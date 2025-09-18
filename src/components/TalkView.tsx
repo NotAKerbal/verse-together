@@ -56,8 +56,11 @@ export default function TalkView({ talk }: Props) {
         </section>
       ) : null}
 
-      <article className="prose dark:prose-invert prose-p:my-3 max-w-none">
-        <div dangerouslySetInnerHTML={{ __html: preNotesHtml }} />
+      <article className="prose dark:prose-invert max-w-none">
+        <div
+          className="leading-8 [&_p]:my-5 [&_li]:my-2 [&_blockquote]:my-5 [&_h2]:mt-8 [&_h2]:mb-3"
+          dangerouslySetInnerHTML={{ __html: preNotesHtml }}
+        />
       </article>
 
       {noteItems.length > 0 ? (
