@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/auth";
 
 type Verse = { verse: number; text: string };
 
@@ -18,6 +19,7 @@ export default function ShareComposer({
   verses: Verse[];
   reference: string;
 }) {
+  const { user } = useAuth();
   const [start, setStart] = useState<number>(verses?.[0]?.verse ?? 1);
   const [end, setEnd] = useState<number>(verses?.[0]?.verse ?? 1);
   const [note, setNote] = useState("");
@@ -66,6 +68,7 @@ export default function ShareComposer({
   const minVerse = verses?.[0]?.verse ?? 1;
   const maxVerse = verses?.[verses.length - 1]?.verse ?? 1;
 
+  if (!user) return null;
   return (
     <section className="mt-8 space-y-3">
       <h2 className="text-lg font-medium">Share a highlight from {reference}</h2>

@@ -236,21 +236,23 @@ function Comments({ shareId }: { shareId: string }) {
 
   return (
     <div className="border-t border-black/5 dark:border-white/10 pt-2 space-y-2">
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Add a comment"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          className="flex-1 rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-1.5 text-sm"
-        />
-        <button
-          onClick={addComment}
-          className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10"
-        >
-          Comment
-        </button>
-      </div>
+      {user ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Add a comment"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className="flex-1 rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-1.5 text-sm"
+          />
+          <button
+            onClick={addComment}
+            className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            Comment
+          </button>
+        </div>
+      ) : null}
       {loading ? (
         <div className="text-xs text-foreground/60">Loading comments…</div>
       ) : error ? (

@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
+import { useAuth } from "@/lib/auth";
 
 type Verse = { verse: number; text: string };
+type ShareRow = { id: string; verse_start: number; verse_end: number };
+type ReactionRow = { id: string; share_id: string };
+type CommentDetail = { id: string; share_id: string; body: string; created_at: string };
 
 export default function ChapterReader({
   volume,
@@ -27,13 +31,21 @@ export default function ChapterReader({
   prevHref?: string;
   nextHref?: string;
 }) {
+  const { user } = useAuth();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const router = useRouter();
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number | null>(null);
+  const [isCommentOpen, setIsCommentOpen] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [verseIndicators, setVerseIndicators] = useState<Record<number, { comments: number; likes: number }>>({});
+  const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; body: string; created_at: string }>>>({});
 
   function toggleVerse(n: number) {
+    if (!user) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(n)) next.delete(n); else next.add(n);
@@ -79,6 +91,85 @@ export default function ChapterReader({
     touchStartTime.current = null;
   }
 
+  useEffect(() => {
+    let alive = true;
+    async function loadIndicators() {
+      setVerseIndicators({});
+      const { data: shares, error } = await supabase
+        .from("scripture_shares")
+        .select("id, verse_start, verse_end")
+        .eq("volume", volume)
+        .eq("book", book)
+        .eq("chapter", chapter);
+      if (error || !shares || shares.length === 0) return;
+      const shareIds = (shares as ShareRow[]).map((s) => s.id);
+      const [{ data: comments }, { data: reactions }] = await Promise.all([
+        supabase.from("scripture_comments").select("id, share_id, body, created_at").in("share_id", shareIds),
+        supabase.from("scripture_reactions").select("id, share_id").in("share_id", shareIds),
+      ]);
+      const commentsByShare: Record<string, number> = {};
+      const reactionsByShare: Record<string, number> = {};
+      (comments as CommentDetail[] | null ?? []).forEach((c) => {
+        commentsByShare[c.share_id] = (commentsByShare[c.share_id] ?? 0) + 1;
+      });
+      (reactions as ReactionRow[] | null ?? []).forEach((r) => {
+        reactionsByShare[r.share_id] = (reactionsByShare[r.share_id] ?? 0) + 1;
+      });
+      const map: Record<number, { comments: number; likes: number }> = {};
+      for (const s of shares as ShareRow[]) {
+        const likeCount = reactionsByShare[s.id] ?? 0;
+        const commentCount = commentsByShare[s.id] ?? 0;
+        if (likeCount === 0 && commentCount === 0) continue;
+        for (let v = s.verse_start; v <= s.verse_end; v++) {
+          map[v] = {
+            comments: (map[v]?.comments ?? 0) + commentCount,
+            likes: (map[v]?.likes ?? 0) + likeCount,
+          };
+        }
+      }
+      if (!alive) return;
+      setVerseIndicators(map);
+
+      // Build top comments per verse (up to 3, newest first)
+      const commentsByVerse: Record<number, Array<{ id: string; body: string; created_at: string }>> = {};
+      const commentsByShareFull: Record<string, CommentDetail[]> = {};
+      (comments as CommentDetail[] | null ?? []).forEach((c) => {
+        (commentsByShareFull[c.share_id] ||= []).push(c);
+      });
+      for (const s of shares as ShareRow[]) {
+        const list = (commentsByShareFull[s.id] ?? []).slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+        if (list.length === 0) continue;
+        for (let v = s.verse_start; v <= s.verse_end; v++) {
+          const agg = (commentsByVerse[v] ||= []);
+          for (const c of list) {
+            if (agg.length < 6) {
+              // temporarily allow more, will trim to 3 after merge across shares
+              agg.push({ id: c.id, body: c.body, created_at: c.created_at });
+            }
+          }
+        }
+      }
+      // Deduplicate by id per verse, sort, and cap to 3
+      Object.keys(commentsByVerse).forEach((k) => {
+        const v = Number(k);
+        const seen: Record<string, boolean> = {};
+        const dedup = commentsByVerse[v].filter((c) => {
+          if (seen[c.id]) return false;
+          seen[c.id] = true;
+          return true;
+        });
+        dedup.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+        commentsByVerse[v] = dedup.slice(0, 3);
+      });
+      if (!alive) return;
+      setVerseComments(commentsByVerse);
+    }
+    loadIndicators();
+    return () => {
+      alive = false;
+    };
+  }, [volume, book, chapter]);
+
   return (
     <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
@@ -93,22 +184,43 @@ export default function ChapterReader({
       <ol className="space-y-2 sm:space-y-3">
         {verses.map((v) => {
           const isSelected = selected.has(v.verse);
+          const ind = verseIndicators[v.verse];
+          const hasActivity = !!ind && (ind.likes > 0 || ind.comments > 0);
           return (
-            <li key={v.verse} className={`leading-7 rounded-md px-2 -mx-2 ${isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""}`}>
+            <li key={v.verse} className={`leading-7 rounded-md px-2 -mx-2 ${isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : hasActivity ? "ring-1 ring-black/10 dark:ring-white/15" : ""}`}>
               <button
                 onClick={() => toggleVerse(v.verse)}
                 className="text-left w-full"
               >
-                <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                <span>{v.text}</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                    <span>{v.text}</span>
+                  </div>
+                  {ind && (ind.likes > 0 || ind.comments > 0) ? (
+                    <div className="shrink-0 flex items-center gap-2 text-xs text-foreground/60">
+                      {ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
+                      {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
+                    </div>
+                  ) : null}
+                </div>
               </button>
+              {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
+                <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                  {verseComments[v.verse].map((c) => (
+                    <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
+                      {c.body}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           );
         })}
       </ol>
 
       <VerseActionBar
-        visible={selected.size > 0}
+        visible={selected.size > 0 && !!user}
         onClear={() => setSelected(new Set())}
         onShare={async () => {
           const s = Math.min(...Array.from(selected));
@@ -128,7 +240,7 @@ export default function ChapterReader({
             note: null,
             content: selectedText || null,
           });
-          alert("Shared!");
+          setSelected(new Set());
         }}
         onLike={async () => {
           const { data: session } = await supabase.auth.getSession();
@@ -153,7 +265,7 @@ export default function ChapterReader({
             .select("id")
             .single();
           if (error || !data) {
-            alert(error?.message ?? "Failed creating share");
+            // surface error minimally
             return;
           }
           const shareId = (data as { id: string }).id;
@@ -162,45 +274,120 @@ export default function ChapterReader({
             p_reaction: "like",
           });
           if (reactError) {
-            alert(reactError.message);
             return;
           }
           setSelected(new Set());
-          alert("Shared and liked!");
         }}
         onComment={async () => {
           const { data: session } = await supabase.auth.getSession();
-          if (!session.session) {
-            alert("Please sign in to comment.");
-            return;
-          }
-          const text = prompt("Add a quick comment about your selection:")?.trim();
-          if (!text) return;
-          const s = Math.min(...Array.from(selected));
-          const e = Math.max(...Array.from(selected));
-          const { data, error } = await supabase
-            .from("scripture_shares")
-            .insert({
-              volume,
-              book,
-              chapter,
-              verse_start: s,
-              verse_end: e,
-              translation: null,
-              note: null,
-              content: selectedText || null,
-            })
-            .select("id")
-            .single();
-          if (error || !data) return alert(error?.message ?? "Failed creating share");
-          const shareId = (data as { id: string }).id;
-          const { error: e2 } = await supabase
-            .from("scripture_comments")
-            .insert({ share_id: shareId, body: text });
-          if (e2) return alert(e2.message);
-          alert("Comment posted on your new share!");
+          if (!session.session) return;
+          setCommentError(null);
+          setIsCommentOpen(true);
         }}
       />
+
+      {isCommentOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            aria-label="Close"
+            onClick={() => {
+              if (!submittingComment) {
+                setIsCommentOpen(false);
+                setCommentText("");
+                setCommentError(null);
+              }
+            }}
+            className="absolute inset-0 bg-black/30"
+          />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-black/10 dark:border-white/15 p-4 space-y-3">
+            <div className="h-1 w-10 bg-foreground/20 rounded-full mx-auto mb-1" />
+            <h3 className="text-base font-semibold">Add a comment</h3>
+            {selectedText ? (
+              <pre className="max-h-36 overflow-auto whitespace-pre-wrap text-sm text-foreground/80 border border-black/10 dark:border-white/15 rounded-md p-2 bg-black/5 dark:bg-white/5">{selectedText}</pre>
+            ) : null}
+            <label className="flex flex-col text-sm">
+              <span className="mb-1 text-foreground/70">Your comment</span>
+              <textarea
+                rows={4}
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2"
+                placeholder="Write your thoughts…"
+                disabled={submittingComment}
+              />
+            </label>
+            {commentError ? <p className="text-sm text-red-600">{commentError}</p> : null}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => {
+                  if (!submittingComment) {
+                    setIsCommentOpen(false);
+                    setCommentText("");
+                    setCommentError(null);
+                  }
+                }}
+                className="px-4 py-2 text-sm rounded-md border border-black/10 dark:border-white/15"
+                disabled={submittingComment}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!commentText.trim()) {
+                    setCommentError("Please enter a comment.");
+                    return;
+                  }
+                  const { data: session } = await supabase.auth.getSession();
+                  if (!session.session) {
+                    setCommentError("Please sign in to comment.");
+                    return;
+                  }
+                  setSubmittingComment(true);
+                  setCommentError(null);
+                  const s = Math.min(...Array.from(selected));
+                  const e = Math.max(...Array.from(selected));
+                  const { data, error } = await supabase
+                    .from("scripture_shares")
+                    .insert({
+                      volume,
+                      book,
+                      chapter,
+                      verse_start: s,
+                      verse_end: e,
+                      translation: null,
+                      note: null,
+                      content: selectedText || null,
+                    })
+                    .select("id")
+                    .single();
+                  if (error || !data) {
+                    setCommentError(error?.message ?? "Failed creating share");
+                    setSubmittingComment(false);
+                    return;
+                  }
+                  const shareId = (data as { id: string }).id;
+                  const { error: e2 } = await supabase
+                    .from("scripture_comments")
+                    .insert({ share_id: shareId, body: commentText.trim() });
+                  if (e2) {
+                    setCommentError(e2.message);
+                    setSubmittingComment(false);
+                    return;
+                  }
+                  setSubmittingComment(false);
+                  setIsCommentOpen(false);
+                  setCommentText("");
+                  setSelected(new Set());
+                }}
+                className="px-5 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-60"
+                disabled={submittingComment}
+              >
+                {submittingComment ? "Posting…" : "Post comment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
