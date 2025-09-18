@@ -1,14 +1,41 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
+import type { FC } from "react";
 
-type Props = {
+export type Props = {
   visible: boolean;
+  actionsEnabled?: boolean;
   onClear: () => void;
-  onShare: () => void;
   onLike: () => void;
   onComment: () => void;
+  onCitations: () => void;
 };
 
-export default function VerseActionBar({ visible, onClear, onShare, onLike, onComment }: Props) {
+const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, onLike, onComment, onCitations }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+
+  function toggleMenu() {
+    if (!menuOpen) {
+      if (closeTimerRef.current != null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setMenuMounted(true);
+      requestAnimationFrame(() => setMenuOpen(true));
+    } else {
+      setMenuOpen(false);
+      closeTimerRef.current = window.setTimeout(() => {
+        setMenuMounted(false);
+        closeTimerRef.current = null;
+      }, 180);
+    }
+  }
+
+  useEffect(() => () => {
+    if (closeTimerRef.current != null) window.clearTimeout(closeTimerRef.current);
+  }, []);
   if (!visible) return null;
   return (
     <div
@@ -25,28 +52,72 @@ export default function VerseActionBar({ visible, onClear, onShare, onLike, onCo
           Clear
         </button>
         <div className="ml-auto flex items-center gap-3 sm:gap-4">
-          <button
-            onClick={onShare}
-            className="inline-flex items-center rounded-full bg-foreground text-background px-5 py-2 text-base font-semibold shadow-lg hover:opacity-90"
-          >
-            Share
-          </button>
-          <button
-            onClick={onLike}
-            className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-          >
-            ❤ Like
-          </button>
-          <button
-            onClick={onComment}
-            className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-          >
-            💬 Comment
-          </button>
+          {actionsEnabled ? (
+            <>
+              <button
+                onClick={onLike}
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                ❤ Like
+              </button>
+              <button
+                onClick={onComment}
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                💬 Comment
+              </button>
+              <button
+                onClick={toggleMenu}
+                aria-expanded={menuOpen}
+                aria-label="More actions"
+                title="More"
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                + More
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onCitations}
+              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              🎤 Citations
+            </button>
+          )}
         </div>
       </div>
+
+      {actionsEnabled && menuMounted ? (
+        <div
+          className="fixed right-3 sm:right-4 z-[60] flex flex-col items-end gap-1 pointer-events-auto"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.5rem)" }}
+        >
+          <div
+            style={{
+              transform: menuOpen ? "translateY(0) scale(1)" : "translateY(12px) scale(0.95)",
+              opacity: menuOpen ? 1 : 0,
+              transition: "opacity 180ms ease, transform 180ms ease",
+              transformOrigin: "bottom right",
+            }}
+          >
+            <button
+              onClick={() => {
+                toggleMenu();
+                onCitations();
+              }}
+              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/90 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              title="Citations"
+              aria-label="Citations"
+            >
+              🎤 Citations
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
-}
+};
+
+export default VerseActionBar;
 
 

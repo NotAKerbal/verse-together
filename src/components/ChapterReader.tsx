@@ -128,7 +128,6 @@ export default function ChapterReader({
   }, [user?.id]);
 
   function toggleVerse(n: number) {
-    if (!user) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(n)) next.delete(n); else next.add(n);
@@ -691,28 +690,9 @@ export default function ChapterReader({
       ) : null}
 
       <VerseActionBar
-        visible={selected.size > 0 && !!user}
+        visible={selected.size > 0}
+        actionsEnabled={!!user}
         onClear={() => setSelected(new Set())}
-        onShare={async () => {
-        const s = Math.min(...Array.from(selected));
-        const e = Math.max(...Array.from(selected));
-        const { data: session } = await supabase.auth.getSession();
-        if (!session.session) {
-          alert("Please sign in to share.");
-          return;
-        }
-        await supabase.from("scripture_shares").insert({
-          volume,
-          book,
-          chapter,
-          verse_start: s,
-          verse_end: e,
-          translation: null,
-          note: null,
-          content: selectedText || null,
-        });
-        setSelected(new Set());
-        }}
         onLike={async () => {
         const { data: session } = await supabase.auth.getSession();
         if (!session.session) {
@@ -754,6 +734,10 @@ export default function ChapterReader({
         if (!session.session) return;
         setCommentError(null);
         setIsCommentOpen(true);
+        }}
+        onCitations={() => {
+        // Placeholder for now; opens the comment drawer pattern later if needed
+        alert("Citations coming soon.");
         }}
       />
     </section>
