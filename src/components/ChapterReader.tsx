@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
 import { useAuth } from "@/lib/auth";
+import FootnoteModal from "./FootnoteModal";
+import type { Footnote } from "@/lib/openscripture";
 
-type Verse = { verse: number; text: string };
+type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type ShareRow = { id: string; verse_start: number; verse_end: number };
 type ReactionRow = { id: string; share_id: string };
 type CommentDetail = { id: string; share_id: string; user_id: string; body: string; created_at: string };
@@ -44,6 +47,7 @@ export default function ChapterReader({
   const [verseIndicators, setVerseIndicators] = useState<Record<number, { comments: number; likes: number }>>({});
   const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>>>({});
   const [commenterNames, setCommenterNames] = useState<Record<string, string>>({});
+  const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string }>(null);
 
   function toggleVerse(n: number) {
     if (!user) return;
@@ -62,6 +66,55 @@ export default function ChapterReader({
   }, [verses, selected]);
 
   // first/last verse values not currently used
+
+  function renderVerseText(v: Verse) {
+    const fns = v.footnotes ?? [];
+    if (!fns || fns.length === 0) return v.text;
+    const parts: Array<ReactNode> = [];
+    const sorted = fns
+      .slice()
+      .filter((f) => typeof f.start === "number" && typeof f.end === "number")
+      .sort((a, b) => (a.start! - b.start!));
+    let cursor = 0;
+    sorted.forEach((fn, idx) => {
+      const start = Math.max(0, Math.min(v.text.length, fn.start ?? 0));
+      const originalEnd = Math.max(start, Math.min(v.text.length - 1, (fn.end ?? start)));
+      if (start > cursor) {
+        parts.push(v.text.slice(cursor, start));
+      }
+      let displayEnd = originalEnd;
+      let trailing = "";
+      while (displayEnd >= start && /\s/.test(v.text.charAt(displayEnd))) {
+        trailing = v.text.charAt(displayEnd) + trailing;
+        displayEnd -= 1;
+      }
+      if (displayEnd >= start) {
+        const highlighted = v.text.slice(start, displayEnd + 1);
+        parts.push(
+          <span
+            key={`fn-${v.verse}-${idx}-${start}-${displayEnd}`}
+            className="bg-sky-200/50 dark:bg-sky-400/25 rounded px-0.5 cursor-pointer ring-1 ring-sky-600/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenFootnote({ footnote: fn.footnote, verseText: v.text, highlightText: highlighted });
+            }}
+            role="button"
+            aria-label="Show footnote"
+          >
+            {highlighted}
+          </span>
+        );
+      }
+      if (trailing) {
+        parts.push(trailing);
+      }
+      cursor = originalEnd + 1;
+    });
+    if (cursor < v.text.length) {
+      parts.push(v.text.slice(cursor));
+    }
+    return <>{parts}</>;
+  }
 
   function onTouchStart(e: React.TouchEvent) {
     const t = e.changedTouches[0];
@@ -247,7 +300,7 @@ export default function ChapterReader({
                       <div key={v.verse}>
                         <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
                           <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                          <span>{v.text}</span>
+                          <span>{renderVerseText(v)}</span>
                         </button>
                         {(() => {
                           const ind = verseIndicators[v.verse];
@@ -286,7 +339,7 @@ export default function ChapterReader({
                         <div key={v.verse}>
                           <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
                             <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                            <span>{v.text}</span>
+                            <span>{renderVerseText(v)}</span>
                           </button>
                           {ind && (ind.likes > 0 || ind.comments > 0) ? (
                             <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
@@ -319,7 +372,7 @@ export default function ChapterReader({
                 <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
                   <div>
                     <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                    <span>{v.text}</span>
+                    <span>{renderVerseText(v)}</span>
                   </div>
                 </button>
                 {ind && (ind.likes > 0 || ind.comments > 0) ? (
@@ -512,6 +565,16 @@ export default function ChapterReader({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {openFootnote ? (
+        <FootnoteModal
+          open={true}
+          onClose={() => setOpenFootnote(null)}
+          footnote={openFootnote.footnote}
+          verseText={openFootnote.verseText}
+          highlightText={openFootnote.highlightText}
+        />
       ) : null}
     </section>
   );

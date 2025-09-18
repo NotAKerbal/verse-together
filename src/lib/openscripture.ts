@@ -1,8 +1,15 @@
+export type Footnote = {
+  footnote: string;
+  start?: number;
+  end?: number;
+};
+
 export type ChapterResponse = {
   reference: string;
   verses: Array<{
     verse: number;
     text: string;
+    footnotes?: Footnote[];
   }>;
 };
 
@@ -142,13 +149,145 @@ export async function fetchChapter(
         get(v, "text") ?? get(v, "content") ?? get(v, "body")
       );
       const text = textRaw.trim();
-      return verseNumber > 0 && text
-        ? { verse: verseNumber, text }
-        : null;
+
+      // Attempt to parse footnotes if present in API response
+      const rawFootnotes = Array.isArray(get(v, "footnotes")) ? (get(v, "footnotes") as unknown[]) : [];
+      const footnotes: Footnote[] = rawFootnotes
+        .map((fn: unknown) => {
+          const footnoteText = getString(fn, "footnote") ?? coerceToString(fn).trim();
+          if (!footnoteText) return null;
+          const s = getNumber(fn, "start");
+          const e = getNumber(fn, "end");
+          const out: Footnote = { footnote: footnoteText };
+          if (typeof s === "number" && Number.isFinite(s)) out.start = s;
+          if (typeof e === "number" && Number.isFinite(e)) out.end = e;
+          return out;
+        })
+        .filter(Boolean) as Footnote[];
+
+      if (verseNumber > 0 && text) {
+        return footnotes.length > 0
+          ? { verse: verseNumber, text, footnotes }
+          : { verse: verseNumber, text };
+      }
+      return null;
     })
     .filter(Boolean) as ChapterResponse["verses"];
 
   return { reference: reference || `${bookId} ${chapterNumber}`, verses };
+}
+
+
+export async function fetchChapterByBook(
+  bookId: string,
+  chapterNumber: string | number
+): Promise<ChapterResponse> {
+  const url = `${BASE_URL}/book/${encodeURIComponent(bookId)}/${encodeURIComponent(String(chapterNumber))}`;
+  const res = await fetch(url, { next: { revalidate: 60 } });
+  if (!res.ok) {
+    throw new Error(`OpenScripture API error ${res.status}`);
+  }
+  const raw: unknown = await res.json();
+
+  const explicitReference = getString(raw, "reference");
+  const bookObj = getObject(raw, "book");
+  const chapterObj = getObject(raw, "chapter");
+  const bookTitle = getString(bookObj, "title") ?? bookId;
+  const chapterNum = getNumber(chapterObj, "number") ?? Number(chapterNumber);
+  const reference: string =
+    explicitReference && explicitReference.length > 0
+      ? explicitReference
+      : [bookTitle, String(chapterNum)].filter(Boolean).join(" ");
+
+  const versesFromRoot = getArray(raw, "verses");
+  const versesFromChapter = chapterObj ? getArray(chapterObj, "verses") : [];
+  const versesFromContent = getArray(raw, "content");
+  const sourceVerses: unknown[] =
+    versesFromRoot.length > 0
+      ? versesFromRoot
+      : versesFromChapter.length > 0
+      ? versesFromChapter
+      : versesFromContent;
+
+  const verses = sourceVerses
+    .map((v: unknown, idx: number) => {
+      const verseNumber =
+        getNumber(v, "verse") ?? getNumber(v, "number") ?? getNumber(v, "verseNumber") ?? idx + 1;
+      const textRaw = coerceToString(
+        get(v, "text") ?? get(v, "content") ?? get(v, "body")
+      );
+      const text = textRaw.trim();
+
+      const rawFootnotes = Array.isArray(get(v, "footnotes")) ? (get(v, "footnotes") as unknown[]) : [];
+      const footnotes: Footnote[] = rawFootnotes
+        .map((fn: unknown) => {
+          const footnoteText = getString(fn, "footnote") ?? coerceToString(fn).trim();
+          if (!footnoteText) return null;
+          const s = getNumber(fn, "start");
+          const e = getNumber(fn, "end");
+          const out: Footnote = { footnote: footnoteText };
+          if (typeof s === "number" && Number.isFinite(s)) out.start = s;
+          if (typeof e === "number" && Number.isFinite(e)) out.end = e;
+          return out;
+        })
+        .filter(Boolean) as Footnote[];
+
+      if (verseNumber > 0 && text) {
+        return footnotes.length > 0
+          ? { verse: verseNumber, text, footnotes }
+          : { verse: verseNumber, text };
+      }
+      return null;
+    })
+    .filter(Boolean) as ChapterResponse["verses"];
+
+  return { reference: reference || `${bookId} ${chapterNumber}`, verses };
+}
+
+
+export type ReferenceParserResult = {
+  valid: boolean;
+  prettyString?: string;
+  references?: Array<{
+    book: string;
+    chapters: Array<{
+      start: number;
+      end: number;
+      verses: Array<{ start: number; end: number }>;
+    }>;
+  }>;
+  error?: string;
+};
+
+// Uses the Open Scripture "Plain Text Reference Parser" to normalize a reference string.
+// Docs: https://openscriptureapi.org/docs/reference-parser
+export async function parseReferenceString(reference: string): Promise<ReferenceParserResult | null> {
+  const apiKey = process.env.NEXT_PUBLIC_OPENSCRIPTURE_API_KEY;
+  if (!apiKey || !reference || reference.trim().length === 0) return null;
+  const url = `${BASE_URL}/referencesParser?reference=${encodeURIComponent(reference)}&api-key=${encodeURIComponent(apiKey)}`;
+  try {
+    const res = await fetch(url, { next: { revalidate: 0 } });
+    if (!res.ok) return null;
+    const raw: unknown = await res.json();
+    const out: ReferenceParserResult = {
+      valid: Boolean(get(raw, "valid")),
+      prettyString: getString(raw, "prettyString") ?? undefined,
+      error: getString(raw, "error") ?? undefined,
+      references: Array.isArray(get(raw, "references"))
+        ? (get(raw, "references") as Array<{
+            book: string;
+            chapters: Array<{
+              start: number;
+              end: number;
+              verses: Array<{ start: number; end: number }>;
+            }>;
+          }>)
+        : undefined,
+    };
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 
