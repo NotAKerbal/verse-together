@@ -1,51 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 export default function AuthPage() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user?.email ?? null);
-    });
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, []);
+  const { user } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
 
   // Email/password flow removed; Google-only sign-in
 
   async function handleSignOut() {
+    setSigningOut(true);
     await supabase.auth.signOut();
     router.refresh();
+    setSigningOut(false);
   }
 
   return (
     <section className="mx-auto max-w-md space-y-6">
       <header className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold">Sign in</h1>
-        {userEmail ? (
-          <p className="text-foreground/80">Signed in as {userEmail}</p>
+        {user?.email ? (
+          <p className="text-foreground/80">Signed in as {user.email}</p>
         ) : (
           <p className="text-foreground/80">Use your Google account</p>
         )}
       </header>
 
-      {userEmail ? (
+      {user?.email ? (
         <div className="flex items-center justify-center">
           <button
             onClick={handleSignOut}
-            className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium hover:opacity-90"
+            disabled={signingOut}
+            className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            Sign out
+            {signingOut ? "Signing out…" : "Sign out"}
           </button>
         </div>
       ) : (

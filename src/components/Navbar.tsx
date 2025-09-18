@@ -2,51 +2,36 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Navbar() {
-  const [email, setEmail] = useState<string | null>(null);
+  const { user } = useAuth();
   const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      const user = data.user;
-      setEmail(user?.email ?? null);
-      if (user?.id) {
-        try {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("display_name")
-            .eq("user_id", user.id)
-            .maybeSingle();
-          setDisplayName(prof?.display_name ?? null);
-        } catch {
-          setDisplayName(null);
-        }
+    let isMounted = true;
+    async function fetchProfileName(userId: string) {
+      try {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (isMounted) setDisplayName(prof?.display_name ?? null);
+      } catch {
+        if (isMounted) setDisplayName(null);
       }
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const user = session?.user;
-      setEmail(user?.email ?? null);
-      if (user?.id) {
-        try {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("display_name")
-            .eq("user_id", user.id)
-            .maybeSingle();
-          setDisplayName(prof?.display_name ?? null);
-        } catch {
-          setDisplayName(null);
-        }
-      } else {
-        setDisplayName(null);
-      }
-    });
+    }
+    if (user?.id) {
+      fetchProfileName(user.id);
+    } else {
+      setDisplayName(null);
+    }
     return () => {
-      sub.subscription.unsubscribe();
+      isMounted = false;
     };
-  }, []);
+  }, [user?.id]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -66,9 +51,9 @@ export default function Navbar() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          {email ? (
+          {user?.email ? (
             <>
-              <span className="text-sm text-foreground/70 hidden sm:inline">{displayName ?? email}</span>
+              <span className="text-sm text-foreground/70 hidden sm:inline">{displayName ?? user.email}</span>
               <button
                 onClick={handleSignOut}
                 className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90"

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/auth";
 
 type ShareRow = {
   id: string;
@@ -20,6 +21,7 @@ type ShareRow = {
 };
 
 export default function Feed() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ShareRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export default function Feed() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [user?.id]);
 
   if (loading) {
     return <div className="mx-auto max-w-3xl">Loading feed…</div>;
@@ -106,12 +108,12 @@ function ShareCard({ row }: { row: ShareRow }) {
 }
 
 function Comments({ shareId }: { shareId: string }) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   type CommentRow = { id: string; body: string; created_at: string; user_id: string };
   const [items, setItems] = useState<CommentRow[]>([]);
   const [body, setBody] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [names, setNames] = useState<Record<string, string>>({});
@@ -139,41 +141,46 @@ function Comments({ shareId }: { shareId: string }) {
       .eq("share_id", shareId)
       .order("created_at", { ascending: false })
       .limit(10);
-    if (error) setError(error.message);
-    setItems((data as CommentRow[] | null) ?? []);
+    if (error) {
+      setError(error.message);
+      setItems([]);
+      setNames({});
+      setLoading(false);
+      return;
+    }
+    const rows = (data as CommentRow[] | null) ?? [];
+    setItems(rows);
+    try {
+      const uniqueUserIds = Array.from(new Set(rows.map((i) => i.user_id)));
+      if (uniqueUserIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", uniqueUserIds);
+        const map: Record<string, string> = {};
+        (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
+          map[p.user_id] = p.display_name;
+        });
+        setNames(map);
+      } else {
+        setNames({});
+      }
+    } catch {
+      setNames({});
+    }
     setLoading(false);
   }
 
   useEffect(() => {
     let ignore = false;
-    async function init() {
-      const { data: session } = await supabase.auth.getSession();
-      if (!ignore) setCurrentUserId(session.session?.user?.id ?? null);
-      await load();
-      // fetch display names for commenters
-      try {
-        const uniqueUserIds = Array.from(new Set((items ?? []).map((i) => i.user_id)));
-        if (uniqueUserIds.length > 0) {
-          const { data: profs } = await supabase
-            .from("profiles")
-            .select("user_id, display_name")
-            .in("user_id", uniqueUserIds);
-          const map: Record<string, string> = {};
-          (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
-            map[p.user_id] = p.display_name;
-          });
-          if (!ignore) setNames(map);
-        }
-      } catch {
-        // ignore if profiles table doesn't exist
-      }
-    }
-    init();
+    (async () => {
+      if (!ignore) await load();
+    })();
     return () => {
       ignore = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareId]);
+  }, [shareId, user?.id]);
 
   async function addComment() {
     try {
@@ -253,7 +260,7 @@ function Comments({ shareId }: { shareId: string }) {
       ) : (
         <ul className="space-y-2">
           {items.map((c) => {
-            const isMine = currentUserId && c.user_id === currentUserId;
+            const isMine = user?.id && c.user_id === user.id;
             const name = names[c.user_id];
             const who = isMine ? "You" : name ? name : `User ${c.user_id.slice(0, 6)}`;
             return (
