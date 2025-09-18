@@ -202,40 +202,146 @@ export default function ChapterReader({
       </header>
 
       <ol className="space-y-2 sm:space-y-3">
-        {verses.map((v) => {
-          const isSelected = selected.has(v.verse);
-          const ind = verseIndicators[v.verse];
-          const hasActivity = !!ind && (ind.likes > 0 || ind.comments > 0);
-          return (
-            <li key={v.verse} className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : hasActivity ? "ring-1 ring-black/10 dark:ring-white/15" : ""}`}>
-              <button
-                onClick={() => toggleVerse(v.verse)}
-                className="text-left w-full"
-              >
-                <div>
-                  <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                  <span>{v.text}</span>
-                </div>
-              </button>
-              {ind && (ind.likes > 0 || ind.comments > 0) ? (
-                <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
-                  {ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
-                  {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
-                </div>
-              ) : null}
-              {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-foreground/70">
-                  {verseComments[v.verse].map((c) => (
-                    <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
-                      <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
-                      <span className="text-foreground/70">{c.body}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          );
-        })}
+        {(() => {
+          const blocks: Array<{ key: string; verses: Verse[]; type: "selected" | "active" | "plain" }> = [];
+          let i = 0;
+          while (i < verses.length) {
+            const v = verses[i];
+            const isSel = selected.has(v.verse);
+            if (isSel) {
+              const start = i;
+              let end = i;
+              while (end + 1 < verses.length && selected.has(verses[end + 1].verse)) end += 1;
+              const group = verses.slice(start, end + 1);
+              blocks.push({ key: `sel-${group[0].verse}-${group[group.length - 1].verse}`, verses: group, type: "selected" });
+              i = end + 1;
+              continue;
+            }
+            const ind0 = verseIndicators[v.verse];
+            const hasActivity0 = !!ind0 && (ind0.likes > 0 || ind0.comments > 0);
+            if (hasActivity0) {
+              const start = i;
+              let end = i;
+              while (end + 1 < verses.length) {
+                const nextV = verses[end + 1];
+                if (selected.has(nextV.verse)) break;
+                const nextInd = verseIndicators[nextV.verse];
+                const nextActive = !!nextInd && (nextInd.likes > 0 || nextInd.comments > 0);
+                if (!nextActive) break;
+                end += 1;
+              }
+              const group = verses.slice(start, end + 1);
+              blocks.push({ key: `act-${group[0].verse}-${group[group.length - 1].verse}`, verses: group, type: "active" });
+              i = end + 1;
+              continue;
+            }
+            blocks.push({ key: `p-${v.verse}`, verses: [v], type: "plain" });
+            i += 1;
+          }
+          return blocks.map((b) => {
+            if (b.type === "selected") {
+              return (
+                <li key={b.key} className="leading-7 rounded-md px-3 py-2 -mx-2 my-2 bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30">
+                  <div className="space-y-1">
+                    {b.verses.map((v, idx) => (
+                      <div key={v.verse}>
+                        <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
+                          <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                          <span>{v.text}</span>
+                        </button>
+                        {(() => {
+                          const ind = verseIndicators[v.verse];
+                          const isLast = idx === b.verses.length - 1;
+                          return ind && (ind.likes > 0 || ind.comments > 0) ? (
+                            <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
+                              {isLast && ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
+                              {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
+                            </div>
+                          ) : null;
+                        })()}
+                        {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
+                          <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                            {verseComments[v.verse].map((c) => (
+                              <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
+                                <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
+                                <span className="text-foreground/70">{c.body}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </li>
+              );
+            }
+            if (b.type === "active") {
+              return (
+                <li key={b.key} className="leading-7 rounded-md px-3 py-2 -mx-2 my-2 ring-1 ring-black/10 dark:ring-white/15">
+                  <div className="space-y-1">
+                    {b.verses.map((v, idx) => {
+                      const ind = verseIndicators[v.verse];
+                      const isLast = idx === b.verses.length - 1;
+                      return (
+                        <div key={v.verse}>
+                          <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
+                            <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                            <span>{v.text}</span>
+                          </button>
+                          {ind && (ind.likes > 0 || ind.comments > 0) ? (
+                            <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
+                              {isLast && ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
+                              {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
+                            </div>
+                          ) : null}
+                          {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
+                            <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                              {verseComments[v.verse].map((c) => (
+                                <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
+                                  <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
+                                  <span className="text-foreground/70">{c.body}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </li>
+              );
+            }
+            // plain
+            const v = b.verses[0];
+            const ind = verseIndicators[v.verse];
+            return (
+              <li key={b.key} className="leading-7 rounded-md px-3 py-2 -mx-2 my-2">
+                <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
+                  <div>
+                    <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                    <span>{v.text}</span>
+                  </div>
+                </button>
+                {ind && (ind.likes > 0 || ind.comments > 0) ? (
+                  <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
+                    {ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
+                    {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
+                  </div>
+                ) : null}
+                {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                    {verseComments[v.verse].map((c) => (
+                      <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
+                        <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
+                        <span className="text-foreground/70">{c.body}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          });
+        })()}
       </ol>
 
       <VerseActionBar
