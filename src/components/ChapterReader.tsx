@@ -133,10 +133,40 @@ export default function ChapterReader({
         onLike={async () => {
           const { data: session } = await supabase.auth.getSession();
           if (!session.session) {
-            alert("Please sign in to react.");
+            alert("Please sign in to like.");
             return;
           }
-          alert("Tip: Share selection, then like it on the home feed.");
+          const s = Math.min(...Array.from(selected));
+          const e = Math.max(...Array.from(selected));
+          const { data, error } = await supabase
+            .from("scripture_shares")
+            .insert({
+              volume,
+              book,
+              chapter,
+              verse_start: s,
+              verse_end: e,
+              translation: null,
+              note: null,
+              content: selectedText || null,
+            })
+            .select("id")
+            .single();
+          if (error || !data) {
+            alert(error?.message ?? "Failed creating share");
+            return;
+          }
+          const shareId = (data as { id: string }).id;
+          const { error: reactError } = await supabase.rpc("toggle_reaction", {
+            p_share_id: shareId,
+            p_reaction: "like",
+          });
+          if (reactError) {
+            alert(reactError.message);
+            return;
+          }
+          setSelected(new Set());
+          alert("Shared and liked!");
         }}
         onComment={async () => {
           const { data: session } = await supabase.auth.getSession();

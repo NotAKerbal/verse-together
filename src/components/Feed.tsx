@@ -29,19 +29,24 @@ export default function Feed() {
     async function load() {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
-        .from("v_scripture_shares_with_counts")
-        .select("*")
-        .order("reaction_count", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (ignore) return;
-      if (error) {
-        setError(error.message);
-      } else {
-        setRows((data as any) ?? []);
+      try {
+        const { data, error } = await supabase
+          .from("v_scripture_shares_with_counts")
+          .select("*")
+          .order("reaction_count", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (ignore) return;
+        if (error) {
+          setError(error.message);
+        } else {
+          setRows((data as any) ?? []);
+        }
+      } catch (e: any) {
+        if (!ignore) setError(e?.message ?? "Failed to load feed");
+      } finally {
+        if (!ignore) setLoading(false);
       }
-      setLoading(false);
     }
     load();
     return () => {
@@ -102,15 +107,33 @@ function ShareCard({ row }: { row: ShareRow }) {
 function Comments({ shareId }: { shareId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<Array<{ id: string; body: string; created_at: string }>>([]);
+  const [items, setItems] = useState<Array<{ id: string; body: string; created_at: string; user_id: string }>>([]);
   const [body, setBody] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
+  const [names, setNames] = useState<Record<string, string>>({});
+
+  function formatWhen(iso: string) {
+    const d = new Date(iso);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return d.toLocaleString();
+  }
 
   async function load() {
     setLoading(true);
     setError(null);
     const { data, error } = await supabase
       .from("scripture_comments")
-      .select("id, body, created_at")
+      .select("id, body, created_at, user_id")
       .eq("share_id", shareId)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -120,7 +143,30 @@ function Comments({ shareId }: { shareId: string }) {
   }
 
   useEffect(() => {
-    load();
+    let ignore = false;
+    async function init() {
+      const { data: session } = await supabase.auth.getSession();
+      if (!ignore) setCurrentUserId(session.session?.user?.id ?? null);
+      await load();
+      // fetch display names for commenters
+      try {
+        const uniqueUserIds = Array.from(new Set(((items as any) ?? []).map((i: any) => i.user_id)));
+        if (uniqueUserIds.length > 0) {
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("user_id, display_name")
+            .in("user_id", uniqueUserIds);
+          const map: Record<string, string> = {};
+          (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
+            map[p.user_id] = p.display_name;
+          });
+          if (!ignore) setNames(map);
+        }
+      } catch {
+        // ignore if profiles table doesn't exist
+      }
+    }
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareId]);
 
@@ -138,6 +184,38 @@ function Comments({ shareId }: { shareId: string }) {
       load();
     } catch (e: any) {
       setError(e?.message ?? "Failed");
+    }
+  }
+
+  async function saveEdit(id: string) {
+    try {
+      const text = editingBody.trim();
+      if (!text) return;
+      const { error } = await supabase
+        .from("scripture_comments")
+        .update({ body: text })
+        .eq("id", id);
+      if (error) throw error;
+      setEditingId(null);
+      setEditingBody("");
+      load();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to update");
+    }
+  }
+
+  async function deleteComment(id: string) {
+    try {
+      const sure = confirm("Delete this comment?");
+      if (!sure) return;
+      const { error } = await supabase
+        .from("scripture_comments")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      load();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to delete");
     }
   }
 
@@ -165,12 +243,44 @@ function Comments({ shareId }: { shareId: string }) {
       ) : items.length === 0 ? (
         <div className="text-xs text-foreground/60">No comments yet.</div>
       ) : (
-        <ul className="space-y-1">
-          {items.map((c) => (
-            <li key={c.id} className="text-sm text-foreground/85">
-              {c.body}
-            </li>
-          ))}
+        <ul className="space-y-2">
+          {items.map((c) => {
+            const isMine = currentUserId && c.user_id === currentUserId;
+            const name = names[c.user_id];
+            const who = isMine ? "You" : name ? name : `User ${c.user_id.slice(0, 6)}`;
+            return (
+              <li key={c.id} className="rounded-md border border-black/10 dark:border-white/15 p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-foreground/70">
+                    {who} · {formatWhen(c.created_at)}
+                  </div>
+                  {isMine ? (
+                    editingId === c.id ? (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => saveEdit(c.id)} className="text-xs px-2 py-1 rounded bg-foreground text-background">Save</button>
+                        <button onClick={() => { setEditingId(null); setEditingBody(""); }} className="text-xs px-2 py-1 rounded border border-black/10 dark:border-white/15">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setEditingId(c.id); setEditingBody(c.body); }} className="text-xs px-2 py-1 rounded border border-black/10 dark:border-white/15">Edit</button>
+                        <button onClick={() => deleteComment(c.id)} className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 dark:border-red-400/40">Delete</button>
+                      </div>
+                    )
+                  ) : null}
+                </div>
+                {editingId === c.id ? (
+                  <textarea
+                    value={editingBody}
+                    onChange={(e) => setEditingBody(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+                  />
+                ) : (
+                  <div className="text-sm text-foreground/85 whitespace-pre-wrap">{c.body}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

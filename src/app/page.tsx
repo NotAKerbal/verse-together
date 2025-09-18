@@ -10,7 +10,7 @@ export default function Home() {
           Share scriptures. Bear testimony. Learn together.
         </h1>
         <p className="mt-4 text-base sm:text-lg text-foreground/80">
-          Find and share your favorite verses, write insights, and bear testimony—powered by the Open Scripture API.
+          Find and share your favorite verses, write insights, and bear testimony.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <Link

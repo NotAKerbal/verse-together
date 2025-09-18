@@ -6,11 +6,42 @@ import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Navbar() {
   const [email, setEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setEmail(session?.user?.email ?? null);
+    supabase.auth.getUser().then(async ({ data }) => {
+      const user = data.user;
+      setEmail(user?.email ?? null);
+      if (user?.id) {
+        try {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          setDisplayName(prof?.display_name ?? null);
+        } catch {
+          setDisplayName(null);
+        }
+      }
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const user = session?.user;
+      setEmail(user?.email ?? null);
+      if (user?.id) {
+        try {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          setDisplayName(prof?.display_name ?? null);
+        } catch {
+          setDisplayName(null);
+        }
+      } else {
+        setDisplayName(null);
+      }
     });
     return () => {
       sub.subscription.unsubscribe();
@@ -37,7 +68,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {email ? (
             <>
-              <span className="text-sm text-foreground/70 hidden sm:inline">{email}</span>
+              <span className="text-sm text-foreground/70 hidden sm:inline">{displayName ?? email}</span>
               <button
                 onClick={handleSignOut}
                 className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90"
