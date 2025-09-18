@@ -40,10 +40,11 @@ export default function Feed() {
         if (error) {
           setError(error.message);
         } else {
-          setRows((data as any) ?? []);
+          setRows((data as ShareRow[] | null) ?? []);
         }
-      } catch (e: any) {
-        if (!ignore) setError(e?.message ?? "Failed to load feed");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Failed to load feed";
+        if (!ignore) setError(message);
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -107,7 +108,8 @@ function ShareCard({ row }: { row: ShareRow }) {
 function Comments({ shareId }: { shareId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<Array<{ id: string; body: string; created_at: string; user_id: string }>>([]);
+  type CommentRow = { id: string; body: string; created_at: string; user_id: string };
+  const [items, setItems] = useState<CommentRow[]>([]);
   const [body, setBody] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -138,7 +140,7 @@ function Comments({ shareId }: { shareId: string }) {
       .order("created_at", { ascending: false })
       .limit(10);
     if (error) setError(error.message);
-    setItems((data as any) ?? []);
+    setItems((data as CommentRow[] | null) ?? []);
     setLoading(false);
   }
 
@@ -150,7 +152,7 @@ function Comments({ shareId }: { shareId: string }) {
       await load();
       // fetch display names for commenters
       try {
-        const uniqueUserIds = Array.from(new Set(((items as any) ?? []).map((i: any) => i.user_id)));
+        const uniqueUserIds = Array.from(new Set((items ?? []).map((i) => i.user_id)));
         if (uniqueUserIds.length > 0) {
           const { data: profs } = await supabase
             .from("profiles")
@@ -167,6 +169,9 @@ function Comments({ shareId }: { shareId: string }) {
       }
     }
     init();
+    return () => {
+      ignore = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareId]);
 
@@ -182,8 +187,9 @@ function Comments({ shareId }: { shareId: string }) {
       if (error) throw error;
       setBody("");
       load();
-    } catch (e: any) {
-      setError(e?.message ?? "Failed");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed";
+      setError(message);
     }
   }
 
@@ -199,8 +205,9 @@ function Comments({ shareId }: { shareId: string }) {
       setEditingId(null);
       setEditingBody("");
       load();
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to update");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to update";
+      setError(message);
     }
   }
 
@@ -214,8 +221,9 @@ function Comments({ shareId }: { shareId: string }) {
         .eq("id", id);
       if (error) throw error;
       load();
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to delete");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to delete";
+      setError(message);
     }
   }
 
@@ -326,8 +334,9 @@ function FeedActions({ shareId }: { shareId: string }) {
         .select("id", { count: "exact", head: true })
         .eq("share_id", shareId);
       setCount(count ?? 0);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed";
+      setError(message);
     } finally {
       setLoading(false);
     }

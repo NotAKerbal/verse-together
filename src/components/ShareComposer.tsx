@@ -55,8 +55,9 @@ export default function ShareComposer({
       if (error) throw error;
       setOk("Shared!");
       setNote("");
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to share");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to share";
+      setError(message);
     } finally {
       setLoading(false);
     }

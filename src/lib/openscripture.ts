@@ -8,6 +8,46 @@ export type ChapterResponse = {
 
 const BASE_URL = "https://openscriptureapi.org/api/scriptures/v1/lds/en";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function get(obj: unknown, key: string): unknown {
+  if (!isRecord(obj)) return undefined;
+  return obj[key];
+}
+
+function getString(obj: unknown, key: string): string | undefined {
+  const v = get(obj, key);
+  return typeof v === "string" ? v : undefined;
+}
+
+function getNumber(obj: unknown, key: string): number | undefined {
+  const v = get(obj, key);
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+function getArray(obj: unknown, key: string): unknown[] {
+  const v = get(obj, key);
+  return Array.isArray(v) ? v : [];
+}
+
+function getObject(obj: unknown, key: string): Record<string, unknown> | undefined {
+  const v = get(obj, key);
+  return isRecord(v) ? v : undefined;
+}
+
+function coerceToString(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
 export type BookResponse = {
   _id: string;
   title: string;
@@ -32,7 +72,7 @@ export async function fetchBook(volumeId: string, bookId: string): Promise<BookR
   ];
 
   let lastStatus = 0;
-  let raw: any = null;
+  let raw: unknown = null;
   for (const url of urls) {
     const res = await fetch(url, { next: { revalidate: 3600 } });
     if (res.ok) {
@@ -44,16 +84,21 @@ export async function fetchBook(volumeId: string, bookId: string): Promise<BookR
   if (!raw) {
     throw new Error(`OpenScripture API error ${lastStatus || 400}`);
   }
-  const chapters = Array.isArray(raw.chapters) ? raw.chapters : [];
+  const obj: Record<string, unknown> | undefined = isRecord(raw) ? raw : undefined;
+  const chapters: unknown[] = obj ? (Array.isArray(obj.chapters) ? obj.chapters : []) : [];
   return {
-    _id: String(raw._id ?? bookId),
-    title: String(raw.title ?? bookId),
-    titleShort: raw.titleShort ?? undefined,
-    titleOfficial: raw.titleOfficial ?? undefined,
-    subtitle: raw.subtitle ?? undefined,
-    summary: raw.summary ?? undefined,
-    chapterDelineation: raw.chapterDelineation ?? undefined,
-    chapters: chapters.map((c: any) => ({ _id: String(c._id ?? ""), summary: c.summary ?? undefined })),
+    _id: getString(obj, "_id") ?? String(bookId),
+    title: getString(obj, "title") ?? String(bookId),
+    titleShort: getString(obj, "titleShort") ?? undefined,
+    titleOfficial: getString(obj, "titleOfficial") ?? undefined,
+    subtitle: getString(obj, "subtitle") ?? undefined,
+    summary: getString(obj, "summary") ?? undefined,
+    chapterDelineation: getString(obj, "chapterDelineation") ?? undefined,
+    chapters: chapters.map((c: unknown) => {
+      const id = getString(c, "_id") ?? "";
+      const summary = getString(c, "summary") ?? undefined;
+      return { _id: String(id), summary };
+    }),
   };
 }
 
@@ -67,28 +112,36 @@ export async function fetchChapter(
   if (!res.ok) {
     throw new Error(`OpenScripture API error ${res.status}`);
   }
-  const raw: any = await res.json();
+  const raw: unknown = await res.json();
 
+  const explicitReference = getString(raw, "reference");
+  const bookObj = getObject(raw, "book");
+  const chapterObj = getObject(raw, "chapter");
+  const bookTitle = getString(bookObj, "title") ?? bookId;
+  const chapterNum = getNumber(chapterObj, "number") ?? Number(chapterNumber);
   const reference: string =
-    (typeof raw.reference === "string" && raw.reference) ||
-    [raw.book?.title ?? bookId, raw.chapter?.number ?? String(chapterNumber)]
-      .filter(Boolean)
-      .join(" ");
+    explicitReference && explicitReference.length > 0
+      ? explicitReference
+      : [bookTitle, String(chapterNum)].filter(Boolean).join(" ");
 
-  const sourceVerses: any[] = Array.isArray(raw.verses)
-    ? raw.verses
-    : Array.isArray(raw.chapter?.verses)
-    ? raw.chapter.verses
-    : Array.isArray(raw.content)
-    ? raw.content
-    : [];
+  const versesFromRoot = getArray(raw, "verses");
+  const versesFromChapter = chapterObj ? getArray(chapterObj, "verses") : [];
+  const versesFromContent = getArray(raw, "content");
+  const sourceVerses: unknown[] =
+    versesFromRoot.length > 0
+      ? versesFromRoot
+      : versesFromChapter.length > 0
+      ? versesFromChapter
+      : versesFromContent;
 
   const verses = sourceVerses
-    .map((v: any, idx: number) => {
-      const verseNumber = Number(
-        v.verse ?? v.number ?? v.verseNumber ?? idx + 1
+    .map((v: unknown, idx: number) => {
+      const verseNumber =
+        getNumber(v, "verse") ?? getNumber(v, "number") ?? getNumber(v, "verseNumber") ?? idx + 1;
+      const textRaw = coerceToString(
+        get(v, "text") ?? get(v, "content") ?? get(v, "body")
       );
-      const text = String(v.text ?? v.content ?? v.body ?? "").trim();
+      const text = textRaw.trim();
       return verseNumber > 0 && text
         ? { verse: verseNumber, text }
         : null;
