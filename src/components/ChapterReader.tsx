@@ -10,6 +10,9 @@ import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
 import { fetchChapter } from "@/lib/openscripture";
+import ReaderSettings from "./ReaderSettings";
+import type { ReaderPreferences } from "@/lib/preferences";
+import { getDefaultPreferences, loadPreferences, savePreferences } from "@/lib/preferences";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type ShareRow = { id: string; verse_start: number; verse_end: number };
@@ -36,6 +39,8 @@ export default function ChapterReader({
   nextHref?: string;
 }) {
   const { user } = useAuth();
+  const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const router = useRouter();
   const touchStartX = useRef<number | null>(null);
@@ -110,6 +115,18 @@ export default function ChapterReader({
     };
   }, [nextHref, prevHref]);
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const loaded = await loadPreferences(user?.id ?? null);
+      if (!alive) return;
+      setPrefs(loaded);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
+
   function toggleVerse(n: number) {
     if (!user) return;
     setSelected((prev) => {
@@ -129,6 +146,7 @@ export default function ChapterReader({
   // first/last verse values not currently used
 
   function renderVerseText(v: Verse) {
+    if (!prefs.showFootnotes) return v.text;
     const fns = v.footnotes ?? [];
     if (!fns || fns.length === 0) return v.text;
     const parts: Array<ReactNode> = [];
@@ -383,15 +401,28 @@ export default function ChapterReader({
         className="relative"
       >
         <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
-          <div className="flex flex-col gap-1">
-            <div className="text-xs sm:text-sm">
+          <div className="relative flex flex-col gap-1">
+            <div className="text-xs sm:text-sm pr-10">
               <Breadcrumbs items={breadcrumbs} />
             </div>
-            <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
+              <button
+                aria-label="Reader settings"
+                title="Reader settings"
+                onClick={() => setSettingsOpen(true)}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                ⚙
+              </button>
+            </div>
           </div>
         </header>
 
-        <ol className="space-y-2 sm:space-y-3">
+        <ol
+          className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
+          style={{ fontSize: `${prefs.fontScale}rem` }}
+        >
         {(() => {
           const blocks: Array<{ key: string; verses: Verse[]; type: "selected" | "active" | "plain" }> = [];
           let i = 0;
@@ -601,6 +632,16 @@ export default function ChapterReader({
           }}
         />
       </div>
+
+      <ReaderSettings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        prefs={prefs}
+        onChange={(next) => {
+          setPrefs(next);
+          void savePreferences(user?.id ?? null, next);
+        }}
+      />
 
       {isCommentOpen ? (
         <div className="fixed inset-0 z-50">
