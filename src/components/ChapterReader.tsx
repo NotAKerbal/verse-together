@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 type Verse = { verse: number; text: string };
 type ShareRow = { id: string; verse_start: number; verse_end: number };
 type ReactionRow = { id: string; share_id: string };
-type CommentDetail = { id: string; share_id: string; body: string; created_at: string };
+type CommentDetail = { id: string; share_id: string; user_id: string; body: string; created_at: string };
 
 export default function ChapterReader({
   volume,
@@ -42,7 +42,8 @@ export default function ChapterReader({
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [verseIndicators, setVerseIndicators] = useState<Record<number, { comments: number; likes: number }>>({});
-  const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; body: string; created_at: string }>>>({});
+  const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>>>({});
+  const [commenterNames, setCommenterNames] = useState<Record<string, string>>({});
 
   function toggleVerse(n: number) {
     if (!user) return;
@@ -104,7 +105,7 @@ export default function ChapterReader({
       if (error || !shares || shares.length === 0) return;
       const shareIds = (shares as ShareRow[]).map((s) => s.id);
       const [{ data: comments }, { data: reactions }] = await Promise.all([
-        supabase.from("scripture_comments").select("id, share_id, body, created_at").in("share_id", shareIds),
+        supabase.from("scripture_comments").select("id, share_id, user_id, body, created_at").in("share_id", shareIds),
         supabase.from("scripture_reactions").select("id, share_id").in("share_id", shareIds),
       ]);
       const commentsByShare: Record<string, number> = {};
@@ -131,7 +132,7 @@ export default function ChapterReader({
       setVerseIndicators(map);
 
       // Build top comments per verse (up to 3, newest first)
-      const commentsByVerse: Record<number, Array<{ id: string; body: string; created_at: string }>> = {};
+      const commentsByVerse: Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>> = {};
       const commentsByShareFull: Record<string, CommentDetail[]> = {};
       (comments as CommentDetail[] | null ?? []).forEach((c) => {
         (commentsByShareFull[c.share_id] ||= []).push(c);
@@ -144,7 +145,7 @@ export default function ChapterReader({
           for (const c of list) {
             if (agg.length < 6) {
               // temporarily allow more, will trim to 3 after merge across shares
-              agg.push({ id: c.id, body: c.body, created_at: c.created_at });
+              agg.push({ id: c.id, user_id: c.user_id, body: c.body, created_at: c.created_at });
             }
           }
         }
@@ -163,6 +164,25 @@ export default function ChapterReader({
       });
       if (!alive) return;
       setVerseComments(commentsByVerse);
+
+      // Load commenter display names
+      const uniqueUserIds = Array.from(
+        new Set((comments as CommentDetail[] | null ?? []).map((c) => c.user_id))
+      );
+      if (uniqueUserIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", uniqueUserIds);
+        const nameMap: Record<string, string> = {};
+        (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
+          nameMap[p.user_id] = p.display_name;
+        });
+        if (!alive) return;
+        setCommenterNames(nameMap);
+      } else {
+        setCommenterNames({});
+      }
     }
     loadIndicators();
     return () => {
@@ -187,29 +207,28 @@ export default function ChapterReader({
           const ind = verseIndicators[v.verse];
           const hasActivity = !!ind && (ind.likes > 0 || ind.comments > 0);
           return (
-            <li key={v.verse} className={`leading-7 rounded-md px-2 -mx-2 ${isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : hasActivity ? "ring-1 ring-black/10 dark:ring-white/15" : ""}`}>
+            <li key={v.verse} className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : hasActivity ? "ring-1 ring-black/10 dark:ring-white/15" : ""}`}>
               <button
                 onClick={() => toggleVerse(v.verse)}
                 className="text-left w-full"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                    <span>{v.text}</span>
-                  </div>
-                  {ind && (ind.likes > 0 || ind.comments > 0) ? (
-                    <div className="shrink-0 flex items-center gap-2 text-xs text-foreground/60">
-                      {ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
-                      {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
-                    </div>
-                  ) : null}
+                <div>
+                  <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                  <span>{v.text}</span>
                 </div>
               </button>
+              {ind && (ind.likes > 0 || ind.comments > 0) ? (
+                <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
+                  {ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
+                  {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
+                </div>
+              ) : null}
               {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
                 <ul className="mt-2 space-y-1 text-xs text-foreground/70">
                   {verseComments[v.verse].map((c) => (
                     <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
-                      {c.body}
+                      <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
+                      <span className="text-foreground/70">{c.body}</span>
                     </li>
                   ))}
                 </ul>
