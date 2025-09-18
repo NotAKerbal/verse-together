@@ -71,96 +71,178 @@ function absoluteUrl(href: string): string {
   }
 }
 
-// Extract candidate talks lines from the verse HTML fragment
+// Extract the first http(s) URL found inside a string
+function extractHttpUrlFromString(source: string): string | undefined {
+  const m = source.match(/https?:\/\/[^"'\s<>]+/i);
+  return m ? m[0] : undefined;
+}
+
+// Sanitize anchor URLs that might be javascript:... wrappers. Prefer http(s) or absolute URLs.
+function sanitizeAnchorUrl(rawHref: string | undefined, fullAnchorHtml: string): string | undefined {
+  if (rawHref) {
+    const trimmed = rawHref.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    if (trimmed.startsWith("/")) return absoluteUrl(trimmed);
+    const embedded = extractHttpUrlFromString(trimmed);
+    if (embedded) return embedded;
+  }
+  const inTag = extractHttpUrlFromString(fullAnchorHtml);
+  if (inTag) return inTag;
+  return undefined;
+}
+
+// Extract candidate talks from the verse HTML fragment
 function parseTalksFromHtml(html: string): CitationTalk[] {
-  const text = textFromHtml(html);
-  const rawLines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-  const lines: string[] = rawLines.filter((l) => {
-    // Remove generic headers/noise commonly present in the fragment
-    if (/^citation(\s|\u00A0)?index$/i.test(l)) return false;
-    if (/^index$/i.test(l)) return false;
-    // Lines like "Ether 12 :4" or "Ether 12:4"
-    if (/^[A-Za-z0-9\- ]+\s+\d+\s*: ?\d+$/i.test(l)) return false;
-    return true;
-  });
+  // Strategy 1: Parse each <li> block independently to keep anchors scoped to a talk
+  const liBlocks = Array.from(html.matchAll(/<li\b[^>]*>[\s\S]*?<\/li>/gi)).map((m) => m[0]);
+  const talksFromLi: CitationTalk[] = [];
+  if (liBlocks.length > 0) {
+    for (const liHtml of liBlocks) {
+      const blockTextRaw = textFromHtml(liHtml).replace(/^•\s*/, "");
+      const blockText = blockTextRaw.replace(/\s+(Watch|Listen)(\s|$)/gi, " ").trim();
 
-  const talks: CitationTalk[] = [];
-  const bulletOnly = /^•?\s*(\d{4})-([OA]):(\d+),\s+(.+)$/;
-  const combined = /^(\d{4})-([OA]):(\d+),\s+([^,]+?)\s+(.+)$/; // year-session:index, speaker title
+      // Extract core identifiers
+      const combined = /^(\d{4})-([OA]):(\d+),\s+([^,]+?)\s+(.+)$/; // year-session:index, speaker title
+      const bulletOnly = /^(\d{4})-([OA]):(\d+),\s+(.+)$/;
 
-  // First, find explicit talk anchors to capture talk URLs and titles
-  const talkAnchors = Array.from(html.matchAll(/<a[^>]+href="([^"]*?(?:content\/)?talks_ajax\/(\d+)\/?[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi));
-  const talkIdToBase: Record<string, { talkUrl: string; title?: string; index: number; end: number }> = {};
-  for (const m of talkAnchors) {
-    const href = absoluteUrl(m[1]);
-    const talkId = m[2];
-    const title = decodeEntities(textFromHtml(m[3]));
-    const index = m.index ?? 0;
-    const end = index + m[0].length;
-    talkIdToBase[talkId] = { talkUrl: href, title: title || undefined, index, end };
-  }
+      let year: string | undefined;
+      let sess: string | undefined;
+      let idx: string | undefined;
+      let speaker: string | undefined;
+      let title: string | undefined;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+      const mCombined = blockText.match(combined);
+      if (mCombined) {
+        [, year, sess, idx, speaker, title] = mCombined as unknown as [string, string, string, string, string, string];
+      } else {
+        const mBullet = blockText.match(bulletOnly);
+        if (mBullet) {
+          [, year, sess, idx, speaker] = mBullet as unknown as [string, string, string, string, string];
+        }
+      }
 
-    // Case 1: combined line has speaker and title
-    const mCombined = line.match(combined);
-    if (mCombined) {
-      const [, year, sess, idx, speaker, title] = mCombined;
-      talks.push({
-        id: `${year}-${sess}:${idx}`,
+      // Extract anchors within this block
+      const talkAnchor = liHtml.match(/<a[^>]+href="([^"]*?(?:content\/)?talks_ajax\/(\d+)\/?[^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
+      const talkUrl = talkAnchor ? absoluteUrl(talkAnchor[1]) : undefined;
+      const talkId = talkAnchor ? talkAnchor[2] : undefined;
+      const anchorTitle = talkAnchor ? decodeEntities(textFromHtml(talkAnchor[3])) : undefined;
+
+      // Prefer explicit onclick handlers which contain the canonical URLs
+      const onWatch = liHtml.match(/watchTalk\([^,]+,\s*'([^']+)'\)/i);
+      const onListen = liHtml.match(/listenTalk\([^,]+,\s*'([^']+)'\)/i);
+      let watchUrl = onWatch ? onWatch[1] : undefined;
+      let listenUrl = onListen ? onListen[1] : undefined;
+      if (!watchUrl) {
+        const mWatchTag = liHtml.match(/(<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Watch[\s\S]*?<\/a>)/i);
+        watchUrl = mWatchTag ? sanitizeAnchorUrl(mWatchTag[2], mWatchTag[1]) : undefined;
+      }
+      if (!listenUrl) {
+        const mListenTag = liHtml.match(/(<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Listen[\s\S]*?<\/a>)/i);
+        listenUrl = mListenTag ? sanitizeAnchorUrl(mListenTag[2], mListenTag[1]) : undefined;
+      }
+
+      const talk: CitationTalk = {
+        id: year && sess && idx ? `${year}-${sess}:${idx}` : talkId,
         year,
         session: sess === "O" ? "October" : sess === "A" ? "April" : undefined,
-        speaker: speaker.trim(),
-        title: title.trim(),
-      });
-      continue;
-    }
+        speaker: speaker?.trim(),
+        title: (title || anchorTitle || "").trim(),
+        talkUrl,
+        watchUrl: watchUrl,
+        listenUrl: listenUrl,
+        talkId,
+      };
 
-    // Case 2: bullet-only line with year/session/index and speaker; next line is title
-    const mBullet = line.match(bulletOnly);
-    if (mBullet) {
-      const [, year, sess, idx, speaker] = mBullet;
-      // Title is typically the next line
-      const next = lines[i + 1] || "";
-      const isNextAlsoBullet = bulletOnly.test(next) || combined.test(next);
-      const isNoise = /^watch|^listen/i.test(next);
-      const title = !isNextAlsoBullet && !isNoise ? next : "";
-      talks.push({
-        id: `${year}-${sess}:${idx}`,
-        year,
-        session: sess === "O" ? "October" : sess === "A" ? "April" : undefined,
-        speaker: speaker.trim(),
-        title: title || speaker.trim(),
-      });
-      if (title) i += 1; // consume the title line
-      continue;
+      // Avoid empty/invalid entries (must have at least a title or talkUrl)
+      if (talk.title || talk.talkUrl) {
+        talksFromLi.push(talk);
+      }
     }
-    // Other lines ignored
   }
 
-  // Enrich talks with URLs by matching nearby talk anchors and Watch/Listen links
-  for (const t of talks) {
-    // Find a talk anchor block that is near the corresponding year/index info.
-    // Best effort: choose the first unmatched anchor.
-    const candidates = Object.entries(talkIdToBase)
-      .sort((a, b) => a[1].index - b[1].index);
-    if (candidates.length > 0) {
-      const [talkId, base] = candidates[0];
-      t.id = t.id || talkId; // ensure unique id
-      t.talkId = talkId;
-      t.talkUrl = base.talkUrl;
-      if (!t.title && base.title) t.title = base.title;
-      // Slice a local window around this anchor and look for Watch/Listen anchors
-      const start = Math.max(0, base.index - 400);
-      const end = Math.min(html.length, base.end + 400);
-      const windowHtml = html.slice(start, end);
-      const mWatch = windowHtml.match(/<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Watch[\s\S]*?<\/a>/i);
-      if (mWatch) t.watchUrl = absoluteUrl(mWatch[1]);
-      const mListen = windowHtml.match(/<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Listen[\s\S]*?<\/a>/i);
-      if (mListen) t.listenUrl = absoluteUrl(mListen[1]);
-      // Remove so next talk takes next anchor
-      delete talkIdToBase[talkId];
+  // If LI parsing yielded results, use them
+  const talks: CitationTalk[] = talksFromLi;
+  if (talks.length === 0) {
+    // Strategy 2 (fallback): text-line parsing across the whole fragment
+    const text = textFromHtml(html);
+    const rawLines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const lines: string[] = rawLines.filter((l) => {
+      if (/^citation(\s|\u00A0)?index$/i.test(l)) return false;
+      if (/^index$/i.test(l)) return false;
+      if (/^[A-Za-z0-9\- ]+\s+\d+\s*: ?\d+$/i.test(l)) return false;
+      return true;
+    });
+
+    const bulletOnly = /^•?\s*(\d{4})-([OA]):(\d+),\s+(.+)$/;
+    const combined = /^(\d{4})-([OA]):(\d+),\s+([^,]+?)\s+(.+)$/;
+
+    // Capture talk anchors to later enrich talks with URLs
+    const talkAnchors = Array.from(html.matchAll(/<a[^>]+href="([^"]*?(?:content\/)?talks_ajax\/(\d+)\/?[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi));
+    const talkIdToBase: Record<string, { talkUrl: string; title?: string; index: number; end: number }> = {};
+    for (const m of talkAnchors) {
+      const href = absoluteUrl(m[1]);
+      const tId = m[2];
+      const tTitle = decodeEntities(textFromHtml(m[3]));
+      const index = m.index ?? 0;
+      const end = index + m[0].length;
+      talkIdToBase[tId] = { talkUrl: href, title: tTitle || undefined, index, end };
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const mCombined = line.match(combined);
+      if (mCombined) {
+        const [, year, sess, idx, speaker, title] = mCombined;
+        talks.push({
+          id: `${year}-${sess}:${idx}`,
+          year,
+          session: sess === "O" ? "October" : sess === "A" ? "April" : undefined,
+          speaker: speaker.trim(),
+          title: title.trim(),
+        });
+        continue;
+      }
+      const mBullet = line.match(bulletOnly);
+      if (mBullet) {
+        const [, year, sess, idx, speaker] = mBullet;
+        const next = lines[i + 1] || "";
+        const isNextAlsoBullet = bulletOnly.test(next) || combined.test(next);
+        const isNoise = /^watch|^listen/i.test(next);
+        const title = !isNextAlsoBullet && !isNoise ? next : "";
+        talks.push({
+          id: `${year}-${sess}:${idx}`,
+          year,
+          session: sess === "O" ? "October" : sess === "A" ? "April" : undefined,
+          speaker: speaker.trim(),
+          title: title || speaker.trim(),
+        });
+        if (title) i += 1;
+        continue;
+      }
+    }
+
+    // Enrich with nearby anchors for URLs and watch/listen links
+    for (const t of talks) {
+      const candidates = Object.entries(talkIdToBase).sort((a, b) => a[1].index - b[1].index);
+      if (candidates.length > 0) {
+        const [tId, base] = candidates[0];
+        t.id = t.id || tId;
+        t.talkId = tId;
+        t.talkUrl = base.talkUrl;
+        if (!t.title && base.title) t.title = base.title;
+        const start = Math.max(0, base.index - 400);
+        const end = Math.min(html.length, base.end + 400);
+        const windowHtml = html.slice(start, end);
+        const wOn = windowHtml.match(/watchTalk\([^,]+,\s*'([^']+)'\)/i);
+        const wUrl = wOn ? wOn[1] : (windowHtml.match(/(<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Watch[\s\S]*?<\/a>)/i)?.[2] ?? undefined);
+        const wUrlSanitized = wUrl ? sanitizeAnchorUrl(wUrl, wOn ? wOn[0] : "") : undefined;
+        if (wUrlSanitized) t.watchUrl = wUrlSanitized;
+        const lOn = windowHtml.match(/listenTalk\([^,]+,\s*'([^']+)'\)/i);
+        const lUrl = lOn ? lOn[1] : (windowHtml.match(/(<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Listen[\s\S]*?<\/a>)/i)?.[2] ?? undefined);
+        const lUrlSanitized = lUrl ? sanitizeAnchorUrl(lUrl, lOn ? lOn[0] : "") : undefined;
+        if (lUrlSanitized) t.listenUrl = lUrlSanitized;
+        delete talkIdToBase[tId];
+      }
     }
   }
 
