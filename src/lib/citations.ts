@@ -123,9 +123,18 @@ function parseTalksFromHtml(html: string): CitationTalk[] {
 
       // Extract anchors within this block
       const talkAnchor = liHtml.match(/<a[^>]+href="([^"]*?(?:content\/)?talks_ajax\/(\d+)\/?[^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
-      const talkUrl = talkAnchor ? absoluteUrl(talkAnchor[1]) : undefined;
-      const talkId = talkAnchor ? talkAnchor[2] : undefined;
+      let talkUrl = talkAnchor ? absoluteUrl(talkAnchor[1]) : undefined;
+      let talkId = talkAnchor ? talkAnchor[2] : undefined;
       const anchorTitle = talkAnchor ? decodeEntities(textFromHtml(talkAnchor[3])) : undefined;
+
+      // Fallback talk id from onclick getTalk('ID', ...)
+      const getTalkMatch = liHtml.match(/getTalk\(\s*'(\d+)'\s*,/i);
+      if (!talkId && getTalkMatch) {
+        talkId = getTalkMatch[1];
+      }
+      if (!talkUrl && talkId) {
+        talkUrl = absoluteUrl(`/content/talks_ajax/${talkId}/`);
+      }
 
       // Prefer explicit onclick handlers which contain the canonical URLs
       const onWatch = liHtml.match(/watchTalk\([^,]+,\s*'([^']+)'\)/i);
@@ -233,6 +242,13 @@ function parseTalksFromHtml(html: string): CitationTalk[] {
         const start = Math.max(0, base.index - 400);
         const end = Math.min(html.length, base.end + 400);
         const windowHtml = html.slice(start, end);
+        // Extract or confirm talkId from getTalk in nearby window
+        const winGetTalk = windowHtml.match(/getTalk\(\s*'(\d+)'\s*,/i);
+        if (winGetTalk && !t.talkId) {
+          t.talkId = winGetTalk[1];
+          if (!t.talkUrl) t.talkUrl = absoluteUrl(`/content/talks_ajax/${t.talkId}/`);
+        }
+
         const wOn = windowHtml.match(/watchTalk\([^,]+,\s*'([^']+)'\)/i);
         const wUrl = wOn ? wOn[1] : (windowHtml.match(/(<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?Watch[\s\S]*?<\/a>)/i)?.[2] ?? undefined);
         const wUrlSanitized = wUrl ? sanitizeAnchorUrl(wUrl, wOn ? wOn[0] : "") : undefined;

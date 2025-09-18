@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Props = {
   open: boolean;
@@ -30,6 +31,7 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [talks, setTalks] = useState<CitationTalk[]>([]);
+  const router = useRouter();
 
   const verseSpec = useMemo(() => (verseEnd && verseEnd > verseStart ? `${verseStart}-${verseEnd}` : String(verseStart)), [verseStart, verseEnd]);
 
@@ -81,27 +83,43 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
         {talks.length > 0 ? (
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
             {talks.map((t, idx) => (
-              <li key={t.id ?? `${idx}-${t.title}`}
-                  className="border border-black/10 dark:border-white/15 rounded-lg p-3 bg-black/5 dark:bg-white/5 flex flex-col gap-2 group">
-                <button
-                  className="text-left"
-                  onClick={() => {
+              <li
+                key={t.id ?? `${idx}-${t.title}`}
+                className="relative border border-black/10 dark:border-white/15 rounded-lg p-3 bg-black/5 dark:bg-white/5 flex flex-col gap-2 group cursor-pointer"
+                onClick={() => {
+                  const talkId = t.talkId || (t.talkUrl ? (t.talkUrl.match(/talks_ajax\/(\d+)/)?.[1] ?? null) : null);
+                  if (talkId) {
+                    router.push(`/talk/${talkId}`);
+                    onClose();
+                  } else if (t.talkUrl) {
+                    window.open(t.talkUrl, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
                     const talkId = t.talkId || (t.talkUrl ? (t.talkUrl.match(/talks_ajax\/(\d+)/)?.[1] ?? null) : null);
                     if (talkId) {
-                      window.open(`/talk/${talkId}`, "_blank", "noopener,noreferrer");
+                      router.push(`/talk/${talkId}`);
+                      onClose();
                     } else if (t.talkUrl) {
                       window.open(t.talkUrl, "_blank", "noopener,noreferrer");
                     }
-                  }}
-                  title="Open talk"
-                >
-                  <div className="text-sm text-foreground/70">
-                    {t.year ? <span className="mr-1">{t.year}</span> : null}
-                    {t.session ? <span className="mr-1">{t.session}</span> : null}
-                  </div>
-                  <div className="font-semibold leading-snug">{t.title}</div>
-                  {t.speaker ? <div className="text-sm text-foreground/80">{t.speaker}</div> : null}
-                </button>
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                title="Open talk"
+              >
+                <div className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-foreground/70">
+                  {t.talkId || (t.talkUrl ? (t.talkUrl.match(/talks_ajax\/(\d+)/)?.[1] ?? "") : "")}
+                </div>
+                <div className="text-sm text-foreground/70">
+                  {t.year ? <span className="mr-1">{t.year}</span> : null}
+                  {t.session ? <span className="mr-1">{t.session}</span> : null}
+                </div>
+                <div className="font-semibold leading-snug">{t.title}</div>
+                {t.speaker ? <div className="text-sm text-foreground/80">{t.speaker}</div> : null}
                 <div className="flex items-center gap-2 pt-1">
                   {t.watchUrl ? (
                     <a
@@ -110,6 +128,7 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Watch"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       Watch
                     </a>
@@ -121,6 +140,7 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Listen"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       Listen
                     </a>
