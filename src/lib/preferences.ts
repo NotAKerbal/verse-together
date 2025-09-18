@@ -12,7 +12,7 @@ const STORAGE_KEY = "reader_prefs_v1";
 
 export function getDefaultPreferences(): ReaderPreferences {
   return {
-    showFootnotes: true,
+    showFootnotes: false,
     fontScale: 1,
     fontFamily: "serif",
   };
