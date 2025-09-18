@@ -8,6 +8,55 @@ export type ChapterResponse = {
 
 const BASE_URL = "https://openscriptureapi.org/api/scriptures/v1/lds/en";
 
+export type BookResponse = {
+  _id: string;
+  title: string;
+  titleShort?: string;
+  titleOfficial?: string;
+  subtitle?: string;
+  summary?: string;
+  chapterDelineation?: string;
+  chapters: Array<{
+    _id: string;
+    summary?: string;
+  }>;
+};
+
+export async function fetchBook(volumeId: string, bookId: string): Promise<BookResponse> {
+  // Try volume/book form first, then fallback to book/id form per docs
+  // Docs: "GET /book/[id] OR /volume/[volume_id]/[book_id]" (Books) – see docs/books
+  // https://openscriptureapi.org/docs/books
+  const urls = [
+    `${BASE_URL}/volume/${encodeURIComponent(volumeId)}/${encodeURIComponent(bookId)}`,
+    `${BASE_URL}/book/${encodeURIComponent(bookId)}`,
+  ];
+
+  let lastStatus = 0;
+  let raw: any = null;
+  for (const url of urls) {
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (res.ok) {
+      raw = await res.json();
+      break;
+    }
+    lastStatus = res.status;
+  }
+  if (!raw) {
+    throw new Error(`OpenScripture API error ${lastStatus || 400}`);
+  }
+  const chapters = Array.isArray(raw.chapters) ? raw.chapters : [];
+  return {
+    _id: String(raw._id ?? bookId),
+    title: String(raw.title ?? bookId),
+    titleShort: raw.titleShort ?? undefined,
+    titleOfficial: raw.titleOfficial ?? undefined,
+    subtitle: raw.subtitle ?? undefined,
+    summary: raw.summary ?? undefined,
+    chapterDelineation: raw.chapterDelineation ?? undefined,
+    chapters: chapters.map((c: any) => ({ _id: String(c._id ?? ""), summary: c.summary ?? undefined })),
+  };
+}
+
 export async function fetchChapter(
   volumeId: string,
   bookId: string,

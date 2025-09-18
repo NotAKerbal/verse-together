@@ -1,8 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
+import Breadcrumbs, { Crumb } from "./Breadcrumbs";
+import VerseActionBar from "./VerseActionBar";
 
 type Verse = { verse: number; text: string };
 
@@ -12,6 +14,7 @@ export default function ChapterReader({
   chapter,
   verses,
   reference,
+  breadcrumbs,
   prevHref,
   nextHref,
 }: {
@@ -20,10 +23,15 @@ export default function ChapterReader({
   chapter: number;
   verses: Verse[];
   reference: string;
+  breadcrumbs: Crumb[];
   prevHref?: string;
   nextHref?: string;
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const router = useRouter();
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchStartTime = useRef<number | null>(null);
 
   function toggleVerse(n: number) {
     setSelected((prev) => {
@@ -42,109 +50,44 @@ export default function ChapterReader({
 
   // first/last verse values not currently used
 
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.changedTouches[0];
+    touchStartX.current = t.clientX;
+    touchStartY.current = t.clientY;
+    touchStartTime.current = Date.now();
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current == null || touchStartY.current == null || touchStartTime.current == null) return;
+    const t = e.changedTouches[0];
+    const dx = (t.clientX - touchStartX.current);
+    const dy = (t.clientY - touchStartY.current);
+    const dt = Date.now() - touchStartTime.current;
+    // Basic horizontal swipe detection
+    const distanceThreshold = 48; // px
+    const velocityOk = dt < 800;
+    const horizontalEnough = Math.abs(dx) > distanceThreshold && Math.abs(dx) > Math.abs(dy) * 1.3;
+    if (horizontalEnough && velocityOk) {
+      if (dx < 0 && nextHref) {
+        router.push(nextHref);
+      } else if (dx > 0 && prevHref) {
+        router.push(prevHref);
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchStartTime.current = null;
+  }
+
   return (
-    <section className="space-y-4">
-      <header className="sticky top-[56px] z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
-        <div className="flex items-center justify-between gap-3">
+    <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs sm:text-sm">
+            <Breadcrumbs items={breadcrumbs} />
+          </div>
           <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
-          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-            {prevHref ? (
-              <Link href={prevHref} className="underline underline-offset-4">Previous</Link>
-            ) : (
-              <span className="text-foreground/50">Previous</span>
-            )}
-            <span className="text-foreground/30">•</span>
-            {nextHref ? (
-              <Link href={nextHref} className="underline underline-offset-4">Next</Link>
-            ) : (
-              <span className="text-foreground/50">Next</span>
-            )}
-          </div>
         </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <button
-            onClick={() => setSelected(new Set())}
-            aria-label="Clear selection"
-            title="Clear selection"
-            className="inline-flex items-center justify-center rounded-full border border-black/10 dark:border-white/15 w-8 h-8 text-lg leading-none hover:bg-black/5 dark:hover:bg-white/10"
-          >
-            ×
-          </button>
-
-          <div className="ml-auto flex items-center gap-2">
-            <ActionButtons
-              disabled={selected.size === 0}
-              onShare={async () => {
-                const s = Math.min(...Array.from(selected));
-                const e = Math.max(...Array.from(selected));
-                const { data: session } = await supabase.auth.getSession();
-                if (!session.session) {
-                  alert("Please sign in to share.");
-                  return;
-                }
-                await supabase.from("scripture_shares").insert({
-                  volume,
-                  book,
-                  chapter,
-                  verse_start: s,
-                  verse_end: e,
-                  translation: null,
-                  note: null,
-                  content: selectedText || null,
-                });
-                alert("Shared!");
-              }}
-              onLike={async () => {
-                const { data: session } = await supabase.auth.getSession();
-                if (!session.session) {
-                  alert("Please sign in to react.");
-                  return;
-                }
-                // Like for the first selected verse range as a share-less quick reaction is ambiguous.
-                // Encourage share flow then like on feed; keep as no-op here for now.
-                alert("Tip: Share selection, then like it on the home feed.");
-              }}
-              onComment={async () => {
-                const { data: session } = await supabase.auth.getSession();
-                if (!session.session) {
-                  alert("Please sign in to comment.");
-                  return;
-                }
-                const text = prompt("Add a quick comment about your selection:")?.trim();
-                if (!text) return;
-                // Create a share to attach comments to
-                const s = Math.min(...Array.from(selected));
-                const e = Math.max(...Array.from(selected));
-                const { data, error } = await supabase
-                  .from("scripture_shares")
-                  .insert({
-                    volume,
-                    book,
-                    chapter,
-                    verse_start: s,
-                    verse_end: e,
-                    translation: null,
-                    note: null,
-                    content: selectedText || null,
-                  })
-                  .select("id")
-                  .single();
-                if (error || !data) return alert(error?.message ?? "Failed creating share");
-                const shareId = (data as { id: string }).id;
-                const { error: e2 } = await supabase
-                  .from("scripture_comments")
-                  .insert({ share_id: shareId, body: text });
-                if (e2) return alert(e2.message);
-                alert("Comment posted on your new share!");
-              }}
-            />
-          </div>
-        </div>
-
-        {selectedText ? (
-          <div className="mt-2 text-xs sm:text-sm text-foreground/70 line-clamp-2">{selectedText}</div>
-        ) : null}
       </header>
 
       <ol className="space-y-2 sm:space-y-3">
@@ -163,36 +106,71 @@ export default function ChapterReader({
           );
         })}
       </ol>
+
+      <VerseActionBar
+        visible={selected.size > 0}
+        onClear={() => setSelected(new Set())}
+        onShare={async () => {
+          const s = Math.min(...Array.from(selected));
+          const e = Math.max(...Array.from(selected));
+          const { data: session } = await supabase.auth.getSession();
+          if (!session.session) {
+            alert("Please sign in to share.");
+            return;
+          }
+          await supabase.from("scripture_shares").insert({
+            volume,
+            book,
+            chapter,
+            verse_start: s,
+            verse_end: e,
+            translation: null,
+            note: null,
+            content: selectedText || null,
+          });
+          alert("Shared!");
+        }}
+        onLike={async () => {
+          const { data: session } = await supabase.auth.getSession();
+          if (!session.session) {
+            alert("Please sign in to react.");
+            return;
+          }
+          alert("Tip: Share selection, then like it on the home feed.");
+        }}
+        onComment={async () => {
+          const { data: session } = await supabase.auth.getSession();
+          if (!session.session) {
+            alert("Please sign in to comment.");
+            return;
+          }
+          const text = prompt("Add a quick comment about your selection:")?.trim();
+          if (!text) return;
+          const s = Math.min(...Array.from(selected));
+          const e = Math.max(...Array.from(selected));
+          const { data, error } = await supabase
+            .from("scripture_shares")
+            .insert({
+              volume,
+              book,
+              chapter,
+              verse_start: s,
+              verse_end: e,
+              translation: null,
+              note: null,
+              content: selectedText || null,
+            })
+            .select("id")
+            .single();
+          if (error || !data) return alert(error?.message ?? "Failed creating share");
+          const shareId = (data as { id: string }).id;
+          const { error: e2 } = await supabase
+            .from("scripture_comments")
+            .insert({ share_id: shareId, body: text });
+          if (e2) return alert(e2.message);
+          alert("Comment posted on your new share!");
+        }}
+      />
     </section>
   );
 }
-
-function ActionButtons({ disabled, onShare, onLike, onComment }: { disabled: boolean; onShare: () => void; onLike: () => void; onComment: () => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={onShare}
-        disabled={disabled}
-        className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-      >
-        Share
-      </button>
-      <button
-        onClick={onLike}
-        disabled={disabled}
-        className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
-      >
-        ❤ Like
-      </button>
-      <button
-        onClick={onComment}
-        disabled={disabled}
-        className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
-      >
-        💬 Comment
-      </button>
-    </div>
-  );
-}
-
-
