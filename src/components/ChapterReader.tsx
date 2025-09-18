@@ -9,6 +9,7 @@ import VerseActionBar from "./VerseActionBar";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
+import { fetchChapter } from "@/lib/openscripture";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type ShareRow = { id: string; verse_start: number; verse_end: number };
@@ -48,6 +49,66 @@ export default function ChapterReader({
   const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>>>({});
   const [commenterNames, setCommenterNames] = useState<Record<string, string>>({});
   const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string }>(null);
+  const [dragDx, setDragDx] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [animTargetX, setAnimTargetX] = useState<number | null>(null);
+  const navHrefRef = useRef<string | null>(null);
+  const leavingRef = useRef(false);
+  const [prevPreview, setPrevPreview] = useState<null | { reference: string; preview: string }>(null);
+  const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
+
+  function parseBrowseHref(href: string | undefined): { volume: string; book: string; chapter: number } | null {
+    if (!href) return null;
+    const clean = href.split("?")[0].split("#")[0];
+    const parts = clean.split("/").filter(Boolean);
+    // expect: ["browse", volume, book, chapter]
+    if (parts.length >= 4 && parts[0] === "browse") {
+      const vol = decodeURIComponent(parts[1] || "");
+      const b = decodeURIComponent(parts[2] || "");
+      const chStr = decodeURIComponent(parts[3] || "");
+      const ch = Number(chStr);
+      if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch };
+    }
+    return null;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function prefetch() {
+      const nextInfo = parseBrowseHref(nextHref);
+      const prevInfo = parseBrowseHref(prevHref);
+      try {
+        if (nextInfo) {
+          const chap = await fetchChapter(nextInfo.volume, nextInfo.book, nextInfo.chapter);
+          if (!cancelled) {
+            const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
+            setNextPreview({ reference: chap.reference, preview: text });
+          }
+        } else {
+          setNextPreview(null);
+        }
+      } catch {
+        if (!cancelled) setNextPreview(null);
+      }
+      try {
+        if (prevInfo) {
+          const chap = await fetchChapter(prevInfo.volume, prevInfo.book, prevInfo.chapter);
+          if (!cancelled) {
+            const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
+            setPrevPreview({ reference: chap.reference, preview: text });
+          }
+        } else {
+          setPrevPreview(null);
+        }
+      } catch {
+        if (!cancelled) setPrevPreview(null);
+      }
+    }
+    prefetch();
+    return () => {
+      cancelled = true;
+    };
+  }, [nextHref, prevHref]);
 
   function toggleVerse(n: number) {
     if (!user) return;
@@ -123,6 +184,24 @@ export default function ChapterReader({
     touchStartTime.current = Date.now();
   }
 
+  function onTouchMove(e: React.TouchEvent) {
+    if (touchStartX.current == null || touchStartY.current == null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX.current;
+    const dy = t.clientY - touchStartY.current;
+    const horizontalEnough = Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy) * 1.2;
+    if (!horizontalEnough) return;
+    setIsDragging(true);
+    const hasPrev = !!prevHref;
+    const hasNext = !!nextHref;
+    const direction = dx < 0 ? -1 : 1;
+    const allowed = (direction < 0 && hasNext) || (direction > 0 && hasPrev);
+    const maxDrag = typeof window !== "undefined" ? Math.max(120, Math.floor(window.innerWidth * 0.92)) : 120;
+    const clamp = allowed ? maxDrag : 24;
+    const clamped = Math.max(-clamp, Math.min(clamp, dx));
+    setDragDx(clamped);
+  }
+
   function onTouchEnd(e: React.TouchEvent) {
     if (touchStartX.current == null || touchStartY.current == null || touchStartTime.current == null) return;
     const t = e.changedTouches[0];
@@ -133,16 +212,40 @@ export default function ChapterReader({
     const distanceThreshold = 48; // px
     const velocityOk = dt < 800;
     const horizontalEnough = Math.abs(dx) > distanceThreshold && Math.abs(dx) > Math.abs(dy) * 1.3;
+    let targetHref: string | null = null;
+    let slideX = 0;
     if (horizontalEnough && velocityOk) {
       if (dx < 0 && nextHref) {
-        router.push(nextHref);
+        targetHref = nextHref;
+        slideX = -window.innerWidth;
       } else if (dx > 0 && prevHref) {
-        router.push(prevHref);
+        targetHref = prevHref;
+        slideX = window.innerWidth;
       }
+    }
+    if (targetHref) {
+      navHrefRef.current = targetHref;
+      leavingRef.current = true;
+      setAnimTargetX(slideX);
+    } else {
+      setAnimTargetX(0);
     }
     touchStartX.current = null;
     touchStartY.current = null;
     touchStartTime.current = null;
+  }
+
+  function onTransitionEnd() {
+    if (leavingRef.current && navHrefRef.current) {
+      const href = navHrefRef.current;
+      navHrefRef.current = null;
+      leavingRef.current = false;
+      router.push(href);
+      return;
+    }
+    setAnimTargetX(null);
+    setIsDragging(false);
+    setDragDx(0);
   }
 
   useEffect(() => {
@@ -243,18 +346,52 @@ export default function ChapterReader({
     };
   }, [volume, book, chapter]);
 
-  return (
-    <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
-        <div className="flex flex-col gap-1">
-          <div className="text-xs sm:text-sm">
-            <Breadcrumbs items={breadcrumbs} />
-          </div>
-          <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
-        </div>
-      </header>
+  const translateX = animTargetX !== null ? animTargetX : isDragging ? dragDx : 0;
+  const progress = Math.min(1, Math.max(0, Math.abs(translateX) / (typeof window !== "undefined" ? Math.max(120, Math.floor(window.innerWidth * 0.92)) : 120)));
+  const overlayOpacity = progress * 0.9; // fade-in intensity
+  const transition = animTargetX !== null ? "transform 240ms ease-out" : isDragging ? "none" : undefined;
 
-      <ol className="space-y-2 sm:space-y-3">
+  return (
+    <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      {/* Preview overlay behind the sliding content */}
+      {isDragging || animTargetX !== null ? (
+        <div className="pointer-events-none fixed inset-0 z-0">
+          {/* Right swipe shows previous title */}
+          {translateX > 0 && prevPreview ? (
+            <div className="absolute inset-0 flex items-start justify-start">
+              <div className="m-3 sm:m-4 rounded-md border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-3 py-2 shadow"
+                   style={{ opacity: overlayOpacity }}>
+                <div className="text-base sm:text-xl font-semibold">{prevPreview.reference}</div>
+              </div>
+            </div>
+          ) : null}
+          {/* Left swipe shows next title */}
+          {translateX < 0 && nextPreview ? (
+            <div className="absolute inset-0 flex items-start justify-end">
+              <div className="m-3 sm:m-4 rounded-md border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-3 py-2 shadow text-right"
+                   style={{ opacity: overlayOpacity }}>
+                <div className="text-base sm:text-xl font-semibold">{nextPreview.reference}</div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        onTransitionEnd={onTransitionEnd}
+        style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
+        className="relative"
+      >
+        <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
+          <div className="flex flex-col gap-1">
+            <div className="text-xs sm:text-sm">
+              <Breadcrumbs items={breadcrumbs} />
+            </div>
+            <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
+          </div>
+        </header>
+
+        <ol className="space-y-2 sm:space-y-3">
         {(() => {
           const blocks: Array<{ key: string; verses: Verse[]; type: "selected" | "active" | "plain" }> = [];
           let i = 0;
@@ -395,12 +532,12 @@ export default function ChapterReader({
             );
           });
         })()}
-      </ol>
+        </ol>
 
-      <VerseActionBar
-        visible={selected.size > 0 && !!user}
-        onClear={() => setSelected(new Set())}
-        onShare={async () => {
+        <VerseActionBar
+          visible={selected.size > 0 && !!user}
+          onClear={() => setSelected(new Set())}
+          onShare={async () => {
           const s = Math.min(...Array.from(selected));
           const e = Math.max(...Array.from(selected));
           const { data: session } = await supabase.auth.getSession();
@@ -419,8 +556,8 @@ export default function ChapterReader({
             content: selectedText || null,
           });
           setSelected(new Set());
-        }}
-        onLike={async () => {
+          }}
+          onLike={async () => {
           const { data: session } = await supabase.auth.getSession();
           if (!session.session) {
             alert("Please sign in to like.");
@@ -455,14 +592,15 @@ export default function ChapterReader({
             return;
           }
           setSelected(new Set());
-        }}
-        onComment={async () => {
+          }}
+          onComment={async () => {
           const { data: session } = await supabase.auth.getSession();
           if (!session.session) return;
           setCommentError(null);
           setIsCommentOpen(true);
-        }}
-      />
+          }}
+        />
+      </div>
 
       {isCommentOpen ? (
         <div className="fixed inset-0 z-50">
