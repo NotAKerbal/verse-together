@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
+import CitationsModal from "./CitationsModal";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -61,6 +62,8 @@ export default function ChapterReader({
   const leavingRef = useRef(false);
   const [prevPreview, setPrevPreview] = useState<null | { reference: string; preview: string }>(null);
   const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
+  const [openCitations, setOpenCitations] = useState(false);
+  const overlayOpen = isCommentOpen || !!openFootnote || openCitations;
 
   function parseBrowseHref(href: string | undefined): { volume: string; book: string; chapter: number } | null {
     if (!href) return null;
@@ -689,8 +692,20 @@ export default function ChapterReader({
         />
       ) : null}
 
+      {openCitations ? (
+        <CitationsModal
+          open={true}
+          onClose={() => setOpenCitations(false)}
+          volume={volume}
+          book={book}
+          chapter={chapter}
+          verseStart={Math.min(...Array.from(selected))}
+          verseEnd={Math.max(...Array.from(selected))}
+        />
+      ) : null}
+
       <VerseActionBar
-        visible={selected.size > 0}
+        visible={selected.size > 0 && !overlayOpen}
         actionsEnabled={!!user}
         onClear={() => setSelected(new Set())}
         onLike={async () => {
@@ -736,8 +751,7 @@ export default function ChapterReader({
         setIsCommentOpen(true);
         }}
         onCitations={() => {
-        // Placeholder for now; opens the comment drawer pattern later if needed
-        alert("Citations coming soon.");
+        setOpenCitations(true);
         }}
       />
     </section>
