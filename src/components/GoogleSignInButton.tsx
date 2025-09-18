@@ -6,18 +6,28 @@ import { supabase } from "@/lib/supabaseClient";
 
 declare const google: any;
 
-async function generateNonce(): Promise<{ nonce: string; hashedNonce: string }> {
-  const nonce = btoa(
-    String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))
-  );
-  const encoder = new TextEncoder();
-  const encodedNonce = encoder.encode(nonce);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", encodedNonce);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashedNonce = hashArray
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return { nonce, hashedNonce };
+async function generateNonce(): Promise<{ nonce?: string; hashedNonce?: string }> {
+  try {
+    if (typeof window === "undefined" || !window.crypto) {
+      return {};
+    }
+    const random = new Uint8Array(32);
+    window.crypto.getRandomValues(random);
+    const nonce = btoa(String.fromCharCode(...Array.from(random as any)));
+    // Some mobile browsers over HTTP do not support SubtleCrypto
+    if (!window.crypto.subtle || typeof window.crypto.subtle.digest !== "function") {
+      return { nonce };
+    }
+    const encoder = new TextEncoder();
+    const encodedNonce = encoder.encode(nonce);
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", encodedNonce);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashedNonce = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    return { nonce, hashedNonce };
+  } catch (_e) {
+    // Fallback: no nonce
+    return {};
+  }
 }
 
 export default function GoogleSignInButton({ oneTap = false, showButton = true }: { oneTap?: boolean; showButton?: boolean }) {
@@ -33,13 +43,14 @@ export default function GoogleSignInButton({ oneTap = false, showButton = true }
 
       const { nonce, hashedNonce } = await generateNonce();
 
-      google.accounts.id.initialize({
+      const initConfig: any = {
         client_id: clientId,
         callback: async (response: { credential: string }) => {
           try {
             const { error } = await supabase.auth.signInWithIdToken({
               provider: "google",
               token: response.credential,
+              // nonce is optional for Google; only send when we have one
               nonce,
             });
             if (error) throw error;
@@ -48,11 +59,13 @@ export default function GoogleSignInButton({ oneTap = false, showButton = true }
             console.error("Supabase signInWithIdToken failed", e);
           }
         },
-        nonce: hashedNonce,
         ux_mode: "popup",
         auto_select: false,
         use_fedcm_for_prompt: true,
-      });
+      };
+      if (hashedNonce) initConfig.nonce = hashedNonce;
+
+      google.accounts.id.initialize(initConfig);
 
       if (showButton && buttonRef.current) {
         google.accounts.id.renderButton(buttonRef.current, {

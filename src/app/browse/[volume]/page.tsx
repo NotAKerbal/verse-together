@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   bookofmormon: [
@@ -48,6 +49,7 @@ export default function VolumePage({ params }: { params: { volume: string } }) {
   const books = volumeToBooks[params.volume] ?? [];
   return (
     <section className="space-y-6">
+      <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: params.volume.replace(/-/g, " ") }]} />
       <h1 className="text-2xl font-semibold capitalize">{params.volume.replace(/-/g, " ")}</h1>
       {books.length === 0 ? (
         <p className="text-foreground/80">No book list available for this volume yet.</p>

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Navbar() {
   const [email, setEmail] = useState<string | null>(null);
@@ -45,12 +46,7 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <Link
-              href="/auth"
-              className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90"
-            >
-              Sign in
-            </Link>
+            <GoogleSignInButton oneTap={false} showButton={true} />
           )}
         </div>
       </div>
