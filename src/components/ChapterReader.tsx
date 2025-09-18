@@ -565,72 +565,6 @@ export default function ChapterReader({
         })()}
         </ol>
 
-        <VerseActionBar
-          visible={selected.size > 0 && !!user}
-          onClear={() => setSelected(new Set())}
-          onShare={async () => {
-          const s = Math.min(...Array.from(selected));
-          const e = Math.max(...Array.from(selected));
-          const { data: session } = await supabase.auth.getSession();
-          if (!session.session) {
-            alert("Please sign in to share.");
-            return;
-          }
-          await supabase.from("scripture_shares").insert({
-            volume,
-            book,
-            chapter,
-            verse_start: s,
-            verse_end: e,
-            translation: null,
-            note: null,
-            content: selectedText || null,
-          });
-          setSelected(new Set());
-          }}
-          onLike={async () => {
-          const { data: session } = await supabase.auth.getSession();
-          if (!session.session) {
-            alert("Please sign in to like.");
-            return;
-          }
-          const s = Math.min(...Array.from(selected));
-          const e = Math.max(...Array.from(selected));
-          const { data, error } = await supabase
-            .from("scripture_shares")
-            .insert({
-              volume,
-              book,
-              chapter,
-              verse_start: s,
-              verse_end: e,
-              translation: null,
-              note: null,
-              content: selectedText || null,
-            })
-            .select("id")
-            .single();
-          if (error || !data) {
-            // surface error minimally
-            return;
-          }
-          const shareId = (data as { id: string }).id;
-          const { error: reactError } = await supabase.rpc("toggle_reaction", {
-            p_share_id: shareId,
-            p_reaction: "like",
-          });
-          if (reactError) {
-            return;
-          }
-          setSelected(new Set());
-          }}
-          onComment={async () => {
-          const { data: session } = await supabase.auth.getSession();
-          if (!session.session) return;
-          setCommentError(null);
-          setIsCommentOpen(true);
-          }}
-        />
       </div>
 
       <ReaderSettings
@@ -755,6 +689,73 @@ export default function ChapterReader({
           highlightText={openFootnote.highlightText}
         />
       ) : null}
+
+      <VerseActionBar
+        visible={selected.size > 0 && !!user}
+        onClear={() => setSelected(new Set())}
+        onShare={async () => {
+        const s = Math.min(...Array.from(selected));
+        const e = Math.max(...Array.from(selected));
+        const { data: session } = await supabase.auth.getSession();
+        if (!session.session) {
+          alert("Please sign in to share.");
+          return;
+        }
+        await supabase.from("scripture_shares").insert({
+          volume,
+          book,
+          chapter,
+          verse_start: s,
+          verse_end: e,
+          translation: null,
+          note: null,
+          content: selectedText || null,
+        });
+        setSelected(new Set());
+        }}
+        onLike={async () => {
+        const { data: session } = await supabase.auth.getSession();
+        if (!session.session) {
+          alert("Please sign in to like.");
+          return;
+        }
+        const s = Math.min(...Array.from(selected));
+        const e = Math.max(...Array.from(selected));
+        const { data, error } = await supabase
+          .from("scripture_shares")
+          .insert({
+            volume,
+            book,
+            chapter,
+            verse_start: s,
+            verse_end: e,
+            translation: null,
+            note: null,
+            content: selectedText || null,
+          })
+          .select("id")
+          .single();
+        if (error || !data) {
+          // surface error minimally
+          return;
+        }
+        const shareId = (data as { id: string }).id;
+        const { error: reactError } = await supabase.rpc("toggle_reaction", {
+          p_share_id: shareId,
+          p_reaction: "like",
+        });
+        if (reactError) {
+          return;
+        }
+        setSelected(new Set());
+        }}
+        onComment={async () => {
+        const { data: session } = await supabase.auth.getSession();
+        if (!session.session) return;
+        setCommentError(null);
+        setIsCommentOpen(true);
+        }}
+      />
     </section>
   );
 }
