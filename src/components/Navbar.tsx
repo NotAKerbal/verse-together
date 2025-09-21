@@ -53,6 +53,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {user?.email ? (
             <>
+              <Link href="/account" className="text-sm hover:underline">Account</Link>
               <span className="text-sm text-foreground/70 hidden sm:inline">{displayName ?? user.email}</span>
               <button
                 onClick={handleSignOut}

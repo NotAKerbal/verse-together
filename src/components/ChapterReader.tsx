@@ -18,7 +18,7 @@ import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToAc
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type ShareRow = { id: string; verse_start: number; verse_end: number };
 type ReactionRow = { id: string; share_id: string };
-type CommentDetail = { id: string; share_id: string; user_id: string; body: string; created_at: string };
+type CommentDetail = { id: string; share_id: string; user_id: string; body: string; created_at: string; visibility: "public" | "friends" };
 
 export default function ChapterReader({
   volume,
@@ -51,6 +51,7 @@ export default function ChapterReader({
   const [commentText, setCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [commentVisibility, setCommentVisibility] = useState<"public" | "friends">("public");
   const [verseIndicators, setVerseIndicators] = useState<Record<number, { comments: number; likes: number }>>({});
   const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>>>({});
   const [commenterNames, setCommenterNames] = useState<Record<string, string>>({});
@@ -297,7 +298,7 @@ export default function ChapterReader({
       if (error || !shares || shares.length === 0) return;
       const shareIds = (shares as ShareRow[]).map((s) => s.id);
       const [{ data: comments }, { data: reactions }] = await Promise.all([
-        supabase.from("scripture_comments").select("id, share_id, user_id, body, created_at").in("share_id", shareIds),
+        supabase.from("scripture_comments").select("id, share_id, user_id, body, created_at, visibility").in("share_id", shareIds),
         supabase.from("scripture_reactions").select("id, share_id").in("share_id", shareIds),
       ]);
       const commentsByShare: Record<string, number> = {};
@@ -659,6 +660,19 @@ export default function ChapterReader({
               />
             </label>
             {commentError ? <p className="text-sm text-red-600">{commentError}</p> : null}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm">
+                <label className="text-foreground/70">Visibility</label>
+                <select
+                  value={commentVisibility}
+                  onChange={(e) => setCommentVisibility(e.target.value as "public" | "friends")}
+                  className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-2 py-1"
+                >
+                  <option value="public">Public</option>
+                  <option value="friends">Friends</option>
+                </select>
+              </div>
+            </div>
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => {
@@ -710,7 +724,7 @@ export default function ChapterReader({
                   const shareId = (data as { id: string }).id;
                   const { error: e2 } = await supabase
                     .from("scripture_comments")
-                    .insert({ share_id: shareId, body: commentText.trim() });
+                    .insert({ share_id: shareId, body: commentText.trim(), visibility: commentVisibility });
                   if (e2) {
                     setCommentError(e2.message);
                     setSubmittingComment(false);
@@ -719,6 +733,7 @@ export default function ChapterReader({
                   setSubmittingComment(false);
                   setIsCommentOpen(false);
                   setCommentText("");
+                  setCommentVisibility("public");
                   setSelected(new Set());
                 }}
                 className="px-5 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-60"
