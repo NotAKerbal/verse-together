@@ -60,6 +60,7 @@ export default function VolumePage({ params }: { params: { volume: string } }) {
               <Link
                 href={`/browse/${params.volume}/${b.id}`}
                 className="block rounded-lg border border-black/10 dark:border-white/15 p-4 hover:bg-black/5 dark:hover:bg-white/10"
+                data-ripple
               >
                 {b.label}
               </Link>

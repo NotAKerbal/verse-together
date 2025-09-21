@@ -53,6 +53,7 @@ function ChapterCards({ volume, book, chapters, delineation }: { volume: string;
                 <Link
                   href={`/browse/${volume}/${book}/${n}`}
                   className="block rounded-lg border border-black/10 dark:border-white/15 p-4 hover:bg-black/5 dark:hover:bg-white/10"
+                  data-ripple
                 >
                   <div className="font-medium">{delineation} {n}</div>
                   {preview ? (
