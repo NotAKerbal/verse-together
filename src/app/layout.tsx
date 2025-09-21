@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "../components/Navbar";
 import Ripple from "../components/Ripple";
 import { AuthProvider } from "../lib/auth";
+import OneTapGate from "../components/OneTapGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({
         <AuthProvider>
           <Ripple />
           <Navbar />
+          <OneTapGate />
           <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
         </AuthProvider>
       </body>

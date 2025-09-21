@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Feed from "@/components/Feed";
-import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Home() {
   return (
@@ -24,10 +23,6 @@ export default function Home() {
       </div>
 
       <Feed />
-      {/* One Tap prompt only (no visible button) */}
-      <div className="sr-only" aria-hidden>
-        <GoogleSignInButton oneTap={true} showButton={false} />
-      </div>
     </section>
   );
 }
