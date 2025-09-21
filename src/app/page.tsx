@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Feed from "@/components/Feed";
+import MigrationNotice from "../components/MigrationNotice";
 
 export default function Home() {
   return (
@@ -19,10 +19,44 @@ export default function Home() {
           >
             Start browsing
           </Link>
+          <Link
+            href="/feed"
+            className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            View feed
+          </Link>
         </div>
       </div>
-
-      <Feed />
+      <MigrationNotice />
+      <div className="mx-auto max-w-5xl">
+        <div className="grid sm:grid-cols-2 gap-6">
+          <FeatureCard
+            title="Find relevant conference talks"
+            description="Find talks that reference the verses you're studying and listen to them in Gospel Library."
+          />
+          <FeatureCard
+            title="Scripture sharing with others"
+            description="Highlight verses, add notes, and share with the community or friends."
+          />
+          <FeatureCard
+            title="Verse Explorer"
+            description="Jump across cross-references and footnotes to deepen your study."
+          />
+          <FeatureCard
+            title="Reader settings"
+            description="Customize font size, line width, and tools to fit your study style."
+          />
+        </div>
+      </div>
     </section>
+  );
+}
+
+function FeatureCard({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-lg border border-black/10 dark:border-white/15 p-5">
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-sm text-foreground/80">{description}</p>
+    </div>
   );
 }
