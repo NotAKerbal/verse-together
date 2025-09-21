@@ -13,7 +13,7 @@ import type { Footnote } from "@/lib/openscripture";
 import { fetchChapter } from "@/lib/openscripture";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
-import { getDefaultPreferences, loadPreferences, savePreferences } from "@/lib/preferences";
+import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type ShareRow = { id: string; verse_start: number; verse_end: number };
@@ -64,6 +64,7 @@ export default function ChapterReader({
   const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
   const overlayOpen = isCommentOpen || !!openFootnote || openCitations;
+  const [showTapHint, setShowTapHint] = useState(false);
 
   function parseBrowseHref(href: string | undefined): { volume: string; book: string; chapter: number } | null {
     if (!href) return null;
@@ -130,7 +131,22 @@ export default function ChapterReader({
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    // Show one-time hint on first use
+    try {
+      if (!hasSeenTapToActionsHint()) {
+        setShowTapHint(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   function toggleVerse(n: number) {
+    if (showTapHint) {
+      try { setSeenTapToActionsHint(); } catch {}
+      setShowTapHint(false);
+    }
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(n)) next.delete(n); else next.add(n);
@@ -578,6 +594,39 @@ export default function ChapterReader({
           void savePreferences(user?.id ?? null, next);
         }}
       />
+
+      {/* One-time onboarding tooltip */}
+      {showTapHint && !overlayOpen && selected.size === 0 ? (
+        <div
+          className="fixed inset-x-0 z-40 pointer-events-none"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
+        >
+          <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
+            <div
+              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-black/10 dark:border-white/15 bg-background/90 backdrop-blur px-3 py-2 shadow"
+              style={{ maxWidth: "28rem" }}
+              role="dialog"
+              aria-live="polite"
+            >
+              <div className="text-sm flex items-start gap-3">
+                <div className="text-lg select-none" aria-hidden>👉</div>
+                <div className="flex-1">
+                  Tap a scripture to view available actions.
+                </div>
+                <button
+                  onClick={() => {
+                    try { setSeenTapToActionsHint(); } catch {}
+                    setShowTapHint(false);
+                  }}
+                  className="ml-2 text-sm px-2 py-1 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isCommentOpen ? (
         <div className="fixed inset-0 z-50">
