@@ -21,6 +21,7 @@ export default function BrowsePage() {
             <Link
               href={`/browse/${v.id}`}
               className="block rounded-lg border border-black/10 dark:border-white/15 p-4 hover:bg-black/5 dark:hover:bg-white/10"
+              data-ripple
             >
               <div className="font-medium">{v.label}</div>
               <div className="text-sm text-foreground/70">English (LDS)</div>
