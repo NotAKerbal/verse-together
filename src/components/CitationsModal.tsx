@@ -87,8 +87,11 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
                 key={t.id ?? `${idx}-${t.title}`}
                 className="relative border border-black/10 dark:border-white/15 rounded-lg p-3 bg-black/5 dark:bg-white/5 flex flex-col gap-2 group cursor-pointer"
                 onClick={() => {
+                  const external = t.watchUrl || t.listenUrl;
                   const talkId = t.talkId || (t.talkUrl ? (t.talkUrl.match(/talks_ajax\/(\d+)/)?.[1] ?? null) : null);
-                  if (talkId) {
+                  if (external) {
+                    window.open(external, "_blank", "noopener,noreferrer");
+                  } else if (talkId) {
                     router.push(`/talk/${talkId}`);
                     onClose();
                   } else if (t.talkUrl) {
@@ -98,8 +101,11 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
+                    const external = t.watchUrl || t.listenUrl;
                     const talkId = t.talkId || (t.talkUrl ? (t.talkUrl.match(/talks_ajax\/(\d+)/)?.[1] ?? null) : null);
-                    if (talkId) {
+                    if (external) {
+                      window.open(external, "_blank", "noopener,noreferrer");
+                    } else if (talkId) {
                       router.push(`/talk/${talkId}`);
                       onClose();
                     } else if (t.talkUrl) {
