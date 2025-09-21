@@ -7,6 +7,15 @@ import { useAuth } from "@/lib/auth";
 
 type Friend = { id: string; requester_id: string; addressee_id: string; status: "pending" | "accepted" | "blocked" };
 type CommentRow = { id: string; body: string; created_at: string; share_id: string; visibility: "public" | "friends" };
+type ShareRow = {
+  id: string;
+  book: string;
+  chapter: number;
+  verse_start: number;
+  verse_end: number;
+  translation: string | null;
+  content: string | null;
+};
 
 export default function AccountPage() {
   const { user } = useAuth();
@@ -16,6 +25,10 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [myComments, setMyComments] = useState<CommentRow[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
+  const [shares, setShares] = useState<Record<string, ShareRow>>({});
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -59,7 +72,23 @@ export default function AccountPage() {
           .order("created_at", { ascending: false })
           .limit(20);
         if (!alive) return;
-        setMyComments((comments as CommentRow[] | null) ?? []);
+        const commentRows = (comments as CommentRow[] | null) ?? [];
+        setMyComments(commentRows);
+
+        // Load related shares for these comments
+        const shareIds = Array.from(new Set(commentRows.map((c) => c.share_id)));
+        if (shareIds.length > 0) {
+          const { data: sharesData } = await supabase
+            .from("scripture_shares")
+            .select("id, book, chapter, verse_start, verse_end, translation, content")
+            .in("id", shareIds);
+          if (!alive) return;
+          const map: Record<string, ShareRow> = {};
+          (sharesData as ShareRow[] | null)?.forEach((s) => { map[s.id] = s; });
+          setShares(map);
+        } else {
+          setShares({});
+        }
       } catch (e: unknown) {
         if (!alive) return;
         const msg = e instanceof Error ? e.message : "Failed to load";
@@ -88,6 +117,54 @@ export default function AccountPage() {
     user?.id ? friends.filter((f) => f.status === "pending" && f.requester_id === user.id) : []
   ), [friends, user?.id]);
   const accepted = useMemo(() => friends.filter((f) => f.status === "accepted"), [friends]);
+
+  function referenceFromShare(s: ShareRow | undefined) {
+    if (!s) return "";
+    const base = `${s.book} ${s.chapter}:${s.verse_start}${s.verse_end && s.verse_end !== s.verse_start ? "-" + s.verse_end : ""}`;
+    return s.translation ? `${base} (${s.translation})` : base;
+  }
+
+  async function saveEdit(id: string) {
+    try {
+      const text = editingBody.trim();
+      if (!text) return;
+      const { error } = await supabase
+        .from("scripture_comments")
+        .update({ body: text })
+        .eq("id", id);
+      if (error) throw error;
+      setEditingId(null);
+      setEditingBody("");
+      // Reload comments to reflect changes
+      const { data: comments } = await supabase
+        .from("scripture_comments")
+        .select("id, body, created_at, share_id, visibility")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      const commentRows = (comments as CommentRow[] | null) ?? [];
+      setMyComments(commentRows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to update";
+      setCommentError(msg);
+    }
+  }
+
+  async function deleteComment(id: string) {
+    try {
+      const sure = confirm("Delete this comment?");
+      if (!sure) return;
+      const { error } = await supabase
+        .from("scripture_comments")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      setMyComments((prev) => prev.filter((c) => c.id !== id));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to delete";
+      setCommentError(msg);
+    }
+  }
 
   async function sendFriendRequest() {
     setError(null);
@@ -272,17 +349,51 @@ export default function AccountPage() {
           <ul className="space-y-2">
             {myComments.map((c) => (
               <li key={c.id} className="rounded-md border border-black/10 dark:border-white/15 p-3 text-sm">
+                {(() => {
+                  const s = shares[c.share_id];
+                  const ref = referenceFromShare(s);
+                  return ref ? (
+                    <header className="mb-2">
+                      <div className="font-medium">{ref}</div>
+                      {s?.content ? (
+                        <blockquote className="text-foreground/85 whitespace-pre-wrap">{s.content}</blockquote>
+                      ) : null}
+                    </header>
+                  ) : null;
+                })()}
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-foreground/70">{new Date(c.created_at).toLocaleString()}</span>
-                  {c.visibility === "friends" ? (
+                  <span className="text-foreground/70">{new Date(c.created_at).toLocaleString()} {c.visibility === "friends" ? (
                     <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded border border-black/10 dark:border-white/15 text-[10px] uppercase tracking-wide">Friends</span>
-                  ) : null}
+                  ) : null}</span>
+                  <div className="flex items-center gap-2">
+                    {editingId === c.id ? (
+                      <>
+                        <button onClick={() => saveEdit(c.id)} className="text-xs px-2 py-1 rounded bg-foreground text-background">Save</button>
+                        <button onClick={() => { setEditingId(null); setEditingBody(""); }} className="text-xs px-2 py-1 rounded border border-black/10 dark:border-white/15">Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditingId(c.id); setEditingBody(c.body); }} className="text-xs px-2 py-1 rounded border border-black/10 dark:border-white/15">Edit</button>
+                        <button onClick={() => deleteComment(c.id)} className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 dark:border-red-400/40">Delete</button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="text-foreground/85 whitespace-pre-wrap">{c.body}</div>
+                {editingId === c.id ? (
+                  <textarea
+                    value={editingBody}
+                    onChange={(e) => setEditingBody(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+                  />
+                ) : (
+                  <div className="text-foreground/85 whitespace-pre-wrap">{c.body}</div>
+                )}
               </li>
             ))}
           </ul>
         )}
+        {commentError ? <div className="text-xs text-red-600">{commentError}</div> : null}
       </section>
     </div>
   );
