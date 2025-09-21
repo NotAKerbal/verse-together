@@ -9,6 +9,7 @@ export type ReaderPreferences = {
 };
 
 const STORAGE_KEY = "reader_prefs_v1";
+const ONBOARDING_KEY = "reader_onboarding_v1";
 
 export function getDefaultPreferences(): ReaderPreferences {
   return {
@@ -96,6 +97,41 @@ export async function savePreferences(userId: string | null | undefined, prefs: 
   } catch {
     // ignore
   }
+}
+
+// One-time onboarding flags (local-only)
+type OnboardingFlags = {
+  seenTapHint: boolean;
+};
+
+function readOnboardingFlags(): OnboardingFlags {
+  try {
+    if (typeof window === "undefined") return { seenTapHint: false };
+    const raw = window.localStorage.getItem(ONBOARDING_KEY);
+    if (!raw) return { seenTapHint: false };
+    const parsed = JSON.parse(raw) as Partial<OnboardingFlags>;
+    return { seenTapHint: !!parsed.seenTapHint };
+  } catch {
+    return { seenTapHint: false };
+  }
+}
+
+function writeOnboardingFlags(flags: OnboardingFlags): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ONBOARDING_KEY, JSON.stringify(flags));
+  } catch {
+    // ignore
+  }
+}
+
+export function hasSeenTapToActionsHint(): boolean {
+  return readOnboardingFlags().seenTapHint;
+}
+
+export function setSeenTapToActionsHint(): void {
+  const next: OnboardingFlags = { seenTapHint: true };
+  writeOnboardingFlags(next);
 }
 
 
