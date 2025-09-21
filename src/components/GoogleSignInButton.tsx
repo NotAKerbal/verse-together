@@ -70,6 +70,11 @@ export default function GoogleSignInButton({ oneTap = false, showButton = true }
 
         const { nonce, hashedNonce } = await generateNonce();
 
+        const isBrowser = typeof window !== "undefined";
+        const host = isBrowser ? window.location.hostname : "";
+        const secure = isBrowser ? window.isSecureContext : false;
+        const useFedCM = secure && host !== "localhost" && host !== "127.0.0.1";
+
         const initConfig: GsiInitConfig = {
           client_id: clientId,
           callback: async (response: GsiCallbackResponse) => {
@@ -114,7 +119,7 @@ export default function GoogleSignInButton({ oneTap = false, showButton = true }
           },
           ux_mode: "popup",
           auto_select: false,
-          use_fedcm_for_prompt: true,
+          use_fedcm_for_prompt: useFedCM,
         };
         if (hashedNonce) initConfig.nonce = hashedNonce;
 
