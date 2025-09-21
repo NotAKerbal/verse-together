@@ -500,7 +500,7 @@ export default function ChapterReader({
                           ) : null;
                         })()}
                         {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                          <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                          <ul className="mt-2 space-y-1 text-[0.95em] text-foreground/70">
                             {verseComments[v.verse].map((c) => (
                               <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
                                 <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
@@ -535,7 +535,7 @@ export default function ChapterReader({
                             </div>
                           ) : null}
                           {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                            <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                            <ul className="mt-2 space-y-1 text-[0.95em] text-foreground/70">
                               {verseComments[v.verse].map((c) => (
                                 <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
                                   <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
@@ -569,7 +569,7 @@ export default function ChapterReader({
                   </div>
                 ) : null}
                 {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-xs text-foreground/70">
+                  <ul className="mt-2 space-y-1 text-[0.95em] text-foreground/70">
                     {verseComments[v.verse].map((c) => (
                       <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
                         <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
