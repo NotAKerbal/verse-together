@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scriptures Sharing",
-  description: "Find and share your favorite verses, write insights, and bear testimony.",
+  title: "Verse Together",
+  description: "Share verses, bear testimony, and learn together.",
 };
 
 export default function RootLayout({
