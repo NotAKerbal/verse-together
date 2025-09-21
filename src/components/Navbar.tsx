@@ -42,7 +42,7 @@ export default function Navbar() {
       <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-lg font-semibold tracking-tight">
-            Scripture Share
+            Verse Together
           </Link>
           <nav className="hidden sm:flex items-center gap-4 text-sm text-foreground/80">
             <Link href="/browse" className="hover:text-foreground">
