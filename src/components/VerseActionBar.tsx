@@ -9,9 +9,10 @@ export type Props = {
   onLike: () => void;
   onComment: () => void;
   onCitations: () => void;
+  onExplore: () => void;
 };
 
-const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, onLike, onComment, onCitations }) => {
+const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, onLike, onComment, onCitations, onExplore }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -77,12 +78,21 @@ const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, on
               </button>
             </>
           ) : (
-            <button
-              onClick={onCitations}
-              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-            >
-              🎤 Citations
-            </button>
+            <>
+              <button
+                onClick={onCitations}
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                🎤 Citations
+              </button>
+              <button
+                onClick={onExplore}
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+                title="Verse Explorer"
+              >
+                🔎 Explore
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -110,6 +120,18 @@ const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, on
               aria-label="Citations"
             >
               🎤 Citations
+            </button>
+            <div className="h-1" />
+            <button
+              onClick={() => {
+                toggleMenu();
+                onExplore();
+              }}
+              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/90 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              title="Verse Explorer"
+              aria-label="Verse Explorer"
+            >
+              🔎 Explore
             </button>
           </div>
         </div>

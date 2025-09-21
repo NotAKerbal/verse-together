@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
+import VerseExplorer from "./VerseExplorer";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -64,7 +65,8 @@ export default function ChapterReader({
   const [prevPreview, setPrevPreview] = useState<null | { reference: string; preview: string }>(null);
   const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
-  const overlayOpen = isCommentOpen || !!openFootnote || openCitations;
+  const [openExplorer, setOpenExplorer] = useState(false);
+  const overlayOpen = isCommentOpen || !!openFootnote || openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
 
   function parseBrowseHref(href: string | undefined): { volume: string; book: string; chapter: number } | null {
@@ -160,6 +162,23 @@ export default function ChapterReader({
   const selectedText = useMemo(() => {
     const picked = verses.filter((v) => selected.has(v.verse));
     return picked.map((v) => `${v.verse}. ${v.text}`).join("\n");
+  }, [verses, selected]);
+
+  const selectedFirstWord = useMemo(() => {
+    // Prefer DOM text selection when available
+    if (typeof window !== "undefined") {
+      const sel = window.getSelection?.();
+      const raw = sel ? String(sel.toString()) : "";
+      const trimmed = raw.trim();
+      if (trimmed) {
+        const mSel = trimmed.match(/[A-Za-z][A-Za-z'\-]*/);
+        if (mSel?.[0]) return mSel[0].toLowerCase();
+      }
+    }
+    const picked = verses.filter((v) => selected.has(v.verse));
+    const text = picked.map((v) => v.text).join(" ");
+    const m = text.match(/[A-Za-z][A-Za-z'\-]*/);
+    return m?.[0]?.toLowerCase() ?? "";
   }, [verses, selected]);
 
   // first/last verse values not currently used
@@ -768,6 +787,16 @@ export default function ChapterReader({
         />
       ) : null}
 
+      {openExplorer ? (
+        <VerseExplorer
+          open={true}
+          onClose={() => setOpenExplorer(false)}
+          verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
+        />
+      ) : null}
+
+      {/* dictionary and etymology now live inside VerseExplorer */}
+
       <VerseActionBar
         visible={selected.size > 0 && !overlayOpen}
         actionsEnabled={!!user}
@@ -815,7 +844,11 @@ export default function ChapterReader({
         setIsCommentOpen(true);
         }}
         onCitations={() => {
-        setOpenCitations(true);
+          setOpenCitations(true);
+        }}
+        onExplore={() => {
+          if (selected.size === 0) return;
+          setOpenExplorer(true);
         }}
       />
     </section>
