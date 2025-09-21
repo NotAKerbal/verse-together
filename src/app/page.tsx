@@ -16,6 +16,7 @@ export default function Home() {
           <Link
             href="/browse"
             className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium hover:opacity-90"
+            data-ripple
           >
             Start browsing
           </Link>
