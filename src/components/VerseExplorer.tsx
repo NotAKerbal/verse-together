@@ -35,6 +35,8 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   const [tab, setTab] = useState<"1828" | "ety" | "tg" | "bd">("1828");
   const [tgAvailable, setTgAvailable] = useState<boolean>(false);
   const [bdAvailable, setBdAvailable] = useState<boolean>(false);
+  const [etyAvailable, setEtyAvailable] = useState<boolean>(true);
+  const [w1828Available, setW1828Available] = useState<boolean>(true);
   const [tgSlug, setTgSlug] = useState<string>("");
   const [bdSlug, setBdSlug] = useState<string>("");
 
@@ -57,8 +59,8 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
     }
   }, [open, onClose]);
 
-  const websterUrl = useMemo(() => (activeWord ? `https://webstersdictionary1828.com/Dictionary/${encodeURIComponent(activeWord)}` : ""), [activeWord]);
-  const etyUrl = useMemo(() => (activeWord ? `https://www.etymonline.com/word/${encodeURIComponent(activeWord)}` : ""), [activeWord]);
+  const websterUrl = useMemo(() => (w1828Available && activeWord ? `https://webstersdictionary1828.com/Dictionary/${encodeURIComponent(activeWord)}` : ""), [activeWord, w1828Available]);
+  const etyUrl = useMemo(() => (etyAvailable && activeWord ? `https://www.etymonline.com/word/${encodeURIComponent(activeWord)}` : ""), [activeWord, etyAvailable]);
   const tgUrl = useMemo(
     () => (tgAvailable && tgSlug ? `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(tgSlug)}?lang=eng` : ""),
     [tgAvailable, tgSlug]
@@ -77,16 +79,22 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
         return;
       }
       try {
-        const [tgRes, bdRes] = await Promise.all([
+        const [tgRes, bdRes, etyRes, w1828Res] = await Promise.all([
           fetch(`/api/tools/exists?type=tg&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/exists?type=bd&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
+          fetch(`/api/tools/exists?type=ety&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
+          fetch(`/api/tools/exists?type=1828&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
         ]);
-        const [tgJson, bdJson] = await Promise.all([tgRes.json(), bdRes.json()]);
+        const [tgJson, bdJson, etyJson, w1828Json] = await Promise.all([tgRes.json(), bdRes.json(), etyRes.json(), w1828Res.json()]);
         if (!cancelled) {
           const tgOk = !!tgJson.available;
           const bdOk = !!bdJson.available;
+          const etyOk = !!etyJson.available;
+          const w1828Ok = !!w1828Json.available;
           setTgAvailable(tgOk);
           setBdAvailable(bdOk);
+          setEtyAvailable(etyOk);
+          setW1828Available(w1828Ok);
           setTgSlug(tgOk ? tgJson.slug || "" : "");
           setBdSlug(bdOk ? bdJson.slug || "" : "");
         }
@@ -94,6 +102,8 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
         if (!cancelled) {
           setTgAvailable(false);
           setBdAvailable(false);
+          setEtyAvailable(false);
+          setW1828Available(false);
           setTgSlug("");
           setBdSlug("");
         }
@@ -114,6 +124,16 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   useEffect(() => {
     if (tab === "bd" && !bdAvailable) setTab("1828");
   }, [bdAvailable, tab]);
+  useEffect(() => {
+    if (tab === "ety" && !etyAvailable) setTab("1828");
+  }, [etyAvailable, tab]);
+  useEffect(() => {
+    if (tab === "1828" && !w1828Available) {
+      if (etyAvailable) setTab("ety");
+      else if (tgAvailable) setTab("tg");
+      else if (bdAvailable) setTab("bd");
+    }
+  }, [w1828Available, etyAvailable, tgAvailable, bdAvailable, tab]);
 
   if (!open) return null;
   return (
@@ -157,18 +177,22 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
 
         <div className="flex items-center justify-between gap-2">
           <div className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 overflow-hidden">
-            <button
-              onClick={() => setTab("1828")}
-              className={`px-3 py-1 text-sm ${tab === "1828" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
-            >
-              📖 1828
-            </button>
-            <button
-              onClick={() => setTab("ety")}
-              className={`px-3 py-1 text-sm ${tab === "ety" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
-            >
-              🧬 Etymology
-            </button>
+            {w1828Available ? (
+              <button
+                onClick={() => setTab("1828")}
+                className={`px-3 py-1 text-sm ${tab === "1828" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
+              >
+                📖 1828
+              </button>
+            ) : null}
+            {etyAvailable ? (
+              <button
+                onClick={() => setTab("ety")}
+                className={`px-3 py-1 text-sm ${tab === "ety" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
+              >
+                🧬 Etymology
+              </button>
+            ) : null}
             {tgAvailable ? (
               <button
                 onClick={() => setTab("tg")}

@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 
-type ToolType = "tg" | "bd";
+type ToolType = "tg" | "bd" | "ety" | "1828";
 
-function baseIndexUrl(type: ToolType): string {
+function baseIndexUrl(type: Exclude<ToolType, "ety">): string {
   return type === "tg"
     ? "https://www.churchofjesuschrist.org/study/scriptures/tg?lang=eng"
     : "https://www.churchofjesuschrist.org/study/scriptures/bd?lang=eng";
@@ -12,7 +12,14 @@ function buildUrl(type: ToolType, slug: string): string {
   if (type === "tg") {
     return `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(slug)}?lang=eng`;
   }
-  return `https://www.churchofjesuschrist.org/study/scriptures/bd/${encodeURIComponent(slug)}?lang=eng`;
+  if (type === "bd") {
+    return `https://www.churchofjesuschrist.org/study/scriptures/bd/${encodeURIComponent(slug)}?lang=eng`;
+  }
+  if (type === "ety") {
+    return `https://www.etymonline.com/word/${encodeURIComponent(slug)}`;
+  }
+  // 1828 Webster's
+  return `https://webstersdictionary1828.com/Dictionary/${encodeURIComponent(slug)}`;
 }
 
 function slugify(input: string): string {
@@ -60,20 +67,69 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const indexUrl = baseIndexUrl(type);
   const candidates = generateCandidates(term);
 
   try {
-    for (const slug of candidates) {
-      const targetUrl = buildUrl(type, slug);
-      const res = await fetch(targetUrl, { redirect: "follow", cache: "no-store" });
-      const finalUrl = res.url;
+    if (type === "tg" || type === "bd") {
+      const indexUrl = baseIndexUrl(type);
+      for (const slug of candidates) {
+        const targetUrl = buildUrl(type, slug);
+        const res = await fetch(targetUrl, { redirect: "follow", cache: "no-store" });
+        const finalUrl = res.url;
+        if (res.status === 200 && finalUrl && !finalUrl.startsWith(indexUrl)) {
+          return new Response(
+            JSON.stringify({ ok: true, available: true, url: targetUrl, finalUrl, slug }),
+            { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } }
+          );
+        }
+      }
+    } else if (type === "ety") {
+      for (const slug of candidates) {
+        const targetUrl = buildUrl(type, slug);
+        const res = await fetch(targetUrl, { redirect: "follow", cache: "no-store" });
+        const urlObj = new URL(res.url);
+        const path = urlObj.pathname;
 
-      if (res.status === 200 && finalUrl && !finalUrl.startsWith(indexUrl)) {
-        return new Response(
-          JSON.stringify({ ok: true, available: true, url: targetUrl, finalUrl, slug }),
-          { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } }
-        );
+        // If redirected to search or explicit 404, unavailable
+        if (res.status === 404 || path.startsWith("/search")) {
+          continue;
+        }
+
+        if (path.startsWith("/word/") && res.status === 200) {
+          const html = await res.text();
+          const lower = html.toLowerCase();
+          const titleMatch = lower.match(/<title>([^<]*)<\/title>/i);
+          const titleText = titleMatch ? titleMatch[1].trim() : "";
+          const isGenericTitle = /etymonline\s*-\s*online etymology dictionary/i.test(titleText);
+          const robotsMatch = lower.match(/<meta[^>]+name=["']robots["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+          const robots = robotsMatch ? robotsMatch[1] : "";
+          const hasNoIndex = /\bnoindex\b/i.test(robots);
+          const canonicalMatch = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["'][^>]*>/i);
+          const canonicalHref = canonicalMatch ? canonicalMatch[1] : "";
+          const canonicalLooksValid = canonicalHref.includes("/word/");
+          const is404 = hasNoIndex || isGenericTitle || !canonicalLooksValid;
+          if (!is404) {
+            return new Response(
+              JSON.stringify({ ok: true, available: true, url: targetUrl, finalUrl: res.url, slug }),
+              { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } }
+            );
+          }
+        }
+      }
+    } else if (type === "1828") {
+      for (const slug of candidates) {
+        const targetUrl = buildUrl(type, slug);
+        const res = await fetch(targetUrl, { redirect: "follow", cache: "no-store" });
+        if (res.status !== 200) continue;
+        const html = await res.text();
+        const lower = html.toLowerCase();
+        const didYouMean = lower.includes("did you mean one of these words?");
+        if (!didYouMean) {
+          return new Response(
+            JSON.stringify({ ok: true, available: true, url: targetUrl, finalUrl: res.url, slug }),
+            { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } }
+          );
+        }
       }
     }
 
