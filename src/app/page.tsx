@@ -1,5 +1,6 @@
 import Link from "next/link";
 import MigrationNotice from "../components/MigrationNotice";
+import FeedbackForm from "../components/FeedbackForm";
 
 export default function Home() {
   return (
@@ -46,6 +47,11 @@ export default function Home() {
             title="Reader settings"
             description="Customize font size, line width, and tools to fit your study style."
           />
+        </div>
+      </div>
+      <div className="mx-auto max-w-3xl">
+        <div className="mt-10">
+          <FeedbackForm />
         </div>
       </div>
     </section>
