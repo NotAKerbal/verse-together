@@ -12,10 +12,20 @@ export default async function ChapterPage({ params }: Params) {
   const prevHref = currentChapter > 1 ? `/browse/${volume}/${book}/${currentChapter - 1}` : undefined;
   const nextHref = `/browse/${volume}/${book}/${currentChapter + 1}`;
 
+  const volumeLabelMap: Record<string, string> = {
+    bookofmormon: "Book of Mormon",
+    oldtestament: "Old Testament",
+    newtestament: "New Testament",
+    doctrineandcovenants: "Doctrine and Covenants",
+    pearl: "Pearl of Great Price",
+  };
+  const volumeLabel = volumeLabelMap[volume] || volume.replace(/-/g, " ");
+  const bookTitle = (data.reference || "").replace(/\s+\d+$/, "");
+
   const breadcrumbs: Crumb[] = [
     { label: "Browse", href: "/browse" },
-    { label: volume.replace(/-/g, " "), href: `/browse/${volume}` },
-    { label: book.replace(/-/g, " "), href: `/browse/${volume}/${book}` },
+    { label: volumeLabel, href: `/browse/${volume}` },
+    { label: bookTitle || book.replace(/-/g, " "), href: `/browse/${volume}/${book}` },
     { label: `Chapter ${chapter}` },
   ];
 

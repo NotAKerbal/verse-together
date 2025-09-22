@@ -6,13 +6,21 @@ export default async function BookLanding({ params }: { params: { volume: string
   const bookData = await fetchBook(params.volume, params.book);
   const chapters = bookData.chapters ?? [];
   const delineation = bookData.chapterDelineation || "Chapter";
+  const volumeLabelMap: Record<string, string> = {
+    bookofmormon: "Book of Mormon",
+    oldtestament: "Old Testament",
+    newtestament: "New Testament",
+    doctrineandcovenants: "Doctrine and Covenants",
+    pearl: "Pearl of Great Price",
+  };
+  const volumeLabel = volumeLabelMap[params.volume] || params.volume.replace(/-/g, " ");
   return (
     <section className="space-y-6">
       <Breadcrumbs
         items={[
           { label: "Browse", href: "/browse" },
-          { label: params.volume.replace(/-/g, " "), href: `/browse/${params.volume}` },
-          { label: params.book.replace(/-/g, " ") },
+          { label: volumeLabel, href: `/browse/${params.volume}` },
+          { label: bookData.title || params.book.replace(/-/g, " ") },
         ]}
       />
       <header className="space-y-2">
