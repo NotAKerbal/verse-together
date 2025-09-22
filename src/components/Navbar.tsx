@@ -51,6 +51,11 @@ export default function Navbar() {
             >
               Menu
             </button>
+            {user?.email ? (
+              <span className="sm:hidden text-sm text-foreground/70 truncate max-w-[40vw]">
+                {displayName ?? user.email}
+              </span>
+            ) : null}
             <Link href="/" className="text-lg font-semibold tracking-tight">
               Verse Together
             </Link>
