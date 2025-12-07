@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import MobileNavDrawer from "@/components/MobileNavDrawer";
 
 export default function Navbar() {
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -38,35 +40,54 @@ export default function Navbar() {
   }
 
   return (
-    <header className="w-full border-b border-black/10 dark:border-white/15 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            Verse Together
-          </Link>
-          <nav className="hidden sm:flex items-center gap-4 text-sm text-foreground/80">
-            <Link href="/browse" className="hover:text-foreground">
-              Browse
+    <>
+      <header className="w-full border-b border-black/10 dark:border-white/15 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              className="sm:hidden inline-flex items-center justify-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm"
+              aria-label="Open menu"
+              onClick={() => setDrawerOpen(true)}
+            >
+              Menu
+            </button>
+            {user?.email ? (
+              <span className="sm:hidden text-sm text-foreground/70 truncate max-w-[40vw]">
+                {displayName ?? user.email}
+              </span>
+            ) : null}
+            <Link href="/" className="text-lg font-semibold tracking-tight">
+              Verse Together
             </Link>
-          </nav>
+            <nav className="hidden sm:flex items-center gap-4 text-sm text-foreground/80">
+              <Link href="/browse" className="hover:text-foreground">
+                Browse
+              </Link>
+              <Link href="/feed" className="hover:text-foreground">
+                Feed
+              </Link>
+            </nav>
+          </div>
+          <div className="hidden sm:flex items-center gap-3">
+            {user?.email ? (
+              <>
+                <Link href="/account" className="text-sm hover:underline">Account</Link>
+                <span className="text-sm text-foreground/70 hidden sm:inline">{displayName ?? user.email}</span>
+                <button
+                  onClick={handleSignOut}
+                  className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <GoogleSignInButton oneTap={false} showButton={true} />
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {user?.email ? (
-            <>
-              <span className="text-sm text-foreground/70 hidden sm:inline">{displayName ?? user.email}</span>
-              <button
-                onClick={handleSignOut}
-                className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90"
-              >
-                Sign out
-              </button>
-            </>
-          ) : (
-            <GoogleSignInButton oneTap={false} showButton={true} />
-          )}
-        </div>
-      </div>
-    </header>
+      </header>
+      <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+    </>
   );
 }
 

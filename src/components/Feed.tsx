@@ -111,9 +111,10 @@ function Comments({ shareId }: { shareId: string }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  type CommentRow = { id: string; body: string; created_at: string; user_id: string };
+  type CommentRow = { id: string; body: string; created_at: string; user_id: string; visibility: "public" | "friends" };
   const [items, setItems] = useState<CommentRow[]>([]);
   const [body, setBody] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "friends">("public");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [names, setNames] = useState<Record<string, string>>({});
@@ -137,7 +138,7 @@ function Comments({ shareId }: { shareId: string }) {
     setError(null);
     const { data, error } = await supabase
       .from("scripture_comments")
-      .select("id, body, created_at, user_id")
+      .select("id, body, created_at, user_id, visibility")
       .eq("share_id", shareId)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -190,9 +191,10 @@ function Comments({ shareId }: { shareId: string }) {
       if (!text) return;
       const { error } = await supabase
         .from("scripture_comments")
-        .insert({ share_id: shareId, body: text });
+        .insert({ share_id: shareId, body: text, visibility });
       if (error) throw error;
       setBody("");
+      setVisibility("public");
       load();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed";
@@ -245,6 +247,15 @@ function Comments({ shareId }: { shareId: string }) {
             onChange={(e) => setBody(e.target.value)}
             className="flex-1 rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-1.5 text-sm"
           />
+          <select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as "public" | "friends")}
+            className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm"
+            title="Visibility"
+          >
+            <option value="public">Public</option>
+            <option value="friends">Friends</option>
+          </select>
           <button
             onClick={addComment}
             className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10"
@@ -269,7 +280,7 @@ function Comments({ shareId }: { shareId: string }) {
               <li key={c.id} className="rounded-md border border-black/10 dark:border-white/15 p-3">
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-xs text-foreground/70">
-                    {who} · {formatWhen(c.created_at)}
+                    {who} · {formatWhen(c.created_at)} {c.visibility === "friends" ? <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded border border-black/10 dark:border-white/15 text-[10px] uppercase tracking-wide">Friends</span> : null}
                   </div>
                   {isMine ? (
                     editingId === c.id ? (

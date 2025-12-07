@@ -325,8 +325,26 @@ const BOOK_TO_BYU_ID: Record<string, number> = {
   "john": 104,
 };
 
+// Normalize various incoming book identifiers (e.g., "1nephi", "1 nephi", "1-nephi",
+// "Words of Mormon", "wordsofmormon") to the canonical hyphenated keys used by
+// BOOK_TO_BYU_ID.
+function normalizeBookKey(book: string): string {
+  let s = (book || "").toLowerCase().trim();
+  // Replace spaces/underscores with hyphens
+  s = s.replace(/[\s_]+/g, "-");
+  // Insert hyphen between leading digit and following letters if missing (e.g., 1nephi -> 1-nephi)
+  s = s.replace(/^(\d)([a-z])/i, "$1-$2");
+  // Common condensed aliases
+  if (s === "wordsofmormon") s = "words-of-mormon";
+  if (s === "1nephi") s = "1-nephi";
+  if (s === "2nephi") s = "2-nephi";
+  if (s === "3nephi") s = "3-nephi";
+  if (s === "4nephi") s = "4-nephi";
+  return s;
+}
+
 export function mapBookKeyToByuId(volume: string, book: string): number | null {
-  const key = book.toLowerCase();
+  const key = normalizeBookKey(book);
   if (BOOK_TO_BYU_ID[key]) return BOOK_TO_BYU_ID[key];
   return null;
 }
