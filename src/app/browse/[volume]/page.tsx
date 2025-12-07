@@ -45,12 +45,13 @@ const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   ],
 };
 
-export default function VolumePage({ params }: { params: { volume: string } }) {
-  const books = volumeToBooks[params.volume] ?? [];
+export default async function VolumePage({ params }: { params: Promise<{ volume: string }> }) {
+  const { volume } = await params;
+  const books = volumeToBooks[volume] ?? [];
   return (
     <section className="space-y-6">
-      <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: params.volume.replace(/-/g, " ") }]} />
-      <h1 className="text-2xl font-semibold capitalize">{params.volume.replace(/-/g, " ")}</h1>
+      <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: volume.replace(/-/g, " ") }]} />
+      <h1 className="text-2xl font-semibold capitalize">{volume.replace(/-/g, " ")}</h1>
       {books.length === 0 ? (
         <p className="text-foreground/80">No book list available for this volume yet.</p>
       ) : (
@@ -58,7 +59,7 @@ export default function VolumePage({ params }: { params: { volume: string } }) {
           {books.map((b) => (
             <li key={b.id}>
               <Link
-                href={`/browse/${params.volume}/${b.id}`}
+                href={`/browse/${volume}/${b.id}`}
                 className="block rounded-lg border border-black/10 dark:border-white/15 p-4 hover:bg-black/5 dark:hover:bg-white/10"
                 data-ripple
               >
