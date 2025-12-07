@@ -2,10 +2,10 @@ import { fetchChapter } from "../../../../../lib/openscripture";
 import ChapterReader from "@/components/ChapterReader";
 import type { Crumb } from "@/components/Breadcrumbs";
 
-type Params = { params: { volume: string; book: string; chapter: string } };
+type Params = { params: Promise<{ volume: string; book: string; chapter: string }> };
 
 export default async function ChapterPage({ params }: Params) {
-  const { volume, book, chapter } = params;
+  const { volume, book, chapter } = await params;
   const data = await fetchChapter(volume, book, chapter);
 
   const currentChapter = Number(chapter);
