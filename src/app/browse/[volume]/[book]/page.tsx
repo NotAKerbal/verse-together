@@ -2,8 +2,9 @@ import Link from "next/link";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { fetchBook } from "@/lib/openscripture";
 
-export default async function BookLanding({ params }: { params: { volume: string; book: string } }) {
-  const bookData = await fetchBook(params.volume, params.book);
+export default async function BookLanding({ params }: { params: Promise<{ volume: string; book: string }> }) {
+  const { volume, book } = await params;
+  const bookData = await fetchBook(volume, book);
   const chapters = bookData.chapters ?? [];
   const delineation = bookData.chapterDelineation || "Chapter";
   const volumeLabelMap: Record<string, string> = {
@@ -13,23 +14,23 @@ export default async function BookLanding({ params }: { params: { volume: string
     doctrineandcovenants: "Doctrine and Covenants",
     pearl: "Pearl of Great Price",
   };
-  const volumeLabel = volumeLabelMap[params.volume] || params.volume.replace(/-/g, " ");
+  const volumeLabel = volumeLabelMap[volume] || volume.replace(/-/g, " ");
   return (
     <section className="space-y-6">
       <Breadcrumbs
         items={[
           { label: "Browse", href: "/browse" },
-          { label: volumeLabel, href: `/browse/${params.volume}` },
-          { label: bookData.title || params.book.replace(/-/g, " ") },
+          { label: volumeLabel, href: `/browse/${volume}` },
+          { label: bookData.title || book.replace(/-/g, " ") },
         ]}
       />
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold capitalize">{bookData.title || params.book.replace(/-/g, " ")}</h1>
+        <h1 className="text-2xl font-semibold capitalize">{bookData.title || book.replace(/-/g, " ")}</h1>
         {bookData.summary ? (
           <p className="text-foreground/80 text-sm max-w-3xl">{bookData.summary}</p>
         ) : null}
       </header>
-      <ChapterCards volume={params.volume} book={params.book} chapters={chapters} delineation={delineation} />
+      <ChapterCards volume={volume} book={book} chapters={chapters} delineation={delineation} />
     </section>
   );
 }
