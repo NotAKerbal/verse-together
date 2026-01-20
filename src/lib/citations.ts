@@ -1,3 +1,5 @@
+import { getCache, setCache } from "./cache";
+
 export type CitationTalk = {
   id?: string;
   title: string;
@@ -273,27 +275,39 @@ function parseTalksFromHtml(html: string): CitationTalk[] {
 }
 
 export async function fetchChapterListing(bookId: number): Promise<{ chapterNumbers: number[] } | null> {
+  const cacheKey = `chapters:${bookId}`;
+  const cached = getCache<{ chapterNumbers: number[] }>(cacheKey);
+  if (cached) return cached;
+
   try {
-    const res = await fetch(buildBookUrl(bookId), { cache: "no-store" });
+    const res = await fetch(buildBookUrl(bookId));
     if (!res.ok) return null;
     const html = await res.text();
     // Look for chapter numbers like "* 1[102]" in text version
     const text = textFromHtml(html);
     const numbers = Array.from(text.matchAll(/\b(\d{1,3})\s*\[/g)).map((m) => Number(m[1]));
     const unique = Array.from(new Set(numbers)).sort((a, b) => a - b);
-    return { chapterNumbers: unique };
+    const data = { chapterNumbers: unique };
+    setCache(cacheKey, data);
+    return data;
   } catch {
     return null;
   }
 }
 
 export async function fetchVerseCitations(bookId: number, chapter: number, verseSpec: string): Promise<VerseCitations | null> {
+  const cacheKey = `verses:${bookId}:${chapter}:${verseSpec}`;
+  const cached = getCache<VerseCitations>(cacheKey);
+  if (cached) return cached;
+
   try {
-    const res = await fetch(buildVersesUrl(bookId, chapter, verseSpec), { cache: "no-store" });
+    const res = await fetch(buildVersesUrl(bookId, chapter, verseSpec));
     if (!res.ok) return null;
     const html = await res.text();
     const talks = parseTalksFromHtml(html);
-    return { bookId, chapter, verseSpec, talks };
+    const data = { bookId, chapter, verseSpec, talks };
+    setCache(cacheKey, data);
+    return data;
   } catch {
     return null;
   }
