@@ -57,13 +57,33 @@ function flattenContent(content: unknown[]): string {
     .trim();
 }
 
+async function readJsonBodyOrThrow(res: Response, context: string): Promise<unknown> {
+  const contentType = res.headers.get("content-type") ?? "";
+  const rawText = await res.text();
+  if (!rawText) {
+    throw new Error(`${context}: empty response body`);
+  }
+  if (!contentType.toLowerCase().includes("json")) {
+    const snippet = rawText.slice(0, 120).replace(/\s+/g, " ").trim();
+    throw new Error(
+      `${context}: expected JSON but got "${contentType || "unknown"}" (${snippet || "no content"})`
+    );
+  }
+  try {
+    return JSON.parse(rawText) as unknown;
+  } catch {
+    const snippet = rawText.slice(0, 120).replace(/\s+/g, " ").trim();
+    throw new Error(`${context}: invalid JSON body (${snippet || "no content"})`);
+  }
+}
+
 export async function fetchAvailableHelloaoTranslations(): Promise<HelloaoTranslation[]> {
   const url = "https://bible.helloao.org/api/available_translations.json";
   const res = await fetch(url, { next: { revalidate: 60 * 60 * 24 } });
   if (!res.ok) {
     throw new Error(`HelloAO translations error ${res.status}`);
   }
-  const raw: unknown = await res.json();
+  const raw: unknown = await readJsonBodyOrThrow(res, "HelloAO translations");
   const translations = Array.isArray(get(raw, "translations")) ? (get(raw, "translations") as unknown[]) : [];
   return translations
     .map((item) => {
@@ -115,7 +135,7 @@ export async function fetchHelloaoChapter(
     throw new Error(`HelloAO chapter error ${res?.status ?? 500}`);
   }
 
-  const raw: unknown = await res.json();
+  const raw: unknown = await readJsonBodyOrThrow(res, "HelloAO chapter");
   const chapter = isRecord(get(raw, "chapter")) ? (get(raw, "chapter") as Record<string, unknown>) : undefined;
   const content = Array.isArray(chapter?.content) ? (chapter?.content as unknown[]) : [];
 

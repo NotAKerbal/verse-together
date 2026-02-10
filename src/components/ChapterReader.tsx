@@ -181,6 +181,7 @@ export default function ChapterReader({
   prevHref,
   nextHref,
   primaryTranslation,
+  translationNotices,
   compareChapters,
 }: {
   volume: string;
@@ -193,6 +194,7 @@ export default function ChapterReader({
   prevHref?: string;
   nextHref?: string;
   primaryTranslation?: string;
+  translationNotices?: string[];
   compareChapters?: CompareChapter[];
 }) {
   const { user, getToken } = useAuth();
@@ -680,6 +682,13 @@ export default function ChapterReader({
                       {idx > 0 ? ", " : ""}
                       {item.label}
                     </span>
+                  ))}
+                </div>
+              ) : null}
+              {translationNotices && translationNotices.length > 0 ? (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+                  {translationNotices.map((notice) => (
+                    <div key={notice}>{notice}</div>
                   ))}
                 </div>
               ) : null}

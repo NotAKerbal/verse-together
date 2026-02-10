@@ -218,12 +218,21 @@ async function fetchChapterUncached(
         verses: bibleData.verses,
       };
     }
-    const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
-    return {
-      reference: helloaoData.reference,
-      translation: helloaoData.translationId,
-      verses: helloaoData.verses,
-    };
+    try {
+      const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
+      return {
+        reference: helloaoData.reference,
+        translation: helloaoData.translationId,
+        verses: helloaoData.verses,
+      };
+    } catch {
+      const bibleData = await fetchBibleApiChapter(bookId, chapter, "kjv");
+      return {
+        reference: bibleData.reference,
+        translation: bibleData.translationId,
+        verses: bibleData.verses,
+      };
+    }
   }
 
   const url = `${BASE_URL}/volume/${encodeURIComponent(volumeId)}/${encodeURIComponent(bookId)}/${encodeURIComponent(String(chapterNumber))}`;
@@ -245,12 +254,21 @@ async function fetchChapterUncached(
         verses: bibleData.verses,
       };
     }
-    const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
-    return {
-      reference: helloaoData.reference,
-      translation: helloaoData.translationId,
-      verses: helloaoData.verses,
-    };
+    try {
+      const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
+      return {
+        reference: helloaoData.reference,
+        translation: helloaoData.translationId,
+        verses: helloaoData.verses,
+      };
+    } catch {
+      const bibleData = await fetchBibleApiChapter(bookId, chapter, "kjv");
+      return {
+        reference: bibleData.reference,
+        translation: bibleData.translationId,
+        verses: bibleData.verses,
+      };
+    }
   }
 
   throw new Error(`OpenScripture API error ${res.status}`);
