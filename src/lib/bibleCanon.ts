@@ -79,22 +79,17 @@ export const BIBLE_BOOKS: BibleBook[] = [
 
 export const BIBLE_TRANSLATION_OPTIONS = [
   { id: "kjv", label: "King James Version" },
-  { id: "web", label: "World English Bible" },
-  { id: "asv", label: "American Standard Version" },
-  { id: "bbe", label: "Bible in Basic English" },
-  { id: "darby", label: "Darby Bible" },
-  { id: "dra", label: "Douay-Rheims" },
-  { id: "webbe", label: "World English Bible (British)" },
-  { id: "oeb-us", label: "Open English Bible (US)" },
-  { id: "oeb-cw", label: "Open English Bible (Commonwealth)" },
 ] as const;
 
-export type BibleTranslationId = (typeof BIBLE_TRANSLATION_OPTIONS)[number]["id"];
+export type BuiltInBibleTranslationId = (typeof BIBLE_TRANSLATION_OPTIONS)[number]["id"];
+export type BibleTranslationId = string;
 
-const SUPPORTED_TRANSLATIONS = new Set<BibleTranslationId>(BIBLE_TRANSLATION_OPTIONS.map((item) => item.id));
+const SUPPORTED_TRANSLATIONS = new Set<BuiltInBibleTranslationId>(
+  BIBLE_TRANSLATION_OPTIONS.map((item) => item.id)
+);
 
-export function isBibleTranslationId(value: string): value is BibleTranslationId {
-  return SUPPORTED_TRANSLATIONS.has(value as BibleTranslationId);
+export function isBibleTranslationId(value: string): value is BuiltInBibleTranslationId {
+  return SUPPORTED_TRANSLATIONS.has(value as BuiltInBibleTranslationId);
 }
 
 export function isBibleVolume(volume: string): boolean {
@@ -113,7 +108,9 @@ export function getBibleBookBySlug(slug: string): BibleBook | undefined {
 
 export function normalizeBibleTranslationId(value: string | null | undefined): BibleTranslationId {
   if (!value) return "kjv";
-  const normalized = value.trim().toLowerCase();
+  const trimmed = value.trim();
+  if (!trimmed) return "kjv";
+  const normalized = trimmed.toLowerCase();
   if (isBibleTranslationId(normalized)) return normalized;
-  return "kjv";
+  return trimmed;
 }

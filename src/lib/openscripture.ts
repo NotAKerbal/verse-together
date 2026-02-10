@@ -1,6 +1,7 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 import { fetchBibleApiChapter } from "@/lib/bibleApi";
-import { isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
+import { fetchHelloaoChapter } from "@/lib/helloaoApi";
+import { isBibleTranslationId, isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
 
 export type Footnote = {
   footnote: string;
@@ -209,11 +210,19 @@ async function fetchChapterUncached(
   const preferredTranslation = normalizeBibleTranslationId(options?.translation);
   const shouldUseBibleApiPrimary = isBibleVolume(volumeId) && options?.translation;
   if (shouldUseBibleApiPrimary) {
-    const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+    if (isBibleTranslationId(preferredTranslation)) {
+      const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+      return {
+        reference: bibleData.reference,
+        translation: bibleData.translationId,
+        verses: bibleData.verses,
+      };
+    }
+    const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
     return {
-      reference: bibleData.reference,
-      translation: bibleData.translationId,
-      verses: bibleData.verses,
+      reference: helloaoData.reference,
+      translation: helloaoData.translationId,
+      verses: helloaoData.verses,
     };
   }
 
@@ -228,11 +237,19 @@ async function fetchChapterUncached(
   }
 
   if (isBibleVolume(volumeId)) {
-    const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+    if (isBibleTranslationId(preferredTranslation)) {
+      const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+      return {
+        reference: bibleData.reference,
+        translation: bibleData.translationId,
+        verses: bibleData.verses,
+      };
+    }
+    const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
     return {
-      reference: bibleData.reference,
-      translation: bibleData.translationId,
-      verses: bibleData.verses,
+      reference: helloaoData.reference,
+      translation: helloaoData.translationId,
+      verses: helloaoData.verses,
     };
   }
 

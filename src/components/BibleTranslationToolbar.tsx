@@ -1,5 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import TranslationCatalogPicker from "@/components/TranslationCatalogPicker";
 import { BIBLE_TRANSLATION_OPTIONS, type BibleTranslationId } from "@/lib/bibleCanon";
+import {
+  readFavoriteTranslations,
+  writeFavoriteTranslations,
+  type FavoriteTranslation,
+} from "@/lib/translationFavorites";
 
 type Props = {
   volume: string;
@@ -32,26 +41,26 @@ function buildQuery(translation: BibleTranslationId, compareIds: BibleTranslatio
 
 function getSelectedIds(
   translation: BibleTranslationId,
-  compare: BibleTranslationId[]
+  compare: BibleTranslationId[],
+  availableIds: BibleTranslationId[]
 ): BibleTranslationId[] {
   const set = new Set<BibleTranslationId>([translation, ...compare.filter((id) => id !== translation)]);
-  return BIBLE_TRANSLATION_OPTIONS.map((option) => option.id).filter((id) => set.has(id));
+  return availableIds.filter((id) => set.has(id));
 }
 
 function buildToggleQuery(
   targetId: BibleTranslationId,
   translation: BibleTranslationId,
-  compare: BibleTranslationId[]
+  compare: BibleTranslationId[],
+  availableIds: BibleTranslationId[]
 ): string {
-  const selectedSet = new Set<BibleTranslationId>(getSelectedIds(translation, compare));
+  const selectedSet = new Set<BibleTranslationId>(getSelectedIds(translation, compare, availableIds));
   if (selectedSet.has(targetId)) {
     if (selectedSet.size > 1) selectedSet.delete(targetId);
   } else {
     selectedSet.add(targetId);
   }
-  const orderedSelected = BIBLE_TRANSLATION_OPTIONS.map((option) => option.id).filter((id) =>
-    selectedSet.has(id)
-  );
+  const orderedSelected = availableIds.filter((id) => selectedSet.has(id));
   const nextTranslation = orderedSelected.includes(translation)
     ? translation
     : orderedSelected[0] ?? translation;
@@ -60,8 +69,47 @@ function buildToggleQuery(
 }
 
 export default function BibleTranslationToolbar({ volume, book, chapter, translation, compare }: Props) {
-  const selectedIds = new Set(getSelectedIds(translation, compare));
+  const [favorites, setFavorites] = useState<FavoriteTranslation[]>([]);
+
+  useEffect(() => {
+    setFavorites(readFavoriteTranslations());
+  }, []);
+
+  const options = useMemo(() => {
+    const builtIn = BIBLE_TRANSLATION_OPTIONS.map((item) => ({ id: item.id, label: item.label, source: "builtin" as const }));
+    const seen = new Set(builtIn.map((item) => item.id.toLowerCase()));
+    const custom = favorites
+      .filter((item) => {
+        const key = item.id.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((item) => ({ id: item.id, label: item.label, source: "favorite" as const }));
+    const querySelected = [translation, ...compare];
+    const selectedFromQuery = querySelected
+      .filter((id) => {
+        const key = id.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((id) => ({ id, label: id, source: "favorite" as const }));
+    return [...builtIn, ...custom, ...selectedFromQuery];
+  }, [compare, favorites, translation]);
+
+  const optionIds = useMemo(() => options.map((item) => item.id), [options]);
+  const selectedIds = new Set(getSelectedIds(translation, compare, optionIds));
   const selectedCount = selectedIds.size;
+
+  function addFavorite(next: FavoriteTranslation) {
+    setFavorites((current) => {
+      if (current.some((item) => item.id.toLowerCase() === next.id.toLowerCase())) return current;
+      const updated = [...current, next];
+      writeFavoriteTranslations(updated);
+      return updated;
+    });
+  }
 
   return (
     <details className="rounded-lg border border-black/10 dark:border-white/15 p-3">
@@ -72,16 +120,20 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
         </span>
       </summary>
       <div className="mt-2 space-y-3">
-        <div className="text-xs text-foreground/70">Bible source: bible-api.com</div>
+        <div className="text-xs text-foreground/70">Bible source: bible-api.com + bible.helloao.org</div>
         <div className="text-xs text-foreground/70">Select one or more translations to compare inline differences.</div>
+        <TranslationCatalogPicker
+          existingIds={optionIds}
+          onAddFavorite={(item) => addFavorite(item)}
+        />
         <div className="grid gap-2 grid-cols-1">
-          {BIBLE_TRANSLATION_OPTIONS.map((option) => {
+          {options.map((option) => {
             const isSelected = selectedIds.has(option.id);
             const description = TRANSLATION_DESCRIPTIONS[option.id] ?? `${option.label} is included for side-by-side comparison. Select it to view wording differences inline.`;
             return (
               <Link
                 key={option.id}
-                href={`/browse/${volume}/${book}/${chapter}?${buildToggleQuery(option.id, translation, compare)}`}
+                href={`/browse/${volume}/${book}/${chapter}?${buildToggleQuery(option.id, translation, compare, optionIds)}`}
                 className={`rounded-md border p-2 transition-colors ${
                   isSelected
                     ? "border-sky-600/40 bg-sky-500/10"
@@ -90,9 +142,14 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <div className="text-sm font-medium">{option.id.toUpperCase()}</div>
-                  {isSelected ? (
-                    <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">Selected</span>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {option.source === "favorite" ? (
+                      <span className="text-[10px] uppercase tracking-wide text-foreground/60">Favorite</span>
+                    ) : null}
+                    {isSelected ? (
+                      <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">Selected</span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="text-[11px] text-foreground/70">{option.label}.</div>
                 <div className="mt-1 text-[11px] leading-relaxed text-foreground/60">

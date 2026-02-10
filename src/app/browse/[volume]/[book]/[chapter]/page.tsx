@@ -22,13 +22,10 @@ export default async function ChapterPage({ params, searchParams }: Params) {
       ? [query.compare]
       : [];
   const compareTranslations = bibleMode
-    ? Array.from(
-        new Set(
-          compareParams
-            .map((value) => normalizeBibleTranslationId(value))
-            .filter((id) => id !== activeTranslation)
-        )
-      )
+    ? compareParams
+        .map((value) => normalizeBibleTranslationId(value))
+        .filter((id) => id.toLowerCase() !== activeTranslation.toLowerCase())
+        .filter((id, index, list) => list.findIndex((item) => item.toLowerCase() === id.toLowerCase()) === index)
     : [];
 
   const data = await fetchChapter(volume, book, chapter, { translation: activeTranslation });
