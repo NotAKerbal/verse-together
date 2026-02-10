@@ -88,6 +88,7 @@ export type ReaderPreferences = {
   showFootnotes: boolean;
   fontScale: number;
   fontFamily: "serif" | "sans";
+  comparisonView: "inline" | "sideBySide";
 };
 
 export async function upsertCurrentUser(

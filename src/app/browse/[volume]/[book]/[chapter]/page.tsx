@@ -22,21 +22,43 @@ export default async function ChapterPage({ params, searchParams }: Params) {
       ? [query.compare]
       : [];
   const compareTranslations = bibleMode
-    ? Array.from(
-        new Set(
-          compareParams
-            .map((value) => normalizeBibleTranslationId(value))
-            .filter((id) => id !== activeTranslation)
-        )
-      )
+    ? compareParams
+        .map((value) => normalizeBibleTranslationId(value))
+        .filter((id) => id.toLowerCase() !== activeTranslation.toLowerCase())
+        .filter((id, index, list) => list.findIndex((item) => item.toLowerCase() === id.toLowerCase()) === index)
     : [];
 
   const data = await fetchChapter(volume, book, chapter, { translation: activeTranslation });
-  const compareData = await Promise.all(
+  const compareResults = await Promise.allSettled(
     compareTranslations.map((translationId) =>
       fetchChapter(volume, book, chapter, { translation: translationId })
     )
   );
+  const compareData: Awaited<ReturnType<typeof fetchChapter>>[] = [];
+  const translationNotices: string[] = [];
+  if (bibleMode && (data.translation ?? "").toLowerCase() !== activeTranslation.toLowerCase()) {
+    translationNotices.push(
+      `Primary translation "${activeTranslation.toUpperCase()}" was unavailable, showing "${(data.translation ?? "kjv").toUpperCase()}" instead.`
+    );
+  }
+  compareResults.forEach((result, index) => {
+    const requested = compareTranslations[index];
+    if (result.status === "fulfilled") {
+      const actual = (result.value.translation ?? "").toLowerCase();
+      if (requested && actual && actual !== requested.toLowerCase()) {
+        translationNotices.push(
+          `Compare translation "${requested.toUpperCase()}" was unavailable, showing "${actual.toUpperCase()}" instead.`
+        );
+      }
+      compareData.push(result.value);
+      return;
+    }
+    if (requested) {
+      translationNotices.push(
+        `Could not load compare translation "${requested.toUpperCase()}".`
+      );
+    }
+  });
   const querySuffix = bibleMode
     ? (() => {
         const params = new URLSearchParams();
@@ -91,6 +113,7 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         prevHref={prevHref}
         nextHref={nextHref}
         primaryTranslation={data.translation ?? activeTranslation}
+        translationNotices={translationNotices}
         compareChapters={compareData.map((item) => ({
           translation: item.translation ?? "",
           verses: item.verses,

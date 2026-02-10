@@ -6,6 +6,7 @@ export type ReaderPreferences = {
   showFootnotes: boolean;
   fontScale: number; // 0.85 - 1.3
   fontFamily: "serif" | "sans";
+  comparisonView: "inline" | "sideBySide";
 };
 
 const STORAGE_KEY = "reader_prefs_v1";
@@ -16,6 +17,7 @@ export function getDefaultPreferences(): ReaderPreferences {
     showFootnotes: false,
     fontScale: 1,
     fontFamily: "serif",
+    comparisonView: "inline",
   };
 }
 
@@ -46,7 +48,11 @@ export function normalizePreferences(input: Partial<ReaderPreferences> | null | 
   const fontScaleRaw = typeof input?.fontScale === "number" ? input!.fontScale : base.fontScale;
   const fontScale = Math.min(1.3, Math.max(0.85, Number.isFinite(fontScaleRaw) ? fontScaleRaw : 1));
   const fontFamily = input?.fontFamily === "sans" || input?.fontFamily === "serif" ? input.fontFamily : base.fontFamily;
-  return { showFootnotes, fontScale, fontFamily };
+  const comparisonView =
+    input?.comparisonView === "inline" || input?.comparisonView === "sideBySide"
+      ? input.comparisonView
+      : base.comparisonView;
+  return { showFootnotes, fontScale, fontFamily, comparisonView };
 }
 
 export async function loadPreferences(
@@ -62,6 +68,7 @@ export async function loadPreferences(
           showFootnotes: !!data.showFootnotes,
           fontScale: typeof data.fontScale === "number" ? data.fontScale : 1,
           fontFamily: data.fontFamily === "sans" ? "sans" : "serif",
+          comparisonView: data.comparisonView === "sideBySide" ? "sideBySide" : "inline",
         });
         writeLocalPreferences(prefs);
         return prefs;
@@ -87,6 +94,7 @@ export async function savePreferences(
       showFootnotes: prefs.showFootnotes,
       fontScale: prefs.fontScale,
       fontFamily: prefs.fontFamily,
+      comparisonView: prefs.comparisonView,
     });
   } catch {
     // ignore

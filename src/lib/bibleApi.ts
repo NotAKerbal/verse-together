@@ -1,4 +1,4 @@
-import { getBibleBookBySlug, normalizeBibleTranslationId } from "@/lib/bibleCanon";
+import { getBibleBookBySlug, isBibleTranslationId, normalizeBibleTranslationId } from "@/lib/bibleCanon";
 
 export type BibleApiChapterResponse = {
   reference: string;
@@ -60,7 +60,8 @@ export async function fetchBibleApiChapter(
   chapterNumber: number,
   translationInput?: string
 ): Promise<BibleApiChapterResponse> {
-  const translationId = normalizeBibleTranslationId(translationInput);
+  const normalized = normalizeBibleTranslationId(translationInput);
+  const translationId = isBibleTranslationId(normalized) ? normalized : "kjv";
   const book = getBibleBookBySlug(bookSlug);
   if (!book) {
     throw new Error(`Unknown Bible book: ${bookSlug}`);

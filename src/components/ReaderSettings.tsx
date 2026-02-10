@@ -135,6 +135,47 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
               </button>
             </div>
           </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-foreground/80">Comparison view</legend>
+            <div
+              className="inline-flex w-full overflow-hidden rounded-md border border-black/10 dark:border-white/15"
+              onTouchStart={stopTouchPropagation}
+              onTouchMove={stopTouchPropagation}
+              onTouchEnd={stopTouchPropagation}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const next = { ...local, comparisonView: "inline" as const };
+                  setLocal(next);
+                  onChange(next);
+                }}
+                className={`flex-1 px-3 py-1.5 text-sm ${
+                  local.comparisonView === "inline"
+                    ? "bg-foreground text-background"
+                    : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+                }`}
+              >
+                Inline
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = { ...local, comparisonView: "sideBySide" as const };
+                  setLocal(next);
+                  onChange(next);
+                }}
+                className={`flex-1 px-3 py-1.5 text-sm border-l border-black/10 dark:border-white/15 ${
+                  local.comparisonView === "sideBySide"
+                    ? "bg-foreground text-background"
+                    : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+                }`}
+              >
+                Side by side
+              </button>
+            </div>
+          </fieldset>
         </div>
         <footer className="px-3 py-2 border-t border-black/10 dark:border-white/15 text-right">
           <button onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/15">Close</button>
