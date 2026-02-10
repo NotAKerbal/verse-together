@@ -35,33 +35,15 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-## Dictionary Migration (Convex)
+## Dictionary Providers
 
-The in-app dictionary supports Webster `1828`, `1844`, and `1913` editions imported from SQL dumps.
+The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/route.ts`:
 
-### Feature flag
+- `https://dictionaryapi.dev/` (default source, no key required)
+- `https://dictionaryapi.com/` (Merriam-Webster, optional key)
 
-- Set `NEXT_PUBLIC_USE_CONVEX_DICTIONARY=1` to enable in-app dictionary rendering.
-- Leave it unset (or not `1`) to keep external Webster fallback behavior.
+### Optional environment variables
 
-### Import pipeline
+- `MERRIAM_WEBSTER_API_KEY` (or `MW_DICTIONARY_API_KEY`)
 
-Place SQL dump files in `data/dictionary/sql/`:
-
-- `dictionary_webster1828.sql`
-- `dictionary_webster1844.sql`
-- `dictionary_webster1913_words.sql`
-- `dictionary_webster1913_definitions.sql`
-- `dictionary_webster1913_alt.sql`
-
-Run:
-
-```bash
-npm run dictionary:migrate
-```
-
-This executes:
-
-- `dictionary:parse` (SQL -> normalized JSONL)
-- `dictionary:import` (batch upsert into Convex)
-- `dictionary:verify` (count + sample lookup checks)
+If no Merriam-Webster key is configured, only Free Dictionary API entries will be returned.

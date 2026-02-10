@@ -19,7 +19,7 @@ const scriptureRefValidator = v.object({
   reference: v.string(),
 });
 const dictionaryMetaValidator = v.object({
-  edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913")),
+  edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913"), v.literal("ETY")),
   word: v.string(),
   heading: v.optional(v.string()),
   pronounce: v.optional(v.string()),

@@ -11,11 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy",
-    "dictionary:parse": "node scripts/dictionary/parseSqlToJsonl.mjs",
-    "dictionary:import": "node scripts/dictionary/chunkedImport.mjs",
-    "dictionary:verify": "node scripts/dictionary/verifyImport.mjs",
-    "dictionary:migrate": "npm run dictionary:parse && npm run dictionary:import && npm run dictionary:verify"
+    "convex:deploy": "convex deploy"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.37.3",

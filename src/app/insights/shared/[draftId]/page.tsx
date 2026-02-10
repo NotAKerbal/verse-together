@@ -123,12 +123,14 @@ export default function SharedDraftPage() {
                     <div className="min-w-0">
                       <div className="text-sm font-semibold">{block.dictionary_meta?.word ?? "Dictionary entry"}</div>
                       <div className="text-xs text-foreground/60">
-                        {block.dictionary_meta?.edition ?? "Webster"} Webster
+                        {block.dictionary_meta?.edition === "ETY"
+                          ? "Etymology"
+                          : `${block.dictionary_meta?.edition ?? "Webster"} Webster`}
                         {block.dictionary_meta?.pronounce ? ` - ${block.dictionary_meta.pronounce}` : ""}
                       </div>
                     </div>
                     <span className="shrink-0 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[10px] text-foreground/70">
-                      Dictionary
+                      {block.dictionary_meta?.edition === "ETY" ? "Etymology" : "Dictionary"}
                     </span>
                   </div>
                   {block.dictionary_meta?.heading ? (

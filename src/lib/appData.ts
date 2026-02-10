@@ -33,7 +33,7 @@ export type InsightDraftBlock = {
   link_url: string | null;
   scripture_ref: InsightScriptureRef | null;
   dictionary_meta: {
-    edition: "1828" | "1844" | "1913";
+    edition: "1828" | "1844" | "1913" | "ETY";
     word: string;
     heading: string | null;
     pronounce: string | null;
@@ -66,7 +66,7 @@ export type PublishedInsight = {
     link_url: string | null;
     scripture_ref: InsightScriptureRef | null;
     dictionary_meta: {
-      edition: "1828" | "1844" | "1913";
+      edition: "1828" | "1844" | "1913" | "ETY";
       word: string;
       heading: string | null;
       pronounce: string | null;
@@ -196,7 +196,7 @@ export async function addInsightBlock(
     linkUrl?: string | null;
     scriptureRef?: InsightScriptureRef | null;
     dictionaryMeta?: {
-      edition: "1828" | "1844" | "1913";
+      edition: "1828" | "1844" | "1913" | "ETY";
       word: string;
       heading?: string | null;
       pronounce?: string | null;
@@ -256,7 +256,7 @@ export async function updateInsightBlock(
     linkUrl?: string | null;
     scriptureRef?: InsightScriptureRef | null;
     dictionaryMeta?: {
-      edition: "1828" | "1844" | "1913";
+      edition: "1828" | "1844" | "1913" | "ETY";
       word: string;
       heading?: string | null;
       pronounce?: string | null;
