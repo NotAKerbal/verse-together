@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
-import { useRouter } from "next/navigation";
 import type { InsightDraftBlock } from "@/lib/appData";
 import { useInsightBuilder } from "./InsightBuilderProvider";
 import { QuoteBlockEditor, ScriptureBlockEditor, TextBlockEditor } from "./InsightBlockEditors";
@@ -149,7 +148,6 @@ function BuilderContent() {
     removeBlock,
     reorderBlocks,
   } = useInsightBuilder();
-  const router = useRouter();
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
@@ -208,11 +206,6 @@ function BuilderContent() {
     } finally {
       setBusy(false);
     }
-  }
-
-  function onGoToPublish() {
-    if (!activeDraftId) return;
-    router.push(`/insights/publish/${activeDraftId}`);
   }
 
   function setDragState(nextDragId: string | null, nextDropIndex: number | null) {
@@ -288,26 +281,6 @@ function BuilderContent() {
               className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm font-medium"
               placeholder="Insight title"
             />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => addTextBlock("")}
-                className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
-              >
-                + Text
-              </button>
-              <button
-                onClick={() => addQuoteBlock("", "")}
-                className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
-              >
-                + Quote
-              </button>
-              <button
-                onClick={onDeleteDraft}
-                className="rounded-md border border-red-200 text-red-700 dark:border-red-400/30 px-2 py-1 text-xs"
-              >
-                Delete
-              </button>
-            </div>
             <ul
               className="space-y-2"
               onDragOver={(event) => {
@@ -388,6 +361,26 @@ function BuilderContent() {
                 />
               ) : null}
             </ul>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => addTextBlock("")}
+                className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+              >
+                + Text
+              </button>
+              <button
+                onClick={() => addQuoteBlock("", "")}
+                className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+              >
+                + Quote
+              </button>
+              <button
+                onClick={onDeleteDraft}
+                className="rounded-md border border-red-200 text-red-700 dark:border-red-400/30 px-2 py-1 text-xs"
+              >
+                Delete
+              </button>
+            </div>
             <div className="space-y-2 pt-2 border-t border-black/10 dark:border-white/15">
               <button
                 onClick={onSaveDraft}
@@ -395,13 +388,6 @@ function BuilderContent() {
                 className="w-full rounded-md bg-foreground text-background px-3 py-2 text-sm font-medium disabled:opacity-60"
               >
                 Save
-              </button>
-              <button
-                onClick={onGoToPublish}
-                disabled={busy || orderedBlocks.length === 0}
-                className="w-full rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm disabled:opacity-60"
-              >
-                Publish insight
               </button>
               {savedMessage ? <p className="text-xs text-foreground/70 text-center">{savedMessage}</p> : null}
             </div>
@@ -427,11 +413,16 @@ export default function InsightBuilderShell() {
       </button>
 
       {isMobileOpen ? (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <button aria-label="Close insight builder" onClick={closeBuilder} className="absolute inset-0 bg-black/35" />
-          <div className="absolute inset-x-2 bottom-0 max-h-[85vh] rounded-t-2xl border border-black/10 dark:border-white/15 bg-background shadow-2xl overflow-hidden">
+        <div className="lg:hidden fixed inset-0 z-50 bg-background">
+          <div className="h-full overflow-hidden">
             <BuilderContent />
           </div>
+          <button
+            onClick={closeBuilder}
+            className="fixed z-[60] right-4 bottom-20 rounded-full border border-black/10 dark:border-white/15 bg-background/95 px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+          >
+            Close
+          </button>
         </div>
       ) : null}
 
