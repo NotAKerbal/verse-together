@@ -10,6 +10,7 @@
 
 import type * as cache from "../cache.js";
 import type * as crons from "../crons.js";
+import type * as dictionary from "../dictionary.js";
 import type * as feedback from "../feedback.js";
 import type * as insights from "../insights.js";
 import type * as preferences from "../preferences.js";
@@ -26,6 +27,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   cache: typeof cache;
   crons: typeof crons;
+  dictionary: typeof dictionary;
   feedback: typeof feedback;
   insights: typeof insights;
   preferences: typeof preferences;
