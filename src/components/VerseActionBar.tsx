@@ -49,9 +49,20 @@ const VerseActionBar: FC<Props> = ({
   useEffect(() => () => {
     if (closeTimerRef.current != null) window.clearTimeout(closeTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("mobile-verse-action-menu-toggle", {
+        detail: { open: menuOpen },
+      })
+    );
+  }, [menuOpen]);
+
   if (!visible) return null;
   return (
     <div
+      data-mobile-verse-action-bar="true"
+      data-mobile-verse-action-menu-open={menuOpen ? "true" : "false"}
       className="fixed inset-x-0 z-50 pointer-events-none lg:hidden"
       style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
     >
@@ -105,6 +116,7 @@ const VerseActionBar: FC<Props> = ({
 
       {menuMounted ? (
         <div
+          data-mobile-verse-action-menu-panel="true"
           className="fixed right-3 sm:right-4 z-[60] flex flex-col items-end gap-1 pointer-events-auto"
           style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.5rem)" }}
         >

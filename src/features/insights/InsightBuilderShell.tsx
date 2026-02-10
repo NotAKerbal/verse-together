@@ -628,6 +628,68 @@ function BuilderContent() {
 
 export default function InsightBuilderShell() {
   const { canUseInsights, isMobileOpen, toggleMobileBuilder, closeBuilder, activeDraftId } = useInsightBuilder();
+  const [mobileToggleBottom, setMobileToggleBottom] = useState(16);
+
+  useEffect(() => {
+    const baseBottom = 16;
+    let rafId = 0;
+
+    const updatePosition = () => {
+      const actionBar = document.querySelector<HTMLElement>('[data-mobile-verse-action-bar="true"]');
+      if (!actionBar) {
+        setMobileToggleBottom(baseBottom);
+        return;
+      }
+      const rect = actionBar.getBoundingClientRect();
+      if (rect.height <= 0) {
+        setMobileToggleBottom(baseBottom);
+        return;
+      }
+      // Keep the FAB above the action bar, and above the expanded "More" menu when present.
+      const actionBarClearance = Math.round(window.innerHeight - rect.top + 12);
+      const menuPanel = document.querySelector<HTMLElement>('[data-mobile-verse-action-menu-panel="true"]');
+      const menuRect = menuPanel?.getBoundingClientRect();
+      const menuClearance = menuRect && menuRect.height > 0
+        ? Math.round(window.innerHeight - menuRect.top + 12)
+        : 0;
+      const nextBottom = Math.max(baseBottom, actionBarClearance, menuClearance);
+      setMobileToggleBottom(nextBottom);
+    };
+
+    const scheduleUpdate = () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+      rafId = window.requestAnimationFrame(updatePosition);
+    };
+
+    const observer = new MutationObserver(scheduleUpdate);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        "class",
+        "style",
+        "data-mobile-verse-action-bar",
+        "data-mobile-verse-action-menu-open",
+        "data-mobile-verse-action-menu-panel",
+      ],
+    });
+
+    window.addEventListener("resize", scheduleUpdate);
+    window.addEventListener("mobile-verse-action-menu-toggle", scheduleUpdate as EventListener);
+    scheduleUpdate();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("mobile-verse-action-menu-toggle", scheduleUpdate as EventListener);
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
+  }, []);
 
   if (!canUseInsights) return null;
 
@@ -635,7 +697,8 @@ export default function InsightBuilderShell() {
     <>
       <button
         onClick={toggleMobileBuilder}
-        className="lg:hidden fixed z-50 right-4 bottom-4 rounded-full bg-foreground text-background px-4 py-3 text-sm font-medium shadow-lg"
+        className="lg:hidden fixed z-50 right-4 rounded-full bg-foreground text-background px-4 py-3 text-sm font-medium shadow-lg transition-[bottom] duration-150"
+        style={{ bottom: `${mobileToggleBottom}px` }}
       >
         {isMobileOpen ? "Close Insight" : "Open Insight"}
       </button>
