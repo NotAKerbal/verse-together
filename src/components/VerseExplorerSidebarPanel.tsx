@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import DictionaryEntryBody from "@/components/DictionaryEntryBody";
 
 type Verse = { verse: number; text: string };
 
@@ -276,7 +277,7 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
                         {entry.pronounce ? <span className="text-xs text-foreground/60">{entry.pronounce}</span> : null}
                       </header>
                       {entry.heading ? <div className="text-xs uppercase tracking-wide text-foreground/60">{entry.heading}</div> : null}
-                      <pre className="whitespace-pre-wrap break-words text-sm leading-6 font-sans">{entry.entryText}</pre>
+                      <DictionaryEntryBody entryText={entry.entryText} />
                     </article>
                   ))}
                 </section>

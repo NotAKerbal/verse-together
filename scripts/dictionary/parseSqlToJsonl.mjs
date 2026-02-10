@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { formatDictionaryEntryRichText } from "./formatDictionaryEntry.mjs";
 import { normalizeLookupKey } from "./normalizeLookupKey.mjs";
 import { parseSqlFileInserts } from "./sqlParser.mjs";
 
@@ -22,7 +23,7 @@ function compactEntry(entry) {
 function toEntry1828(row) {
   const word = String(row.word || row._word || row.heading || "").trim();
   const lookupKey = normalizeLookupKey(row._word || word);
-  const entryText = String(row.content || row.string || "").trim();
+  const entryText = formatDictionaryEntryRichText(String(row.content || row.string || "").trim());
   if (!lookupKey || !entryText) return null;
   return compactEntry({
     edition: "1828",
@@ -39,7 +40,7 @@ function toEntry1828(row) {
 function toEntry1844(row) {
   const word = String(row._word || "").trim();
   const lookupKey = normalizeLookupKey(word);
-  const entryText = String(row.definition || "").trim();
+  const entryText = formatDictionaryEntryRichText(String(row.definition || "").trim());
   if (!lookupKey || !entryText) return null;
   return compactEntry({
     edition: "1844",
@@ -116,7 +117,7 @@ async function emit1913Rows({ definitionsPath, wordsMap, altMap, writer }) {
 
     const definition = String(row.definition || "").trim();
     const extra = String(row.extra || "").trim();
-    const entryText = [definition, extra].filter(Boolean).join("\n\n");
+    const entryText = formatDictionaryEntryRichText([definition, extra].filter(Boolean).join("\n\n"));
     if (!entryText) return;
 
     const primaryLookup = normalizeLookupKey(wordMeta.lookupWord);
