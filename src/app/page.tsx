@@ -4,65 +4,176 @@ import FeedbackForm from "../components/FeedbackForm";
 
 export default function Home() {
   return (
-    <section className="py-12 sm:py-20 space-y-12">
-      <div className="mx-auto max-w-3xl text-center">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Share scriptures. Bear testimony. Learn together.
+    <div className="space-y-16 sm:space-y-24 py-12 sm:py-20">
+      {/* Hero Section */}
+      <section className="mx-auto max-w-4xl text-center space-y-6">
+        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight">
+          Verse Together
         </h1>
-        <p className="mt-4 text-base sm:text-lg text-foreground/80">
-          Find and share your favorite verses, write insights, and bear testimony.
+        <p className="text-xl sm:text-2xl text-foreground/70 font-medium">
+          Share scriptures. Bear testimony. Learn together.
         </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
+        <p className="text-base sm:text-lg text-foreground/60 max-w-2xl mx-auto">
+          A community platform for discovering, sharing, and discussing scripture. 
+          Highlight verses, add your insights, find related conference talks, and 
+          connect with others on their spiritual journey.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link
             href="/browse"
-            className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium hover:opacity-90"
+            className="inline-flex items-center rounded-md bg-foreground text-background px-6 py-3 text-base font-medium hover:opacity-90 transition-opacity"
             data-ripple
           >
-            Start browsing
+            Browse Scriptures
           </Link>
           <Link
             href="/feed"
-            className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10"
+            className="inline-flex items-center rounded-md border-2 border-foreground/20 px-6 py-3 text-base font-medium hover:bg-foreground/5 transition-colors"
           >
-            View feed
+            View Community Feed
           </Link>
         </div>
-      </div>
+      </section>
+
       <MigrationNotice />
-      <div className="mx-auto max-w-5xl">
-        <div className="grid sm:grid-cols-2 gap-6">
+
+      {/* What is Verse Together Section */}
+      <section className="mx-auto max-w-5xl space-y-8">
+        <div className="text-center space-y-3">
+          <h2 className="text-3xl sm:text-4xl font-bold">What is Verse Together?</h2>
+          <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
+            Verse Together is a modern platform designed to enhance your scripture study 
+            and help you share insights with a community of believers.
+          </p>
+        </div>
+        
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
           <FeatureCard
-            title="Find relevant conference talks"
-            description="Find talks that reference the verses you're studying and listen to them in Gospel Library."
+            icon="📖"
+            title="Browse Scriptures"
+            description="Navigate through all standard works with an intuitive reader. Jump between books, chapters, and verses effortlessly."
           />
           <FeatureCard
-            title="Scripture sharing with others"
-            description="Highlight verses, add notes, and share with the community or friends."
+            icon="✨"
+            title="Share Highlights"
+            description="Select verses that inspire you, add personal notes and insights, then share them with the community or your friends."
           />
           <FeatureCard
-            title="Verse Explorer"
-            description="Jump across cross-references and footnotes to deepen your study."
+            icon="💬"
+            title="Engage & Discuss"
+            description="Comment on shared verses, react to insights, and participate in meaningful discussions about the scriptures."
           />
           <FeatureCard
-            title="Reader settings"
-            description="Customize font size, line width, and tools to fit your study style."
+            icon="🎙️"
+            title="Find Conference Talks"
+            description="Discover General Conference talks that reference the verses you're studying. Listen directly in Gospel Library."
+          />
+          <FeatureCard
+            icon="🔗"
+            title="Explore Connections"
+            description="Navigate cross-references and footnotes to deepen your understanding and see how verses connect across the standard works."
+          />
+          <FeatureCard
+            icon="⚙️"
+            title="Customize Your Study"
+            description="Adjust font size, line width, and reading tools to create the perfect study environment for your needs."
           />
         </div>
-      </div>
-      <div className="mx-auto max-w-3xl">
-        <div className="mt-10">
-          <FeedbackForm />
+      </section>
+
+      {/* How It Works Section */}
+      <section className="mx-auto max-w-4xl space-y-8">
+        <div className="text-center space-y-3">
+          <h2 className="text-3xl sm:text-4xl font-bold">How It Works</h2>
+          <p className="text-lg text-foreground/70">
+            Get started in three simple steps
+          </p>
         </div>
-      </div>
-    </section>
+        
+        <div className="grid sm:grid-cols-3 gap-6 mt-10">
+          <StepCard
+            number="1"
+            title="Browse & Read"
+            description="Start by browsing scriptures. Find verses that speak to you as you read through the standard works."
+          />
+          <StepCard
+            number="2"
+            title="Share & Annotate"
+            description="Highlight verses and add your thoughts, insights, or testimony. Share publicly or with friends."
+          />
+          <StepCard
+            number="3"
+            title="Connect & Learn"
+            description="Explore the community feed to see what others are sharing. Comment, react, and discover new perspectives."
+          />
+        </div>
+      </section>
+
+      {/* Call to Action */}
+      <section className="mx-auto max-w-3xl text-center space-y-6 py-12 rounded-2xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5">
+        <h2 className="text-2xl sm:text-3xl font-bold">Ready to Begin?</h2>
+        <p className="text-base sm:text-lg text-foreground/70">
+          Join the community and start sharing your favorite verses today.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+          <Link
+            href="/browse"
+            className="inline-flex items-center rounded-md bg-foreground text-background px-6 py-3 text-base font-medium hover:opacity-90 transition-opacity"
+            data-ripple
+          >
+            Start Browsing Scriptures
+          </Link>
+        </div>
+      </section>
+
+      {/* Feedback Section */}
+      <section className="mx-auto max-w-3xl">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2">We'd Love Your Feedback</h2>
+          <p className="text-foreground/70">
+            Help us improve Verse Together by sharing your thoughts and suggestions.
+          </p>
+        </div>
+        <FeedbackForm />
+      </section>
+    </div>
   );
 }
 
-function FeatureCard({ title, description }: { title: string; description: string }) {
+function FeatureCard({ 
+  icon, 
+  title, 
+  description 
+}: { 
+  icon: string; 
+  title: string; 
+  description: string;
+}) {
   return (
-    <div className="rounded-lg border border-black/10 dark:border-white/15 p-5">
+    <div className="rounded-lg border border-black/10 dark:border-white/15 p-6 hover:border-foreground/30 transition-colors">
+      <div className="text-3xl mb-3">{icon}</div>
+      <h3 className="text-lg font-semibold mb-2">{title}</h3>
+      <p className="text-sm text-foreground/70 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+function StepCard({
+  number,
+  title,
+  description,
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="text-center space-y-3">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-foreground text-background text-xl font-bold">
+        {number}
+      </div>
       <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm text-foreground/80">{description}</p>
+      <p className="text-sm text-foreground/70 leading-relaxed">{description}</p>
     </div>
   );
 }

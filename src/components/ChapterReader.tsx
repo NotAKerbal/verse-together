@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
@@ -15,11 +14,9 @@ import { fetchChapter } from "@/lib/openscripture";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
+import { createComment, createShare, getChapterActivity, toggleReaction } from "@/lib/appData";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
-type ShareRow = { id: string; verse_start: number; verse_end: number };
-type ReactionRow = { id: string; share_id: string };
-type CommentDetail = { id: string; share_id: string; user_id: string; body: string; created_at: string; visibility: "public" | "friends" };
 
 export default function ChapterReader({
   volume,
@@ -40,7 +37,7 @@ export default function ChapterReader({
   prevHref?: string;
   nextHref?: string;
 }) {
-  const { user } = useAuth();
+  const { user, getToken } = useAuth();
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -125,14 +122,15 @@ export default function ChapterReader({
   useEffect(() => {
     let alive = true;
     (async () => {
-      const loaded = await loadPreferences(user?.id ?? null);
+      const token = user ? await getToken({ template: "convex" }) : null;
+      const loaded = await loadPreferences(user?.id ?? null, token);
       if (!alive) return;
       setPrefs(loaded);
     })();
     return () => {
       alive = false;
     };
-  }, [user?.id]);
+  }, [user?.id, getToken]);
 
   useEffect(() => {
     // Show one-time hint on first use
@@ -308,91 +306,16 @@ export default function ChapterReader({
     let alive = true;
     async function loadIndicators() {
       setVerseIndicators({});
-      const { data: shares, error } = await supabase
-        .from("scripture_shares")
-        .select("id, verse_start, verse_end")
-        .eq("volume", volume)
-        .eq("book", book)
-        .eq("chapter", chapter);
-      if (error || !shares || shares.length === 0) return;
-      const shareIds = (shares as ShareRow[]).map((s) => s.id);
-      const [{ data: comments }, { data: reactions }] = await Promise.all([
-        supabase.from("scripture_comments").select("id, share_id, user_id, body, created_at, visibility").in("share_id", shareIds),
-        supabase.from("scripture_reactions").select("id, share_id").in("share_id", shareIds),
-      ]);
-      const commentsByShare: Record<string, number> = {};
-      const reactionsByShare: Record<string, number> = {};
-      (comments as CommentDetail[] | null ?? []).forEach((c) => {
-        commentsByShare[c.share_id] = (commentsByShare[c.share_id] ?? 0) + 1;
-      });
-      (reactions as ReactionRow[] | null ?? []).forEach((r) => {
-        reactionsByShare[r.share_id] = (reactionsByShare[r.share_id] ?? 0) + 1;
-      });
-      const map: Record<number, { comments: number; likes: number }> = {};
-      for (const s of shares as ShareRow[]) {
-        const likeCount = reactionsByShare[s.id] ?? 0;
-        const commentCount = commentsByShare[s.id] ?? 0;
-        if (likeCount === 0 && commentCount === 0) continue;
-        for (let v = s.verse_start; v <= s.verse_end; v++) {
-          map[v] = {
-            comments: (map[v]?.comments ?? 0) + commentCount,
-            likes: (map[v]?.likes ?? 0) + likeCount,
-          };
-        }
-      }
-      if (!alive) return;
-      setVerseIndicators(map);
-
-      // Build top comments per verse (up to 3, newest first)
-      const commentsByVerse: Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>> = {};
-      const commentsByShareFull: Record<string, CommentDetail[]> = {};
-      (comments as CommentDetail[] | null ?? []).forEach((c) => {
-        (commentsByShareFull[c.share_id] ||= []).push(c);
-      });
-      for (const s of shares as ShareRow[]) {
-        const list = (commentsByShareFull[s.id] ?? []).slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-        if (list.length === 0) continue;
-        for (let v = s.verse_start; v <= s.verse_end; v++) {
-          const agg = (commentsByVerse[v] ||= []);
-          for (const c of list) {
-            if (agg.length < 6) {
-              // temporarily allow more, will trim to 3 after merge across shares
-              agg.push({ id: c.id, user_id: c.user_id, body: c.body, created_at: c.created_at });
-            }
-          }
-        }
-      }
-      // Deduplicate by id per verse, sort, and cap to 3
-      Object.keys(commentsByVerse).forEach((k) => {
-        const v = Number(k);
-        const seen: Record<string, boolean> = {};
-        const dedup = commentsByVerse[v].filter((c) => {
-          if (seen[c.id]) return false;
-          seen[c.id] = true;
-          return true;
-        });
-        dedup.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-        commentsByVerse[v] = dedup.slice(0, 3);
-      });
-      if (!alive) return;
-      setVerseComments(commentsByVerse);
-
-      // Load commenter display names
-      const uniqueUserIds = Array.from(
-        new Set((comments as CommentDetail[] | null ?? []).map((c) => c.user_id))
-      );
-      if (uniqueUserIds.length > 0) {
-        const { data: profs } = await supabase
-          .from("profiles")
-          .select("user_id, display_name")
-          .in("user_id", uniqueUserIds);
-        const nameMap: Record<string, string> = {};
-        (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
-          nameMap[p.user_id] = p.display_name;
-        });
+      try {
+        const data = await getChapterActivity(volume, book, chapter);
         if (!alive) return;
-        setCommenterNames(nameMap);
-      } else {
+        setVerseIndicators(data.verseIndicators ?? {});
+        setVerseComments(data.verseComments ?? {});
+        setCommenterNames(data.names ?? {});
+      } catch {
+        if (!alive) return;
+        setVerseIndicators({});
+        setVerseComments({});
         setCommenterNames({});
       }
     }
@@ -611,7 +534,10 @@ export default function ChapterReader({
         prefs={prefs}
         onChange={(next) => {
           setPrefs(next);
-          void savePreferences(user?.id ?? null, next);
+          void (async () => {
+            const token = user ? await getToken({ template: "convex" }) : null;
+            await savePreferences(user?.id ?? null, next, token);
+          })();
         }}
       />
 
@@ -712,8 +638,12 @@ export default function ChapterReader({
                     setCommentError("Please enter a comment.");
                     return;
                   }
-                  const { data: session } = await supabase.auth.getSession();
-                  if (!session.session) {
+                  if (!user) {
+                    setCommentError("Please sign in to comment.");
+                    return;
+                  }
+                  const token = await getToken({ template: "convex" });
+                  if (!token) {
                     setCommentError("Please sign in to comment.");
                     return;
                   }
@@ -721,31 +651,30 @@ export default function ChapterReader({
                   setCommentError(null);
                   const s = Math.min(...Array.from(selected));
                   const e = Math.max(...Array.from(selected));
-                  const { data, error } = await supabase
-                    .from("scripture_shares")
-                    .insert({
+                  let shareId = "";
+                  try {
+                    const share = await createShare(token, {
                       volume,
                       book,
                       chapter,
-                      verse_start: s,
-                      verse_end: e,
-                      translation: null,
-                      note: null,
+                      verseStart: s,
+                      verseEnd: e,
                       content: selectedText || null,
-                    })
-                    .select("id")
-                    .single();
-                  if (error || !data) {
-                    setCommentError(error?.message ?? "Failed creating share");
+                    });
+                    shareId = share.id;
+                  } catch (eCreate) {
+                    setCommentError(eCreate instanceof Error ? eCreate.message : "Failed creating share");
                     setSubmittingComment(false);
                     return;
                   }
-                  const shareId = (data as { id: string }).id;
-                  const { error: e2 } = await supabase
-                    .from("scripture_comments")
-                    .insert({ share_id: shareId, body: commentText.trim(), visibility: commentVisibility });
-                  if (e2) {
-                    setCommentError(e2.message);
+                  try {
+                    await createComment(token, {
+                      shareId,
+                      body: commentText.trim(),
+                      visibility: commentVisibility,
+                    });
+                  } catch (eComment) {
+                    setCommentError(eComment instanceof Error ? eComment.message : "Failed posting comment");
                     setSubmittingComment(false);
                     return;
                   }
@@ -802,44 +731,40 @@ export default function ChapterReader({
         actionsEnabled={!!user}
         onClear={() => setSelected(new Set())}
         onLike={async () => {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session.session) {
+        if (!user) {
+          alert("Please sign in to like.");
+          return;
+        }
+        const token = await getToken({ template: "convex" });
+        if (!token) {
           alert("Please sign in to like.");
           return;
         }
         const s = Math.min(...Array.from(selected));
         const e = Math.max(...Array.from(selected));
-        const { data, error } = await supabase
-          .from("scripture_shares")
-          .insert({
+        let shareId = "";
+        try {
+          const created = await createShare(token, {
             volume,
             book,
             chapter,
-            verse_start: s,
-            verse_end: e,
-            translation: null,
-            note: null,
+            verseStart: s,
+            verseEnd: e,
             content: selectedText || null,
-          })
-          .select("id")
-          .single();
-        if (error || !data) {
-          // surface error minimally
+          });
+          shareId = created.id;
+        } catch {
           return;
         }
-        const shareId = (data as { id: string }).id;
-        const { error: reactError } = await supabase.rpc("toggle_reaction", {
-          p_share_id: shareId,
-          p_reaction: "like",
-        });
-        if (reactError) {
+        try {
+          await toggleReaction(token, shareId, "like");
+        } catch {
           return;
         }
         setSelected(new Set());
         }}
         onComment={async () => {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session.session) return;
+        if (!user) return;
         setCommentError(null);
         setIsCommentOpen(true);
         }}

@@ -7,14 +7,33 @@ export type TalkDetails = {
   aboutHtml?: string;
   bodyHtml: string;
 };
+import { convexMutation, convexQuery } from "@/lib/convexHttp";
 
 const BASE = "https://scriptures.byu.edu";
 
 export async function fetchTalkHtml(id: string): Promise<string> {
+  try {
+    const cached = await convexQuery<{ rawHtml: string } | null>("cache:getTalkCache", { talkId: id });
+    if (cached?.rawHtml) return cached.rawHtml;
+  } catch {
+    // Fallback to upstream.
+  }
   const url = `${BASE}/content/talks_ajax/${encodeURIComponent(id)}/`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`Talk load failed ${res.status}`);
-  return await res.text();
+  const html = await res.text();
+  try {
+    const parsed = parseTalkHtml(id, html);
+    await convexMutation("cache:upsertTalkCache", {
+      talkId: id,
+      rawHtml: html,
+      parsed,
+      fetchedAt: Date.now(),
+    });
+  } catch {
+    // Ignore cache write errors.
+  }
+  return html;
 }
 
 function extractText(html: string): string {
@@ -58,6 +77,17 @@ export function parseTalkHtml(id: string, html: string): TalkDetails {
     aboutHtml: enhancedAbout,
     bodyHtml,
   };
+}
+
+export async function fetchTalkDetails(id: string): Promise<TalkDetails> {
+  try {
+    const cached = await convexQuery<{ parsed: TalkDetails } | null>("cache:getTalkCache", { talkId: id });
+    if (cached?.parsed) return cached.parsed;
+  } catch {
+    // Fallback to live fetch.
+  }
+  const html = await fetchTalkHtml(id);
+  return parseTalkHtml(id, html);
 }
 
 // Convert bracket/superscript footnote refs into anchors and structure Notes section

@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import GoogleSignInButton from "@/components/GoogleSignInButton";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
+import { SignInButton } from "@clerk/nextjs";
 
 type Props = {
   open: boolean;
@@ -12,7 +11,7 @@ type Props = {
 };
 
 export default function MobileNavDrawer({ open, onClose }: Props) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [isClosing, setIsClosing] = useState(false);
   const [hasEntered, setHasEntered] = useState(false);
 
@@ -46,7 +45,7 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
   if (!open && !isClosing) return null;
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await signOut();
     requestClose();
   }
 
@@ -82,7 +81,9 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
             </>
           ) : (
             <div className="pt-1">
-              <GoogleSignInButton oneTap={false} showButton={true} />
+              <SignInButton mode="modal">
+                <button className="px-3 py-2 rounded-md bg-foreground text-background">Sign in</button>
+              </SignInButton>
             </div>
           )}
         </nav>

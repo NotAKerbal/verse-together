@@ -1,29 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
-
-type ShareRow = {
-  id: string;
-  user_id: string;
-  volume: string;
-  book: string;
-  chapter: number;
-  verse_start: number;
-  verse_end: number;
-  translation: string | null;
-  note: string | null;
-  content: string | null;
-  created_at: string;
-  reaction_count: number;
-  comment_count: number;
-};
+import {
+  getFeed,
+  getReactionCount,
+  toggleReaction,
+  type FeedShare,
+} from "@/lib/appData";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 export default function Feed() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<ShareRow[]>([]);
+  const [rows, setRows] = useState<FeedShare[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,18 +23,9 @@ export default function Feed() {
       setLoading(true);
       setError(null);
       try {
-        const { data, error } = await supabase
-          .from("v_scripture_shares_with_counts")
-          .select("*")
-          .order("reaction_count", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(50);
+        const data = await getFeed();
         if (ignore) return;
-        if (error) {
-          setError(error.message);
-        } else {
-          setRows((data as ShareRow[] | null) ?? []);
-        }
+        setRows(data ?? []);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : "Failed to load feed";
         if (!ignore) setError(message);
@@ -84,7 +66,7 @@ export default function Feed() {
   );
 }
 
-function ShareCard({ row }: { row: ShareRow }) {
+function ShareCard({ row }: { row: FeedShare }) {
   const reference = useMemo(() => {
     const ref = `${row.book} ${row.chapter}:${row.verse_start}${row.verse_end && row.verse_end !== row.verse_start ? "-" + row.verse_end : ""}`;
     return row.translation ? `${ref} (${row.translation})` : ref;
@@ -109,15 +91,26 @@ function ShareCard({ row }: { row: ShareRow }) {
 
 function Comments({ shareId }: { shareId: string }) {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   type CommentRow = { id: string; body: string; created_at: string; user_id: string; visibility: "public" | "friends" };
-  const [items, setItems] = useState<CommentRow[]>([]);
   const [body, setBody] = useState("");
   const [visibility, setVisibility] = useState<"public" | "friends">("public");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
-  const [names, setNames] = useState<Record<string, string>>({});
+
+  const comments = useQuery(api.social.getComments, { shareId: shareId as any }) as CommentRow[] | undefined;
+  const createCommentMutation = useMutation(api.social.createComment);
+  const updateCommentMutation = useMutation(api.social.updateComment);
+  const deleteCommentMutation = useMutation(api.social.deleteComment);
+
+  const commenterIds = useMemo(
+    () => Array.from(new Set((comments ?? []).map((c) => c.user_id))),
+    [comments]
+  );
+  const names = useQuery(
+    api.users.getNames,
+    comments ? { clerkIds: commenterIds } : "skip"
+  ) as Record<string, string> | undefined;
 
   function formatWhen(iso: string) {
     const d = new Date(iso);
@@ -133,69 +126,14 @@ function Comments({ shareId }: { shareId: string }) {
     return d.toLocaleString();
   }
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from("scripture_comments")
-      .select("id, body, created_at, user_id, visibility")
-      .eq("share_id", shareId)
-      .order("created_at", { ascending: false })
-      .limit(10);
-    if (error) {
-      setError(error.message);
-      setItems([]);
-      setNames({});
-      setLoading(false);
-      return;
-    }
-    const rows = (data as CommentRow[] | null) ?? [];
-    setItems(rows);
-    try {
-      const uniqueUserIds = Array.from(new Set(rows.map((i) => i.user_id)));
-      if (uniqueUserIds.length > 0) {
-        const { data: profs } = await supabase
-          .from("profiles")
-          .select("user_id, display_name")
-          .in("user_id", uniqueUserIds);
-        const map: Record<string, string> = {};
-        (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
-          map[p.user_id] = p.display_name;
-        });
-        setNames(map);
-      } else {
-        setNames({});
-      }
-    } catch {
-      setNames({});
-    }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    let ignore = false;
-    (async () => {
-      if (!ignore) await load();
-    })();
-    return () => {
-      ignore = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareId, user?.id]);
-
   async function addComment() {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) throw new Error("Please sign in to comment.");
+      if (!user) throw new Error("Please sign in to comment.");
       const text = body.trim();
       if (!text) return;
-      const { error } = await supabase
-        .from("scripture_comments")
-        .insert({ share_id: shareId, body: text, visibility });
-      if (error) throw error;
+      await createCommentMutation({ shareId: shareId as any, body: text, visibility });
       setBody("");
       setVisibility("public");
-      load();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed";
       setError(message);
@@ -206,14 +144,9 @@ function Comments({ shareId }: { shareId: string }) {
     try {
       const text = editingBody.trim();
       if (!text) return;
-      const { error } = await supabase
-        .from("scripture_comments")
-        .update({ body: text })
-        .eq("id", id);
-      if (error) throw error;
+      await updateCommentMutation({ commentId: id as any, body: text });
       setEditingId(null);
       setEditingBody("");
-      load();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to update";
       setError(message);
@@ -224,12 +157,7 @@ function Comments({ shareId }: { shareId: string }) {
     try {
       const sure = confirm("Delete this comment?");
       if (!sure) return;
-      const { error } = await supabase
-        .from("scripture_comments")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-      load();
+      await deleteCommentMutation({ commentId: id as any });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to delete";
       setError(message);
@@ -264,17 +192,17 @@ function Comments({ shareId }: { shareId: string }) {
           </button>
         </div>
       ) : null}
-      {loading ? (
+      {comments === undefined ? (
         <div className="text-xs text-foreground/60">Loading comments…</div>
       ) : error ? (
         <div className="text-xs text-red-600">{error}</div>
-      ) : items.length === 0 ? (
+      ) : comments.length === 0 ? (
         <div className="text-xs text-foreground/60">No comments yet.</div>
       ) : (
         <ul className="space-y-2">
-          {items.map((c) => {
+          {comments.map((c) => {
             const isMine = user?.id && c.user_id === user.id;
-            const name = names[c.user_id];
+            const name = names?.[c.user_id];
             const who = isMine ? "You" : name ? name : `User ${c.user_id.slice(0, 6)}`;
             return (
               <li key={c.id} className="rounded-md border border-black/10 dark:border-white/15 p-3">
@@ -316,6 +244,7 @@ function Comments({ shareId }: { shareId: string }) {
 }
 
 function FeedActions({ shareId }: { shareId: string }) {
+  const { user, getToken } = useAuth();
   const [count, setCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -323,13 +252,14 @@ function FeedActions({ shareId }: { shareId: string }) {
   useEffect(() => {
     let ignore = false;
     async function load() {
-      const { count, error } = await supabase
-        .from("scripture_reactions")
-        .select("id", { count: "exact", head: true })
-        .eq("share_id", shareId);
-      if (!ignore) {
-        if (error) setError(error.message);
-        setCount(count ?? 0);
+      try {
+        const total = await getReactionCount(shareId);
+        if (!ignore) setCount(total ?? 0);
+      } catch (e) {
+        if (!ignore) {
+          const message = e instanceof Error ? e.message : "Failed loading reactions";
+          setError(message);
+        }
       }
     }
     load();
@@ -342,18 +272,12 @@ function FeedActions({ shareId }: { shareId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) throw new Error("Please sign in to react.");
-      const { error } = await supabase.rpc("toggle_reaction", {
-        p_share_id: shareId,
-        p_reaction: "like",
-      });
-      if (error) throw error;
-      const { count } = await supabase
-        .from("scripture_reactions")
-        .select("id", { count: "exact", head: true })
-        .eq("share_id", shareId);
-      setCount(count ?? 0);
+      if (!user) throw new Error("Please sign in to react.");
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in to react.");
+      await toggleReaction(token, shareId, "like");
+      const total = await getReactionCount(shareId);
+      setCount(total ?? 0);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed";
       setError(message);

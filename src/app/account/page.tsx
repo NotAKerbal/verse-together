@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
+import {
+  deleteComment as deleteCommentMutation,
+  getAccountData,
+  lookupUserByEmail,
+  removeFriendship,
+  sendFriendRequest as sendFriendRequestMutation,
+  updateComment,
+  updateFriendshipStatus,
+} from "@/lib/appData";
 // import Link from "next/link";
 
 type Friend = { id: string; requester_id: string; addressee_id: string; status: "pending" | "accepted" | "blocked" };
@@ -18,7 +26,7 @@ type ShareRow = {
 };
 
 export default function AccountPage() {
-  const { user } = useAuth();
+  const { user, getToken } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [emailToAdd, setEmailToAdd] = useState("");
   const [loading, setLoading] = useState(true);
@@ -37,58 +45,14 @@ export default function AccountPage() {
       setLoading(true);
       setError(null);
       try {
-        const { data: fr } = await supabase
-          .from("friendships")
-          .select("id, requester_id, addressee_id, status")
-          .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
-          .order("created_at", { ascending: false });
+        const token = await getToken({ template: "convex" });
+        if (!token) return;
+        const data = await getAccountData(token);
         if (!alive) return;
-        const frList = (fr as Friend[] | null) ?? [];
-        setFriends(frList);
-
-        // Load display names for friend user IDs
-        const otherIds = Array.from(new Set(
-          frList.map((f) => (f.requester_id === user.id ? f.addressee_id : f.requester_id))
-        ));
-        if (otherIds.length > 0) {
-          const { data: profs } = await supabase
-            .from("profiles")
-            .select("user_id, display_name")
-            .in("user_id", otherIds);
-          if (!alive) return;
-          const map: Record<string, string> = {};
-          (profs as Array<{ user_id: string; display_name: string }> | null)?.forEach((p) => {
-            map[p.user_id] = p.display_name;
-          });
-          setNames(map);
-        } else {
-          setNames({});
-        }
-
-        const { data: comments } = await supabase
-          .from("scripture_comments")
-          .select("id, body, created_at, share_id, visibility")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(20);
-        if (!alive) return;
-        const commentRows = (comments as CommentRow[] | null) ?? [];
-        setMyComments(commentRows);
-
-        // Load related shares for these comments
-        const shareIds = Array.from(new Set(commentRows.map((c) => c.share_id)));
-        if (shareIds.length > 0) {
-          const { data: sharesData } = await supabase
-            .from("scripture_shares")
-            .select("id, book, chapter, verse_start, verse_end, translation, content")
-            .in("id", shareIds);
-          if (!alive) return;
-          const map: Record<string, ShareRow> = {};
-          (sharesData as ShareRow[] | null)?.forEach((s) => { map[s.id] = s; });
-          setShares(map);
-        } else {
-          setShares({});
-        }
+        setFriends(data.friends as Friend[]);
+        setMyComments(data.myComments as CommentRow[]);
+        setNames(data.names);
+        setShares(data.shares as Record<string, ShareRow>);
       } catch (e: unknown) {
         if (!alive) return;
         const msg = e instanceof Error ? e.message : "Failed to load";
@@ -100,7 +64,7 @@ export default function AccountPage() {
     }
     load();
     return () => { alive = false; };
-  }, [user?.id]);
+  }, [user?.id, getToken]);
 
   // const friendsList = useMemo(() => {
   //   if (!user?.id) return [] as Array<{ friendUserId: string; status: Friend["status"] }>;
@@ -128,22 +92,13 @@ export default function AccountPage() {
     try {
       const text = editingBody.trim();
       if (!text) return;
-      const { error } = await supabase
-        .from("scripture_comments")
-        .update({ body: text })
-        .eq("id", id);
-      if (error) throw error;
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in.");
+      await updateComment(token, id, text);
       setEditingId(null);
       setEditingBody("");
-      // Reload comments to reflect changes
-      const { data: comments } = await supabase
-        .from("scripture_comments")
-        .select("id, body, created_at, share_id, visibility")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      const commentRows = (comments as CommentRow[] | null) ?? [];
-      setMyComments(commentRows);
+      const latest = await getAccountData(token);
+      setMyComments(latest.myComments as CommentRow[]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to update";
       setCommentError(msg);
@@ -154,11 +109,9 @@ export default function AccountPage() {
     try {
       const sure = confirm("Delete this comment?");
       if (!sure) return;
-      const { error } = await supabase
-        .from("scripture_comments")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in.");
+      await deleteCommentMutation(token, id);
       setMyComments((prev) => prev.filter((c) => c.id !== id));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to delete";
@@ -171,10 +124,9 @@ export default function AccountPage() {
     try {
       const email = emailToAdd.trim();
       if (!email) return;
-      // lookup user by email via secure RPC
-      const { data: rpc, error: rpcError } = await supabase.rpc("lookup_user_id_by_email", { p_email: email });
-      if (rpcError) throw rpcError;
-      const targetId = rpc as unknown as string | null;
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in.");
+      const targetId = await lookupUserByEmail(email);
       if (!targetId) {
         setError("No user with that email");
         return;
@@ -183,18 +135,10 @@ export default function AccountPage() {
         setError("You cannot add yourself");
         return;
       }
-      const { error } = await supabase
-        .from("friendships")
-        .insert({ requester_id: user!.id, addressee_id: targetId, status: "pending" });
-      if (error) throw error;
+      await sendFriendRequestMutation(token, targetId);
       setEmailToAdd("");
-      // reload
-      const { data: fr } = await supabase
-        .from("friendships")
-        .select("id, requester_id, addressee_id, status")
-        .or(`requester_id.eq.${user!.id},addressee_id.eq.${user!.id}`)
-        .order("created_at", { ascending: false });
-      setFriends((fr as Friend[] | null) ?? []);
+      const latest = await getAccountData(token);
+      setFriends(latest.friends as Friend[]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to send request";
       setError(msg);
@@ -203,33 +147,27 @@ export default function AccountPage() {
 
   async function accept(friendshipId: string) {
     setError(null);
-    const { error } = await supabase
-      .from("friendships")
-      .update({ status: "accepted" })
-      .eq("id", friendshipId);
-    if (error) {
-      setError(error.message);
-      return;
+    try {
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in.");
+      await updateFriendshipStatus(token, friendshipId, "accepted");
+      const latest = await getAccountData(token);
+      setFriends(latest.friends as Friend[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to accept request");
     }
-    const { data: fr } = await supabase
-      .from("friendships")
-      .select("id, requester_id, addressee_id, status")
-      .or(`requester_id.eq.${user!.id},addressee_id.eq.${user!.id}`)
-      .order("created_at", { ascending: false });
-    setFriends((fr as Friend[] | null) ?? []);
   }
 
   async function remove(friendshipId: string) {
     setError(null);
-    const { error } = await supabase
-      .from("friendships")
-      .delete()
-      .eq("id", friendshipId);
-    if (error) {
-      setError(error.message);
-      return;
+    try {
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in.");
+      await removeFriendship(token, friendshipId);
+      setFriends((prev) => prev.filter((f) => f.id !== friendshipId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove friendship");
     }
-    setFriends((prev) => prev.filter((f) => f.id !== friendshipId));
   }
 
   async function decline(friendshipId: string) {
