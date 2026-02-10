@@ -28,6 +28,7 @@ type InsightBuilderContextValue = {
   isLoading: boolean;
   createDraft: (title?: string) => Promise<string | null>;
   switchDraft: (draftId: string) => Promise<void>;
+  clearActiveDraft: () => void;
   renameDraft: (draftId: string, title: string) => Promise<void>;
   saveDraftSettings: (payload: { draftId: string; title?: string; tags?: string[]; visibility?: InsightVisibility }) => Promise<void>;
   deleteDraft: (draftId: string) => Promise<void>;
@@ -120,6 +121,10 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     },
     [setActiveDraftMutation]
   );
+
+  const clearActiveDraft = useCallback(() => {
+    setActiveDraftId(null);
+  }, []);
 
   const renameDraft = useCallback(
     async (draftId: string, title: string) => {
@@ -259,6 +264,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       isLoading,
       createDraft,
       switchDraft,
+      clearActiveDraft,
       renameDraft,
       saveDraftSettings,
       deleteDraft,
@@ -282,6 +288,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       isLoading,
       createDraft,
       switchDraft,
+      clearActiveDraft,
       renameDraft,
       saveDraftSettings,
       deleteDraft,

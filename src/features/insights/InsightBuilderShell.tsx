@@ -16,7 +16,7 @@ function parseTags(raw: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const part of raw.split(",")) {
-    const tag = part.trim().toLowerCase();
+    const tag = part.trim().replace(/^#+/, "").toLowerCase();
     if (!tag || seen.has(tag)) continue;
     seen.add(tag);
     out.push(tag);
@@ -160,6 +160,7 @@ function BuilderContent() {
     isLoading,
     createDraft,
     switchDraft,
+    clearActiveDraft,
     renameDraft,
     saveDraftSettings,
     deleteDraft,
@@ -193,7 +194,7 @@ function BuilderContent() {
 
   useEffect(() => {
     setTitle(activeDraft?.title ?? "");
-    setTagsInput((activeDraft?.tags ?? []).join(", "));
+    setTagsInput((activeDraft?.tags ?? []).map((tag) => `#${tag}`).join(", "));
     setVisibility(activeDraft?.visibility ?? "private");
     setShareMessage("");
     setIsShareMenuOpen(false);
@@ -286,7 +287,11 @@ function BuilderContent() {
     const nextTabs = openDraftIds.filter((id) => id !== draftId);
     setOpenDraftIds(nextTabs);
     if (activeDraftId !== draftId) return;
-    if (nextTabs.length === 0) return;
+    if (nextTabs.length === 0) {
+      clearActiveDraft();
+      setIsLoadSavedOpen(true);
+      return;
+    }
     await switchDraft(nextTabs[0]);
   }
 

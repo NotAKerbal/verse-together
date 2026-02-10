@@ -34,7 +34,7 @@ export default function PublishInsightPage() {
   useEffect(() => {
     if (!draft) return;
     setVisibility(draft.visibility ?? "private");
-    setTags((draft.tags ?? []).join(", "));
+    setTags((draft.tags ?? []).map((tag) => `#${tag}`).join(", "));
   }, [draft]);
 
   async function onPublish() {
@@ -48,7 +48,7 @@ export default function PublishInsightPage() {
         summary: summary.trim() || undefined,
         tags: tags
           .split(",")
-          .map((tag) => tag.trim())
+          .map((tag) => tag.trim().replace(/^#+/, ""))
           .filter(Boolean),
         visibility,
       });
@@ -100,7 +100,7 @@ export default function PublishInsightPage() {
           <input
             value={tags}
             onChange={(e) => setTags(e.target.value)}
-            placeholder={(draft.tags ?? []).join(", ")}
+            placeholder={(draft.tags ?? []).map((tag) => `#${tag}`).join(", ")}
             className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
           />
         </label>
