@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
-import type { InsightDraftBlock } from "@/lib/appData";
+import type { InsightDraftBlock, InsightVisibility } from "@/lib/appData";
 import { useInsightBuilder } from "./InsightBuilderProvider";
 import { QuoteBlockEditor, ScriptureBlockEditor, TextBlockEditor } from "./InsightBlockEditors";
 
@@ -10,6 +10,26 @@ function blockLabel(type: InsightDraftBlock["type"]) {
   if (type === "scripture") return "Scripture";
   if (type === "quote") return "Quote";
   return "Text";
+}
+
+function parseTags(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    const tag = part.trim().toLowerCase();
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+  }
+  return out;
+}
+
+function tagsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 function BlockCard({
@@ -141,6 +161,7 @@ function BuilderContent() {
     createDraft,
     switchDraft,
     renameDraft,
+    saveDraftSettings,
     deleteDraft,
     addTextBlock,
     addQuoteBlock,
@@ -150,22 +171,83 @@ function BuilderContent() {
   } = useInsightBuilder();
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
-  const [savedMessage, setSavedMessage] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
+  const [visibility, setVisibility] = useState<InsightVisibility>("private");
+  const [origin, setOrigin] = useState("");
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [openDraftIds, setOpenDraftIds] = useState<string[]>([]);
+  const [isLoadSavedOpen, setIsLoadSavedOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const tagAutosaveTimeoutRef = useRef<number | null>(null);
   const dragIdRef = useRef<string | null>(null);
   const dropIndexRef = useRef<number | null>(null);
   const didDropRef = useRef(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setOrigin(window.location.origin);
+    }
+  }, []);
+
+  useEffect(() => {
     setTitle(activeDraft?.title ?? "");
-    setSavedMessage("");
-  }, [activeDraft?.id, activeDraft?.title]);
+    setTagsInput((activeDraft?.tags ?? []).join(", "));
+    setVisibility(activeDraft?.visibility ?? "private");
+    setShareMessage("");
+    setIsShareMenuOpen(false);
+  }, [activeDraft?.id, activeDraft?.title, activeDraft?.tags, activeDraft?.visibility]);
+
+  useEffect(() => {
+    if (!activeDraftId) return;
+    if (!activeDraft) return;
+    const nextTags = parseTags(tagsInput);
+    const currentTags = activeDraft.tags ?? [];
+    if (tagsEqual(nextTags, currentTags)) return;
+
+    if (tagAutosaveTimeoutRef.current) {
+      window.clearTimeout(tagAutosaveTimeoutRef.current);
+    }
+    tagAutosaveTimeoutRef.current = window.setTimeout(() => {
+      void saveDraftSettings({
+        draftId: activeDraftId,
+        tags: nextTags,
+      });
+    }, 700);
+
+    return () => {
+      if (tagAutosaveTimeoutRef.current) {
+        window.clearTimeout(tagAutosaveTimeoutRef.current);
+      }
+    };
+  }, [tagsInput, activeDraftId, activeDraft, saveDraftSettings]);
+
+  useEffect(() => {
+    const draftIds = drafts.filter((d) => d.status === "draft").map((d) => d.id);
+    const draftIdSet = new Set(draftIds);
+    setOpenDraftIds((prev) => {
+      const kept = prev.filter((id) => draftIdSet.has(id));
+      const keptSet = new Set(kept);
+      const additions = draftIds.filter((id) => !keptSet.has(id));
+      return [...kept, ...additions];
+    });
+  }, [drafts]);
 
   const orderedBlocks = useMemo(
     () => (activeDraft?.blocks ? [...activeDraft.blocks].sort((a, b) => a.order - b.order) : []),
     [activeDraft?.blocks]
   );
+  const openDraftTabs = useMemo(() => {
+    const byId = new Map(drafts.filter((d) => d.status === "draft").map((d) => [d.id, d]));
+    return openDraftIds
+      .map((id) => byId.get(id))
+      .filter((draft): draft is (typeof drafts)[number] => Boolean(draft));
+  }, [drafts, openDraftIds]);
+  const hiddenDraftTabs = useMemo(() => {
+    const openSet = new Set(openDraftIds);
+    return drafts.filter((d) => d.status === "draft" && !openSet.has(d.id));
+  }, [drafts, openDraftIds]);
 
   async function onCreateDraft() {
     setBusy(true);
@@ -186,7 +268,7 @@ function BuilderContent() {
 
   async function onDeleteDraft() {
     if (!activeDraftId) return;
-    const sure = window.confirm("Delete this draft?");
+    const sure = window.confirm("Delete this insight?");
     if (!sure) return;
     setBusy(true);
     try {
@@ -196,13 +278,38 @@ function BuilderContent() {
     }
   }
 
-  async function onSaveDraft() {
+  async function onShareInsight() {
+    setIsShareMenuOpen((prev) => !prev);
+  }
+
+  async function onCloseTab(draftId: string) {
+    const nextTabs = openDraftIds.filter((id) => id !== draftId);
+    setOpenDraftIds(nextTabs);
+    if (activeDraftId !== draftId) return;
+    if (nextTabs.length === 0) return;
+    await switchDraft(nextTabs[0]);
+  }
+
+  async function onLoadSaved(draftId: string) {
+    setOpenDraftIds((prev) => (prev.includes(draftId) ? prev : [...prev, draftId]));
+    await switchDraft(draftId);
+    setIsLoadSavedOpen(false);
+  }
+
+  async function onSelectVisibility(nextVisibility: InsightVisibility) {
     if (!activeDraftId) return;
     setBusy(true);
     try {
-      await onRenameDraft();
-      setSavedMessage("Saved");
-      window.setTimeout(() => setSavedMessage(""), 1200);
+      await saveDraftSettings({
+        draftId: activeDraftId,
+        title: title.trim() || undefined,
+        tags: parseTags(tagsInput),
+        visibility: nextVisibility,
+      });
+      setVisibility(nextVisibility);
+      setIsShareMenuOpen(false);
+      setShareMessage("Sharing updated");
+      window.setTimeout(() => setShareMessage(""), 1200);
     } finally {
       setBusy(false);
     }
@@ -236,40 +343,74 @@ function BuilderContent() {
     <div className="h-full flex flex-col">
       <div className="p-3 border-b border-black/10 dark:border-white/15 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Insight Builder</h2>
-          <button
-            onClick={onCreateDraft}
-            disabled={busy}
-            className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-          >
-            + Draft
-          </button>
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {drafts.filter((d) => d.status === "draft").map((draft) => (
+          <h2 className="text-sm font-semibold">Insights</h2>
+          <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsLoadSavedOpen((prev) => !prev)}
+              className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              Load insights
+            </button>
+            <button
+              onClick={onCreateDraft}
+              disabled={busy}
+              className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              + Insight
+            </button>
+          </div>
+        </div>
+        {isLoadSavedOpen ? (
+          <div className="rounded-md border border-black/10 dark:border-white/15 p-2 space-y-1 max-h-40 overflow-y-auto">
+            {hiddenDraftTabs.length === 0 ? (
+              <p className="text-xs text-foreground/60 px-1 py-1">No hidden insights.</p>
+            ) : (
+              hiddenDraftTabs.map((draft) => (
+                <button
+                  key={draft.id}
+                  onClick={() => void onLoadSaved(draft.id)}
+                  className="w-full text-left rounded-md px-2 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  {draft.title}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {openDraftTabs.map((draft) => (
+            <div
               key={draft.id}
-              onClick={() => switchDraft(draft.id)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs ${
+              className={`whitespace-nowrap rounded-full border pl-3 pr-1 py-1 text-xs flex items-center gap-1 ${
                 draft.id === activeDraftId
                   ? "border-foreground text-foreground"
                   : "border-black/10 dark:border-white/15 text-foreground/75"
               }`}
             >
-              {draft.title}
-            </button>
+              <button onClick={() => switchDraft(draft.id)} className="text-left">
+                {draft.title}
+              </button>
+              <button
+                onClick={() => void onCloseTab(draft.id)}
+                className="hidden lg:inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+                title="Close tab"
+                aria-label={`Close ${draft.title}`}
+              >
+                ×
+              </button>
+            </div>
           ))}
-          {drafts.filter((d) => d.status === "draft").length === 0 ? (
-            <span className="text-xs text-foreground/60">No drafts yet.</span>
+          {openDraftTabs.length === 0 ? (
+            <span className="text-xs text-foreground/60">No insights yet.</span>
           ) : null}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {isLoading ? <p className="text-sm text-foreground/60">Loading insight draft…</p> : null}
+      <div className="flex-1 overflow-y-auto p-3 pb-0 space-y-3">
+        {isLoading ? <p className="text-sm text-foreground/60">Loading insight...</p> : null}
         {!isLoading && !activeDraft ? (
           <p className="text-sm text-foreground/70">
-            Start an insight by tapping a scripture, or create a blank draft here.
+            Start an insight by tapping a scripture, or create a blank insight here.
           </p>
         ) : null}
         {activeDraft ? (
@@ -277,7 +418,9 @@ function BuilderContent() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onBlur={onRenameDraft}
+              onBlur={() => {
+                void onRenameDraft();
+              }}
               className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm font-medium"
               placeholder="Insight title"
             />
@@ -378,18 +521,98 @@ function BuilderContent() {
                 onClick={onDeleteDraft}
                 className="rounded-md border border-red-200 text-red-700 dark:border-red-400/30 px-2 py-1 text-xs"
               >
-                Delete
+                Delete insight
               </button>
             </div>
-            <div className="space-y-2 pt-2 border-t border-black/10 dark:border-white/15">
+            <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-black/10 dark:border-white/15 mt-3 -mx-3 px-3 py-3 space-y-2">
+              <div className="text-xs font-medium text-foreground/75">Tags</div>
+              <input
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                onBlur={() => {
+                  if (!activeDraftId || !activeDraft) return;
+                  const nextTags = parseTags(tagsInput);
+                  const currentTags = activeDraft.tags ?? [];
+                  if (tagsEqual(nextTags, currentTags)) return;
+                  void saveDraftSettings({
+                    draftId: activeDraftId,
+                    tags: nextTags,
+                  });
+                }}
+                className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+                placeholder="Tags (comma separated)"
+              />
               <button
-                onClick={onSaveDraft}
+                onClick={onShareInsight}
                 disabled={busy}
                 className="w-full rounded-md bg-foreground text-background px-3 py-2 text-sm font-medium disabled:opacity-60"
               >
-                Save
+                Share
               </button>
-              {savedMessage ? <p className="text-xs text-foreground/70 text-center">{savedMessage}</p> : null}
+              {isShareMenuOpen ? (
+                <div className="space-y-2 rounded-md border border-black/10 dark:border-white/15 p-2">
+                  <div className="text-xs text-foreground/70">Who can view this insight?</div>
+                  {(
+                    [
+                      {
+                        key: "private",
+                        title: "Private",
+                        description: "Only you can view this insight.",
+                      },
+                      {
+                        key: "friends",
+                        title: "Visible to friends",
+                        description: "Only friends can open this insight.",
+                      },
+                      {
+                        key: "link",
+                        title: "Sharable link",
+                        description: "Anyone with the link can view.",
+                      },
+                      {
+                        key: "public",
+                        title: "Public",
+                        description: "Visible in the community feed.",
+                      },
+                    ] as Array<{ key: InsightVisibility; title: string; description: string }>
+                  ).map((option) => (
+                    <button
+                      key={option.key}
+                      onClick={() => void onSelectVisibility(option.key)}
+                      className={`w-full rounded-md border px-3 py-2 text-left ${
+                        visibility === option.key
+                          ? "border-foreground bg-black/5 dark:bg-white/10"
+                          : "border-black/10 dark:border-white/15"
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{option.title}</div>
+                      <div className="text-xs text-foreground/70">{option.description}</div>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {visibility === "link" ? (
+                <div className="rounded-md border border-black/10 dark:border-white/15 p-2 text-xs space-y-2">
+                  <div className="text-foreground/70">Sharable link</div>
+                  <div className="break-all text-foreground/90">
+                    {origin ? `${origin}/insights/shared/${activeDraft.id}` : `/insights/shared/${activeDraft.id}`}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const shareUrl = origin
+                        ? `${origin}/insights/shared/${activeDraft.id}`
+                        : `/insights/shared/${activeDraft.id}`;
+                      await navigator.clipboard.writeText(shareUrl);
+                      setShareMessage("Link copied");
+                      window.setTimeout(() => setShareMessage(""), 1200);
+                    }}
+                    className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+                  >
+                    Copy link
+                  </button>
+                </div>
+              ) : null}
+              {shareMessage ? <p className="text-xs text-foreground/70 text-center">{shareMessage}</p> : null}
             </div>
           </>
         ) : null}
@@ -399,7 +622,7 @@ function BuilderContent() {
 }
 
 export default function InsightBuilderShell() {
-  const { canUseInsights, isMobileOpen, toggleMobileBuilder, closeBuilder } = useInsightBuilder();
+  const { canUseInsights, isMobileOpen, toggleMobileBuilder, closeBuilder, activeDraftId } = useInsightBuilder();
 
   if (!canUseInsights) return null;
 
@@ -426,9 +649,11 @@ export default function InsightBuilderShell() {
         </div>
       ) : null}
 
-      <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] xl:w-[420px] 2xl:w-[480px] border-l border-black/10 dark:border-white/15 bg-background/95 backdrop-blur">
-        <BuilderContent />
-      </aside>
+      {activeDraftId ? (
+        <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] xl:w-[420px] 2xl:w-[480px] border-l border-black/10 dark:border-white/15 bg-background/95 backdrop-blur">
+          <BuilderContent />
+        </aside>
+      ) : null}
     </>
   );
 }

@@ -76,6 +76,7 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
           <Link href="/feed" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">Feed</Link>
           {user ? (
             <>
+              <Link href="/insights/saved" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">My Insights</Link>
               <Link href="/account" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">Account</Link>
               <button onClick={handleSignOut} className="px-3 py-2 rounded-md bg-foreground text-background">Sign out</button>
             </>

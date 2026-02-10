@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
-import type { InsightDraft, InsightDraftSummary } from "@/lib/appData";
+import type { InsightDraft, InsightDraftSummary, InsightVisibility } from "@/lib/appData";
 
 type ScripturePayload = {
   volume: string;
@@ -29,6 +29,7 @@ type InsightBuilderContextValue = {
   createDraft: (title?: string) => Promise<string | null>;
   switchDraft: (draftId: string) => Promise<void>;
   renameDraft: (draftId: string, title: string) => Promise<void>;
+  saveDraftSettings: (payload: { draftId: string; title?: string; tags?: string[]; visibility?: InsightVisibility }) => Promise<void>;
   deleteDraft: (draftId: string) => Promise<void>;
   addTextBlock: (text?: string) => Promise<void>;
   addQuoteBlock: (text?: string, linkUrl?: string) => Promise<void>;
@@ -58,6 +59,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const createDraftMutation = useMutation(api.insights.createDraft);
   const setActiveDraftMutation = useMutation(api.insights.setActiveDraft);
   const renameDraftMutation = useMutation(api.insights.renameDraft);
+  const saveDraftSettingsMutation = useMutation(api.insights.saveDraftSettings);
   const deleteDraftMutation = useMutation(api.insights.deleteDraft);
   const addBlockMutation = useMutation(api.insights.addBlock);
   const appendScriptureBlockMutation = useMutation(api.insights.appendScriptureBlock);
@@ -76,9 +78,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       return;
     }
     if (draftRows === undefined) return;
-    if (activeDraftId && draftRows.some((d) => d.id === activeDraftId)) return;
-    const preferred = draftRows.find((d) => d.status === "draft") ?? draftRows[0];
-    setActiveDraftId(preferred?.id ?? null);
+    if (!activeDraftId) return;
+    if (draftRows.some((d) => d.id === activeDraftId)) return;
+    setActiveDraftId(null);
   }, [canUseInsights, draftRows, activeDraftId]);
 
   const openBuilder = useCallback(() => {
@@ -132,6 +134,18 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (activeDraftId === draftId) setActiveDraftId(null);
     },
     [deleteDraftMutation, activeDraftId]
+  );
+
+  const saveDraftSettings = useCallback(
+    async (payload: { draftId: string; title?: string; tags?: string[]; visibility?: InsightVisibility }) => {
+      await saveDraftSettingsMutation({
+        draftId: payload.draftId as any,
+        title: payload.title?.trim() || undefined,
+        tags: payload.tags?.map((tag) => tag.trim()).filter(Boolean) ?? undefined,
+        visibility: payload.visibility,
+      });
+    },
+    [saveDraftSettingsMutation]
   );
 
   const addTextBlock = useCallback(
@@ -246,6 +260,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       createDraft,
       switchDraft,
       renameDraft,
+      saveDraftSettings,
       deleteDraft,
       addTextBlock,
       addQuoteBlock,
@@ -268,6 +283,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       createDraft,
       switchDraft,
       renameDraft,
+      saveDraftSettings,
       deleteDraft,
       addTextBlock,
       addQuoteBlock,

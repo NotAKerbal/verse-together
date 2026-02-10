@@ -1,6 +1,7 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 
 export type InsightBlockType = "scripture" | "text" | "quote";
+export type InsightVisibility = "private" | "friends" | "link" | "public";
 
 export type InsightScriptureRef = {
   volume: string;
@@ -15,6 +16,8 @@ export type InsightDraftSummary = {
   id: string;
   title: string;
   status: "draft" | "published" | "archived";
+  visibility: InsightVisibility;
+  tags: string[];
   created_at: string;
   updated_at: string;
   last_active_at: string;
@@ -43,6 +46,8 @@ export type PublishedInsight = {
   author_name: string | null;
   title: string;
   summary: string | null;
+  visibility: InsightVisibility;
+  tags: string[];
   block_count: number;
   published_at: string;
   blocks: Array<{
@@ -143,6 +148,27 @@ export async function renameInsightDraft(token: string, draftId: string, title: 
   return await convexMutation("insights:renameDraft", { draftId, title }, token);
 }
 
+export async function saveInsightDraftSettings(
+  token: string,
+  payload: {
+    draftId: string;
+    title?: string | null;
+    visibility?: InsightVisibility;
+    tags?: string[];
+  }
+) {
+  return await convexMutation(
+    "insights:saveDraftSettings",
+    {
+      draftId: payload.draftId,
+      title: payload.title ?? undefined,
+      visibility: payload.visibility,
+      tags: payload.tags ?? undefined,
+    },
+    token
+  );
+}
+
 export async function deleteInsightDraft(token: string, draftId: string) {
   return await convexMutation("insights:deleteDraft", { draftId }, token);
 }
@@ -236,7 +262,13 @@ export async function reorderInsightBlocks(token: string, draftId: string, block
 
 export async function publishInsightDraft(
   token: string,
-  payload: { draftId: string; title?: string | null; summary?: string | null }
+  payload: {
+    draftId: string;
+    title?: string | null;
+    summary?: string | null;
+    visibility?: InsightVisibility;
+    tags?: string[];
+  }
 ): Promise<{ id: string }> {
   return await convexMutation(
     "insights:publishDraft",
@@ -244,6 +276,8 @@ export async function publishInsightDraft(
       draftId: payload.draftId,
       title: payload.title ?? undefined,
       summary: payload.summary ?? undefined,
+      visibility: payload.visibility,
+      tags: payload.tags ?? undefined,
     },
     token
   );

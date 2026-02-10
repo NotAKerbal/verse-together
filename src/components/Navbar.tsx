@@ -68,6 +68,11 @@ export default function Navbar() {
               <Link href="/feed" className="hover:text-foreground">
                 Feed
               </Link>
+              {user ? (
+                <Link href="/insights/saved" className="hover:text-foreground">
+                  My Insights
+                </Link>
+              ) : null}
             </nav>
           </div>
           <div className="hidden sm:flex items-center gap-3">

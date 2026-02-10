@@ -3,9 +3,12 @@
 type Props = {
   visible: boolean;
   hasSelection: boolean;
+  hasActiveInsight: boolean;
   actionsEnabled?: boolean;
   onClear: () => void;
   onInsight: () => void;
+  onNewInsight: () => void;
+  onLoadInsights: () => void;
   onCitations: () => void;
   onExplore: () => void;
 };
@@ -13,9 +16,12 @@ type Props = {
 export default function DesktopVerseActionList({
   visible,
   hasSelection,
+  hasActiveInsight,
   actionsEnabled = true,
   onClear,
   onInsight,
+  onNewInsight,
+  onLoadInsights,
   onCitations,
   onExplore,
 }: Props) {
@@ -28,9 +34,20 @@ export default function DesktopVerseActionList({
     <div className="rounded-lg border border-black/10 dark:border-white/15 bg-background/60 backdrop-blur p-2 space-y-2">
       <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-foreground/65">Actions</h3>
       <div className="grid grid-cols-2 gap-1.5">
-        <button onClick={onInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
-          Add to Insight
-        </button>
+        {hasActiveInsight ? (
+          <button onClick={onInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
+            Add to Insight
+          </button>
+        ) : (
+          <>
+            <button onClick={onNewInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
+              New Insight
+            </button>
+            <button onClick={onLoadInsights} disabled={!actionsEnabled} className={baseBtn}>
+              Open Insights
+            </button>
+          </>
+        )}
         <button onClick={onCitations} disabled={!hasSelection} className={baseBtn}>
           Citations
         </button>

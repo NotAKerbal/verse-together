@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
+import type { InsightVisibility } from "@/lib/appData";
 
 export default function PublishInsightPage() {
   const params = useParams<{ draftId: string }>();
@@ -11,6 +12,8 @@ export default function PublishInsightPage() {
   const draftId = String(params?.draftId ?? "");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
+  const [tags, setTags] = useState("");
+  const [visibility, setVisibility] = useState<InsightVisibility>("private");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -19,12 +22,20 @@ export default function PublishInsightPage() {
         id: string;
         title: string;
         status: "draft" | "published" | "archived";
+        tags: string[];
+        visibility: InsightVisibility;
         blocks: Array<{ id: string }>;
       }
     | undefined;
   const publishDraft = useMutation(api.insights.publishDraft);
 
   const blockCount = useMemo(() => draft?.blocks?.length ?? 0, [draft?.blocks]);
+
+  useEffect(() => {
+    if (!draft) return;
+    setVisibility(draft.visibility ?? "private");
+    setTags((draft.tags ?? []).join(", "));
+  }, [draft]);
 
   async function onPublish() {
     if (!draftId) return;
@@ -35,6 +46,11 @@ export default function PublishInsightPage() {
         draftId: draftId as any,
         title: title.trim() || undefined,
         summary: summary.trim() || undefined,
+        tags: tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        visibility,
       });
       router.push("/feed");
     } catch (e: unknown) {
@@ -78,6 +94,28 @@ export default function PublishInsightPage() {
             className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
             placeholder="Add a brief summary for the feed..."
           />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">Tags (optional)</span>
+          <input
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder={(draft.tags ?? []).join(", ")}
+            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">Visibility</span>
+          <select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as InsightVisibility)}
+            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+          >
+            <option value="private">Private (default)</option>
+            <option value="friends">Visible to friends</option>
+            <option value="link">Sharable link</option>
+            <option value="public">Public</option>
+          </select>
         </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <div className="flex items-center gap-2">

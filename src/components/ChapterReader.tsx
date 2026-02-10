@@ -41,7 +41,7 @@ export default function ChapterReader({
   nextHref?: string;
 }) {
   const { user, getToken } = useAuth();
-  const { appendScriptureBlock, openBuilder } = useInsightBuilder();
+  const { appendScriptureBlock, openBuilder, activeDraftId, drafts, switchDraft, createDraft } = useInsightBuilder();
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -183,6 +183,8 @@ export default function ChapterReader({
     const m = text.match(/[A-Za-z][A-Za-z'\-]*/);
     return m?.[0]?.toLowerCase() ?? "";
   }, [verses, selected]);
+  const hasActiveInsight = !!activeDraftId;
+  const availableInsights = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
 
   // first/last verse values not currently used
 
@@ -336,6 +338,31 @@ export default function ChapterReader({
     clearSelection();
   }
 
+  async function onNewInsightFromActions() {
+    if (!user) {
+      alert("Please sign in to build insights.");
+      return;
+    }
+    const createdId = await createDraft("New insight");
+    if (!createdId) return;
+    await switchDraft(createdId);
+    openBuilder();
+  }
+
+  async function onLoadInsightsFromActions() {
+    if (!user) {
+      alert("Please sign in to build insights.");
+      return;
+    }
+    const targetId = activeDraftId ?? availableInsights[0]?.id ?? null;
+    if (!targetId) {
+      await onNewInsightFromActions();
+      return;
+    }
+    await switchDraft(targetId);
+    openBuilder();
+  }
+
   function onOpenCitations() {
     if (!selectedBounds) return;
     setOpenExplorer(false);
@@ -379,10 +406,17 @@ export default function ChapterReader({
           <DesktopVerseActionList
             visible={!openFootnote}
             hasSelection={hasSelection}
+            hasActiveInsight={hasActiveInsight}
             actionsEnabled={!!user}
             onClear={clearSelection}
             onInsight={() => {
               void onAddToInsight();
+            }}
+            onNewInsight={() => {
+              void onNewInsightFromActions();
+            }}
+            onLoadInsights={() => {
+              void onLoadInsightsFromActions();
             }}
             onCitations={onOpenCitations}
             onExplore={onOpenExplore}
@@ -538,10 +572,17 @@ export default function ChapterReader({
 
       <VerseActionBar
         visible={hasSelection && !overlayOpen}
+        hasActiveInsight={hasActiveInsight}
         actionsEnabled={!!user}
         onClear={clearSelection}
         onInsight={() => {
           void onAddToInsight();
+        }}
+        onNewInsight={() => {
+          void onNewInsightFromActions();
+        }}
+        onLoadInsights={() => {
+          void onLoadInsightsFromActions();
         }}
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}

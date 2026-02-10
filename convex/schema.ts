@@ -61,6 +61,15 @@ export default defineSchema({
     clerkId: v.string(),
     title: v.string(),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    visibility: v.optional(
+      v.union(
+        v.literal("private"),
+        v.literal("friends"),
+        v.literal("link"),
+        v.literal("public")
+      )
+    ),
+    tags: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
     lastActiveAt: v.number(),
@@ -98,6 +107,15 @@ export default defineSchema({
     clerkId: v.string(),
     title: v.string(),
     summary: v.optional(v.string()),
+    visibility: v.optional(
+      v.union(
+        v.literal("private"),
+        v.literal("friends"),
+        v.literal("link"),
+        v.literal("public")
+      )
+    ),
+    tags: v.optional(v.array(v.string())),
     blockCount: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),

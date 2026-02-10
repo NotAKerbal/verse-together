@@ -4,14 +4,27 @@ import type { FC } from "react";
 
 export type Props = {
   visible: boolean;
+  hasActiveInsight: boolean;
   actionsEnabled?: boolean;
   onClear: () => void;
   onInsight: () => void;
+  onNewInsight: () => void;
+  onLoadInsights: () => void;
   onCitations: () => void;
   onExplore: () => void;
 };
 
-const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, onInsight, onCitations, onExplore }) => {
+const VerseActionBar: FC<Props> = ({
+  visible,
+  hasActiveInsight,
+  actionsEnabled = true,
+  onClear,
+  onInsight,
+  onNewInsight,
+  onLoadInsights,
+  onCitations,
+  onExplore,
+}) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -52,13 +65,32 @@ const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, on
           Clear
         </button>
         <div className="ml-auto flex items-center gap-3 sm:gap-4">
-          <button
-            onClick={onInsight}
-            disabled={!actionsEnabled}
-            className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
-          >
-            ✍ Add to Insight
-          </button>
+          {hasActiveInsight ? (
+            <button
+              onClick={onInsight}
+              disabled={!actionsEnabled}
+              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+            >
+              ✍ Add to Insight
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onNewInsight}
+                disabled={!actionsEnabled}
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+              >
+                + New Insight
+              </button>
+              <button
+                onClick={onLoadInsights}
+                disabled={!actionsEnabled}
+                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+              >
+                Load
+              </button>
+            </>
+          )}
           <button
             onClick={toggleMenu}
             aria-expanded={menuOpen}

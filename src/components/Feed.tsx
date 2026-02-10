@@ -77,6 +77,18 @@ function InsightCard({ row }: { row: PublishedInsight }) {
       {row.summary ? (
         <p className="text-sm text-foreground/80 whitespace-pre-wrap">{row.summary}</p>
       ) : null}
+      {row.tags.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1">
+          {row.tags.map((tag) => (
+            <span
+              key={`${row.id}-${tag}`}
+              className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] text-foreground/70"
+            >
+              #{tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <ul className="space-y-2">
         {row.blocks.map((block) => (
           <li key={block.id} className="rounded-md border border-black/5 dark:border-white/10 p-3">
