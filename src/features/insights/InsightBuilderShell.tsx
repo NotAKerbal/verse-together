@@ -326,7 +326,19 @@ function BuilderContent() {
               {orderedBlocks.map((block, index) => (
                 <div key={block.id} className="space-y-2">
                   {dragId && dropIndex === index ? (
-                    <li className="rounded-md border border-dashed border-sky-500/60 bg-sky-500/10 h-12" />
+                    <li
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        didDropRef.current = true;
+                        commitDrop();
+                      }}
+                      className="rounded-md border border-dashed border-sky-500/60 bg-sky-500/10 h-12"
+                    />
                   ) : null}
                   <BlockCard
                     block={block}
@@ -361,7 +373,19 @@ function BuilderContent() {
                 </div>
               ))}
               {dragId && dropIndex === orderedBlocks.length ? (
-                <li className="rounded-md border border-dashed border-sky-500/60 bg-sky-500/10 h-12" />
+                <li
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    didDropRef.current = true;
+                    commitDrop();
+                  }}
+                  className="rounded-md border border-dashed border-sky-500/60 bg-sky-500/10 h-12"
+                />
               ) : null}
             </ul>
             <div className="space-y-2 pt-2 border-t border-black/10 dark:border-white/15">
