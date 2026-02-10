@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
+import { createShare as createShareMutation } from "@/lib/appData";
 
 type Verse = { verse: number; text: string };
 
@@ -19,7 +19,7 @@ export default function ShareComposer({
   verses: Verse[];
   reference: string;
 }) {
-  const { user } = useAuth();
+  const { user, getToken } = useAuth();
   const [start, setStart] = useState<number>(verses?.[0]?.verse ?? 1);
   const [end, setEnd] = useState<number>(verses?.[0]?.verse ?? 1);
   const [note, setNote] = useState("");
@@ -37,24 +37,24 @@ export default function ShareComposer({
       .join("\n");
   }, [verses, start, end]);
 
-  async function createShare() {
+  async function handleCreateShare() {
     setLoading(true);
     setError(null);
     setOk(null);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) throw new Error("Please sign in to share.");
-      const { error } = await supabase.from("scripture_shares").insert({
+      if (!user) throw new Error("Please sign in to share.");
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Please sign in to share.");
+      await createShareMutation(token, {
         volume,
         book,
         chapter,
-        verse_start: Math.min(start, end),
-        verse_end: Math.max(start, end),
+        verseStart: Math.min(start, end),
+        verseEnd: Math.max(start, end),
         translation: null,
         note: note || null,
         content: selectedContent || null,
       });
-      if (error) throw error;
       setOk("Shared!");
       setNote("");
     } catch (e: unknown) {
@@ -107,7 +107,7 @@ export default function ShareComposer({
           </label>
         </div>
         <button
-          onClick={createShare}
+          onClick={handleCreateShare}
           disabled={loading}
           className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >

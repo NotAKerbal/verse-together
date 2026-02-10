@@ -1,21 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { SignInButton } from "@clerk/nextjs";
 
 export default function AuthPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
-
-  // Email/password flow removed; Google-only sign-in
 
   async function handleSignOut() {
     setSigningOut(true);
-    await supabase.auth.signOut();
+    await signOut();
     router.refresh();
     setSigningOut(false);
   }
@@ -27,7 +24,7 @@ export default function AuthPage() {
         {user?.email ? (
           <p className="text-foreground/80">Signed in as {user.email}</p>
         ) : (
-          <p className="text-foreground/80">Use your Google account</p>
+          <p className="text-foreground/80">Sign in to share and discuss verses</p>
         )}
       </header>
 
@@ -44,9 +41,12 @@ export default function AuthPage() {
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-center">
-            <GoogleSignInButton oneTap={false} showButton={true} />
+            <SignInButton mode="modal">
+              <button className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium hover:opacity-90">
+                Sign in
+              </button>
+            </SignInButton>
           </div>
-          <p className="text-xs text-foreground/70 text-center">We also use Google One Tap on the homepage for faster sign-in.</p>
         </div>
       )}
     </section>

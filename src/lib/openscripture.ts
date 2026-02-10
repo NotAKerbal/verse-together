@@ -1,3 +1,5 @@
+import { convexMutation, convexQuery } from "@/lib/convexHttp";
+
 export type Footnote = {
   footnote: string;
   start?: number;
@@ -70,6 +72,16 @@ export type BookResponse = {
 };
 
 export async function fetchBook(volumeId: string, bookId: string): Promise<BookResponse> {
+  try {
+    const cached = await convexQuery<{ payload: BookResponse } | null>("cache:getCachedBook", {
+      volume: volumeId,
+      book: bookId,
+    });
+    if (cached?.payload) return cached.payload;
+  } catch {
+    // Fallback to upstream fetch.
+  }
+
   // Try volume/book form first, then fallback to book/id form per docs
   // Docs: "GET /book/[id] OR /volume/[volume_id]/[book_id]" (Books) – see docs/books
   // https://openscriptureapi.org/docs/books
@@ -93,7 +105,7 @@ export async function fetchBook(volumeId: string, bookId: string): Promise<BookR
   }
   const obj: Record<string, unknown> | undefined = isRecord(raw) ? raw : undefined;
   const chapters: unknown[] = obj ? (Array.isArray(obj.chapters) ? obj.chapters : []) : [];
-  return {
+  const out = {
     _id: getString(obj, "_id") ?? String(bookId),
     title: getString(obj, "title") ?? String(bookId),
     titleShort: getString(obj, "titleShort") ?? undefined,
@@ -107,20 +119,20 @@ export async function fetchBook(volumeId: string, bookId: string): Promise<BookR
       return { _id: String(id), summary };
     }),
   };
+  try {
+    await convexMutation("cache:upsertCachedBook", {
+      volume: volumeId,
+      book: bookId,
+      payload: out,
+      fetchedAt: Date.now(),
+    });
+  } catch {
+    // Ignore cache write errors.
+  }
+  return out;
 }
 
-export async function fetchChapter(
-  volumeId: string,
-  bookId: string,
-  chapterNumber: string | number
-): Promise<ChapterResponse> {
-  const url = `${BASE_URL}/volume/${encodeURIComponent(volumeId)}/${encodeURIComponent(bookId)}/${encodeURIComponent(String(chapterNumber))}`;
-  const res = await fetch(url, { next: { revalidate: 60 } });
-  if (!res.ok) {
-    throw new Error(`OpenScripture API error ${res.status}`);
-  }
-  const raw: unknown = await res.json();
-
+function buildChapterResponse(raw: unknown, bookId: string, chapterNumber: string | number): ChapterResponse {
   const explicitReference = getString(raw, "reference");
   const bookObj = getObject(raw, "book");
   const chapterObj = getObject(raw, "chapter");
@@ -177,11 +189,115 @@ export async function fetchChapter(
   return { reference: reference || `${bookId} ${chapterNumber}`, verses };
 }
 
+async function fetchChapterUncached(
+  volumeId: string,
+  bookId: string,
+  chapterNumber: string | number
+): Promise<ChapterResponse> {
+  const url = `${BASE_URL}/volume/${encodeURIComponent(volumeId)}/${encodeURIComponent(bookId)}/${encodeURIComponent(String(chapterNumber))}`;
+  const res = await fetch(url, { next: { revalidate: 60 } });
+  if (!res.ok) {
+    throw new Error(`OpenScripture API error ${res.status}`);
+  }
+  const raw: unknown = await res.json();
+  return buildChapterResponse(raw, bookId, chapterNumber);
+}
+
+async function cacheVerseChapter(volumeId: string, bookId: string, chapter: number, data: ChapterResponse) {
+  try {
+    await convexMutation(
+      "cache:upsertChapterBundle",
+      {
+        volume: volumeId,
+        book: bookId,
+        chapter,
+        reference: data.reference,
+        verses: data.verses,
+        fetchedAt: Date.now(),
+      }
+    );
+  } catch {
+    // Ignore cache write failures and still return live data.
+  }
+}
+
+async function fetchWithCache(
+  volumeId: string,
+  bookId: string,
+  chapterNumber: string | number,
+  prefetchNeighbors: boolean
+): Promise<ChapterResponse> {
+  const chapter = Number(chapterNumber);
+  if (!Number.isFinite(chapter) || chapter <= 0) {
+    throw new Error("Invalid chapter");
+  }
+  try {
+    const cached = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
+      "cache:getChapterBundle",
+      { volume: volumeId, book: bookId, chapter }
+    );
+    if (cached?.reference && Array.isArray(cached.verses) && cached.verses.length > 0) {
+      return { reference: cached.reference, verses: cached.verses };
+    }
+  } catch {
+    // Fallback to upstream fetch below.
+  }
+
+  const fresh = await fetchChapterUncached(volumeId, bookId, chapter);
+  void cacheVerseChapter(volumeId, bookId, chapter, fresh);
+
+  if (prefetchNeighbors) {
+    const neighborChapters = [chapter - 1, chapter + 1].filter((n) => n > 0);
+    for (const neighbor of neighborChapters) {
+      void (async () => {
+        try {
+          const hit = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
+            "cache:getChapterBundle",
+            { volume: volumeId, book: bookId, chapter: neighbor }
+          );
+          if (!hit) {
+            const neighborData = await fetchChapterUncached(volumeId, bookId, neighbor);
+            await cacheVerseChapter(volumeId, bookId, neighbor, neighborData);
+          }
+        } catch {
+          // Prefetch is best-effort.
+        }
+      })();
+    }
+  }
+  return fresh;
+}
+
+export async function fetchChapter(
+  volumeId: string,
+  bookId: string,
+  chapterNumber: string | number
+): Promise<ChapterResponse> {
+  return await fetchWithCache(volumeId, bookId, chapterNumber, true);
+}
+
 
 export async function fetchChapterByBook(
   bookId: string,
   chapterNumber: string | number
 ): Promise<ChapterResponse> {
+  // Book endpoint caching uses a synthetic volume key.
+  const BOOK_ENDPOINT_VOLUME = "__book_endpoint__";
+  const requestedChapterNum = Number(chapterNumber);
+  if (Number.isFinite(requestedChapterNum) && requestedChapterNum > 0) {
+    try {
+      const cached = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
+        "cache:getChapterBundle",
+        { volume: BOOK_ENDPOINT_VOLUME, book: bookId, chapter: requestedChapterNum }
+      );
+      if (cached?.reference && Array.isArray(cached.verses) && cached.verses.length > 0) {
+        return { reference: cached.reference, verses: cached.verses };
+      }
+    } catch {
+      // Fallback to upstream.
+    }
+  }
+
   const url = `${BASE_URL}/book/${encodeURIComponent(bookId)}/${encodeURIComponent(String(chapterNumber))}`;
   const res = await fetch(url, { next: { revalidate: 60 } });
   if (!res.ok) {
@@ -241,7 +357,22 @@ export async function fetchChapterByBook(
     })
     .filter(Boolean) as ChapterResponse["verses"];
 
-  return { reference: reference || `${bookId} ${chapterNumber}`, verses };
+  const out = { reference: reference || `${bookId} ${chapterNumber}`, verses };
+  if (Number.isFinite(requestedChapterNum) && requestedChapterNum > 0) {
+    try {
+      await convexMutation("cache:upsertChapterBundle", {
+        volume: BOOK_ENDPOINT_VOLUME,
+        book: bookId,
+        chapter: requestedChapterNum,
+        reference: out.reference,
+        verses: out.verses,
+        fetchedAt: Date.now(),
+      });
+    } catch {
+      // Ignore cache write errors.
+    }
+  }
+  return out;
 }
 
 
@@ -264,6 +395,16 @@ export type ReferenceParserResult = {
 export async function parseReferenceString(reference: string): Promise<ReferenceParserResult | null> {
   const apiKey = process.env.NEXT_PUBLIC_OPENSCRIPTURE_API_KEY;
   if (!apiKey || !reference || reference.trim().length === 0) return null;
+  const referenceKey = reference.trim().toLowerCase();
+  try {
+    const cached = await convexQuery<{ payload: ReferenceParserResult } | null>(
+      "cache:getCachedReferenceParse",
+      { referenceKey }
+    );
+    if (cached?.payload) return cached.payload;
+  } catch {
+    // Fall through to live parser API.
+  }
   const url = `${BASE_URL}/referencesParser?reference=${encodeURIComponent(reference)}&api-key=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url, { next: { revalidate: 0 } });
@@ -284,6 +425,20 @@ export async function parseReferenceString(reference: string): Promise<Reference
           }>)
         : undefined,
     };
+    try {
+      await convexMutation("cache:upsertCachedReferenceParse", {
+        referenceKey,
+        payload: {
+          valid: out.valid,
+          prettyString: out.prettyString,
+          references: out.references,
+          error: out.error,
+        },
+        fetchedAt: Date.now(),
+      });
+    } catch {
+      // Ignore cache write errors.
+    }
     return out;
   } catch {
     return null;

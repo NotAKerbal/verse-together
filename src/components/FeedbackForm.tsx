@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { submitFeedback } from "@/lib/appData";
+import { useAuth } from "@/lib/auth";
 
 type FeedbackState = {
   message: string;
@@ -9,6 +10,7 @@ type FeedbackState = {
 };
 
 export default function FeedbackForm() {
+  const { getToken } = useAuth();
   const [form, setForm] = useState<FeedbackState>({ message: "", contact: "" });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -42,15 +44,8 @@ export default function FeedbackForm() {
 
     setSubmitting(true);
     try {
-      const { error: dbError } = await supabase
-        .from("feedback")
-        .insert({ message, contact: contact || null, path });
-      if (dbError) {
-        const friendly = /permission|policy/i.test(dbError.message)
-          ? "Please sign in to send feedback."
-          : dbError.message;
-        throw new Error(friendly);
-      }
+      const token = await getToken({ template: "convex" });
+      await submitFeedback({ message, contact: contact || null, path }, token);
       setSuccess(true);
       setForm({ message: "", contact: "" });
     } catch (err) {

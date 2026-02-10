@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/auth";
-import GoogleSignInButton from "@/components/GoogleSignInButton";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
+import { SignInButton } from "@clerk/nextjs";
+import { getProfileName, upsertCurrentUser } from "@/lib/appData";
 
 export default function Navbar() {
-  const { user } = useAuth();
+  const { user, getToken, signOut } = useAuth();
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -15,12 +15,14 @@ export default function Navbar() {
     let isMounted = true;
     async function fetchProfileName(userId: string) {
       try {
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("user_id", userId)
-          .maybeSingle();
-        if (isMounted) setDisplayName(prof?.display_name ?? null);
+        const token = await getToken({ template: "convex" });
+        await upsertCurrentUser(token, {
+          email: user?.email,
+          displayName: user?.fullName,
+          avatarUrl: user?.imageUrl,
+        });
+        const name = await getProfileName(userId);
+        if (isMounted) setDisplayName(name ?? user?.fullName ?? null);
       } catch {
         if (isMounted) setDisplayName(null);
       }
@@ -36,7 +38,7 @@ export default function Navbar() {
   }, [user?.id]);
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await signOut();
   }
 
   return (
@@ -66,6 +68,11 @@ export default function Navbar() {
               <Link href="/feed" className="hover:text-foreground">
                 Feed
               </Link>
+              {user ? (
+                <Link href="/insights/saved" className="hover:text-foreground">
+                  My Insights
+                </Link>
+              ) : null}
             </nav>
           </div>
           <div className="hidden sm:flex items-center gap-3">
@@ -81,7 +88,11 @@ export default function Navbar() {
                 </button>
               </>
             ) : (
-              <GoogleSignInButton oneTap={false} showButton={true} />
+              <SignInButton mode="modal">
+                <button className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90">
+                  Sign in
+                </button>
+              </SignInButton>
             )}
           </div>
         </div>

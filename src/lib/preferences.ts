@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from "@/lib/supabaseClient";
+import { getReaderPreferences, saveReaderPreferences as saveReaderPreferencesRemote } from "@/lib/appData";
 
 export type ReaderPreferences = {
   showFootnotes: boolean;
@@ -49,22 +49,20 @@ export function normalizePreferences(input: Partial<ReaderPreferences> | null | 
   return { showFootnotes, fontScale, fontFamily };
 }
 
-export async function loadPreferences(userId: string | null | undefined): Promise<ReaderPreferences> {
-  // Prefer Supabase for signed-in users; fall back to localStorage, then defaults
-  if (userId) {
+export async function loadPreferences(
+  userId: string | null | undefined,
+  token?: string | null
+): Promise<ReaderPreferences> {
+  // Prefer Convex for signed-in users; fall back to localStorage, then defaults
+  if (userId && token) {
     try {
-      const { data, error } = await supabase
-        .from("reader_preferences")
-        .select("show_footnotes, font_scale, font_family")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!error && data) {
+      const data = await getReaderPreferences(token);
+      if (data) {
         const prefs = normalizePreferences({
-          showFootnotes: !!data.show_footnotes,
-          fontScale: typeof data.font_scale === "number" ? data.font_scale : 1,
-          fontFamily: data.font_family === "sans" ? "sans" : "serif",
+          showFootnotes: !!data.showFootnotes,
+          fontScale: typeof data.fontScale === "number" ? data.fontScale : 1,
+          fontFamily: data.fontFamily === "sans" ? "sans" : "serif",
         });
-        // Keep local in sync
         writeLocalPreferences(prefs);
         return prefs;
       }
@@ -77,23 +75,19 @@ export async function loadPreferences(userId: string | null | undefined): Promis
   return getDefaultPreferences();
 }
 
-export async function savePreferences(userId: string | null | undefined, prefs: ReaderPreferences): Promise<void> {
-  // Always write local for quick load
+export async function savePreferences(
+  userId: string | null | undefined,
+  prefs: ReaderPreferences,
+  token?: string | null
+): Promise<void> {
   writeLocalPreferences(prefs);
-  if (!userId) return;
+  if (!userId || !token) return;
   try {
-    await supabase
-      .from("reader_preferences")
-      .upsert(
-        {
-          user_id: userId,
-          show_footnotes: prefs.showFootnotes,
-          font_scale: prefs.fontScale,
-          font_family: prefs.fontFamily,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
+    await saveReaderPreferencesRemote(token, {
+      showFootnotes: prefs.showFootnotes,
+      fontScale: prefs.fontScale,
+      fontFamily: prefs.fontFamily,
+    });
   } catch {
     // ignore
   }

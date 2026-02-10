@@ -1,3 +1,5 @@
+import { convexMutation, convexQuery } from "@/lib/convexHttp";
+
 export type CitationTalk = {
   id?: string;
   title: string;
@@ -274,6 +276,21 @@ function parseTalksFromHtml(html: string): CitationTalk[] {
 
 export async function fetchChapterListing(bookId: number): Promise<{ chapterNumbers: number[] } | null> {
   try {
+    const cached = await convexQuery<{ chapterNumbers: number[]; stale: boolean } | null>(
+      "cache:getCitationChapterListing",
+      { bookByuId: bookId }
+    );
+    if (cached?.chapterNumbers?.length) {
+      if (cached.stale) {
+        void refreshChapterListing(bookId);
+      }
+      return { chapterNumbers: cached.chapterNumbers };
+    }
+  } catch {
+    // Fall through to live fetch.
+  }
+
+  try {
     const res = await fetch(buildBookUrl(bookId), { cache: "no-store" });
     if (!res.ok) return null;
     const html = await res.text();
@@ -281,7 +298,17 @@ export async function fetchChapterListing(bookId: number): Promise<{ chapterNumb
     const text = textFromHtml(html);
     const numbers = Array.from(text.matchAll(/\b(\d{1,3})\s*\[/g)).map((m) => Number(m[1]));
     const unique = Array.from(new Set(numbers)).sort((a, b) => a - b);
-    return { chapterNumbers: unique };
+    const out = { chapterNumbers: unique };
+    try {
+      await convexMutation("cache:upsertCitationChapterListing", {
+        bookByuId: bookId,
+        chapterNumbers: unique,
+        fetchedAt: Date.now(),
+      });
+    } catch {
+      // Ignore cache write failures.
+    }
+    return out;
   } catch {
     return null;
   }
@@ -296,6 +323,24 @@ export async function fetchVerseCitations(bookId: number, chapter: number, verse
     return { bookId, chapter, verseSpec, talks };
   } catch {
     return null;
+  }
+}
+
+async function refreshChapterListing(bookId: number): Promise<void> {
+  try {
+    const res = await fetch(buildBookUrl(bookId), { cache: "no-store" });
+    if (!res.ok) return;
+    const html = await res.text();
+    const text = textFromHtml(html);
+    const numbers = Array.from(text.matchAll(/\b(\d{1,3})\s*\[/g)).map((m) => Number(m[1]));
+    const unique = Array.from(new Set(numbers)).sort((a, b) => a - b);
+    await convexMutation("cache:upsertCitationChapterListing", {
+      bookByuId: bookId,
+      chapterNumbers: unique,
+      fetchedAt: Date.now(),
+    });
+  } catch {
+    // best-effort refresh only
   }
 }
 

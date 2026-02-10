@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { auth } from "@clerk/nextjs/server";
+import { convexMutation } from "@/lib/convexHttp";
 
 type FeedbackPayload = {
   message: string;
@@ -21,23 +22,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Feedback message is too long" }, { status: 400 });
     }
 
-    // If no service role key, let the client-side form handle RLS insertion.
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json({ ok: true, id: null });
-    }
-
-    const admin = getSupabaseAdmin();
-    const { data, error } = await admin
-      .from("feedback")
-      .insert({ message, contact, path })
-      .select("id")
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: "Failed to save feedback" }, { status: 500 });
-    }
-
-    return NextResponse.json({ id: data.id, ok: true });
+    const { getToken } = await auth();
+    const token = await getToken({ template: "convex" });
+    await convexMutation(
+      "feedback:submitFeedback",
+      { message, contact: contact ?? undefined, path: path ?? undefined },
+      token ?? undefined
+    );
+    return NextResponse.json({ ok: true });
   } catch (_err) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
