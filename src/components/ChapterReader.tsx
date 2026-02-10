@@ -651,6 +651,11 @@ export default function ChapterReader({
           style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
           className="relative w-full"
         >
+          {translationControls ? (
+            <div className="lg:hidden mb-3">
+              {translationControls}
+            </div>
+          ) : null}
           <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
             <div className="relative flex flex-col gap-1">
               <div className="text-xs sm:text-sm pr-10">
