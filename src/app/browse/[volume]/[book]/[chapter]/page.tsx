@@ -6,22 +6,44 @@ import { isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
 
 type Params = {
   params: Promise<{ volume: string; book: string; chapter: string }>;
-  searchParams: Promise<{ translation?: string; compare?: string }>;
+  searchParams: Promise<{ translation?: string | string[]; compare?: string | string[] }>;
 };
 
 export default async function ChapterPage({ params, searchParams }: Params) {
   const { volume, book, chapter } = await params;
   const query = await searchParams;
   const bibleMode = isBibleVolume(volume);
-  const translation = bibleMode ? normalizeBibleTranslationId(query.translation) : undefined;
-  const compareTranslation = bibleMode && query.compare ? normalizeBibleTranslationId(query.compare) : undefined;
-  const data = await fetchChapter(volume, book, chapter, { translation });
-  const compareData =
-    bibleMode && compareTranslation && compareTranslation !== translation
-      ? await fetchChapter(volume, book, chapter, { translation: compareTranslation })
-      : null;
+  const translationParam = Array.isArray(query.translation) ? query.translation[0] : query.translation;
+  const translation = bibleMode ? normalizeBibleTranslationId(translationParam) : undefined;
+  const activeTranslation = translation ?? "kjv";
+  const compareParams = Array.isArray(query.compare)
+    ? query.compare
+    : query.compare
+      ? [query.compare]
+      : [];
+  const compareTranslations = bibleMode
+    ? Array.from(
+        new Set(
+          compareParams
+            .map((value) => normalizeBibleTranslationId(value))
+            .filter((id) => id !== activeTranslation)
+        )
+      )
+    : [];
+
+  const data = await fetchChapter(volume, book, chapter, { translation: activeTranslation });
+  const compareData = await Promise.all(
+    compareTranslations.map((translationId) =>
+      fetchChapter(volume, book, chapter, { translation: translationId })
+    )
+  );
   const querySuffix = bibleMode
-    ? `?translation=${translation ?? "kjv"}${compareTranslation ? `&compare=${compareTranslation}` : ""}`
+    ? (() => {
+        const params = new URLSearchParams();
+        params.set("translation", activeTranslation);
+        compareTranslations.forEach((id) => params.append("compare", id));
+        return `?${params.toString()}`;
+      })()
     : "";
 
   const currentChapter = Number(chapter);
@@ -48,15 +70,6 @@ export default async function ChapterPage({ params, searchParams }: Params) {
 
   return (
     <article className="space-y-6">
-      {bibleMode ? (
-        <BibleTranslationToolbar
-          volume={volume}
-          book={book}
-          chapter={chapter}
-          translation={translation ?? "kjv"}
-          compare={compareTranslation}
-        />
-      ) : null}
       <ChapterReader
         volume={volume}
         book={book}
@@ -64,10 +77,24 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         verses={data.verses}
         reference={data.reference}
         breadcrumbs={breadcrumbs}
+        translationControls={
+          bibleMode ? (
+            <BibleTranslationToolbar
+              volume={volume}
+              book={book}
+              chapter={chapter}
+              translation={activeTranslation}
+              compare={compareTranslations}
+            />
+          ) : undefined
+        }
         prevHref={prevHref}
         nextHref={nextHref}
-        compareTranslation={compareData?.translation}
-        compareVerses={compareData?.verses}
+        primaryTranslation={data.translation ?? activeTranslation}
+        compareChapters={compareData.map((item) => ({
+          translation: item.translation ?? "",
+          verses: item.verses,
+        }))}
       />
     </article>
   );
