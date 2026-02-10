@@ -89,7 +89,13 @@ export const BIBLE_TRANSLATION_OPTIONS = [
   { id: "oeb-cw", label: "Open English Bible (Commonwealth)" },
 ] as const;
 
-const SUPPORTED_TRANSLATIONS = new Set<string>(BIBLE_TRANSLATION_OPTIONS.map((item) => item.id));
+export type BibleTranslationId = (typeof BIBLE_TRANSLATION_OPTIONS)[number]["id"];
+
+const SUPPORTED_TRANSLATIONS = new Set<BibleTranslationId>(BIBLE_TRANSLATION_OPTIONS.map((item) => item.id));
+
+export function isBibleTranslationId(value: string): value is BibleTranslationId {
+  return SUPPORTED_TRANSLATIONS.has(value as BibleTranslationId);
+}
 
 export function isBibleVolume(volume: string): boolean {
   return volume === "oldtestament" || volume === "newtestament";
@@ -105,9 +111,9 @@ export function getBibleBookBySlug(slug: string): BibleBook | undefined {
   return BIBLE_BOOKS.find((book) => book.slug === slug);
 }
 
-export function normalizeBibleTranslationId(value: string | null | undefined): string {
+export function normalizeBibleTranslationId(value: string | null | undefined): BibleTranslationId {
   if (!value) return "kjv";
   const normalized = value.trim().toLowerCase();
-  if (SUPPORTED_TRANSLATIONS.has(normalized)) return normalized;
+  if (isBibleTranslationId(normalized)) return normalized;
   return "kjv";
 }
