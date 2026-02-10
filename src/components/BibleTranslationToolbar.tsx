@@ -121,7 +121,7 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
       </summary>
       <div className="mt-2 space-y-3">
         <div className="text-xs text-foreground/70">Bible source: bible-api.com + bible.helloao.org</div>
-        <div className="text-xs text-foreground/70">Select one or more translations to compare inline differences.</div>
+        <div className="text-xs text-foreground/70">Select one or more translations to compare wording differences.</div>
         <TranslationCatalogPicker
           existingIds={optionIds}
           onAddFavorite={(item) => addFavorite(item)}
@@ -129,7 +129,7 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
         <div className="grid gap-2 grid-cols-1">
           {options.map((option) => {
             const isSelected = selectedIds.has(option.id);
-            const description = TRANSLATION_DESCRIPTIONS[option.id] ?? `${option.label} is included for side-by-side comparison. Select it to view wording differences inline.`;
+            const description = TRANSLATION_DESCRIPTIONS[option.id] ?? `${option.label} is included for comparison. Select it to view wording differences.`;
             return (
               <Link
                 key={option.id}

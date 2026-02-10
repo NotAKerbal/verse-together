@@ -18,6 +18,7 @@ export default defineSchema({
     showFootnotes: v.boolean(),
     fontScale: v.number(),
     fontFamily: v.union(v.literal("serif"), v.literal("sans")),
+    comparisonView: v.optional(v.union(v.literal("inline"), v.literal("sideBySide"))),
     updatedAt: v.number(),
   }).index("by_clerk_id", ["clerkId"]),
 

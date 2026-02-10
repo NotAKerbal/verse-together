@@ -701,12 +701,13 @@ export default function ChapterReader({
                   const legend = compareLegend.find((item) => item.translationId === translationId);
                   return {
                     key: translationId,
+                    label: legend?.label ?? formatTranslationShortLabel(translationId),
                     compareText: text,
                     compareColorClass: legend?.colorClass ?? compareColorClasses[0],
                   };
                 })
                 .filter(
-                  (item): item is { key: string; compareText: string; compareColorClass: string } =>
+                  (item): item is { key: string; label: string; compareText: string; compareColorClass: string } =>
                     item !== null
                 );
               return (
@@ -721,6 +722,30 @@ export default function ChapterReader({
                     <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
                     {verseComparisons.length === 0 ? (
                       <span>{renderVerseText(v)}</span>
+                    ) : prefs.comparisonView === "sideBySide" ? (
+                      <span className="mt-1 block space-y-2">
+                        {verseComparisons.map((comparison) => (
+                          <span
+                            key={`${v.verse}-${comparison.key}`}
+                            className="block rounded-md border border-black/10 dark:border-white/15 p-2"
+                          >
+                            <span className="grid gap-2 md:grid-cols-2">
+                              <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
+                                <span className="block text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                                  {primaryTranslationLabel}
+                                </span>
+                                <span className="mt-0.5 block text-sm leading-6">{renderVerseText(v)}</span>
+                              </span>
+                              <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
+                                <span className={`block text-[10px] uppercase tracking-wide ${comparison.compareColorClass}`}>
+                                  {comparison.label}
+                                </span>
+                                <span className="mt-0.5 block text-sm leading-6">{comparison.compareText}</span>
+                              </span>
+                            </span>
+                          </span>
+                        ))}
+                      </span>
                     ) : (
                       <span className="text-sm leading-6">
                         {verseComparisons.map((comparison, index) => (
