@@ -473,6 +473,7 @@ export default function ChapterReader({
               return (
                 <li
                   key={v.verse}
+                  id={`v-${v.verse}`}
                   className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
                     isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""
                   }`}
