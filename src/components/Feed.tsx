@@ -1,49 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import {
-  getFeed,
-  getReactionCount,
-  toggleReaction,
-  type FeedShare,
-} from "@/lib/appData";
+import { type FeedShare } from "@/lib/appData";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
 export default function Feed() {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<FeedShare[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const rows = useQuery(api.social.getFeed, {}) as FeedShare[] | undefined;
 
-  useEffect(() => {
-    let ignore = false;
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getFeed();
-        if (ignore) return;
-        setRows(data ?? []);
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : "Failed to load feed";
-        if (!ignore) setError(message);
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      ignore = true;
-    };
-  }, [user?.id]);
-
-  if (loading) {
+  if (rows === undefined) {
     return <div className="mx-auto max-w-3xl">Loading feed…</div>;
-  }
-  if (error) {
-    return <div className="mx-auto max-w-3xl text-red-600">{error}</div>;
   }
 
   if (rows.length === 0) {
@@ -244,40 +211,18 @@ function Comments({ shareId }: { shareId: string }) {
 }
 
 function FeedActions({ shareId }: { shareId: string }) {
-  const { user, getToken } = useAuth();
-  const [count, setCount] = useState<number | null>(null);
+  const { user } = useAuth();
+  const count = useQuery(api.social.getReactionCount, { shareId: shareId as any }) as number | undefined;
+  const toggleReactionMutation = useMutation(api.social.toggleReaction);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let ignore = false;
-    async function load() {
-      try {
-        const total = await getReactionCount(shareId);
-        if (!ignore) setCount(total ?? 0);
-      } catch (e) {
-        if (!ignore) {
-          const message = e instanceof Error ? e.message : "Failed loading reactions";
-          setError(message);
-        }
-      }
-    }
-    load();
-    return () => {
-      ignore = true;
-    };
-  }, [shareId]);
 
   async function toggleLike() {
     setLoading(true);
     setError(null);
     try {
       if (!user) throw new Error("Please sign in to react.");
-      const token = await getToken({ template: "convex" });
-      if (!token) throw new Error("Please sign in to react.");
-      await toggleReaction(token, shareId, "like");
-      const total = await getReactionCount(shareId);
-      setCount(total ?? 0);
+      await toggleReactionMutation({ shareId: shareId as any, reaction: "like" });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed";
       setError(message);
@@ -293,7 +238,7 @@ function FeedActions({ shareId }: { shareId: string }) {
         disabled={loading}
         className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
       >
-        ❤ Like {count !== null ? `(${count})` : ""}
+        ❤ Like {typeof count === "number" ? `(${count})` : ""}
       </button>
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
     </div>
