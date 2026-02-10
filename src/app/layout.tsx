@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "../components/Navbar";
 import Ripple from "../components/Ripple";
 import AppProviders from "../components/AppProviders";
+import AppMain from "../components/AppMain";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,7 +34,7 @@ export default function RootLayout({
         <AppProviders>
           <Ripple />
           <Navbar />
-          <main className="w-full px-4 py-8 lg:pr-[380px] xl:pr-[440px] 2xl:pr-[500px]">{children}</main>
+          <AppMain>{children}</AppMain>
         </AppProviders>
       </body>
     </html>
