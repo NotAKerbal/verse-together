@@ -39,7 +39,7 @@ const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, on
   if (!visible) return null;
   return (
     <div
-      className="fixed inset-x-0 z-50 pointer-events-none"
+      className="fixed inset-x-0 z-50 pointer-events-none lg:hidden"
       style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
     >
       <div className="mx-auto max-w-3xl flex items-center justify-between gap-3 sm:gap-4 px-3 sm:px-4 pointer-events-auto">

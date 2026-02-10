@@ -5,8 +5,11 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
+import DesktopVerseActionList from "./DesktopVerseActionList";
 import CitationsModal from "./CitationsModal";
 import VerseExplorer from "./VerseExplorer";
+import CitationsSidebarPanel from "./CitationsSidebarPanel";
+import VerseExplorerSidebarPanel from "./VerseExplorerSidebarPanel";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -154,6 +157,15 @@ export default function ChapterReader({
     const picked = verses.filter((v) => selected.has(v.verse));
     return picked.map((v) => `${v.verse}. ${v.text}`).join("\n");
   }, [verses, selected]);
+  const hasSelection = selected.size > 0;
+  const selectedBounds = useMemo(() => {
+    if (!hasSelection) return null;
+    const verseList = Array.from(selected);
+    return {
+      start: Math.min(...verseList),
+      end: Math.max(...verseList),
+    };
+  }, [hasSelection, selected]);
 
   const selectedFirstWord = useMemo(() => {
     // Prefer DOM text selection when available
@@ -300,6 +312,42 @@ export default function ChapterReader({
   const overlayOpacity = progress * 0.9; // fade-in intensity
   const transition = animTargetX !== null ? "transform 240ms ease-out" : isDragging ? "none" : undefined;
 
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function onAddToInsight() {
+    if (!user) {
+      alert("Please sign in to build insights.");
+      return;
+    }
+    if (!selectedBounds) return;
+    const reference = `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
+    await appendScriptureBlock({
+      volume,
+      book,
+      chapter,
+      verseStart: selectedBounds.start,
+      verseEnd: selectedBounds.end,
+      reference,
+      text: selectedText || null,
+    });
+    openBuilder();
+    clearSelection();
+  }
+
+  function onOpenCitations() {
+    if (!selectedBounds) return;
+    setOpenExplorer(false);
+    setOpenCitations(true);
+  }
+
+  function onOpenExplore() {
+    if (!selectedBounds) return;
+    setOpenCitations(false);
+    setOpenExplorer(true);
+  }
+
   return (
     <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       {/* Preview overlay behind the sliding content */}
@@ -326,52 +374,84 @@ export default function ChapterReader({
         </div>
       ) : null}
 
-      <div
-        onTransitionEnd={onTransitionEnd}
-        style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
-        className="relative"
-      >
-        <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
-          <div className="relative flex flex-col gap-1">
-            <div className="text-xs sm:text-sm pr-10">
-              <Breadcrumbs items={breadcrumbs} />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
-              <button
-                aria-label="Reader settings"
-                title="Reader settings"
-                onClick={() => setSettingsOpen(true)}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                ⚙
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <ol
-          className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
-          style={{ fontSize: `${prefs.fontScale}rem` }}
+      <div className="lg:grid lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:items-start lg:gap-6 xl:gap-8">
+        <aside className="hidden lg:block self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-3">
+          <DesktopVerseActionList
+            visible={!openFootnote}
+            hasSelection={hasSelection}
+            actionsEnabled={!!user}
+            onClear={clearSelection}
+            onInsight={() => {
+              void onAddToInsight();
+            }}
+            onCitations={onOpenCitations}
+            onExplore={onOpenExplore}
+          />
+          {openCitations && selectedBounds ? (
+            <CitationsSidebarPanel
+              open={true}
+              onClose={() => setOpenCitations(false)}
+              volume={volume}
+              book={book}
+              chapter={chapter}
+              verseStart={selectedBounds.start}
+              verseEnd={selectedBounds.end}
+            />
+          ) : null}
+          {openExplorer ? (
+            <VerseExplorerSidebarPanel
+              open={true}
+              onClose={() => setOpenExplorer(false)}
+              verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
+            />
+          ) : null}
+        </aside>
+        <div
+          onTransitionEnd={onTransitionEnd}
+          style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
+          className="relative w-full"
         >
-          {verses.map((v) => {
-            const isSelected = selected.has(v.verse);
-            return (
-              <li
-                key={v.verse}
-                className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
-                  isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""
-                }`}
-              >
-                <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
-                  <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                  <span>{renderVerseText(v)}</span>
+          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
+            <div className="relative flex flex-col gap-1">
+              <div className="text-xs sm:text-sm pr-10">
+                <Breadcrumbs items={breadcrumbs} />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
+                <button
+                  aria-label="Reader settings"
+                  title="Reader settings"
+                  onClick={() => setSettingsOpen(true)}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  ⚙
                 </button>
-              </li>
-            );
-          })}
-        </ol>
+              </div>
+            </div>
+          </header>
 
+          <ol
+            className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
+            style={{ fontSize: `${prefs.fontScale}rem` }}
+          >
+            {verses.map((v) => {
+              const isSelected = selected.has(v.verse);
+              return (
+                <li
+                  key={v.verse}
+                  className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
+                    isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""
+                  }`}
+                >
+                  <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
+                    <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                    <span>{renderVerseText(v)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
       </div>
 
       <ReaderSettings
@@ -430,60 +510,41 @@ export default function ChapterReader({
         />
       ) : null}
 
-      {openCitations ? (
-        <CitationsModal
-          open={true}
-          onClose={() => setOpenCitations(false)}
-          volume={volume}
-          book={book}
-          chapter={chapter}
-          verseStart={Math.min(...Array.from(selected))}
-          verseEnd={Math.max(...Array.from(selected))}
-        />
+      {openCitations && selectedBounds ? (
+        <div className="lg:hidden">
+          <CitationsModal
+            open={true}
+            onClose={() => setOpenCitations(false)}
+            volume={volume}
+            book={book}
+            chapter={chapter}
+            verseStart={selectedBounds.start}
+            verseEnd={selectedBounds.end}
+          />
+        </div>
       ) : null}
 
       {openExplorer ? (
-        <VerseExplorer
-          open={true}
-          onClose={() => setOpenExplorer(false)}
-          verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
-        />
+        <div className="lg:hidden">
+          <VerseExplorer
+            open={true}
+            onClose={() => setOpenExplorer(false)}
+            verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
+          />
+        </div>
       ) : null}
 
       {/* dictionary and etymology now live inside VerseExplorer */}
 
       <VerseActionBar
-        visible={selected.size > 0 && !overlayOpen}
+        visible={hasSelection && !overlayOpen}
         actionsEnabled={!!user}
-        onClear={() => setSelected(new Set())}
-        onInsight={async () => {
-          if (!user) {
-            alert("Please sign in to build insights.");
-            return;
-          }
-          if (selected.size === 0) return;
-          const s = Math.min(...Array.from(selected));
-          const e = Math.max(...Array.from(selected));
-          const reference = `${book} ${chapter}:${s}${e !== s ? `-${e}` : ""}`;
-          await appendScriptureBlock({
-            volume,
-            book,
-            chapter,
-            verseStart: s,
-            verseEnd: e,
-            reference,
-            text: selectedText || null,
-          });
-          openBuilder();
-          setSelected(new Set());
+        onClear={clearSelection}
+        onInsight={() => {
+          void onAddToInsight();
         }}
-        onCitations={() => {
-          setOpenCitations(true);
-        }}
-        onExplore={() => {
-          if (selected.size === 0) return;
-          setOpenExplorer(true);
-        }}
+        onCitations={onOpenCitations}
+        onExplore={onOpenExplore}
       />
     </section>
   );

@@ -426,7 +426,7 @@ export default function InsightBuilderShell() {
         </div>
       ) : null}
 
-      <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] border-l border-black/10 dark:border-white/15 bg-background/95 backdrop-blur">
+      <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] xl:w-[420px] 2xl:w-[480px] border-l border-black/10 dark:border-white/15 bg-background/95 backdrop-blur">
         <BuilderContent />
       </aside>
     </>
