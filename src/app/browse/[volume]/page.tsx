@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import { getBibleBooksForVolume } from "@/lib/bibleCanon";
 
 const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   bookofmormon: [
@@ -20,18 +21,10 @@ const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
     { id: "moroni", label: "Moroni" },
   ],
   oldtestament: [
-    { id: "genesis", label: "Genesis" },
-    { id: "exodus", label: "Exodus" },
-    { id: "leviticus", label: "Leviticus" },
-    { id: "numbers", label: "Numbers" },
-    { id: "deuteronomy", label: "Deuteronomy" },
+    ...getBibleBooksForVolume("oldtestament").map((book) => ({ id: book.slug, label: book.label })),
   ],
   newtestament: [
-    { id: "matthew", label: "Matthew" },
-    { id: "mark", label: "Mark" },
-    { id: "luke", label: "Luke" },
-    { id: "john", label: "John" },
-    { id: "acts", label: "Acts" },
+    ...getBibleBooksForVolume("newtestament").map((book) => ({ id: book.slug, label: book.label })),
   ],
   doctrineandcovenants: [
     { id: "doctrineandcovenants", label: "Sections" },

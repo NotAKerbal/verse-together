@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireClerkId } from "./utils";
 
-const insightBlockType = v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"));
+const insightBlockType = v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"), v.literal("dictionary"));
 const insightVisibility = v.union(
   v.literal("private"),
   v.literal("friends"),
@@ -17,6 +17,12 @@ const scriptureRefValidator = v.object({
   verseStart: v.number(),
   verseEnd: v.number(),
   reference: v.string(),
+});
+const dictionaryMetaValidator = v.object({
+  edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913")),
+  word: v.string(),
+  heading: v.optional(v.string()),
+  pronounce: v.optional(v.string()),
 });
 
 function toIso(ts: number): string {
@@ -134,6 +140,14 @@ export const getDraft = query({
         highlight_word_indices: b.highlightWordIndices ?? [],
         link_url: b.linkUrl ?? null,
         scripture_ref: b.scriptureRef ?? null,
+        dictionary_meta: b.dictionaryMeta
+          ? {
+              edition: b.dictionaryMeta.edition,
+              word: b.dictionaryMeta.word,
+              heading: b.dictionaryMeta.heading ?? null,
+              pronounce: b.dictionaryMeta.pronounce ?? null,
+            }
+          : null,
         created_at: toIso(b.createdAt),
         updated_at: toIso(b.updatedAt),
       })),
@@ -177,6 +191,14 @@ export const getSharedDraft = query({
         highlight_word_indices: b.highlightWordIndices ?? [],
         link_url: b.linkUrl ?? null,
         scripture_ref: b.scriptureRef ?? null,
+        dictionary_meta: b.dictionaryMeta
+          ? {
+              edition: b.dictionaryMeta.edition,
+              word: b.dictionaryMeta.word,
+              heading: b.dictionaryMeta.heading ?? null,
+              pronounce: b.dictionaryMeta.pronounce ?? null,
+            }
+          : null,
       })),
     };
   },
@@ -288,6 +310,7 @@ export const addBlock = mutation({
     highlightWordIndices: v.optional(v.array(v.number())),
     linkUrl: v.optional(v.string()),
     scriptureRef: v.optional(scriptureRefValidator),
+    dictionaryMeta: v.optional(dictionaryMetaValidator),
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
@@ -308,6 +331,14 @@ export const addBlock = mutation({
       highlightWordIndices: args.highlightWordIndices,
       linkUrl: args.linkUrl?.trim() || undefined,
       scriptureRef: args.scriptureRef,
+      dictionaryMeta: args.dictionaryMeta
+        ? {
+            edition: args.dictionaryMeta.edition,
+            word: args.dictionaryMeta.word.trim(),
+            heading: args.dictionaryMeta.heading?.trim() || undefined,
+            pronounce: args.dictionaryMeta.pronounce?.trim() || undefined,
+          }
+        : undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -370,6 +401,7 @@ export const updateBlock = mutation({
     highlightWordIndices: v.optional(v.array(v.number())),
     linkUrl: v.optional(v.string()),
     scriptureRef: v.optional(scriptureRefValidator),
+    dictionaryMeta: v.optional(dictionaryMetaValidator),
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
@@ -381,6 +413,16 @@ export const updateBlock = mutation({
     if (args.highlightWordIndices !== undefined) patch.highlightWordIndices = args.highlightWordIndices;
     if (args.linkUrl !== undefined) patch.linkUrl = args.linkUrl.trim() || undefined;
     if (args.scriptureRef !== undefined) patch.scriptureRef = args.scriptureRef;
+    if (args.dictionaryMeta !== undefined) {
+      patch.dictionaryMeta = args.dictionaryMeta
+        ? {
+            edition: args.dictionaryMeta.edition,
+            word: args.dictionaryMeta.word.trim(),
+            heading: args.dictionaryMeta.heading?.trim() || undefined,
+            pronounce: args.dictionaryMeta.pronounce?.trim() || undefined,
+          }
+        : undefined;
+    }
     await ctx.db.patch(block._id, patch);
     const now = Date.now();
     await ctx.db.patch(draft._id, { updatedAt: now, lastActiveAt: now });
@@ -478,6 +520,7 @@ export const publishDraft = mutation({
           highlightWordIndices: b.highlightWordIndices,
           linkUrl: b.linkUrl,
           scriptureRef: b.scriptureRef,
+          dictionaryMeta: b.dictionaryMeta,
           createdAt: now,
           updatedAt: now,
         })
@@ -532,6 +575,14 @@ export const getPublishedInsightsFeed = query({
           highlight_word_indices: b.highlightWordIndices ?? [],
           link_url: b.linkUrl ?? null,
           scripture_ref: b.scriptureRef ?? null,
+          dictionary_meta: b.dictionaryMeta
+            ? {
+                edition: b.dictionaryMeta.edition,
+                word: b.dictionaryMeta.word,
+                heading: b.dictionaryMeta.heading ?? null,
+                pronounce: b.dictionaryMeta.pronounce ?? null,
+              }
+            : null,
         })),
       });
     }

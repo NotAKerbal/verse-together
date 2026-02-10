@@ -81,7 +81,7 @@ export default defineSchema({
   insightDraftBlocks: defineTable({
     draftId: v.id("insightDrafts"),
     order: v.number(),
-    type: v.union(v.literal("scripture"), v.literal("text"), v.literal("quote")),
+    type: v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"), v.literal("dictionary")),
     text: v.optional(v.string()),
     highlightText: v.optional(v.string()),
     highlightWordIndices: v.optional(v.array(v.number())),
@@ -94,6 +94,14 @@ export default defineSchema({
         verseStart: v.number(),
         verseEnd: v.number(),
         reference: v.string(),
+      })
+    ),
+    dictionaryMeta: v.optional(
+      v.object({
+        edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913")),
+        word: v.string(),
+        heading: v.optional(v.string()),
+        pronounce: v.optional(v.string()),
       })
     ),
     createdAt: v.number(),
@@ -128,7 +136,7 @@ export default defineSchema({
   publishedInsightBlocks: defineTable({
     insightId: v.id("publishedInsights"),
     order: v.number(),
-    type: v.union(v.literal("scripture"), v.literal("text"), v.literal("quote")),
+    type: v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"), v.literal("dictionary")),
     text: v.optional(v.string()),
     highlightText: v.optional(v.string()),
     highlightWordIndices: v.optional(v.array(v.number())),
@@ -141,6 +149,14 @@ export default defineSchema({
         verseStart: v.number(),
         verseEnd: v.number(),
         reference: v.string(),
+      })
+    ),
+    dictionaryMeta: v.optional(
+      v.object({
+        edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913")),
+        word: v.string(),
+        heading: v.optional(v.string()),
+        pronounce: v.optional(v.string()),
       })
     ),
     createdAt: v.number(),
@@ -291,6 +307,22 @@ export default defineSchema({
     fetchedAt: v.number(),
     updatedAt: v.number(),
   }).index("by_ref", ["volume", "book", "chapter"]),
+
+  dictionaryEntries: defineTable({
+    edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913")),
+    word: v.string(),
+    lookupKey: v.string(),
+    heading: v.optional(v.string()),
+    entryText: v.string(),
+    sourceTable: v.optional(v.string()),
+    sourceId: v.optional(v.number()),
+    length: v.optional(v.number()),
+    pronounce: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_edition_lookupKey", ["edition", "lookupKey"])
+    .index("by_lookupKey", ["lookupKey"])
+    .index("by_edition_word", ["edition", "word"]),
 
   citationCache: defineTable({
     bookByuId: v.number(),

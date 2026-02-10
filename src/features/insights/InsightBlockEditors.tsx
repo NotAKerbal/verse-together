@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { InsightDraftBlock } from "@/lib/appData";
+import DictionaryEntryBody from "@/components/DictionaryEntryBody";
 
 type BlockEditorProps = {
   block: InsightDraftBlock;
@@ -24,12 +25,19 @@ function rangeIndices(start: number, end: number) {
   return out;
 }
 
-export function ScriptureBlockEditor({ block, onHighlightWordsChange }: BlockEditorProps) {
-  const sourceText = block.text ?? "";
+function WordHighlightEditor({
+  sourceText,
+  highlightedIndices,
+  onHighlightWordsChange,
+}: {
+  sourceText: string;
+  highlightedIndices: number[];
+  onHighlightWordsChange?: (highlightWordIndices: number[]) => void;
+}) {
   const tokens = useMemo(() => tokenizeWords(sourceText), [sourceText]);
   const serverIndices = useMemo(
-    () => [...(block.highlight_word_indices ?? [])].sort((a, b) => a - b),
-    [block.highlight_word_indices]
+    () => [...(highlightedIndices ?? [])].sort((a, b) => a - b),
+    [highlightedIndices]
   );
   const [selectedIndices, setSelectedIndices] = useState<number[]>(serverIndices);
   const dragModeRef = useRef<"add" | "remove" | null>(null);
@@ -110,38 +118,49 @@ export function ScriptureBlockEditor({ block, onHighlightWordsChange }: BlockEdi
   }
 
   return (
+    <div className="px-1 py-1 text-sm whitespace-pre-wrap select-none rounded-md border border-black/10 dark:border-white/15 bg-background/40">
+      {sourceText ? (
+        tokens.map((token, wordIdx) => {
+          const highlighted = selectedSet.has(wordIdx);
+          const prevHighlighted = selectedSet.has(wordIdx - 1);
+          const nextHighlighted = selectedSet.has(wordIdx + 1);
+          return (
+            <button
+              key={`w-${wordIdx}`}
+              type="button"
+              data-word-index={wordIdx}
+              onPointerDown={(e) => handleWordPointerDown(wordIdx, e)}
+              className={`inline transition-colors ${
+                highlighted
+                  ? [
+                      "bg-amber-300/70 dark:bg-amber-400/40",
+                      prevHighlighted ? "" : "rounded-l-sm",
+                      nextHighlighted ? "" : "rounded-r-sm",
+                    ].join(" ")
+                  : "hover:bg-black/10 dark:hover:bg-white/10"
+              }`}
+              title="Toggle highlight"
+            >
+              {token}
+            </button>
+          );
+        })
+      ) : (
+        <span className="text-foreground/60">No text is available for highlighting.</span>
+      )}
+    </div>
+  );
+}
+
+export function ScriptureBlockEditor({ block, onHighlightWordsChange }: BlockEditorProps) {
+  const sourceText = block.text ?? "";
+  return (
     <div className="space-y-2">
-      <div className="px-1 py-1 text-sm whitespace-pre-wrap select-none">
-        {sourceText ? (
-          tokens.map((token, wordIdx) => {
-            const highlighted = selectedSet.has(wordIdx);
-            const prevHighlighted = selectedSet.has(wordIdx - 1);
-            const nextHighlighted = selectedSet.has(wordIdx + 1);
-            return (
-              <button
-                key={`w-${wordIdx}`}
-                type="button"
-                data-word-index={wordIdx}
-                onPointerDown={(e) => handleWordPointerDown(wordIdx, e)}
-                className={`inline transition-colors ${
-                  highlighted
-                    ? [
-                        "bg-amber-300/70 dark:bg-amber-400/40",
-                        prevHighlighted ? "" : "rounded-l-sm",
-                        nextHighlighted ? "" : "rounded-r-sm",
-                      ].join(" ")
-                    : "hover:bg-black/10 dark:hover:bg-white/10"
-                }`}
-                title="Toggle highlight"
-              >
-                {token}
-              </button>
-            );
-          })
-        ) : (
-          <span>No scripture text is available for this block yet.</span>
-        )}
-      </div>
+      <WordHighlightEditor
+        sourceText={sourceText}
+        highlightedIndices={block.highlight_word_indices ?? []}
+        onHighlightWordsChange={onHighlightWordsChange}
+      />
     </div>
   );
 }
@@ -158,22 +177,130 @@ export function TextBlockEditor({ block, onTextChange }: BlockEditorProps) {
   );
 }
 
-export function QuoteBlockEditor({ block, onTextChange, onLinkChange }: BlockEditorProps) {
+export function QuoteBlockEditor({ block, onTextChange, onLinkChange, onHighlightWordsChange }: BlockEditorProps) {
+  const sourceText = block.text ?? "";
+  const [expanded, setExpanded] = useState(false);
+  const allTokens = useMemo(() => tokenizeWords(sourceText), [sourceText]);
+  const allHighlights = useMemo(
+    () =>
+      [...(block.highlight_word_indices ?? [])]
+        .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < allTokens.length)
+        .sort((a, b) => a - b),
+    [block.highlight_word_indices, allTokens.length]
+  );
+  const COLLAPSED_TOKEN_COUNT = 140;
+  const CONTEXT_TOKENS = 40;
+  const collapseAnchor = allHighlights[0] ?? 0;
+  const collapsedStart = useMemo(() => {
+    if (allTokens.length <= COLLAPSED_TOKEN_COUNT) return 0;
+    const start = Math.max(0, collapseAnchor - CONTEXT_TOKENS);
+    const maxStart = Math.max(0, allTokens.length - COLLAPSED_TOKEN_COUNT);
+    return Math.min(start, maxStart);
+  }, [allTokens.length, collapseAnchor]);
+  const collapsedEnd = useMemo(
+    () => Math.min(allTokens.length, collapsedStart + COLLAPSED_TOKEN_COUNT),
+    [allTokens.length, collapsedStart]
+  );
+  const isCollapsedView = !expanded && allTokens.length > COLLAPSED_TOKEN_COUNT;
+  const visibleStart = isCollapsedView ? collapsedStart : 0;
+  const visibleEnd = isCollapsedView ? collapsedEnd : allTokens.length;
+  const visibleText = useMemo(() => allTokens.slice(visibleStart, visibleEnd).join(""), [allTokens, visibleStart, visibleEnd]);
+  const visibleHighlights = useMemo(
+    () =>
+      allHighlights
+        .filter((idx) => idx >= visibleStart && idx < visibleEnd)
+        .map((idx) => idx - visibleStart),
+    [allHighlights, visibleStart, visibleEnd]
+  );
+  const hasHiddenPrefix = visibleStart > 0;
+  const hasHiddenSuffix = visibleEnd < allTokens.length;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [block.id, sourceText]);
+
+  function handleVisibleHighlightsChange(nextVisibleIndices: number[]) {
+    const nextVisibleAbs = nextVisibleIndices.map((idx) => idx + visibleStart);
+    const hiddenPersist = allHighlights.filter((idx) => idx < visibleStart || idx >= visibleEnd);
+    const nextAll = Array.from(new Set([...hiddenPersist, ...nextVisibleAbs])).sort((a, b) => a - b);
+    onHighlightWordsChange?.(nextAll);
+  }
+
   return (
     <div className="space-y-2">
-      <textarea
-        value={block.text ?? ""}
-        onChange={(e) => onTextChange(e.target.value)}
-        rows={3}
-        className="w-full bg-transparent px-1 py-1 text-sm focus:outline-none"
-        placeholder="Quote text..."
-      />
-      <input
-        value={block.link_url ?? ""}
-        onChange={(e) => onLinkChange(e.target.value)}
-        className="w-full bg-transparent px-1 py-1 text-xs text-foreground/70 focus:outline-none"
-        placeholder="Source link (https://...)"
-      />
+      {sourceText.trim() ? (
+        <div className="space-y-1">
+          <div className="text-[11px] text-foreground/60">Highlight words</div>
+          {hasHiddenPrefix ? <div className="text-[11px] text-foreground/50">... earlier text hidden</div> : null}
+          <WordHighlightEditor
+            sourceText={visibleText}
+            highlightedIndices={visibleHighlights}
+            onHighlightWordsChange={handleVisibleHighlightsChange}
+          />
+          {hasHiddenSuffix ? <div className="text-[11px] text-foreground/50">... later text hidden</div> : null}
+          {allTokens.length > COLLAPSED_TOKEN_COUNT ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="text-[11px] text-foreground/70 underline underline-offset-2"
+            >
+              {expanded ? "Show less" : "Show full card"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {(block.link_url ?? "").trim() ? (
+        <input
+          value={block.link_url ?? ""}
+          onChange={(e) => onLinkChange(e.target.value)}
+          className="w-full bg-transparent px-1 py-1 text-xs text-foreground/70 focus:outline-none"
+          placeholder="Source link (https://...)"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function DictionaryBlockEditor({ block }: { block: InsightDraftBlock }) {
+  const sourceText = block.text ?? "";
+  const [expanded, setExpanded] = useState(false);
+  const isLong = sourceText.length > 1800;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [block.id, sourceText]);
+
+  return (
+    <div className="space-y-2">
+      {block.dictionary_meta ? (
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold truncate">{block.dictionary_meta.word}</div>
+            <div className="text-[11px] text-foreground/60">
+              {block.dictionary_meta.edition} Webster
+              {block.dictionary_meta.pronounce ? ` - ${block.dictionary_meta.pronounce}` : ""}
+            </div>
+          </div>
+          <span className="shrink-0 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[10px] text-foreground/70">
+            Dictionary
+          </span>
+        </div>
+      ) : null}
+      {block.dictionary_meta?.heading ? (
+        <div className="text-[11px] uppercase tracking-wide text-foreground/60">{block.dictionary_meta.heading}</div>
+      ) : null}
+      <div className={`rounded-md border border-black/10 dark:border-white/15 p-2 ${!expanded && isLong ? "max-h-64 overflow-hidden" : ""}`}>
+        <DictionaryEntryBody entryText={sourceText} />
+      </div>
+      {isLong ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="text-[11px] text-foreground/70 underline underline-offset-2"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
     </div>
   );
 }

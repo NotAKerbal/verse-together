@@ -30,6 +30,8 @@ export default function ChapterReader({
   breadcrumbs,
   prevHref,
   nextHref,
+  compareTranslation,
+  compareVerses,
 }: {
   volume: string;
   book: string;
@@ -39,6 +41,8 @@ export default function ChapterReader({
   breadcrumbs: Crumb[];
   prevHref?: string;
   nextHref?: string;
+  compareTranslation?: string;
+  compareVerses?: Verse[];
 }) {
   const { user, getToken } = useAuth();
   const { appendScriptureBlock, openBuilder, activeDraftId, drafts, switchDraft, createDraft } = useInsightBuilder();
@@ -62,17 +66,22 @@ export default function ChapterReader({
   const overlayOpen = !!openFootnote || openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
 
-  function parseBrowseHref(href: string | undefined): { volume: string; book: string; chapter: number } | null {
+  function parseBrowseHref(
+    href: string | undefined
+  ): { volume: string; book: string; chapter: number; translation?: string } | null {
     if (!href) return null;
-    const clean = href.split("?")[0].split("#")[0];
+    const [pathname, query = ""] = href.split("?");
+    const clean = pathname.split("#")[0];
     const parts = clean.split("/").filter(Boolean);
+    const params = new URLSearchParams(query);
+    const translation = params.get("translation") ?? undefined;
     // expect: ["browse", volume, book, chapter]
     if (parts.length >= 4 && parts[0] === "browse") {
       const vol = decodeURIComponent(parts[1] || "");
       const b = decodeURIComponent(parts[2] || "");
       const chStr = decodeURIComponent(parts[3] || "");
       const ch = Number(chStr);
-      if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch };
+      if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch, translation };
     }
     return null;
   }
@@ -84,7 +93,9 @@ export default function ChapterReader({
       const prevInfo = parseBrowseHref(prevHref);
       try {
         if (nextInfo) {
-          const chap = await fetchChapter(nextInfo.volume, nextInfo.book, nextInfo.chapter);
+          const chap = await fetchChapter(nextInfo.volume, nextInfo.book, nextInfo.chapter, {
+            translation: nextInfo.translation,
+          });
           if (!cancelled) {
             const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
             setNextPreview({ reference: chap.reference, preview: text });
@@ -97,7 +108,9 @@ export default function ChapterReader({
       }
       try {
         if (prevInfo) {
-          const chap = await fetchChapter(prevInfo.volume, prevInfo.book, prevInfo.chapter);
+          const chap = await fetchChapter(prevInfo.volume, prevInfo.book, prevInfo.chapter, {
+            translation: prevInfo.translation,
+          });
           if (!cancelled) {
             const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
             setPrevPreview({ reference: chap.reference, preview: text });
@@ -185,6 +198,21 @@ export default function ChapterReader({
   }, [verses, selected]);
   const hasActiveInsight = !!activeDraftId;
   const availableInsights = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
+  const compareByVerse = useMemo(() => {
+    const nextMap = new Map<number, string>();
+    (compareVerses ?? []).forEach((item) => {
+      nextMap.set(item.verse, item.text);
+    });
+    return nextMap;
+  }, [compareVerses]);
+
+  function normalizeCompareText(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
   // first/last verse values not currently used
 
@@ -470,9 +498,14 @@ export default function ChapterReader({
           >
             {verses.map((v) => {
               const isSelected = selected.has(v.verse);
+              const compareText = compareByVerse.get(v.verse);
+              const hasDifference =
+                typeof compareText === "string" &&
+                normalizeCompareText(compareText) !== normalizeCompareText(v.text);
               return (
                 <li
                   key={v.verse}
+                  id={`v-${v.verse}`}
                   className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
                     isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""
                   }`}
@@ -480,6 +513,16 @@ export default function ChapterReader({
                   <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
                     <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
                     <span>{renderVerseText(v)}</span>
+                    {hasDifference ? (
+                      <div className="mt-1 ml-6 text-sm text-foreground/65">
+                        {compareText}
+                        {compareTranslation ? (
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-foreground/45">
+                            {compareTranslation}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </button>
                 </li>
               );

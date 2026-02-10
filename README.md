@@ -34,3 +34,34 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Dictionary Migration (Convex)
+
+The in-app dictionary supports Webster `1828`, `1844`, and `1913` editions imported from SQL dumps.
+
+### Feature flag
+
+- Set `NEXT_PUBLIC_USE_CONVEX_DICTIONARY=1` to enable in-app dictionary rendering.
+- Leave it unset (or not `1`) to keep external Webster fallback behavior.
+
+### Import pipeline
+
+Place SQL dump files in `data/dictionary/sql/`:
+
+- `dictionary_webster1828.sql`
+- `dictionary_webster1844.sql`
+- `dictionary_webster1913_words.sql`
+- `dictionary_webster1913_definitions.sql`
+- `dictionary_webster1913_alt.sql`
+
+Run:
+
+```bash
+npm run dictionary:migrate
+```
+
+This executes:
+
+- `dictionary:parse` (SQL -> normalized JSONL)
+- `dictionary:import` (batch upsert into Convex)
+- `dictionary:verify` (count + sample lookup checks)

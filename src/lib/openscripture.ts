@@ -1,4 +1,6 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
+import { fetchBibleApiChapter } from "@/lib/bibleApi";
+import { isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
 
 export type Footnote = {
   footnote: string;
@@ -8,11 +10,16 @@ export type Footnote = {
 
 export type ChapterResponse = {
   reference: string;
+  translation?: string;
   verses: Array<{
     verse: number;
     text: string;
     footnotes?: Footnote[];
   }>;
+};
+
+type ChapterFetchOptions = {
+  translation?: string;
 };
 
 const BASE_URL = "https://openscriptureapi.org/api/scriptures/v1/lds/en";
@@ -192,15 +199,44 @@ function buildChapterResponse(raw: unknown, bookId: string, chapterNumber: strin
 async function fetchChapterUncached(
   volumeId: string,
   bookId: string,
-  chapterNumber: string | number
+  chapterNumber: string | number,
+  options?: ChapterFetchOptions
 ): Promise<ChapterResponse> {
+  const chapter = Number(chapterNumber);
+  if (!Number.isFinite(chapter) || chapter <= 0) {
+    throw new Error("Invalid chapter");
+  }
+  const preferredTranslation = normalizeBibleTranslationId(options?.translation);
+  const shouldUseBibleApiPrimary = isBibleVolume(volumeId) && options?.translation;
+  if (shouldUseBibleApiPrimary) {
+    const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+    return {
+      reference: bibleData.reference,
+      translation: bibleData.translationId,
+      verses: bibleData.verses,
+    };
+  }
+
   const url = `${BASE_URL}/volume/${encodeURIComponent(volumeId)}/${encodeURIComponent(bookId)}/${encodeURIComponent(String(chapterNumber))}`;
   const res = await fetch(url, { next: { revalidate: 60 } });
-  if (!res.ok) {
-    throw new Error(`OpenScripture API error ${res.status}`);
+  if (res.ok) {
+    const raw: unknown = await res.json();
+    const chapterData = buildChapterResponse(raw, bookId, chapterNumber);
+    if (chapterData.verses.length > 0) {
+      return chapterData;
+    }
   }
-  const raw: unknown = await res.json();
-  return buildChapterResponse(raw, bookId, chapterNumber);
+
+  if (isBibleVolume(volumeId)) {
+    const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+    return {
+      reference: bibleData.reference,
+      translation: bibleData.translationId,
+      verses: bibleData.verses,
+    };
+  }
+
+  throw new Error(`OpenScripture API error ${res.status}`);
 }
 
 async function cacheVerseChapter(volumeId: string, bookId: string, chapter: number, data: ChapterResponse) {
@@ -225,26 +261,29 @@ async function fetchWithCache(
   volumeId: string,
   bookId: string,
   chapterNumber: string | number,
-  prefetchNeighbors: boolean
+  prefetchNeighbors: boolean,
+  options?: ChapterFetchOptions
 ): Promise<ChapterResponse> {
   const chapter = Number(chapterNumber);
   if (!Number.isFinite(chapter) || chapter <= 0) {
     throw new Error("Invalid chapter");
   }
+  const translation = isBibleVolume(volumeId) ? normalizeBibleTranslationId(options?.translation) : undefined;
+  const cacheVolume = translation ? `${volumeId}::${translation}` : volumeId;
   try {
     const cached = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
       "cache:getChapterBundle",
-      { volume: volumeId, book: bookId, chapter }
+      { volume: cacheVolume, book: bookId, chapter }
     );
     if (cached?.reference && Array.isArray(cached.verses) && cached.verses.length > 0) {
-      return { reference: cached.reference, verses: cached.verses };
+      return { reference: cached.reference, verses: cached.verses, translation };
     }
   } catch {
     // Fallback to upstream fetch below.
   }
 
-  const fresh = await fetchChapterUncached(volumeId, bookId, chapter);
-  void cacheVerseChapter(volumeId, bookId, chapter, fresh);
+  const fresh = await fetchChapterUncached(volumeId, bookId, chapter, options);
+  void cacheVerseChapter(cacheVolume, bookId, chapter, fresh);
 
   if (prefetchNeighbors) {
     const neighborChapters = [chapter - 1, chapter + 1].filter((n) => n > 0);
@@ -253,11 +292,11 @@ async function fetchWithCache(
         try {
           const hit = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
             "cache:getChapterBundle",
-            { volume: volumeId, book: bookId, chapter: neighbor }
+            { volume: cacheVolume, book: bookId, chapter: neighbor }
           );
           if (!hit) {
-            const neighborData = await fetchChapterUncached(volumeId, bookId, neighbor);
-            await cacheVerseChapter(volumeId, bookId, neighbor, neighborData);
+            const neighborData = await fetchChapterUncached(volumeId, bookId, neighbor, options);
+            await cacheVerseChapter(cacheVolume, bookId, neighbor, neighborData);
           }
         } catch {
           // Prefetch is best-effort.
@@ -271,9 +310,10 @@ async function fetchWithCache(
 export async function fetchChapter(
   volumeId: string,
   bookId: string,
-  chapterNumber: string | number
+  chapterNumber: string | number,
+  options?: ChapterFetchOptions
 ): Promise<ChapterResponse> {
-  return await fetchWithCache(volumeId, bookId, chapterNumber, true);
+  return await fetchWithCache(volumeId, bookId, chapterNumber, true, options);
 }
 
 

@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 import type { InsightDraftBlock, InsightVisibility } from "@/lib/appData";
 import { useInsightBuilder } from "./InsightBuilderProvider";
-import { QuoteBlockEditor, ScriptureBlockEditor, TextBlockEditor } from "./InsightBlockEditors";
+import { DictionaryBlockEditor, QuoteBlockEditor, ScriptureBlockEditor, TextBlockEditor } from "./InsightBlockEditors";
 
 function blockLabel(type: InsightDraftBlock["type"]) {
   if (type === "scripture") return "Scripture";
   if (type === "quote") return "Quote";
+  if (type === "dictionary") return "Dictionary";
   return "Text";
 }
 
@@ -30,6 +31,15 @@ function tagsEqual(a: string[], b: string[]): boolean {
     if (a[i] !== b[i]) return false;
   }
   return true;
+}
+
+function getHighlightedTextByIndices(text: string, highlightWordIndices: number[]) {
+  const tokens = text.match(/\S+\s*/g) ?? [];
+  const selected = new Set(highlightWordIndices);
+  return tokens
+    .filter((_, idx) => selected.has(idx))
+    .join("")
+    .trim();
 }
 
 function BlockCard({
@@ -112,7 +122,7 @@ function BlockCard({
           ×
         </button>
       </div>
-      <div onBlur={block.type === "scripture" ? undefined : saveIfChanged}>
+      <div onBlur={block.type === "scripture" || block.type === "dictionary" ? undefined : saveIfChanged}>
         {block.type === "scripture" ? (
           <ScriptureBlockEditor
             block={{ ...block, text }}
@@ -121,11 +131,7 @@ function BlockCard({
             onHighlightWordsChange={async (highlightWordIndices) => {
               setSaving(true);
               try {
-                const selectedWords = (text ?? "")
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .filter((_, idx) => highlightWordIndices.includes(idx))
-                  .join(" ");
+                const selectedWords = getHighlightedTextByIndices(text ?? "", highlightWordIndices);
                 await onSave({
                   highlightWordIndices,
                   highlightText: selectedWords || "",
@@ -144,8 +150,21 @@ function BlockCard({
             block={{ ...block, text, link_url: linkUrl }}
             onTextChange={(value) => setText(value)}
             onLinkChange={(value) => setLinkUrl(value)}
+            onHighlightWordsChange={async (highlightWordIndices) => {
+              setSaving(true);
+              try {
+                const selectedWords = getHighlightedTextByIndices(text ?? "", highlightWordIndices);
+                await onSave({
+                  highlightWordIndices,
+                  highlightText: selectedWords || "",
+                });
+              } finally {
+                setSaving(false);
+              }
+            }}
           />
         ) : null}
+        {block.type === "dictionary" ? <DictionaryBlockEditor block={{ ...block, text }} /> : null}
       </div>
       {saving ? <div className="text-[11px] text-foreground/60">Saving…</div> : null}
     </li>
