@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DictionaryEntryCard from "@/components/DictionaryEntryCard";
+import EtymologyEntryCard from "@/components/EtymologyEntryCard";
 
 type Verse = { verse: number; text: string };
 
@@ -11,14 +12,22 @@ type Props = {
   verses: Verse[];
 };
 
-type ExplorerTab = "dict" | "tg" | "bd";
+type ExplorerTab = "dict" | "tg" | "bd" | "ety";
+type DictionaryEdition = "1828" | "1844" | "1913";
 type DictionaryEntry = {
   id: string;
-  edition: "1828" | "1844" | "1913";
+  edition: DictionaryEdition;
   word: string;
   heading: string | null;
   entryText: string;
   pronounce: string | null;
+};
+type DictionaryGroup = { edition: DictionaryEdition; rows: DictionaryEntry[] };
+type EtymologyItem = { id: string; source: string; word: string; text: string };
+const DEFAULT_PROVIDER_LABELS: Record<DictionaryEdition, string> = {
+  "1828": "Merriam-Webster",
+  "1844": "Unavailable",
+  "1913": "Free Dictionary API",
 };
 
 function tokenize(text: string): Array<{ type: "word" | "sep"; value: string }> {
@@ -48,9 +57,10 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   const [entries1828, setEntries1828] = useState<DictionaryEntry[]>([]);
   const [entries1844, setEntries1844] = useState<DictionaryEntry[]>([]);
   const [entries1913, setEntries1913] = useState<DictionaryEntry[]>([]);
+  const [providerLabels, setProviderLabels] = useState<Record<DictionaryEdition, string>>(DEFAULT_PROVIDER_LABELS);
+  const [etymologyItems, setEtymologyItems] = useState<EtymologyItem[]>([]);
   const [tgAvailable, setTgAvailable] = useState<boolean>(false);
   const [bdAvailable, setBdAvailable] = useState<boolean>(false);
-  const [w1828Available, setW1828Available] = useState<boolean>(true);
   const [tgSlug, setTgSlug] = useState<string>("");
   const [bdSlug, setBdSlug] = useState<string>("");
 
@@ -73,7 +83,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
     }
   }, [open, onClose]);
 
-  const websterUrl = useMemo(() => (w1828Available && activeWord ? `https://webstersdictionary1828.com/Dictionary/${encodeURIComponent(activeWord)}` : ""), [activeWord, w1828Available]);
   const tgUrl = useMemo(
     () => (tgAvailable && tgSlug ? `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(tgSlug)}?lang=eng` : ""),
     [tgAvailable, tgSlug]
@@ -82,26 +91,29 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
     () => (bdAvailable && bdSlug ? `https://www.churchofjesuschrist.org/study/scriptures/bd/${encodeURIComponent(bdSlug)}?lang=eng` : ""),
     [bdAvailable, bdSlug]
   );
-
   useEffect(() => {
     let cancelled = false;
     async function checkAvailability() {
       if (!activeWord) {
         setTgAvailable(false);
         setBdAvailable(false);
+        setEtymologyItems([]);
+        setEntries1828([]);
+        setEntries1844([]);
+        setEntries1913([]);
+        setTgSlug("");
+        setBdSlug("");
         return;
       }
       try {
-        const [tgRes, bdRes, w1828Res, dictRes] = await Promise.all([
+        const [tgRes, bdRes, dictRes] = await Promise.all([
           fetch(`/api/tools/exists?type=tg&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/exists?type=bd&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
-          fetch(`/api/tools/exists?type=1828&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/dictionary?term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
         ]);
-        const [tgJson, bdJson, w1828Json, dictJson] = await Promise.all([
+        const [tgJson, bdJson, dictJson] = await Promise.all([
           tgRes.json(),
           bdRes.json(),
-          w1828Res.json(),
           dictRes.json(),
         ]);
         if (!cancelled) {
@@ -111,15 +123,14 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
           const e1828 = (dictJson.byEdition?.["1828"]?.entries ?? []) as DictionaryEntry[];
           const e1844 = (dictJson.byEdition?.["1844"]?.entries ?? []) as DictionaryEntry[];
           const e1913 = (dictJson.byEdition?.["1913"]?.entries ?? []) as DictionaryEntry[];
-          const hasAnyInApp = e1828.length > 0 || e1844.length > 0 || e1913.length > 0;
-          const w1828Ok = inAppEnabled ? hasAnyInApp : !!w1828Json.available;
           setDictEnabled(inAppEnabled);
           setEntries1828(inAppEnabled ? e1828 : []);
           setEntries1844(inAppEnabled ? e1844 : []);
           setEntries1913(inAppEnabled ? e1913 : []);
+          setEtymologyItems((dictJson.etymology?.items ?? []) as EtymologyItem[]);
+          setProviderLabels((dictJson.providerLabels ?? DEFAULT_PROVIDER_LABELS) as Record<DictionaryEdition, string>);
           setTgAvailable(tgOk);
           setBdAvailable(bdOk);
-          setW1828Available(w1828Ok);
           setTgSlug(tgOk ? tgJson.slug || "" : "");
           setBdSlug(bdOk ? bdJson.slug || "" : "");
         }
@@ -129,9 +140,9 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
           setEntries1828([]);
           setEntries1844([]);
           setEntries1913([]);
+          setEtymologyItems([]);
           setTgAvailable(false);
           setBdAvailable(false);
-          setW1828Available(false);
           setTgSlug("");
           setBdSlug("");
         }
@@ -143,7 +154,7 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
     };
   }, [activeWord]);
 
-  const currentUrl = tab === "tg" ? tgUrl : tab === "bd" ? bdUrl : !dictEnabled ? websterUrl : "";
+  const currentUrl = tab === "tg" ? tgUrl : tab === "bd" ? bdUrl : "";
   const inAppDictionaryTab = dictEnabled && tab === "dict";
 
   // Ensure we don't stay on a tab that becomes unavailable
@@ -153,13 +164,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   useEffect(() => {
     if (tab === "bd" && !bdAvailable) setTab("dict");
   }, [bdAvailable, tab]);
-  useEffect(() => {
-    if (tab === "dict" && !w1828Available) {
-      if (tgAvailable) setTab("tg");
-      else if (bdAvailable) setTab("bd");
-    }
-  }, [w1828Available, tgAvailable, bdAvailable, tab]);
-
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
@@ -202,14 +206,12 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
 
         <div className="flex items-center justify-between gap-2">
           <div className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 overflow-hidden">
-            {w1828Available ? (
-              <button
-                onClick={() => setTab("dict")}
-                className={`px-3 py-1 text-sm ${tab === "dict" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
-              >
-                📖 Dictionary
-              </button>
-            ) : null}
+            <button
+              onClick={() => setTab("dict")}
+              className={`px-3 py-1 text-sm ${tab === "dict" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
+            >
+              📖 Dictionary
+            </button>
             {tgAvailable ? (
               <button
                 onClick={() => setTab("tg")}
@@ -228,6 +230,13 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
                 📘 BD
               </button>
             ) : null}
+            <button
+              onClick={() => setTab("ety")}
+              className={`px-3 py-1 text-sm ${tab === "ety" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
+              title="Etymology"
+            >
+              🧭 Etymology
+            </button>
           </div>
           {activeWord && currentUrl ? (
             <a
@@ -243,19 +252,33 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
         </div>
 
         <div className="rounded-md overflow-hidden border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5" style={{ height: "40vh" }}>
-          {activeWord && inAppDictionaryTab && (entries1828.length > 0 || entries1844.length > 0 || entries1913.length > 0) ? (
+          {activeWord && tab === "ety" ? (
             <div className="w-full h-full overflow-y-auto p-3 space-y-3">
-              {[
+              {etymologyItems.length > 0 ? (
+                etymologyItems.map((item) => (
+                  <EtymologyEntryCard key={item.id} item={item} />
+                ))
+              ) : (
+                <div className="w-full h-full grid place-items-center text-sm text-foreground/60">
+                  No etymology found for this word.
+                </div>
+              )}
+            </div>
+          ) : activeWord && inAppDictionaryTab && (entries1828.length > 0 || entries1844.length > 0 || entries1913.length > 0) ? (
+            <div className="w-full h-full overflow-y-auto p-3 space-y-3">
+              {([
                 { edition: "1828", rows: entries1828 },
                 { edition: "1844", rows: entries1844 },
                 { edition: "1913", rows: entries1913 },
-              ]
+              ] as DictionaryGroup[])
                 .filter((group) => group.rows.length > 0)
                 .map((group) => (
                   <section key={group.edition} className="space-y-2">
-                    <h4 className="text-xs font-semibold tracking-wide text-foreground/60">{group.edition} Webster</h4>
+                    <h4 className="text-xs font-semibold tracking-wide text-foreground/60">
+                      {providerLabels[group.edition] || "Dictionary Source"}
+                    </h4>
                     {group.rows.map((entry) => (
-                      <DictionaryEntryCard key={entry.id} entry={entry} edition={group.edition as "1828" | "1844" | "1913"} />
+                      <DictionaryEntryCard key={entry.id} entry={entry} edition={group.edition as DictionaryEdition} />
                     ))}
                   </section>
                 ))}

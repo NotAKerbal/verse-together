@@ -17,7 +17,7 @@ type ScripturePayload = {
 };
 
 type DictionaryPayload = {
-  edition: "1828" | "1844" | "1913";
+  edition: "1828" | "1844" | "1913" | "ETY";
   word: string;
   heading?: string | null;
   pronounce?: string | null;
@@ -56,7 +56,7 @@ type InsightBuilderContextValue = {
       highlightText?: string;
       highlightWordIndices?: number[];
       dictionaryMeta?: {
-        edition: "1828" | "1844" | "1913";
+        edition: "1828" | "1844" | "1913" | "ETY";
         word: string;
         heading?: string | null;
         pronounce?: string | null;
@@ -259,7 +259,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
         highlightText?: string;
         highlightWordIndices?: number[];
         dictionaryMeta?: {
-          edition: "1828" | "1844" | "1913";
+          edition: "1828" | "1844" | "1913" | "ETY";
           word: string;
           heading?: string | null;
           pronounce?: string | null;

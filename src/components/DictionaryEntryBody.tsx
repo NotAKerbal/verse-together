@@ -173,6 +173,12 @@ type DictionaryEntry = {
   pronounce: string | null;
 };
 
+const DEFAULT_PROVIDER_LABELS: Record<"1828" | "1844" | "1913", string> = {
+  "1828": "Merriam-Webster",
+  "1844": "Unavailable",
+  "1913": "Free Dictionary API",
+};
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -360,6 +366,7 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
   const [seeTerm, setSeeTerm] = useState<string | null>(null);
   const [loadingSeeTerm, setLoadingSeeTerm] = useState(false);
   const [seeError, setSeeError] = useState<string | null>(null);
+  const [providerLabels, setProviderLabels] = useState(DEFAULT_PROVIDER_LABELS);
   const [seeEntries, setSeeEntries] = useState<Record<"1828" | "1844" | "1913", DictionaryEntry[]>>({
     "1828": [],
     "1844": [],
@@ -379,6 +386,7 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
         const json = await res.json();
         if (cancelled) return;
         const byEdition = json?.byEdition ?? {};
+        setProviderLabels((json?.providerLabels ?? DEFAULT_PROVIDER_LABELS) as typeof DEFAULT_PROVIDER_LABELS);
         setSeeEntries({
           "1828": (byEdition["1828"]?.entries ?? []) as DictionaryEntry[],
           "1844": (byEdition["1844"]?.entries ?? []) as DictionaryEntry[],
@@ -463,7 +471,9 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
                   .filter((group) => group.rows.length > 0)
                   .map((group) => (
                     <section key={group.edition} className="space-y-2">
-                      <h5 className="text-xs font-semibold tracking-wide text-foreground/60">{group.edition} Webster</h5>
+                      <h5 className="text-xs font-semibold tracking-wide text-foreground/60">
+                        {providerLabels[group.edition] || "Dictionary Source"}
+                      </h5>
                       {group.rows.map((entry) => (
                         <article key={entry.id} className="rounded-md border border-black/10 dark:border-white/15 bg-background/70 p-3 space-y-2">
                           <header className="flex items-baseline justify-between gap-2">

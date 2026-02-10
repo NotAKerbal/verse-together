@@ -95,7 +95,11 @@ function BlockCard({
   }
 
   const title =
-    block.type === "scripture" ? block.scripture_ref?.reference ?? "Scripture" : blockLabel(block.type);
+    block.type === "scripture"
+      ? block.scripture_ref?.reference ?? "Scripture"
+      : block.type === "dictionary"
+      ? block.dictionary_meta?.word ?? "Dictionary"
+      : blockLabel(block.type);
 
   return (
     <li

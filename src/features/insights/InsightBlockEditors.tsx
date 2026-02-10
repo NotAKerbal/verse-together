@@ -348,6 +348,15 @@ export function DictionaryBlockEditor({
 }) {
   const sourceText = useMemo(() => normalizeDictionaryEntryText(block.text ?? ""), [block.text]);
   const wordStyleHints = useMemo(() => extractDictionaryWordStyleHints(block.text ?? ""), [block.text]);
+  const dictionaryMeta = block.dictionary_meta;
+  const isEtymology = dictionaryMeta?.edition === "ETY";
+  const sourceLabel = isEtymology
+    ? dictionaryMeta?.heading?.trim() || "Etymology"
+    : dictionaryMeta
+    ? `${dictionaryMeta.edition} Webster`
+    : "Dictionary";
+  const headingLabel = dictionaryMeta?.heading?.trim() || "";
+  const showHeadingLabel = !isEtymology && headingLabel.length > 0 && headingLabel !== sourceLabel;
   const [expanded, setExpanded] = useState(false);
   const isLong = sourceText.length > 1800;
   const allTokens = useMemo(() => tokenizeWords(sourceText), [sourceText]);
@@ -398,26 +407,24 @@ export function DictionaryBlockEditor({
 
   return (
     <div className="space-y-2">
-      {block.dictionary_meta ? (
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{block.dictionary_meta.word}</div>
-            <div className="text-[11px] text-foreground/60">
-              {block.dictionary_meta.edition} Webster
-              {block.dictionary_meta.pronounce ? ` - ${block.dictionary_meta.pronounce}` : ""}
-            </div>
-          </div>
-          <span className="shrink-0 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[10px] text-foreground/70">
-            Dictionary
+      {dictionaryMeta ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/70">
+          <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">
+            {isEtymology ? "Etymology" : "Dictionary"}
           </span>
+          <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">
+            {sourceLabel}
+          </span>
+          {showHeadingLabel ? (
+            <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">{headingLabel}</span>
+          ) : null}
+          {dictionaryMeta.pronounce ? (
+            <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">{dictionaryMeta.pronounce}</span>
+          ) : null}
         </div>
       ) : null}
-      {block.dictionary_meta?.heading ? (
-        <div className="text-[11px] uppercase tracking-wide text-foreground/60">{block.dictionary_meta.heading}</div>
-      ) : null}
       {sourceText.trim() ? (
-        <div className={`space-y-1 rounded-md border border-black/10 dark:border-white/15 p-2 ${!expanded && isLong ? "max-h-64 overflow-hidden" : ""}`}>
-          <div className="text-[11px] text-foreground/60">Dictionary text</div>
+        <div className={`space-y-1 ${!expanded && isLong ? "max-h-64 overflow-hidden" : ""}`}>
           {hasHiddenPrefix ? <div className="text-[11px] text-foreground/50">... earlier text hidden</div> : null}
           <WordHighlightEditor
             sourceText={visibleText}
