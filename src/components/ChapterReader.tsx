@@ -18,8 +18,157 @@ import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
+type CompareChapter = { translation: string; verses: Verse[] };
+
+type DiffSegment = {
+  kind: "equal" | "change";
+  primary: string[];
+  compare: string[];
+};
+
+function normalizeCompareText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatTranslationShortLabel(translationId: string | undefined): string {
+  if (!translationId) return "UNKNOWN";
+  return translationId.toUpperCase();
+}
+
+function tokenizeWords(value: string): string[] {
+  return value.trim().split(/\s+/).filter(Boolean);
+}
+
+function normalizeWord(word: string): string {
+  return word
+    .toLowerCase()
+    .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function buildLcsTable(sourceWords: string[], targetWords: string[]): number[][] {
+  const rows = sourceWords.length;
+  const cols = targetWords.length;
+  const table: number[][] = Array.from({ length: rows + 1 }, () =>
+    Array(cols + 1).fill(0)
+  );
+
+  for (let i = rows - 1; i >= 0; i -= 1) {
+    for (let j = cols - 1; j >= 0; j -= 1) {
+      if (sourceWords[i] === targetWords[j]) {
+        table[i][j] = table[i + 1][j + 1] + 1;
+      } else {
+        table[i][j] = Math.max(table[i + 1][j], table[i][j + 1]);
+      }
+    }
+  }
+  return table;
+}
+
+function computeInlineDiffSegments(primaryText: string, compareText: string): DiffSegment[] {
+  const primaryWords = tokenizeWords(primaryText);
+  const compareWords = tokenizeWords(compareText);
+  const primaryKeys = primaryWords.map(normalizeWord);
+  const compareKeys = compareWords.map(normalizeWord);
+  const table = buildLcsTable(primaryKeys, compareKeys);
+
+  const segments: DiffSegment[] = [];
+  let i = 0;
+  let j = 0;
+  let pendingPrimary: string[] = [];
+  let pendingCompare: string[] = [];
+
+  function flushPendingChange() {
+    if (pendingPrimary.length === 0 && pendingCompare.length === 0) return;
+    segments.push({
+      kind: "change",
+      primary: pendingPrimary,
+      compare: pendingCompare,
+    });
+    pendingPrimary = [];
+    pendingCompare = [];
+  }
+
+  function pushEqualWord(word: string) {
+    const last = segments[segments.length - 1];
+    if (last?.kind === "equal") {
+      last.primary.push(word);
+    } else {
+      segments.push({ kind: "equal", primary: [word], compare: [word] });
+    }
+  }
+
+  while (i < primaryWords.length || j < compareWords.length) {
+    if (
+      i < primaryWords.length &&
+      j < compareWords.length &&
+      primaryKeys[i] === compareKeys[j]
+    ) {
+      flushPendingChange();
+      pushEqualWord(primaryWords[i]);
+      i += 1;
+      j += 1;
+      continue;
+    }
+
+    if (
+      i < primaryWords.length &&
+      (j >= compareWords.length || table[i + 1][j] >= table[i][j + 1])
+    ) {
+      pendingPrimary.push(primaryWords[i]);
+      i += 1;
+    } else if (j < compareWords.length) {
+      pendingCompare.push(compareWords[j]);
+      j += 1;
+    }
+  }
+  flushPendingChange();
+  return segments;
+}
+
+function renderInlineDiff(
+  primaryText: string,
+  compareText: string,
+  primaryColorClass: string,
+  compareColorClass: string
+): ReactNode {
+  const segments = computeInlineDiffSegments(primaryText, compareText);
+  return segments.map((segment, index) => {
+    const prefix = index > 0 ? " " : "";
+    if (segment.kind === "equal") {
+      return <span key={`seg-eq-${index}`}>{prefix}{segment.primary.join(" ")}</span>;
+    }
+    const primaryChanged = segment.primary.join(" ");
+    const compareChanged = segment.compare.join(" ");
+    return (
+      <span key={`seg-change-${index}`} className="inline-flex items-baseline gap-1.5 mx-0.5">
+        {prefix}
+        {primaryChanged ? (
+          <span className={`px-0.5 ${primaryColorClass}`}>
+            {primaryChanged}
+          </span>
+        ) : (
+          <span className="text-foreground/35">-</span>
+        )}
+        <span className="text-foreground/40">/</span>
+        {compareChanged ? (
+          <span className={`px-0.5 ${compareColorClass}`}>
+            {compareChanged}
+          </span>
+        ) : (
+          <span className="text-foreground/35">-</span>
+        )}
+      </span>
+    );
+  });
+}
 
 export default function ChapterReader({
   volume,
@@ -28,10 +177,11 @@ export default function ChapterReader({
   verses,
   reference,
   breadcrumbs,
+  translationControls,
   prevHref,
   nextHref,
-  compareTranslation,
-  compareVerses,
+  primaryTranslation,
+  compareChapters,
 }: {
   volume: string;
   book: string;
@@ -39,10 +189,11 @@ export default function ChapterReader({
   verses: Verse[];
   reference: string;
   breadcrumbs: Crumb[];
+  translationControls?: ReactNode;
   prevHref?: string;
   nextHref?: string;
-  compareTranslation?: string;
-  compareVerses?: Verse[];
+  primaryTranslation?: string;
+  compareChapters?: CompareChapter[];
 }) {
   const { user, getToken } = useAuth();
   const { appendScriptureBlock, openBuilder, activeDraftId, drafts, switchDraft, createDraft } = useInsightBuilder();
@@ -198,21 +349,45 @@ export default function ChapterReader({
   }, [verses, selected]);
   const hasActiveInsight = !!activeDraftId;
   const availableInsights = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
-  const compareByVerse = useMemo(() => {
-    const nextMap = new Map<number, string>();
-    (compareVerses ?? []).forEach((item) => {
-      nextMap.set(item.verse, item.text);
+  const compareByTranslation = useMemo(() => {
+    const nextMap = new Map<string, Map<number, string>>();
+    (compareChapters ?? []).forEach((chapterData) => {
+      if (!chapterData.translation) return;
+      const byVerse = new Map<number, string>();
+      chapterData.verses.forEach((item) => {
+        byVerse.set(item.verse, item.text);
+      });
+      nextMap.set(chapterData.translation, byVerse);
     });
     return nextMap;
-  }, [compareVerses]);
-
-  function normalizeCompareText(value: string): string {
-    return value
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  }, [compareChapters]);
+  const primaryTranslationLabel = formatTranslationShortLabel(primaryTranslation);
+  const compareColorClasses = [
+    "text-sky-700 dark:text-sky-300",
+    "text-emerald-700 dark:text-emerald-300",
+    "text-violet-700 dark:text-violet-300",
+    "text-rose-700 dark:text-rose-300",
+    "text-cyan-700 dark:text-cyan-300",
+    "text-fuchsia-700 dark:text-fuchsia-300",
+  ];
+  const translationNameById = useMemo(() => {
+    const next = new Map<string, string>();
+    BIBLE_TRANSLATION_OPTIONS.forEach((option) => {
+      next.set(option.id, option.label);
+    });
+    return next;
+  }, []);
+  const compareLegend = useMemo(
+    () =>
+      Array.from(compareByTranslation.keys()).map((translationId, index) => ({
+        translationId,
+        label: formatTranslationShortLabel(translationId),
+        title: translationNameById.get(translationId) ?? translationId.toUpperCase(),
+        colorClass: compareColorClasses[index % compareColorClasses.length],
+      })),
+    [compareByTranslation, translationNameById]
+  );
+  const hasCompareSelections = compareByTranslation.size > 0;
 
   // first/last verse values not currently used
 
@@ -431,6 +606,7 @@ export default function ChapterReader({
 
       <div className="lg:grid lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:items-start lg:gap-6 xl:gap-8">
         <aside className="hidden lg:block self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-3">
+          {translationControls ? <div>{translationControls}</div> : null}
           <DesktopVerseActionList
             visible={!openFootnote}
             hasSelection={hasSelection}
@@ -489,6 +665,24 @@ export default function ChapterReader({
                   ⚙
                 </button>
               </div>
+              {hasCompareSelections ? (
+                <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
+                  <span className="text-foreground/45">Key:</span>
+                  <span
+                    className="text-amber-700 dark:text-amber-300"
+                    title={translationNameById.get(primaryTranslation ?? "") ?? primaryTranslationLabel}
+                  >
+                    {primaryTranslationLabel}
+                  </span>
+                  <span className="text-foreground/35">/</span>
+                  {compareLegend.map((item, idx) => (
+                    <span key={`legend-${item.translationId}`} className={item.colorClass} title={item.title}>
+                      {idx > 0 ? ", " : ""}
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </header>
 
@@ -498,10 +692,23 @@ export default function ChapterReader({
           >
             {verses.map((v) => {
               const isSelected = selected.has(v.verse);
-              const compareText = compareByVerse.get(v.verse);
-              const hasDifference =
-                typeof compareText === "string" &&
-                normalizeCompareText(compareText) !== normalizeCompareText(v.text);
+              const verseComparisons = Array.from(compareByTranslation.entries())
+                .map(([translationId, byVerse]) => {
+                  const text = byVerse.get(v.verse);
+                  if (typeof text !== "string") return null;
+                  const hasDifference = normalizeCompareText(text) !== normalizeCompareText(v.text);
+                  if (!hasDifference) return null;
+                  const legend = compareLegend.find((item) => item.translationId === translationId);
+                  return {
+                    key: translationId,
+                    compareText: text,
+                    compareColorClass: legend?.colorClass ?? compareColorClasses[0],
+                  };
+                })
+                .filter(
+                  (item): item is { key: string; compareText: string; compareColorClass: string } =>
+                    item !== null
+                );
               return (
                 <li
                   key={v.verse}
@@ -512,17 +719,23 @@ export default function ChapterReader({
                 >
                   <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
                     <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                    <span>{renderVerseText(v)}</span>
-                    {hasDifference ? (
-                      <div className="mt-1 ml-6 text-sm text-foreground/65">
-                        {compareText}
-                        {compareTranslation ? (
-                          <span className="ml-2 text-[10px] uppercase tracking-wide text-foreground/45">
-                            {compareTranslation}
+                    {verseComparisons.length === 0 ? (
+                      <span>{renderVerseText(v)}</span>
+                    ) : (
+                      <span className="text-sm leading-6">
+                        {verseComparisons.map((comparison, index) => (
+                          <span key={`${v.verse}-${comparison.key}`} className="inline">
+                            {index > 0 ? <span className="mx-2 text-foreground/35">|</span> : null}
+                            {renderInlineDiff(
+                              v.text,
+                              comparison.compareText,
+                              "text-amber-700 dark:text-amber-300",
+                              comparison.compareColorClass
+                            )}
                           </span>
-                        ) : null}
-                      </div>
-                    ) : null}
+                        ))}
+                      </span>
+                    )}
                   </button>
                 </li>
               );

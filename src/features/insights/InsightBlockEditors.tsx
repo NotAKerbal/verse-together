@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { InsightDraftBlock } from "@/lib/appData";
-import DictionaryEntryBody from "@/components/DictionaryEntryBody";
 
 type BlockEditorProps = {
   block: InsightDraftBlock;
@@ -12,9 +11,66 @@ type BlockEditorProps = {
   onHighlightWordsChange?: (highlightWordIndices: number[]) => void;
 };
 
+type WordStyleHint = {
+  bold?: boolean;
+  italic?: boolean;
+};
+
 function tokenizeWords(text: string) {
   const matches = text.match(/\S+\s*/g);
   return matches ?? [];
+}
+
+export function normalizeDictionaryEntryText(raw: string): string {
+  return String(raw || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/?(?:div|p|blockquote)\b[^>]*>/gi, "\n\n")
+    .replace(/<\/?li\b[^>]*>/gi, "\n")
+    .replace(/<\/?[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function extractDictionaryWordStyleHints(raw: string): WordStyleHint[] {
+  if (typeof document === "undefined") return [];
+  const container = document.createElement("div");
+  container.innerHTML = String(raw || "");
+  const hints: WordStyleHint[] = [];
+
+  function walk(node: Node, inherited: WordStyleHint) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || "";
+      const words = text.match(/\S+/g) ?? [];
+      for (let i = 0; i < words.length; i += 1) {
+        hints.push({ bold: !!inherited.bold, italic: !!inherited.italic });
+      }
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    const next: WordStyleHint = {
+      bold: inherited.bold || tag === "b" || tag === "strong",
+      italic: inherited.italic || tag === "i" || tag === "em",
+    };
+    for (const child of Array.from(el.childNodes)) {
+      walk(child, next);
+    }
+  }
+
+  for (const child of Array.from(container.childNodes)) {
+    walk(child, { bold: false, italic: false });
+  }
+  return hints;
 }
 
 function rangeIndices(start: number, end: number) {
@@ -28,13 +84,31 @@ function rangeIndices(start: number, end: number) {
 function WordHighlightEditor({
   sourceText,
   highlightedIndices,
+  wordStyleHints,
   onHighlightWordsChange,
 }: {
   sourceText: string;
   highlightedIndices: number[];
+  wordStyleHints?: WordStyleHint[];
   onHighlightWordsChange?: (highlightWordIndices: number[]) => void;
 }) {
-  const tokens = useMemo(() => tokenizeWords(sourceText), [sourceText]);
+  const displayTokens = useMemo(() => {
+    const wordTokens = sourceText.match(/\S+\s*/g) ?? [];
+    return wordTokens.flatMap((token, wordIndex) => {
+      const newlineMatch = token.match(/(\r?\n)+[ \t]*$/);
+      if (!newlineMatch) {
+        return [{ type: "word" as const, value: token, wordIndex }];
+      }
+      const newlinePart = newlineMatch[0];
+      const wordPart = token.slice(0, -newlinePart.length);
+      const parts: Array<{ type: "word" | "newline"; value: string; wordIndex?: number }> = [];
+      if (wordPart) {
+        parts.push({ type: "word", value: wordPart, wordIndex });
+      }
+      parts.push({ type: "newline", value: newlinePart });
+      return parts as Array<{ type: "word" | "newline"; value: string; wordIndex?: number }>;
+    });
+  }, [sourceText]);
   const serverIndices = useMemo(
     () => [...(highlightedIndices ?? [])].sort((a, b) => a - b),
     [highlightedIndices]
@@ -120,7 +194,11 @@ function WordHighlightEditor({
   return (
     <div className="px-1 py-1 text-sm whitespace-pre-wrap select-none rounded-md border border-black/10 dark:border-white/15 bg-background/40">
       {sourceText ? (
-        tokens.map((token, wordIdx) => {
+        displayTokens.map((token, idx) => {
+          if (token.type === "newline") {
+            return <span key={`nl-${idx}`}>{token.value}</span>;
+          }
+          const wordIdx = token.wordIndex as number;
           const highlighted = selectedSet.has(wordIdx);
           const prevHighlighted = selectedSet.has(wordIdx - 1);
           const nextHighlighted = selectedSet.has(wordIdx + 1);
@@ -138,10 +216,10 @@ function WordHighlightEditor({
                       nextHighlighted ? "" : "rounded-r-sm",
                     ].join(" ")
                   : "hover:bg-black/10 dark:hover:bg-white/10"
-              }`}
+              } ${wordStyleHints?.[wordIdx]?.bold ? "font-semibold" : ""} ${wordStyleHints?.[wordIdx]?.italic ? "italic" : ""}`}
               title="Toggle highlight"
             >
-              {token}
+              {token.value}
             </button>
           );
         })
@@ -261,14 +339,62 @@ export function QuoteBlockEditor({ block, onTextChange, onLinkChange, onHighligh
   );
 }
 
-export function DictionaryBlockEditor({ block }: { block: InsightDraftBlock }) {
-  const sourceText = block.text ?? "";
+export function DictionaryBlockEditor({
+  block,
+  onHighlightWordsChange,
+}: {
+  block: InsightDraftBlock;
+  onHighlightWordsChange?: (highlightWordIndices: number[]) => void;
+}) {
+  const sourceText = useMemo(() => normalizeDictionaryEntryText(block.text ?? ""), [block.text]);
+  const wordStyleHints = useMemo(() => extractDictionaryWordStyleHints(block.text ?? ""), [block.text]);
   const [expanded, setExpanded] = useState(false);
   const isLong = sourceText.length > 1800;
+  const allTokens = useMemo(() => tokenizeWords(sourceText), [sourceText]);
+  const allHighlights = useMemo(
+    () =>
+      [...(block.highlight_word_indices ?? [])]
+        .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < allTokens.length)
+        .sort((a, b) => a - b),
+    [block.highlight_word_indices, allTokens.length]
+  );
+  const COLLAPSED_TOKEN_COUNT = 140;
+  const CONTEXT_TOKENS = 40;
+  const collapseAnchor = allHighlights[0] ?? 0;
+  const collapsedStart = useMemo(() => {
+    if (allTokens.length <= COLLAPSED_TOKEN_COUNT) return 0;
+    const start = Math.max(0, collapseAnchor - CONTEXT_TOKENS);
+    const maxStart = Math.max(0, allTokens.length - COLLAPSED_TOKEN_COUNT);
+    return Math.min(start, maxStart);
+  }, [allTokens.length, collapseAnchor]);
+  const collapsedEnd = useMemo(
+    () => Math.min(allTokens.length, collapsedStart + COLLAPSED_TOKEN_COUNT),
+    [allTokens.length, collapsedStart]
+  );
+  const isCollapsedView = !expanded && allTokens.length > COLLAPSED_TOKEN_COUNT;
+  const visibleStart = isCollapsedView ? collapsedStart : 0;
+  const visibleEnd = isCollapsedView ? collapsedEnd : allTokens.length;
+  const visibleText = useMemo(() => allTokens.slice(visibleStart, visibleEnd).join(""), [allTokens, visibleStart, visibleEnd]);
+  const visibleHighlights = useMemo(
+    () =>
+      allHighlights
+        .filter((idx) => idx >= visibleStart && idx < visibleEnd)
+        .map((idx) => idx - visibleStart),
+    [allHighlights, visibleStart, visibleEnd]
+  );
+  const hasHiddenPrefix = visibleStart > 0;
+  const hasHiddenSuffix = visibleEnd < allTokens.length;
 
   useEffect(() => {
     setExpanded(false);
   }, [block.id, sourceText]);
+
+  function handleVisibleHighlightsChange(nextVisibleIndices: number[]) {
+    const nextVisibleAbs = nextVisibleIndices.map((idx) => idx + visibleStart);
+    const hiddenPersist = allHighlights.filter((idx) => idx < visibleStart || idx >= visibleEnd);
+    const nextAll = Array.from(new Set([...hiddenPersist, ...nextVisibleAbs])).sort((a, b) => a - b);
+    onHighlightWordsChange?.(nextAll);
+  }
 
   return (
     <div className="space-y-2">
@@ -289,9 +415,19 @@ export function DictionaryBlockEditor({ block }: { block: InsightDraftBlock }) {
       {block.dictionary_meta?.heading ? (
         <div className="text-[11px] uppercase tracking-wide text-foreground/60">{block.dictionary_meta.heading}</div>
       ) : null}
-      <div className={`rounded-md border border-black/10 dark:border-white/15 p-2 ${!expanded && isLong ? "max-h-64 overflow-hidden" : ""}`}>
-        <DictionaryEntryBody entryText={sourceText} />
-      </div>
+      {sourceText.trim() ? (
+        <div className={`space-y-1 rounded-md border border-black/10 dark:border-white/15 p-2 ${!expanded && isLong ? "max-h-64 overflow-hidden" : ""}`}>
+          <div className="text-[11px] text-foreground/60">Dictionary text</div>
+          {hasHiddenPrefix ? <div className="text-[11px] text-foreground/50">... earlier text hidden</div> : null}
+          <WordHighlightEditor
+            sourceText={visibleText}
+            highlightedIndices={visibleHighlights}
+            wordStyleHints={wordStyleHints.slice(visibleStart, visibleEnd)}
+            onHighlightWordsChange={handleVisibleHighlightsChange}
+          />
+          {hasHiddenSuffix ? <div className="text-[11px] text-foreground/50">... later text hidden</div> : null}
+        </div>
+      ) : null}
       {isLong ? (
         <button
           type="button"

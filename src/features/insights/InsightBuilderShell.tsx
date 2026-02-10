@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 import type { InsightDraftBlock, InsightVisibility } from "@/lib/appData";
 import { useInsightBuilder } from "./InsightBuilderProvider";
-import { DictionaryBlockEditor, QuoteBlockEditor, ScriptureBlockEditor, TextBlockEditor } from "./InsightBlockEditors";
+import {
+  DictionaryBlockEditor,
+  QuoteBlockEditor,
+  ScriptureBlockEditor,
+  TextBlockEditor,
+  normalizeDictionaryEntryText,
+} from "./InsightBlockEditors";
 
 function blockLabel(type: InsightDraftBlock["type"]) {
   if (type === "scripture") return "Scripture";
@@ -164,7 +170,24 @@ function BlockCard({
             }}
           />
         ) : null}
-        {block.type === "dictionary" ? <DictionaryBlockEditor block={{ ...block, text }} /> : null}
+        {block.type === "dictionary" ? (
+          <DictionaryBlockEditor
+            block={{ ...block, text }}
+            onHighlightWordsChange={async (highlightWordIndices) => {
+              setSaving(true);
+              try {
+                const normalizedText = normalizeDictionaryEntryText(text ?? "");
+                const selectedWords = getHighlightedTextByIndices(normalizedText, highlightWordIndices);
+                await onSave({
+                  highlightWordIndices,
+                  highlightText: selectedWords || "",
+                });
+              } finally {
+                setSaving(false);
+              }
+            }}
+          />
+        ) : null}
       </div>
       {saving ? <div className="text-[11px] text-foreground/60">Saving…</div> : null}
     </li>

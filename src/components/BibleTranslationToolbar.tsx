@@ -6,58 +6,96 @@ type Props = {
   book: string;
   chapter: string;
   translation: string;
-  compare?: string;
+  compare: string[];
 };
 
+const TRANSLATION_DESCRIPTIONS: Record<string, string> = {
+  kjv: "A classic English translation with traditional wording and literary cadence. Good if you want familiar phrasing that many readers recognize immediately.",
+  web: "A modern public-domain update that keeps a fairly literal approach while improving readability. Helpful when you want clearer language without drifting far from traditional structure.",
+  asv: "A formal, word-for-word style translation with careful attention to the original text. Useful when you want precise wording for close comparison.",
+  bbe: "A simplified translation written with a smaller core vocabulary. Great for quick reading and easier comprehension of dense passages.",
+  darby: "A literal translation known for consistent wording choices and close textual alignment. Helpful for detailed study and side-by-side analysis.",
+  dra: "An English translation in the Catholic Douay-Rheims tradition with older devotional language. Useful for historical comparison and a different translation lineage.",
+  webbe: "A British English edition of the WEB with Commonwealth spelling and wording. Good when you prefer UK-style orthography while keeping modern readability.",
+  "oeb-us": "A contemporary translation focused on natural U.S. English expression. Useful when you want clear modern phrasing for comparison.",
+  "oeb-cw": "A contemporary translation tuned for Commonwealth English style. Helpful for modern reading with UK/AU-friendly word choices.",
+};
+
+function buildQuery(translation: string, compareIds: string[]): string {
+  const params = new URLSearchParams();
+  params.set("translation", translation);
+  compareIds.forEach((id) => {
+    if (id !== translation) params.append("compare", id);
+  });
+  return params.toString();
+}
+
+function getSelectedIds(translation: string, compare: string[]): string[] {
+  const set = new Set<string>([translation, ...compare.filter((id) => id !== translation)]);
+  return BIBLE_TRANSLATION_OPTIONS.map((option) => option.id).filter((id) => set.has(id));
+}
+
+function buildToggleQuery(targetId: string, translation: string, compare: string[]): string {
+  const selectedSet = new Set<string>(getSelectedIds(translation, compare));
+  if (selectedSet.has(targetId)) {
+    if (selectedSet.size > 1) selectedSet.delete(targetId);
+  } else {
+    selectedSet.add(targetId);
+  }
+  const orderedSelected = BIBLE_TRANSLATION_OPTIONS.map((option) => option.id).filter((id) =>
+    selectedSet.has(id)
+  );
+  const nextTranslation = orderedSelected.includes(translation)
+    ? translation
+    : orderedSelected[0] ?? translation;
+  const nextCompare = orderedSelected.filter((id) => id !== nextTranslation);
+  return buildQuery(nextTranslation, nextCompare);
+}
+
 export default function BibleTranslationToolbar({ volume, book, chapter, translation, compare }: Props) {
-  const topOptions = BIBLE_TRANSLATION_OPTIONS.slice(0, 5);
-  const compareOptions = BIBLE_TRANSLATION_OPTIONS.filter((option) => option.id !== translation).slice(0, 5);
+  const selectedIds = new Set(getSelectedIds(translation, compare));
+  const selectedCount = selectedIds.size;
 
   return (
-    <div className="space-y-2 rounded-lg border border-black/10 dark:border-white/15 p-3">
-      <div className="text-xs text-foreground/70">Bible source: bible-api.com</div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-foreground/70">Translation:</span>
-        {topOptions.map((option) => (
-          <Link
-            key={option.id}
-            href={`/browse/${volume}/${book}/${chapter}?translation=${option.id}${compare ? `&compare=${compare}` : ""}`}
-            className={`rounded-md border px-2 py-1 text-xs ${
-              translation === option.id
-                ? "border-foreground/30 bg-foreground text-background"
-                : "border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
-            }`}
-          >
-            {option.id.toUpperCase()}
-          </Link>
-        ))}
+    <details className="rounded-lg border border-black/10 dark:border-white/15 p-3">
+      <summary className="cursor-pointer select-none text-sm font-medium list-none">
+        <span className="inline-flex items-center gap-2">
+          <span>Translations</span>
+          <span className="text-xs text-foreground/60">({selectedCount} selected)</span>
+        </span>
+      </summary>
+      <div className="mt-2 space-y-3">
+        <div className="text-xs text-foreground/70">Bible source: bible-api.com</div>
+        <div className="text-xs text-foreground/70">Select one or more translations to compare inline differences.</div>
+        <div className="grid gap-2 grid-cols-1">
+          {BIBLE_TRANSLATION_OPTIONS.map((option) => {
+            const isSelected = selectedIds.has(option.id);
+            const description = TRANSLATION_DESCRIPTIONS[option.id] ?? `${option.label} is included for side-by-side comparison. Select it to view wording differences inline.`;
+            return (
+              <Link
+                key={option.id}
+                href={`/browse/${volume}/${book}/${chapter}?${buildToggleQuery(option.id, translation, compare)}`}
+                className={`rounded-md border p-2 transition-colors ${
+                  isSelected
+                    ? "border-sky-600/40 bg-sky-500/10"
+                    : "border-black/10 dark:border-white/15"
+                }`}
+              >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">{option.id.toUpperCase()}</div>
+                  {isSelected ? (
+                    <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">Selected</span>
+                  ) : null}
+                </div>
+                <div className="text-[11px] text-foreground/70">{option.label}.</div>
+                <div className="mt-1 text-[11px] leading-relaxed text-foreground/60">
+                  {description}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-foreground/70">Compare:</span>
-        <Link
-          href={`/browse/${volume}/${book}/${chapter}?translation=${translation}`}
-          className={`rounded-md border px-2 py-1 text-xs ${
-            !compare
-              ? "border-foreground/30 bg-foreground text-background"
-              : "border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
-          }`}
-        >
-          Off
-        </Link>
-        {compareOptions.map((option) => (
-          <Link
-            key={option.id}
-            href={`/browse/${volume}/${book}/${chapter}?translation=${translation}&compare=${option.id}`}
-            className={`rounded-md border px-2 py-1 text-xs ${
-              compare === option.id
-                ? "border-foreground/30 bg-foreground text-background"
-                : "border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
-            }`}
-          >
-            {option.id.toUpperCase()}
-          </Link>
-        ))}
-      </div>
-    </div>
+    </details>
   );
 }
