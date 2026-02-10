@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import DictionaryEntryBody from "@/components/DictionaryEntryBody";
+import DictionaryEntryCard from "@/components/DictionaryEntryCard";
 
 type Verse = { verse: number; text: string };
 
@@ -11,7 +11,7 @@ type Props = {
   verses: Verse[];
 };
 
-type ExplorerTab = "dict" | "ety" | "tg" | "bd";
+type ExplorerTab = "dict" | "tg" | "bd";
 type DictionaryEntry = {
   id: string;
   edition: "1828" | "1844" | "1913";
@@ -50,7 +50,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   const [entries1913, setEntries1913] = useState<DictionaryEntry[]>([]);
   const [tgAvailable, setTgAvailable] = useState<boolean>(false);
   const [bdAvailable, setBdAvailable] = useState<boolean>(false);
-  const [etyAvailable, setEtyAvailable] = useState<boolean>(true);
   const [w1828Available, setW1828Available] = useState<boolean>(true);
   const [tgSlug, setTgSlug] = useState<string>("");
   const [bdSlug, setBdSlug] = useState<string>("");
@@ -75,7 +74,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   }, [open, onClose]);
 
   const websterUrl = useMemo(() => (w1828Available && activeWord ? `https://webstersdictionary1828.com/Dictionary/${encodeURIComponent(activeWord)}` : ""), [activeWord, w1828Available]);
-  const etyUrl = useMemo(() => (etyAvailable && activeWord ? `https://www.etymonline.com/word/${encodeURIComponent(activeWord)}` : ""), [activeWord, etyAvailable]);
   const tgUrl = useMemo(
     () => (tgAvailable && tgSlug ? `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(tgSlug)}?lang=eng` : ""),
     [tgAvailable, tgSlug]
@@ -94,24 +92,21 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
         return;
       }
       try {
-        const [tgRes, bdRes, etyRes, w1828Res, dictRes] = await Promise.all([
+        const [tgRes, bdRes, w1828Res, dictRes] = await Promise.all([
           fetch(`/api/tools/exists?type=tg&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/exists?type=bd&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
-          fetch(`/api/tools/exists?type=ety&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/exists?type=1828&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/dictionary?term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
         ]);
-        const [tgJson, bdJson, etyJson, w1828Json, dictJson] = await Promise.all([
+        const [tgJson, bdJson, w1828Json, dictJson] = await Promise.all([
           tgRes.json(),
           bdRes.json(),
-          etyRes.json(),
           w1828Res.json(),
           dictRes.json(),
         ]);
         if (!cancelled) {
           const tgOk = !!tgJson.available;
           const bdOk = !!bdJson.available;
-          const etyOk = !!etyJson.available;
           const inAppEnabled = !!dictJson.enabled;
           const e1828 = (dictJson.byEdition?.["1828"]?.entries ?? []) as DictionaryEntry[];
           const e1844 = (dictJson.byEdition?.["1844"]?.entries ?? []) as DictionaryEntry[];
@@ -124,7 +119,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
           setEntries1913(inAppEnabled ? e1913 : []);
           setTgAvailable(tgOk);
           setBdAvailable(bdOk);
-          setEtyAvailable(etyOk);
           setW1828Available(w1828Ok);
           setTgSlug(tgOk ? tgJson.slug || "" : "");
           setBdSlug(bdOk ? bdJson.slug || "" : "");
@@ -137,7 +131,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
           setEntries1913([]);
           setTgAvailable(false);
           setBdAvailable(false);
-          setEtyAvailable(false);
           setW1828Available(false);
           setTgSlug("");
           setBdSlug("");
@@ -150,7 +143,7 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
     };
   }, [activeWord]);
 
-  const currentUrl = tab === "ety" ? etyUrl : tab === "tg" ? tgUrl : tab === "bd" ? bdUrl : !dictEnabled ? websterUrl : "";
+  const currentUrl = tab === "tg" ? tgUrl : tab === "bd" ? bdUrl : !dictEnabled ? websterUrl : "";
   const inAppDictionaryTab = dictEnabled && tab === "dict";
 
   // Ensure we don't stay on a tab that becomes unavailable
@@ -161,15 +154,11 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
     if (tab === "bd" && !bdAvailable) setTab("dict");
   }, [bdAvailable, tab]);
   useEffect(() => {
-    if (tab === "ety" && !etyAvailable) setTab("dict");
-  }, [etyAvailable, tab]);
-  useEffect(() => {
     if (tab === "dict" && !w1828Available) {
-      if (etyAvailable) setTab("ety");
-      else if (tgAvailable) setTab("tg");
+      if (tgAvailable) setTab("tg");
       else if (bdAvailable) setTab("bd");
     }
-  }, [w1828Available, etyAvailable, tgAvailable, bdAvailable, tab]);
+  }, [w1828Available, tgAvailable, bdAvailable, tab]);
 
   if (!open) return null;
   return (
@@ -221,14 +210,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
                 📖 Dictionary
               </button>
             ) : null}
-            {etyAvailable ? (
-              <button
-                onClick={() => setTab("ety")}
-                className={`px-3 py-1 text-sm ${tab === "ety" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
-              >
-                🧬 Etymology
-              </button>
-            ) : null}
             {tgAvailable ? (
               <button
                 onClick={() => setTab("tg")}
@@ -274,14 +255,7 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
                   <section key={group.edition} className="space-y-2">
                     <h4 className="text-xs font-semibold tracking-wide text-foreground/60">{group.edition} Webster</h4>
                     {group.rows.map((entry) => (
-                      <article key={entry.id} className="rounded-md border border-black/10 dark:border-white/15 bg-background/70 p-3 space-y-2">
-                        <header className="flex items-baseline justify-between gap-2">
-                          <h5 className="text-sm font-semibold">{entry.word}</h5>
-                          {entry.pronounce ? <span className="text-xs text-foreground/60">{entry.pronounce}</span> : null}
-                        </header>
-                        {entry.heading ? <div className="text-xs uppercase tracking-wide text-foreground/60">{entry.heading}</div> : null}
-                        <DictionaryEntryBody entryText={entry.entryText} />
-                      </article>
+                      <DictionaryEntryCard key={entry.id} entry={entry} edition={group.edition as "1828" | "1844" | "1913"} />
                     ))}
                   </section>
                 ))}
@@ -291,8 +265,6 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
               title={
                 tab === "dict"
                   ? `Dictionary: ${activeWord}`
-                  : tab === "ety"
-                  ? `Etymology: ${activeWord}`
                   : tab === "tg"
                   ? `Topical Guide: ${activeWord}`
                   : `Bible Dictionary: ${activeWord}`

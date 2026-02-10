@@ -1,6 +1,6 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 
-export type InsightBlockType = "scripture" | "text" | "quote";
+export type InsightBlockType = "scripture" | "text" | "quote" | "dictionary";
 export type InsightVisibility = "private" | "friends" | "link" | "public";
 
 export type InsightScriptureRef = {
@@ -32,6 +32,12 @@ export type InsightDraftBlock = {
   highlight_word_indices: number[];
   link_url: string | null;
   scripture_ref: InsightScriptureRef | null;
+  dictionary_meta: {
+    edition: "1828" | "1844" | "1913";
+    word: string;
+    heading: string | null;
+    pronounce: string | null;
+  } | null;
   created_at: string;
   updated_at: string;
 };
@@ -59,6 +65,12 @@ export type PublishedInsight = {
     highlight_word_indices: number[];
     link_url: string | null;
     scripture_ref: InsightScriptureRef | null;
+    dictionary_meta: {
+      edition: "1828" | "1844" | "1913";
+      word: string;
+      heading: string | null;
+      pronounce: string | null;
+    } | null;
   }>;
 };
 
@@ -183,6 +195,12 @@ export async function addInsightBlock(
     highlightWordIndices?: number[] | null;
     linkUrl?: string | null;
     scriptureRef?: InsightScriptureRef | null;
+    dictionaryMeta?: {
+      edition: "1828" | "1844" | "1913";
+      word: string;
+      heading?: string | null;
+      pronounce?: string | null;
+    } | null;
   }
 ): Promise<{ id: string }> {
   return await convexMutation(
@@ -195,6 +213,7 @@ export async function addInsightBlock(
       highlightWordIndices: payload.highlightWordIndices ?? undefined,
       linkUrl: payload.linkUrl ?? undefined,
       scriptureRef: payload.scriptureRef ?? undefined,
+      dictionaryMeta: payload.dictionaryMeta ?? undefined,
     },
     token
   );
@@ -236,6 +255,12 @@ export async function updateInsightBlock(
     highlightWordIndices?: number[] | null;
     linkUrl?: string | null;
     scriptureRef?: InsightScriptureRef | null;
+    dictionaryMeta?: {
+      edition: "1828" | "1844" | "1913";
+      word: string;
+      heading?: string | null;
+      pronounce?: string | null;
+    } | null;
   }
 ) {
   return await convexMutation(
@@ -247,6 +272,7 @@ export async function updateInsightBlock(
       highlightWordIndices: payload.highlightWordIndices ?? undefined,
       linkUrl: payload.linkUrl ?? undefined,
       scriptureRef: payload.scriptureRef ?? undefined,
+      dictionaryMeta: payload.dictionaryMeta ?? undefined,
     },
     token
   );

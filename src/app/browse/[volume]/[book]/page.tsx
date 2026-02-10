@@ -1,10 +1,22 @@
 import Link from "next/link";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { fetchBook } from "@/lib/openscripture";
+import { getBibleBookBySlug, isBibleVolume } from "@/lib/bibleCanon";
 
 export default async function BookLanding({ params }: { params: Promise<{ volume: string; book: string }> }) {
   const { volume, book } = await params;
-  const bookData = await fetchBook(volume, book);
+  const bibleBook = isBibleVolume(volume) ? getBibleBookBySlug(book) : undefined;
+  const bookData = bibleBook
+    ? {
+        _id: bibleBook.id,
+        title: bibleBook.label,
+        chapterDelineation: "Chapter",
+        summary: undefined,
+        chapters: Array.from({ length: bibleBook.chapters }, (_, index) => ({
+          _id: `${bibleBook.id}-${index + 1}`,
+        })),
+      }
+    : await fetchBook(volume, book);
   const chapters = bookData.chapters ?? [];
   const delineation = bookData.chapterDelineation || "Chapter";
   const volumeLabelMap: Record<string, string> = {

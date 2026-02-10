@@ -16,6 +16,14 @@ type ScripturePayload = {
   text?: string | null;
 };
 
+type DictionaryPayload = {
+  edition: "1828" | "1844" | "1913";
+  word: string;
+  heading?: string | null;
+  pronounce?: string | null;
+  entryText: string;
+};
+
 type InsightBuilderContextValue = {
   canUseInsights: boolean;
   isMobileOpen: boolean;
@@ -33,9 +41,28 @@ type InsightBuilderContextValue = {
   saveDraftSettings: (payload: { draftId: string; title?: string; tags?: string[]; visibility?: InsightVisibility }) => Promise<void>;
   deleteDraft: (draftId: string) => Promise<void>;
   addTextBlock: (text?: string) => Promise<void>;
-  addQuoteBlock: (text?: string, linkUrl?: string) => Promise<void>;
+  addQuoteBlock: (
+    text?: string,
+    linkUrl?: string,
+    options?: { highlightText?: string; highlightWordIndices?: number[] }
+  ) => Promise<void>;
+  addDictionaryBlock: (payload: DictionaryPayload) => Promise<void>;
   appendScriptureBlock: (payload: ScripturePayload) => Promise<void>;
-  updateBlock: (blockId: string, patch: { text?: string; linkUrl?: string; highlightText?: string; highlightWordIndices?: number[] }) => Promise<void>;
+  updateBlock: (
+    blockId: string,
+    patch: {
+      text?: string;
+      linkUrl?: string;
+      highlightText?: string;
+      highlightWordIndices?: number[];
+      dictionaryMeta?: {
+        edition: "1828" | "1844" | "1913";
+        word: string;
+        heading?: string | null;
+        pronounce?: string | null;
+      };
+    }
+  ) => Promise<void>;
   removeBlock: (blockId: string) => Promise<void>;
   reorderBlocks: (fromIndex: number, toIndex: number) => Promise<void>;
   publishDraft: (title?: string, summary?: string) => Promise<void>;
@@ -168,13 +195,15 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   );
 
   const addQuoteBlock = useCallback(
-    async (text?: string, linkUrl?: string) => {
+    async (text?: string, linkUrl?: string, options?: { highlightText?: string; highlightWordIndices?: number[] }) => {
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
       await addBlockMutation({
         draftId: draftId as any,
         type: "quote",
         text: text?.trim() || undefined,
+        highlightText: options?.highlightText?.trim() || undefined,
+        highlightWordIndices: options?.highlightWordIndices,
         linkUrl: linkUrl?.trim() || undefined,
       });
       setIsMobileOpen(true);
@@ -201,14 +230,56 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [appendScriptureBlockMutation, ensureActiveDraftId]
   );
 
+  const addDictionaryBlock = useCallback(
+    async (payload: DictionaryPayload) => {
+      const draftId = await ensureActiveDraftId();
+      if (!draftId) return;
+      await addBlockMutation({
+        draftId: draftId as any,
+        type: "dictionary",
+        text: payload.entryText?.trim() || undefined,
+        dictionaryMeta: {
+          edition: payload.edition,
+          word: payload.word?.trim() || "Dictionary entry",
+          heading: payload.heading?.trim() || undefined,
+          pronounce: payload.pronounce?.trim() || undefined,
+        },
+      });
+      setIsMobileOpen(true);
+    },
+    [addBlockMutation, ensureActiveDraftId]
+  );
+
   const updateBlock = useCallback(
-    async (blockId: string, patch: { text?: string; linkUrl?: string; highlightText?: string; highlightWordIndices?: number[] }) => {
+    async (
+      blockId: string,
+      patch: {
+        text?: string;
+        linkUrl?: string;
+        highlightText?: string;
+        highlightWordIndices?: number[];
+        dictionaryMeta?: {
+          edition: "1828" | "1844" | "1913";
+          word: string;
+          heading?: string | null;
+          pronounce?: string | null;
+        };
+      }
+    ) => {
       await updateBlockMutation({
         blockId: blockId as any,
         text: patch.text?.trim() || undefined,
         highlightText: patch.highlightText?.trim() || undefined,
         highlightWordIndices: patch.highlightWordIndices,
         linkUrl: patch.linkUrl?.trim() || undefined,
+        dictionaryMeta: patch.dictionaryMeta
+          ? {
+              edition: patch.dictionaryMeta.edition,
+              word: patch.dictionaryMeta.word?.trim() || "Dictionary entry",
+              heading: patch.dictionaryMeta.heading?.trim() || undefined,
+              pronounce: patch.dictionaryMeta.pronounce?.trim() || undefined,
+            }
+          : undefined,
       });
     },
     [updateBlockMutation]
@@ -270,6 +341,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       deleteDraft,
       addTextBlock,
       addQuoteBlock,
+      addDictionaryBlock,
       appendScriptureBlock,
       updateBlock,
       removeBlock,
@@ -294,6 +366,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       deleteDraft,
       addTextBlock,
       addQuoteBlock,
+      addDictionaryBlock,
       appendScriptureBlock,
       updateBlock,
       removeBlock,

@@ -6,8 +6,9 @@ import { type PublishedInsight } from "@/lib/appData";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import DictionaryEntryBody from "@/components/DictionaryEntryBody";
 
-function renderScriptureWithHighlights(text: string | null, highlightedWordIndices: number[]) {
+function renderTextWithHighlights(text: string | null, highlightedWordIndices: number[]) {
   const sourceText = text ?? "";
   if (!sourceText) return null;
   const tokens = sourceText.match(/\S+\s*/g) ?? [];
@@ -113,7 +114,7 @@ function InsightCard({ row }: { row: PublishedInsight }) {
                   <div className="text-sm font-medium">{block.scripture_ref?.reference ?? "Unknown reference"}</div>
                   {block.text ? (
                     <div className="text-sm text-foreground/80 mt-1 whitespace-pre-wrap">
-                      {renderScriptureWithHighlights(block.text, block.highlight_word_indices ?? [])}
+                      {renderTextWithHighlights(block.text, block.highlight_word_indices ?? [])}
                     </div>
                   ) : null}
                 </button>
@@ -129,7 +130,7 @@ function InsightCard({ row }: { row: PublishedInsight }) {
               <div>
                 <div className="text-xs font-medium text-foreground/70 uppercase tracking-wide mb-1">Quote</div>
                 <blockquote className="text-sm whitespace-pre-wrap border-l-2 border-black/20 dark:border-white/25 pl-3">
-                  {block.text}
+                  {renderTextWithHighlights(block.text, block.highlight_word_indices ?? [])}
                 </blockquote>
                 {block.link_url ? (
                   <a
@@ -141,6 +142,28 @@ function InsightCard({ row }: { row: PublishedInsight }) {
                     Source
                   </a>
                 ) : null}
+              </div>
+            ) : null}
+            {block.type === "dictionary" ? (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{block.dictionary_meta?.word ?? "Dictionary entry"}</div>
+                    <div className="text-xs text-foreground/60">
+                      {block.dictionary_meta?.edition ?? "Webster"} Webster
+                      {block.dictionary_meta?.pronounce ? ` - ${block.dictionary_meta.pronounce}` : ""}
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[10px] text-foreground/70">
+                    Dictionary
+                  </span>
+                </div>
+                {block.dictionary_meta?.heading ? (
+                  <div className="text-[11px] uppercase tracking-wide text-foreground/60">{block.dictionary_meta.heading}</div>
+                ) : null}
+                <div className="rounded-md border border-black/10 dark:border-white/15 p-2">
+                  <DictionaryEntryBody entryText={block.text ?? ""} />
+                </div>
               </div>
             ) : null}
           </li>
