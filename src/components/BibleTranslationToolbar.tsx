@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
+import { BIBLE_TRANSLATION_OPTIONS, type BibleTranslationId } from "@/lib/bibleCanon";
 
 type Props = {
   volume: string;
   book: string;
   chapter: string;
-  translation: string;
-  compare: string[];
+  translation: BibleTranslationId;
+  compare: BibleTranslationId[];
 };
 
 const TRANSLATION_DESCRIPTIONS: Record<string, string> = {
@@ -21,7 +21,7 @@ const TRANSLATION_DESCRIPTIONS: Record<string, string> = {
   "oeb-cw": "A contemporary translation tuned for Commonwealth English style. Helpful for modern reading with UK/AU-friendly word choices.",
 };
 
-function buildQuery(translation: string, compareIds: string[]): string {
+function buildQuery(translation: BibleTranslationId, compareIds: BibleTranslationId[]): string {
   const params = new URLSearchParams();
   params.set("translation", translation);
   compareIds.forEach((id) => {
@@ -30,13 +30,20 @@ function buildQuery(translation: string, compareIds: string[]): string {
   return params.toString();
 }
 
-function getSelectedIds(translation: string, compare: string[]): string[] {
-  const set = new Set<string>([translation, ...compare.filter((id) => id !== translation)]);
+function getSelectedIds(
+  translation: BibleTranslationId,
+  compare: BibleTranslationId[]
+): BibleTranslationId[] {
+  const set = new Set<BibleTranslationId>([translation, ...compare.filter((id) => id !== translation)]);
   return BIBLE_TRANSLATION_OPTIONS.map((option) => option.id).filter((id) => set.has(id));
 }
 
-function buildToggleQuery(targetId: string, translation: string, compare: string[]): string {
-  const selectedSet = new Set<string>(getSelectedIds(translation, compare));
+function buildToggleQuery(
+  targetId: BibleTranslationId,
+  translation: BibleTranslationId,
+  compare: BibleTranslationId[]
+): string {
+  const selectedSet = new Set<BibleTranslationId>(getSelectedIds(translation, compare));
   if (selectedSet.has(targetId)) {
     if (selectedSet.size > 1) selectedSet.delete(targetId);
   } else {
