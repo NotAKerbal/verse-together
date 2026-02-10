@@ -4,6 +4,8 @@ import { ClerkProvider, useAuth } from "@clerk/nextjs";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { PropsWithChildren, useMemo } from "react";
+import { InsightBuilderProvider } from "@/features/insights/InsightBuilderProvider";
+import InsightBuilderShell from "@/features/insights/InsightBuilderShell";
 
 function ConvexClerkProvider({ children }: PropsWithChildren) {
   const convex = useMemo(() => {
@@ -26,7 +28,12 @@ function ConvexClerkProvider({ children }: PropsWithChildren) {
 export default function AppProviders({ children }: PropsWithChildren) {
   return (
     <ClerkProvider>
-      <ConvexClerkProvider>{children}</ConvexClerkProvider>
+      <ConvexClerkProvider>
+        <InsightBuilderProvider>
+          {children}
+          <InsightBuilderShell />
+        </InsightBuilderProvider>
+      </ConvexClerkProvider>
     </ClerkProvider>
   );
 }

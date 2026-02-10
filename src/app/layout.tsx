@@ -33,7 +33,7 @@ export default function RootLayout({
         <AppProviders>
           <Ripple />
           <Navbar />
-          <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+          <main className="mx-auto max-w-6xl px-4 py-8 lg:pr-[380px]">{children}</main>
         </AppProviders>
       </body>
     </html>

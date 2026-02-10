@@ -11,6 +11,7 @@
 import type * as cache from "../cache.js";
 import type * as crons from "../crons.js";
 import type * as feedback from "../feedback.js";
+import type * as insights from "../insights.js";
 import type * as preferences from "../preferences.js";
 import type * as social from "../social.js";
 import type * as users from "../users.js";
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   cache: typeof cache;
   crons: typeof crons;
   feedback: typeof feedback;
+  insights: typeof insights;
   preferences: typeof preferences;
   social: typeof social;
   users: typeof users;

@@ -14,7 +14,7 @@ import { fetchChapter } from "@/lib/openscripture";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
-import { createComment, createShare, getChapterActivity, toggleReaction } from "@/lib/appData";
+import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 
@@ -38,6 +38,7 @@ export default function ChapterReader({
   nextHref?: string;
 }) {
   const { user, getToken } = useAuth();
+  const { appendScriptureBlock, openBuilder } = useInsightBuilder();
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -45,14 +46,6 @@ export default function ChapterReader({
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number | null>(null);
-  const [isCommentOpen, setIsCommentOpen] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [submittingComment, setSubmittingComment] = useState(false);
-  const [commentError, setCommentError] = useState<string | null>(null);
-  const [commentVisibility, setCommentVisibility] = useState<"public" | "friends">("public");
-  const [verseIndicators, setVerseIndicators] = useState<Record<number, { comments: number; likes: number }>>({});
-  const [verseComments, setVerseComments] = useState<Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>>>({});
-  const [commenterNames, setCommenterNames] = useState<Record<string, string>>({});
   const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string }>(null);
   const [dragDx, setDragDx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -63,7 +56,7 @@ export default function ChapterReader({
   const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
-  const overlayOpen = isCommentOpen || !!openFootnote || openCitations || openExplorer;
+  const overlayOpen = !!openFootnote || openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
 
   function parseBrowseHref(href: string | undefined): { volume: string; book: string; chapter: number } | null {
@@ -302,29 +295,6 @@ export default function ChapterReader({
     setDragDx(0);
   }
 
-  useEffect(() => {
-    let alive = true;
-    async function loadIndicators() {
-      setVerseIndicators({});
-      try {
-        const data = await getChapterActivity(volume, book, chapter);
-        if (!alive) return;
-        setVerseIndicators(data.verseIndicators ?? {});
-        setVerseComments(data.verseComments ?? {});
-        setCommenterNames(data.names ?? {});
-      } catch {
-        if (!alive) return;
-        setVerseIndicators({});
-        setVerseComments({});
-        setCommenterNames({});
-      }
-    }
-    loadIndicators();
-    return () => {
-      alive = false;
-    };
-  }, [volume, book, chapter]);
-
   const translateX = animTargetX !== null ? animTargetX : isDragging ? dragDx : 0;
   const progress = Math.min(1, Math.max(0, Math.abs(translateX) / (typeof window !== "undefined" ? Math.max(120, Math.floor(window.innerWidth * 0.92)) : 120)));
   const overlayOpacity = progress * 0.9; // fade-in intensity
@@ -384,146 +354,22 @@ export default function ChapterReader({
           className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
           style={{ fontSize: `${prefs.fontScale}rem` }}
         >
-        {(() => {
-          const blocks: Array<{ key: string; verses: Verse[]; type: "selected" | "active" | "plain" }> = [];
-          let i = 0;
-          while (i < verses.length) {
-            const v = verses[i];
-            const isSel = selected.has(v.verse);
-            if (isSel) {
-              const start = i;
-              let end = i;
-              while (end + 1 < verses.length && selected.has(verses[end + 1].verse)) end += 1;
-              const group = verses.slice(start, end + 1);
-              blocks.push({ key: `sel-${group[0].verse}-${group[group.length - 1].verse}`, verses: group, type: "selected" });
-              i = end + 1;
-              continue;
-            }
-            const ind0 = verseIndicators[v.verse];
-            const hasActivity0 = !!ind0 && (ind0.likes > 0 || ind0.comments > 0);
-            if (hasActivity0) {
-              const start = i;
-              let end = i;
-              while (end + 1 < verses.length) {
-                const nextV = verses[end + 1];
-                if (selected.has(nextV.verse)) break;
-                const nextInd = verseIndicators[nextV.verse];
-                const nextActive = !!nextInd && (nextInd.likes > 0 || nextInd.comments > 0);
-                if (!nextActive) break;
-                end += 1;
-              }
-              const group = verses.slice(start, end + 1);
-              blocks.push({ key: `act-${group[0].verse}-${group[group.length - 1].verse}`, verses: group, type: "active" });
-              i = end + 1;
-              continue;
-            }
-            blocks.push({ key: `p-${v.verse}`, verses: [v], type: "plain" });
-            i += 1;
-          }
-          return blocks.map((b) => {
-            if (b.type === "selected") {
-              return (
-                <li key={b.key} className="leading-7 rounded-md px-3 py-2 -mx-2 my-2 bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30">
-                  <div className="space-y-1">
-                    {b.verses.map((v, idx) => (
-                      <div key={v.verse}>
-                        <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
-                          <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                          <span>{renderVerseText(v)}</span>
-                        </button>
-                        {(() => {
-                          const ind = verseIndicators[v.verse];
-                          const isLast = idx === b.verses.length - 1;
-                          return ind && (ind.likes > 0 || ind.comments > 0) ? (
-                            <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
-                              {isLast && ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
-                              {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
-                            </div>
-                          ) : null;
-                        })()}
-                        {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                          <ul className="mt-2 space-y-1 text-[0.95em] text-foreground/70">
-                            {verseComments[v.verse].map((c) => (
-                              <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
-                                <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
-                                <span className="text-foreground/70">{c.body}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </li>
-              );
-            }
-            if (b.type === "active") {
-              return (
-                <li key={b.key} className="leading-7 rounded-md px-3 py-2 -mx-2 my-2 ring-1 ring-black/10 dark:ring-white/15">
-                  <div className="space-y-1">
-                    {b.verses.map((v, idx) => {
-                      const ind = verseIndicators[v.verse];
-                      const isLast = idx === b.verses.length - 1;
-                      return (
-                        <div key={v.verse}>
-                          <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
-                            <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                            <span>{renderVerseText(v)}</span>
-                          </button>
-                          {ind && (ind.likes > 0 || ind.comments > 0) ? (
-                            <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
-                              {isLast && ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
-                              {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
-                            </div>
-                          ) : null}
-                          {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                            <ul className="mt-2 space-y-1 text-[0.95em] text-foreground/70">
-                              {verseComments[v.verse].map((c) => (
-                                <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
-                                  <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
-                                  <span className="text-foreground/70">{c.body}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </li>
-              );
-            }
-            // plain
-            const v = b.verses[0];
-            const ind = verseIndicators[v.verse];
+          {verses.map((v) => {
+            const isSelected = selected.has(v.verse);
             return (
-              <li key={b.key} className="leading-7 rounded-md px-3 py-2 -mx-2 my-2">
+              <li
+                key={v.verse}
+                className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
+                  isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""
+                }`}
+              >
                 <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
-                  <div>
-                    <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                    <span>{renderVerseText(v)}</span>
-                  </div>
+                  <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                  <span>{renderVerseText(v)}</span>
                 </button>
-                {ind && (ind.likes > 0 || ind.comments > 0) ? (
-                  <div className="mt-1 text-xs text-foreground/60 flex items-center gap-3">
-                    {ind.likes > 0 ? <span>❤ {ind.likes}</span> : null}
-                    {ind.comments > 0 ? <span>💬 {ind.comments}</span> : null}
-                  </div>
-                ) : null}
-                {verseComments[v.verse] && verseComments[v.verse].length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-[0.95em] text-foreground/70">
-                    {verseComments[v.verse].map((c) => (
-                      <li key={c.id} className="border border-black/5 dark:border-white/10 rounded-md p-2 bg-black/5 dark:bg-white/5">
-                        <span className="font-medium text-foreground/75 mr-2">{commenterNames[c.user_id] ?? `User ${c.user_id.slice(0, 6)}`}</span>
-                        <span className="text-foreground/70">{c.body}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
               </li>
             );
-          });
-        })()}
+          })}
         </ol>
 
       </div>
@@ -574,126 +420,6 @@ export default function ChapterReader({
         </div>
       ) : null}
 
-      {isCommentOpen ? (
-        <div className="fixed inset-0 z-50">
-          <button
-            aria-label="Close"
-            onClick={() => {
-              if (!submittingComment) {
-                setIsCommentOpen(false);
-                setCommentText("");
-                setCommentError(null);
-              }
-            }}
-            className="absolute inset-0 bg-black/30"
-          />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-black/10 dark:border-white/15 p-4 space-y-3">
-            <div className="h-1 w-10 bg-foreground/20 rounded-full mx-auto mb-1" />
-            <h3 className="text-base font-semibold">Add a comment</h3>
-            {selectedText ? (
-              <pre className="max-h-36 overflow-auto whitespace-pre-wrap text-sm text-foreground/80 border border-black/10 dark:border-white/15 rounded-md p-2 bg-black/5 dark:bg-white/5">{selectedText}</pre>
-            ) : null}
-            <label className="flex flex-col text-sm">
-              <span className="mb-1 text-foreground/70">Your comment</span>
-              <textarea
-                rows={4}
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2"
-                placeholder="Write your thoughts…"
-                disabled={submittingComment}
-              />
-            </label>
-            {commentError ? <p className="text-sm text-red-600">{commentError}</p> : null}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm">
-                <label className="text-foreground/70">Visibility</label>
-                <select
-                  value={commentVisibility}
-                  onChange={(e) => setCommentVisibility(e.target.value as "public" | "friends")}
-                  className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-2 py-1"
-                >
-                  <option value="public">Public</option>
-                  <option value="friends">Friends</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                onClick={() => {
-                  if (!submittingComment) {
-                    setIsCommentOpen(false);
-                    setCommentText("");
-                    setCommentError(null);
-                  }
-                }}
-                className="px-4 py-2 text-sm rounded-md border border-black/10 dark:border-white/15"
-                disabled={submittingComment}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (!commentText.trim()) {
-                    setCommentError("Please enter a comment.");
-                    return;
-                  }
-                  if (!user) {
-                    setCommentError("Please sign in to comment.");
-                    return;
-                  }
-                  const token = await getToken({ template: "convex" });
-                  if (!token) {
-                    setCommentError("Please sign in to comment.");
-                    return;
-                  }
-                  setSubmittingComment(true);
-                  setCommentError(null);
-                  const s = Math.min(...Array.from(selected));
-                  const e = Math.max(...Array.from(selected));
-                  let shareId = "";
-                  try {
-                    const share = await createShare(token, {
-                      volume,
-                      book,
-                      chapter,
-                      verseStart: s,
-                      verseEnd: e,
-                      content: selectedText || null,
-                    });
-                    shareId = share.id;
-                  } catch (eCreate) {
-                    setCommentError(eCreate instanceof Error ? eCreate.message : "Failed creating share");
-                    setSubmittingComment(false);
-                    return;
-                  }
-                  try {
-                    await createComment(token, {
-                      shareId,
-                      body: commentText.trim(),
-                      visibility: commentVisibility,
-                    });
-                  } catch (eComment) {
-                    setCommentError(eComment instanceof Error ? eComment.message : "Failed posting comment");
-                    setSubmittingComment(false);
-                    return;
-                  }
-                  setSubmittingComment(false);
-                  setIsCommentOpen(false);
-                  setCommentText("");
-                  setCommentVisibility("public");
-                  setSelected(new Set());
-                }}
-                className="px-5 py-2 text-sm rounded-md bg-foreground text-background font-medium hover:opacity-90 disabled:opacity-60"
-                disabled={submittingComment}
-              >
-                {submittingComment ? "Posting…" : "Post comment"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {openFootnote ? (
         <FootnoteModal
           open={true}
@@ -730,43 +456,26 @@ export default function ChapterReader({
         visible={selected.size > 0 && !overlayOpen}
         actionsEnabled={!!user}
         onClear={() => setSelected(new Set())}
-        onLike={async () => {
-        if (!user) {
-          alert("Please sign in to like.");
-          return;
-        }
-        const token = await getToken({ template: "convex" });
-        if (!token) {
-          alert("Please sign in to like.");
-          return;
-        }
-        const s = Math.min(...Array.from(selected));
-        const e = Math.max(...Array.from(selected));
-        let shareId = "";
-        try {
-          const created = await createShare(token, {
+        onInsight={async () => {
+          if (!user) {
+            alert("Please sign in to build insights.");
+            return;
+          }
+          if (selected.size === 0) return;
+          const s = Math.min(...Array.from(selected));
+          const e = Math.max(...Array.from(selected));
+          const reference = `${book} ${chapter}:${s}${e !== s ? `-${e}` : ""}`;
+          await appendScriptureBlock({
             volume,
             book,
             chapter,
             verseStart: s,
             verseEnd: e,
-            content: selectedText || null,
+            reference,
+            text: selectedText || null,
           });
-          shareId = created.id;
-        } catch {
-          return;
-        }
-        try {
-          await toggleReaction(token, shareId, "like");
-        } catch {
-          return;
-        }
-        setSelected(new Set());
-        }}
-        onComment={async () => {
-        if (!user) return;
-        setCommentError(null);
-        setIsCommentOpen(true);
+          openBuilder();
+          setSelected(new Set());
         }}
         onCitations={() => {
           setOpenCitations(true);

@@ -1,33 +1,60 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 
-export type FeedShare = {
-  id: string;
-  user_id: string;
+export type InsightBlockType = "scripture" | "text" | "quote";
+
+export type InsightScriptureRef = {
   volume: string;
   book: string;
   chapter: number;
-  verse_start: number;
-  verse_end: number;
-  translation: string | null;
-  note: string | null;
-  content: string | null;
-  created_at: string;
-  reaction_count: number;
-  comment_count: number;
+  verseStart: number;
+  verseEnd: number;
+  reference: string;
 };
 
-export type CommentRow = {
+export type InsightDraftSummary = {
   id: string;
-  body: string;
+  title: string;
+  status: "draft" | "published" | "archived";
   created_at: string;
-  user_id: string;
-  visibility: "public" | "friends";
+  updated_at: string;
+  last_active_at: string;
 };
 
-export type ChapterActivity = {
-  verseIndicators: Record<number, { comments: number; likes: number }>;
-  verseComments: Record<number, Array<{ id: string; user_id: string; body: string; created_at: string }>>;
-  names: Record<string, string>;
+export type InsightDraftBlock = {
+  id: string;
+  order: number;
+  type: InsightBlockType;
+  text: string | null;
+  highlight_text: string | null;
+  highlight_word_indices: number[];
+  link_url: string | null;
+  scripture_ref: InsightScriptureRef | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InsightDraft = InsightDraftSummary & {
+  blocks: InsightDraftBlock[];
+};
+
+export type PublishedInsight = {
+  id: string;
+  user_id: string;
+  author_name: string | null;
+  title: string;
+  summary: string | null;
+  block_count: number;
+  published_at: string;
+  blocks: Array<{
+    id: string;
+    order: number;
+    type: InsightBlockType;
+    text: string | null;
+    highlight_text: string | null;
+    highlight_word_indices: number[];
+    link_url: string | null;
+    scripture_ref: InsightScriptureRef | null;
+  }>;
 };
 
 export type AccountData = {
@@ -37,26 +64,7 @@ export type AccountData = {
     addressee_id: string;
     status: "pending" | "accepted" | "blocked";
   }>;
-  myComments: Array<{
-    id: string;
-    body: string;
-    created_at: string;
-    share_id: string;
-    visibility: "public" | "friends";
-  }>;
   names: Record<string, string>;
-  shares: Record<
-    string,
-    {
-      id: string;
-      book: string;
-      chapter: number;
-      verse_start: number;
-      verse_end: number;
-      translation: string | null;
-      content: string | null;
-    }
-  >;
 };
 
 export type ReaderPreferences = {
@@ -90,8 +98,8 @@ export async function lookupUserByEmail(email: string): Promise<string | null> {
   return await convexQuery("users:lookupUserByEmail", { email });
 }
 
-export async function getFeed(): Promise<FeedShare[]> {
-  return await convexQuery("social:getFeed", {});
+export async function getPublishedInsightsFeed(): Promise<PublishedInsight[]> {
+  return await convexQuery("insights:getPublishedInsightsFeed", {});
 }
 
 export async function createShare(
@@ -115,35 +123,130 @@ export async function createShare(
   }, token);
 }
 
-export async function getComments(shareId: string): Promise<CommentRow[]> {
-  return await convexQuery("social:getComments", { shareId });
+export async function listMyInsightDrafts(token: string): Promise<InsightDraftSummary[]> {
+  return await convexQuery("insights:listMyDrafts", {}, token);
 }
 
-export async function createComment(
+export async function getInsightDraft(token: string, draftId: string): Promise<InsightDraft> {
+  return await convexQuery("insights:getDraft", { draftId }, token);
+}
+
+export async function createInsightDraft(token: string, title?: string | null): Promise<{ id: string }> {
+  return await convexMutation("insights:createDraft", { title: title ?? undefined }, token);
+}
+
+export async function setActiveInsightDraft(token: string, draftId: string) {
+  return await convexMutation("insights:setActiveDraft", { draftId }, token);
+}
+
+export async function renameInsightDraft(token: string, draftId: string, title: string) {
+  return await convexMutation("insights:renameDraft", { draftId, title }, token);
+}
+
+export async function deleteInsightDraft(token: string, draftId: string) {
+  return await convexMutation("insights:deleteDraft", { draftId }, token);
+}
+
+export async function addInsightBlock(
   token: string,
-  payload: { shareId: string; body: string; visibility: "public" | "friends" }
+  payload: {
+    draftId: string;
+    type: InsightBlockType;
+    text?: string | null;
+    highlightText?: string | null;
+    highlightWordIndices?: number[] | null;
+    linkUrl?: string | null;
+    scriptureRef?: InsightScriptureRef | null;
+  }
+): Promise<{ id: string }> {
+  return await convexMutation(
+    "insights:addBlock",
+    {
+      draftId: payload.draftId,
+      type: payload.type,
+      text: payload.text ?? undefined,
+      highlightText: payload.highlightText ?? undefined,
+      highlightWordIndices: payload.highlightWordIndices ?? undefined,
+      linkUrl: payload.linkUrl ?? undefined,
+      scriptureRef: payload.scriptureRef ?? undefined,
+    },
+    token
+  );
+}
+
+export async function appendScriptureInsightBlock(
+  token: string,
+  payload: {
+    draftId: string;
+    volume: string;
+    book: string;
+    chapter: number;
+    verseStart: number;
+    verseEnd: number;
+    reference: string;
+    text?: string | null;
+    highlightText?: string | null;
+    highlightWordIndices?: number[] | null;
+  }
+): Promise<{ id: string }> {
+  return await convexMutation(
+    "insights:appendScriptureBlock",
+    {
+      ...payload,
+      text: payload.text ?? undefined,
+      highlightText: payload.highlightText ?? undefined,
+      highlightWordIndices: payload.highlightWordIndices ?? undefined,
+    },
+    token
+  );
+}
+
+export async function updateInsightBlock(
+  token: string,
+  payload: {
+    blockId: string;
+    text?: string | null;
+    highlightText?: string | null;
+    highlightWordIndices?: number[] | null;
+    linkUrl?: string | null;
+    scriptureRef?: InsightScriptureRef | null;
+  }
 ) {
-  return await convexMutation("social:createComment", payload, token);
+  return await convexMutation(
+    "insights:updateBlock",
+    {
+      blockId: payload.blockId,
+      text: payload.text ?? undefined,
+      highlightText: payload.highlightText ?? undefined,
+      highlightWordIndices: payload.highlightWordIndices ?? undefined,
+      linkUrl: payload.linkUrl ?? undefined,
+      scriptureRef: payload.scriptureRef ?? undefined,
+    },
+    token
+  );
 }
 
-export async function updateComment(token: string, commentId: string, body: string) {
-  return await convexMutation("social:updateComment", { commentId, body }, token);
+export async function removeInsightBlock(token: string, blockId: string) {
+  return await convexMutation("insights:removeBlock", { blockId }, token);
 }
 
-export async function deleteComment(token: string, commentId: string) {
-  return await convexMutation("social:deleteComment", { commentId }, token);
+export async function reorderInsightBlocks(token: string, draftId: string, blockIds: string[]) {
+  return await convexMutation("insights:reorderBlocks", { draftId, blockIds }, token);
 }
 
-export async function getReactionCount(shareId: string): Promise<number> {
-  return await convexQuery("social:getReactionCount", { shareId });
-}
-
-export async function toggleReaction(token: string, shareId: string, reaction = "like") {
-  return await convexMutation("social:toggleReaction", { shareId, reaction }, token);
-}
-
-export async function getChapterActivity(volume: string, book: string, chapter: number): Promise<ChapterActivity> {
-  return await convexQuery("social:getChapterActivity", { volume, book, chapter });
+export async function publishInsightDraft(
+  token: string,
+  payload: { draftId: string; title?: string | null; summary?: string | null }
+): Promise<{ id: string }> {
+  return await convexMutation(
+    "insights:publishDraft",
+    {
+      draftId: payload.draftId,
+      title: payload.title ?? undefined,
+      summary: payload.summary ?? undefined,
+    },
+    token
+  );
 }
 
 export async function getAccountData(token: string): Promise<AccountData> {

@@ -6,13 +6,12 @@ export type Props = {
   visible: boolean;
   actionsEnabled?: boolean;
   onClear: () => void;
-  onLike: () => void;
-  onComment: () => void;
+  onInsight: () => void;
   onCitations: () => void;
   onExplore: () => void;
 };
 
-const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, onLike, onComment, onCitations, onExplore }) => {
+const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, onInsight, onCitations, onExplore }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -53,51 +52,26 @@ const VerseActionBar: FC<Props> = ({ visible, actionsEnabled = true, onClear, on
           Clear
         </button>
         <div className="ml-auto flex items-center gap-3 sm:gap-4">
-          {actionsEnabled ? (
-            <>
-              <button
-                onClick={onLike}
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                ❤ Like
-              </button>
-              <button
-                onClick={onComment}
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                💬 Comment
-              </button>
-              <button
-                onClick={toggleMenu}
-                aria-expanded={menuOpen}
-                aria-label="More actions"
-                title="More"
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                + More
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={onCitations}
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                🎤 Citations
-              </button>
-              <button
-                onClick={onExplore}
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
-                title="Verse Explorer"
-              >
-                🔎 Explore
-              </button>
-            </>
-          )}
+          <button
+            onClick={onInsight}
+            disabled={!actionsEnabled}
+            className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+          >
+            ✍ Add to Insight
+          </button>
+          <button
+            onClick={toggleMenu}
+            aria-expanded={menuOpen}
+            aria-label="More actions"
+            title="More"
+            className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            + More
+          </button>
         </div>
       </div>
 
-      {actionsEnabled && menuMounted ? (
+      {menuMounted ? (
         <div
           className="fixed right-3 sm:right-4 z-[60] flex flex-col items-end gap-1 pointer-events-auto"
           style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.5rem)" }}
