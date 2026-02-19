@@ -1,8 +1,14 @@
 import { fetchChapter } from "../../../../../lib/openscripture";
+import { redirect } from "next/navigation";
 import ChapterReader from "@/components/ChapterReader";
 import type { Crumb } from "@/components/Breadcrumbs";
 import BibleTranslationToolbar from "@/components/BibleTranslationToolbar";
 import { isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
+import {
+  getScriptureVolumeLabel,
+  normalizeScriptureVolume,
+  toScriptureVolumeUrlSlug,
+} from "@/lib/scriptureVolumes";
 
 type Params = {
   params: Promise<{ volume: string; book: string; chapter: string }>;
@@ -12,7 +18,25 @@ type Params = {
 export default async function ChapterPage({ params, searchParams }: Params) {
   const { volume, book, chapter } = await params;
   const query = await searchParams;
-  const bibleMode = isBibleVolume(volume);
+  const canonicalVolume = normalizeScriptureVolume(volume);
+  const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
+  if (volume !== volumeSlug) {
+    const redirectParams = new URLSearchParams();
+    const translation = Array.isArray(query.translation) ? query.translation[0] : query.translation;
+    if (translation) {
+      redirectParams.set("translation", translation);
+    }
+    const compareValues = Array.isArray(query.compare)
+      ? query.compare
+      : query.compare
+        ? [query.compare]
+        : [];
+    compareValues.forEach((value) => redirectParams.append("compare", value));
+    const redirectSuffix = redirectParams.toString() ? `?${redirectParams.toString()}` : "";
+    redirect(`/browse/${volumeSlug}/${book}/${chapter}${redirectSuffix}`);
+  }
+
+  const bibleMode = isBibleVolume(canonicalVolume);
   const translationParam = Array.isArray(query.translation) ? query.translation[0] : query.translation;
   const translation = bibleMode ? normalizeBibleTranslationId(translationParam) : undefined;
   const activeTranslation = translation ?? "kjv";
@@ -28,10 +52,10 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         .filter((id, index, list) => list.findIndex((item) => item.toLowerCase() === id.toLowerCase()) === index)
     : [];
 
-  const data = await fetchChapter(volume, book, chapter, { translation: activeTranslation });
+  const data = await fetchChapter(canonicalVolume, book, chapter, { translation: activeTranslation });
   const compareResults = await Promise.allSettled(
     compareTranslations.map((translationId) =>
-      fetchChapter(volume, book, chapter, { translation: translationId })
+      fetchChapter(canonicalVolume, book, chapter, { translation: translationId })
     )
   );
   const compareData: Awaited<ReturnType<typeof fetchChapter>>[] = [];
@@ -70,30 +94,26 @@ export default async function ChapterPage({ params, searchParams }: Params) {
 
   const currentChapter = Number(chapter);
   const prevHref =
-    currentChapter > 1 ? `/browse/${volume}/${book}/${currentChapter - 1}${querySuffix}` : undefined;
-  const nextHref = `/browse/${volume}/${book}/${currentChapter + 1}${querySuffix}`;
-
-  const volumeLabelMap: Record<string, string> = {
-    bookofmormon: "Book of Mormon",
-    oldtestament: "Old Testament",
-    newtestament: "New Testament",
-    doctrineandcovenants: "Doctrine and Covenants",
-    pearl: "Pearl of Great Price",
-  };
-  const volumeLabel = volumeLabelMap[volume] || volume.replace(/-/g, " ");
+    currentChapter > 1 ? `/browse/${volumeSlug}/${book}/${currentChapter - 1}${querySuffix}` : undefined;
+  const nextHref = `/browse/${volumeSlug}/${book}/${currentChapter + 1}${querySuffix}`;
+  const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
   const bookTitle = (data.reference || "").replace(/\s+\d+$/, "");
+  const bookLabel = bookTitle || book.replace(/-/g, " ");
+  const duplicateVolumeBook =
+    bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase() ||
+    (canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants");
 
   const breadcrumbs: Crumb[] = [
     { label: "Browse", href: "/browse" },
-    { label: volumeLabel, href: `/browse/${volume}` },
-    { label: bookTitle || book.replace(/-/g, " "), href: `/browse/${volume}/${book}` },
+    ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
+    { label: bookLabel, href: `/browse/${volumeSlug}/${book}` },
     { label: `Chapter ${chapter}` },
   ];
 
   return (
     <article className="space-y-6">
       <ChapterReader
-        volume={volume}
+        volume={volumeSlug}
         book={book}
         chapter={Number(chapter)}
         verses={data.verses}
@@ -102,7 +122,7 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         translationControls={
           bibleMode ? (
             <BibleTranslationToolbar
-              volume={volume}
+              volume={volumeSlug}
               book={book}
               chapter={chapter}
               translation={activeTranslation}
@@ -122,5 +142,3 @@ export default async function ChapterPage({ params, searchParams }: Params) {
     </article>
   );
 }
-
-

@@ -1,6 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { getBibleBooksForVolume } from "@/lib/bibleCanon";
+import {
+  getScriptureVolumeLabel,
+  normalizeScriptureVolume,
+  toScriptureVolumeUrlSlug,
+} from "@/lib/scriptureVolumes";
 
 const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   bookofmormon: [
@@ -40,11 +46,18 @@ const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
 
 export default async function VolumePage({ params }: { params: Promise<{ volume: string }> }) {
   const { volume } = await params;
-  const books = volumeToBooks[volume] ?? [];
+  const canonicalVolume = normalizeScriptureVolume(volume);
+  const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
+  if (canonicalVolume === "doctrineandcovenants") {
+    redirect(`/browse/${volumeSlug}/doctrineandcovenants`);
+  }
+  const books = volumeToBooks[canonicalVolume] ?? [];
+  const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
+
   return (
     <section className="space-y-6">
-      <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: volume.replace(/-/g, " ") }]} />
-      <h1 className="text-2xl font-semibold capitalize">{volume.replace(/-/g, " ")}</h1>
+      <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: volumeLabel }]} />
+      <h1 className="text-2xl font-semibold">{volumeLabel}</h1>
       {books.length === 0 ? (
         <p className="text-foreground/80">No book list available for this volume yet.</p>
       ) : (
@@ -52,7 +65,7 @@ export default async function VolumePage({ params }: { params: Promise<{ volume:
           {books.map((b) => (
             <li key={b.id}>
               <Link
-                href={`/browse/${volume}/${b.id}`}
+                href={`/browse/${volumeSlug}/${b.id}`}
                 className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
                 data-ripple
               >

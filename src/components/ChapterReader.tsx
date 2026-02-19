@@ -606,27 +606,39 @@ export default function ChapterReader({
         </div>
       ) : null}
 
-      <div className="lg:grid lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:items-start lg:gap-6 xl:gap-8">
+      <div
+        className={`lg:grid lg:items-start ${
+          hasSelection
+            ? "lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:gap-6 xl:gap-8"
+            : "lg:grid-cols-1"
+        }`}
+      >
         <aside className="hidden lg:block self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-3">
           {translationControls ? <div>{translationControls}</div> : null}
-          <DesktopVerseActionList
-            visible={!openFootnote}
-            hasSelection={hasSelection}
-            hasActiveInsight={hasActiveNote}
-            actionsEnabled={!!user}
-            onClear={clearSelection}
-            onInsight={() => {
-              void onAddToNote();
-            }}
-            onNewInsight={() => {
-              void onNewNoteFromActions();
-            }}
-            onLoadInsights={() => {
-              void onLoadNotesFromActions();
-            }}
-            onCitations={onOpenCitations}
-            onExplore={onOpenExplore}
-          />
+          <div
+            className={`overflow-hidden transition-opacity duration-200 ease-out ${
+              hasSelection ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+            }`}
+          >
+            <DesktopVerseActionList
+              visible={!openFootnote}
+              hasSelection={hasSelection}
+              hasActiveInsight={hasActiveNote}
+              actionsEnabled={!!user}
+              onClear={clearSelection}
+              onInsight={() => {
+                void onAddToNote();
+              }}
+              onNewInsight={() => {
+                void onNewNoteFromActions();
+              }}
+              onLoadInsights={() => {
+                void onLoadNotesFromActions();
+              }}
+              onCitations={onOpenCitations}
+              onExplore={onOpenExplore}
+            />
+          </div>
           {openCitations && selectedBounds ? (
             <CitationsSidebarPanel
               open={true}
@@ -667,7 +679,7 @@ export default function ChapterReader({
                   aria-label="Reader settings"
                   title="Reader settings"
                   onClick={() => setSettingsOpen(true)}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-button"
                 >
                   ⚙
                 </button>

@@ -1,11 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { fetchBook } from "@/lib/openscripture";
 import { getBibleBookBySlug, isBibleVolume } from "@/lib/bibleCanon";
+import {
+  getScriptureVolumeLabel,
+  normalizeScriptureVolume,
+  toScriptureVolumeUrlSlug,
+} from "@/lib/scriptureVolumes";
 
 export default async function BookLanding({ params }: { params: Promise<{ volume: string; book: string }> }) {
   const { volume, book } = await params;
-  const bibleBook = isBibleVolume(volume) ? getBibleBookBySlug(book) : undefined;
+  const canonicalVolume = normalizeScriptureVolume(volume);
+  const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
+  if (volume !== volumeSlug) {
+    redirect(`/browse/${volumeSlug}/${book}`);
+  }
+
+  const bibleBook = isBibleVolume(canonicalVolume) ? getBibleBookBySlug(book) : undefined;
   const bookData = bibleBook
     ? {
         _id: bibleBook.id,
@@ -16,39 +28,53 @@ export default async function BookLanding({ params }: { params: Promise<{ volume
           _id: `${bibleBook.id}-${index + 1}`,
         })),
       }
-    : await fetchBook(volume, book);
+    : await fetchBook(canonicalVolume, book);
   const chapters = bookData.chapters ?? [];
   const delineation = bookData.chapterDelineation || "Chapter";
-  const volumeLabelMap: Record<string, string> = {
-    bookofmormon: "Book of Mormon",
-    oldtestament: "Old Testament",
-    newtestament: "New Testament",
-    doctrineandcovenants: "Doctrine and Covenants",
-    pearl: "Pearl of Great Price",
-  };
-  const volumeLabel = volumeLabelMap[volume] || volume.replace(/-/g, " ");
+  const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
+  const bookLabel = bookData.title || book.replace(/-/g, " ");
+  const duplicateVolumeBook = bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase();
+  const compactNumberGrid = canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants";
   return (
     <section className="space-y-6">
       <Breadcrumbs
         items={[
           { label: "Browse", href: "/browse" },
-          { label: volumeLabel, href: `/browse/${volume}` },
-          { label: bookData.title || book.replace(/-/g, " ") },
+          ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
+          { label: bookLabel },
         ]}
       />
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold capitalize">{bookData.title || book.replace(/-/g, " ")}</h1>
+        <h1 className="text-2xl font-semibold capitalize">{bookLabel}</h1>
         {bookData.summary ? (
           <p className="text-foreground/80 text-sm max-w-3xl">{bookData.summary}</p>
         ) : null}
       </header>
-      <ChapterCards volume={volume} book={book} chapters={chapters} delineation={delineation} />
+      <ChapterCards
+        volume={volumeSlug}
+        book={book}
+        chapters={chapters}
+        delineation={delineation}
+        compactNumberGrid={compactNumberGrid}
+      />
     </section>
   );
 }
 
 
-function ChapterCards({ volume, book, chapters, delineation }: { volume: string; book: string; chapters: Array<{ _id: string; summary?: string }>; delineation: string }) {
+function ChapterCards({
+  volume,
+  book,
+  chapters,
+  delineation,
+  compactNumberGrid,
+}: {
+  volume: string;
+  book: string;
+  chapters: Array<{ _id: string; summary?: string }>;
+  delineation: string;
+  compactNumberGrid: boolean;
+}) {
   function extractSummary(text?: string): { preview: string; points: string[] } {
     if (!text) return { preview: "", points: [] };
     const parts = text.split("—").map((p) => p.trim()).filter(Boolean);
@@ -65,7 +91,7 @@ function ChapterCards({ volume, book, chapters, delineation }: { volume: string;
       {chapters.length === 0 ? (
         <p className="text-foreground/70 text-sm">No chapter list available.</p>
       ) : (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <ul className={compactNumberGrid ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2" : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5"}>
           {chapters.map((c, idx) => {
             const n = idx + 1;
             const { preview, points } = extractSummary(c.summary);
@@ -73,15 +99,18 @@ function ChapterCards({ volume, book, chapters, delineation }: { volume: string;
               <li key={c._id}>
                 <Link
                   href={`/browse/${volume}/${book}/${n}`}
-                  className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
+                  className={compactNumberGrid ? "block rounded-lg border surface-card px-2 py-3 text-center hover:bg-[var(--surface-button-hover)]" : "block rounded-lg border surface-card p-3 hover:bg-[var(--surface-button-hover)]"}
+                  aria-label={`${delineation} ${n}`}
                   data-ripple
                 >
-                  <div className="font-medium">{delineation} {n}</div>
-                  {preview ? (
-                    <p className="text-sm text-foreground/80 mt-1">{preview}</p>
+                  <div className={compactNumberGrid ? "text-base font-semibold" : "font-medium"}>
+                    {compactNumberGrid ? n : `${delineation} ${n}`}
+                  </div>
+                  {!compactNumberGrid && preview ? (
+                    <p className="text-xs text-foreground/80 mt-1">{preview}</p>
                   ) : null}
-                  {points.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                  {!compactNumberGrid && points.length ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
                       {points.map((p, i) => (
                         <span key={i} className="inline-flex items-center rounded-full border surface-button px-2 py-0.5 text-xs text-foreground/80">{p}</span>
                       ))}

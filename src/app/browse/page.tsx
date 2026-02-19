@@ -4,7 +4,7 @@ const commonVolumes = [
   { id: "bookofmormon", label: "Book of Mormon" },
   { id: "oldtestament", label: "Old Testament" },
   { id: "newtestament", label: "New Testament" },
-  { id: "doctrineandcovenants", label: "Doctrine & Covenants" },
+  { id: "dnc", label: "Doctrine & Covenants" },
   { id: "pearl", label: "Pearl of Great Price" },
 ];
 
