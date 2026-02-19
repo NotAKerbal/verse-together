@@ -1,22 +1,21 @@
 import Link from "next/link";
-import MigrationNotice from "../components/MigrationNotice";
 import FeedbackForm from "../components/FeedbackForm";
 
 export default function Home() {
   return (
     <div className="space-y-16 sm:space-y-24 py-12 sm:py-20">
       {/* Hero Section */}
-      <section className="mx-auto max-w-4xl text-center space-y-6">
+      <section className="mx-auto max-w-5xl text-center space-y-6">
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight">
           Verse Together
         </h1>
         <p className="text-xl sm:text-2xl text-foreground/70 font-medium">
-          Share scriptures. Bear testimony. Learn together.
+          Study deeply. Capture insights. Revisit what matters.
         </p>
-        <p className="text-base sm:text-lg text-foreground/60 max-w-2xl mx-auto">
-          A community platform for discovering, sharing, and discussing scripture. 
-          Highlight verses, add your notes, find related conference talks, and 
-          connect with others on their spiritual journey.
+        <p className="text-base sm:text-lg text-foreground/60 max-w-3xl mx-auto">
+          Verse Together is a scripture study workspace with modern note-taking and built-in study
+          helps. Read by verse, compare Bible translations, explore dictionary definitions, and build
+          organized notes with folders, tags, and exports.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link
@@ -24,7 +23,7 @@ export default function Home() {
             className="inline-flex items-center rounded-md bg-foreground text-background px-6 py-3 text-base font-medium hover:opacity-90 transition-opacity"
             data-ripple
           >
-            Browse Scriptures
+            Open Scripture Reader
           </Link>
           <Link
             href="/feed"
@@ -32,51 +31,89 @@ export default function Home() {
           >
             Open Notes Workspace
           </Link>
+          <Link
+            href="/help"
+            className="inline-flex items-center rounded-md border-2 border-foreground/20 px-6 py-3 text-base font-medium hover:bg-foreground/5 transition-colors"
+          >
+            View Study Guide
+          </Link>
         </div>
       </section>
 
-      <MigrationNotice />
-
-      {/* What is Verse Together Section */}
+      {/* New Study Tools Section */}
       <section className="mx-auto max-w-5xl space-y-8">
         <div className="text-center space-y-3">
-          <h2 className="text-3xl sm:text-4xl font-bold">What is Verse Together?</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold">Built For Better Scripture Study</h2>
           <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
-            Verse Together is a modern platform designed to enhance your scripture study 
-            and help you capture, organize, and share meaningful scripture notes.
+            The latest updates are focused on stronger study workflows: capture insights quickly,
+            compare wording across translations, and pull dictionary context without leaving your reader.
           </p>
         </div>
-        
+
+        <div className="grid sm:grid-cols-2 gap-6 mt-10">
+          <FeatureCard
+            icon="📝"
+            title="Notes Workspace"
+            description="Create scripture-based notes, keep drafts and published notes separate, and organize everything with folders, tags, and search."
+          />
+          <FeatureCard
+            icon="📚"
+            title="In-Context Dictionary Help"
+            description="Select a word and review dictionary entries directly in your study panel, then send useful definitions into your notes."
+          />
+          <FeatureCard
+            icon="↔️"
+            title="Bible Translation Comparison"
+            description="View translation differences inline or side-by-side so you can spot wording changes and study passages with more precision."
+          />
+          <FeatureCard
+            icon="🔎"
+            title="Footnotes And Cross-References"
+            description="Follow scripture footnotes and related links in one reading flow, then capture those findings as reusable note blocks."
+          />
+        </div>
+      </section>
+
+      {/* Full Feature Section */}
+      <section className="mx-auto max-w-5xl space-y-8">
+        <div className="text-center space-y-3">
+          <h2 className="text-3xl sm:text-4xl font-bold">Everything In One Study Flow</h2>
+          <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
+            From reading to note capture to organization, each step is connected so your insights are
+            easy to build on later.
+          </p>
+        </div>
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
           <FeatureCard
             icon="📖"
-            title="Browse Scriptures"
-            description="Navigate through all standard works with an intuitive reader. Jump between books, chapters, and verses effortlessly."
+            title="Scripture Reader"
+            description="Move across books and chapters quickly while keeping your study context in one place."
           />
           <FeatureCard
             icon="✨"
-            title="Capture Notes"
-            description="Select verses that inspire you, add your thoughts, and keep study notes tied directly to scripture references."
+            title="Verse-To-Note Capture"
+            description="Select verses, add commentary, and send excerpts or study cards straight into a note."
           />
           <FeatureCard
             icon="🗂️"
-            title="Organize Notes"
-            description="Use tags, folders, and filters so your notes are easy to revisit for talks, lessons, and personal study."
+            title="Organization Tools"
+            description="Use folders, tags, filters, and exports to keep notes ready for lessons, talks, and personal study."
           />
           <FeatureCard
             icon="🎙️"
-            title="Find Conference Talks"
-            description="Discover General Conference talks that reference the verses you're studying. Listen directly in Gospel Library."
+            title="Conference Links"
+            description="Find General Conference connections tied to your current verses and open them directly."
           />
           <FeatureCard
-            icon="🔗"
-            title="Explore Connections"
-            description="Navigate cross-references and footnotes to deepen your understanding and see how verses connect across the standard works."
+            icon="🧭"
+            title="Reader Preferences"
+            description="Adjust text presentation, enable study aids, and set comparison view defaults that match how you read."
           />
           <FeatureCard
-            icon="⚙️"
-            title="Customize Your Study"
-            description="Adjust font size, line width, and reading tools to create the perfect study environment for your needs."
+            icon="🤝"
+            title="Share And Revisit"
+            description="Publish notes when you want to share, or keep them private and searchable for ongoing study."
           />
         </div>
       </section>
@@ -93,18 +130,18 @@ export default function Home() {
         <div className="grid sm:grid-cols-3 gap-6 mt-10">
           <StepCard
             number="1"
-            title="Browse & Read"
-            description="Start by browsing scriptures. Find verses that speak to you as you read through the standard works."
+            title="Read And Explore"
+            description="Start in the scripture reader, then explore references, footnotes, dictionaries, and translation comparisons."
           />
           <StepCard
             number="2"
-            title="Capture Your Note"
-            description="Tap verses and add a new note or append to an existing note from the action panel."
+            title="Capture Insights"
+            description="Add selected verses and study findings into a new or existing note with a few clicks."
           />
           <StepCard
             number="3"
-            title="Organize & Reuse"
-            description="Move notes into folders, apply tags, and export notes when you want to share or archive."
+            title="Organize And Reuse"
+            description="Sort notes with folders and tags, then export or publish when you are ready to share."
           />
         </div>
       </section>
@@ -113,7 +150,7 @@ export default function Home() {
       <section className="mx-auto max-w-3xl text-center space-y-6 py-12 rounded-2xl border surface-card-soft">
         <h2 className="text-2xl sm:text-3xl font-bold">Ready to Begin?</h2>
         <p className="text-base sm:text-lg text-foreground/70">
-          Join the community and start sharing your favorite verses today.
+          Open the reader and begin building your next study note.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link
@@ -121,7 +158,13 @@ export default function Home() {
             className="inline-flex items-center rounded-md bg-foreground text-background px-6 py-3 text-base font-medium hover:opacity-90 transition-opacity"
             data-ripple
           >
-            Start Browsing Scriptures
+            Start Studying
+          </Link>
+          <Link
+            href="/feed"
+            className="inline-flex items-center rounded-md border-2 border-foreground/20 px-6 py-3 text-base font-medium hover:bg-foreground/5 transition-colors"
+          >
+            Go To Notes
           </Link>
         </div>
       </section>
