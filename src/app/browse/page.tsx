@@ -20,7 +20,7 @@ export default function BrowsePage() {
           <li key={v.id}>
             <Link
               href={`/browse/${v.id}`}
-              className="block rounded-lg border border-black/10 dark:border-white/15 p-4 hover:bg-black/5 dark:hover:bg-white/10"
+              className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
               data-ripple
             >
               <div className="font-medium">{v.label}</div>

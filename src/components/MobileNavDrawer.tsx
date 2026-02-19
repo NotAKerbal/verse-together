@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth";
+import ThemeSelect from "@/components/ThemeSelect";
 
 type Props = {
   open: boolean;
@@ -96,6 +97,10 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
             );
           })}
         </nav>
+
+        <div className="pt-1 border-t border-black/10 dark:border-white/15">
+          <ThemeSelect compact />
+        </div>
 
         <div className="pt-1 border-t border-black/10 dark:border-white/15">
           {user ? (

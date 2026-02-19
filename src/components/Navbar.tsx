@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
+import ThemeSelect from "@/components/ThemeSelect";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 
@@ -77,6 +78,7 @@ export default function Navbar() {
           </div>
 
           <div className="hidden sm:flex items-center gap-2">
+            <ThemeSelect />
             {user ? (
               <UserButton
                 appearance={{

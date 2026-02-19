@@ -610,7 +610,7 @@ export default function NotesWorkspace({
         className={`rounded-lg border p-3 transition-colors ${
           isDropTarget
             ? "border-sky-500 bg-sky-500/10"
-            : "border-black/10 dark:border-white/15"
+            : "surface-card"
         }`}
       >
         <div className="flex items-center justify-between gap-2">
@@ -692,13 +692,13 @@ export default function NotesWorkspace({
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-3xl rounded-xl border border-black/10 dark:border-white/15 p-5 space-y-3">
+      <div className="mx-auto max-w-3xl rounded-xl border surface-card p-5 space-y-3">
         <h2 className="text-xl font-semibold">Sign in to use Notes</h2>
         <p className="text-sm text-foreground/70">
           Your notes workspace includes folders, tags, exports, and quick actions back into the note editor.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/browse" className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm">
+          <Link href="/browse" className="rounded-md border surface-button px-3 py-2 text-sm">
             Browse scriptures
           </Link>
           <Link href="/auth" className="rounded-md bg-foreground text-background px-3 py-2 text-sm">
@@ -713,18 +713,18 @@ export default function NotesWorkspace({
     <div className="mx-auto max-w-5xl space-y-4 pb-24">
       <div
         ref={filterBoxRef}
-        className={`border border-black/10 dark:border-white/15 p-2 space-y-2 ${
+        className={`border surface-card p-2 space-y-2 ${
           searchAsHeaderExtension ? "rounded-b-xl rounded-t-none border-t-0 -mt-4" : "rounded-lg"
         }`}
       >
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[260px] flex-1">
-            <div className="flex min-h-[36px] w-full flex-wrap items-center gap-1 rounded-md border border-black/10 dark:border-white/15 bg-transparent px-2 py-0.5">
+            <div className="flex min-h-[36px] w-full flex-wrap items-center gap-1 rounded-md border surface-card-soft bg-transparent px-2 py-0.5">
               {activeFilters.map((filter) => (
                 <button
                   key={filter.id}
                   onClick={() => removeFilter(filter.id)}
-                className="inline-flex items-center gap-1 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] hover:bg-black/5 dark:hover:bg-white/10"
+                className="inline-flex items-center gap-1 rounded-full border surface-button px-2 py-0.5 text-[11px]"
                 title="Remove filter"
               >
                   <span>{filter.label}</span>
@@ -771,7 +771,7 @@ export default function NotesWorkspace({
               />
             </div>
             {isFilterMenuOpen ? (
-              <div className="absolute left-0 top-[calc(100%+0.35rem)] z-20 w-full max-h-80 overflow-auto rounded-md border border-black/10 dark:border-white/15 bg-background shadow-lg p-2 space-y-2">
+              <div className="absolute left-0 top-[calc(100%+0.35rem)] z-20 w-full max-h-80 overflow-auto rounded-md border surface-card-strong shadow-lg p-2 space-y-2">
                 {visibleFilterOptions.length === 0 ? (
                   <div className="px-2 py-1 text-xs text-foreground/60">No matching filters.</div>
                 ) : (
@@ -788,7 +788,7 @@ export default function NotesWorkspace({
                         className={`w-full rounded-md px-2.5 py-2 text-left text-xs ${
                           idx === highlightedFilterIndex
                             ? "bg-foreground text-background"
-                            : "border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                            : "border surface-button"
                         }`}
                       >
                         {option.filter.label}
@@ -802,7 +802,7 @@ export default function NotesWorkspace({
           {activeFilters.length > 0 ? (
             <button
               onClick={() => setActiveFilters([])}
-              className="rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm"
+              className="rounded-md border surface-button px-3 py-1.5 text-sm"
             >
               Clear
             </button>
@@ -812,7 +812,7 @@ export default function NotesWorkspace({
               void exportAllNotes();
             }}
             disabled={isBulkExporting || !rows || rows.length === 0}
-            className="rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm disabled:opacity-60"
+            className="rounded-md border surface-button px-3 py-1.5 text-sm disabled:opacity-60"
           >
             {isBulkExporting ? "Exporting all..." : "Export all notes"}
           </button>
@@ -820,7 +820,7 @@ export default function NotesWorkspace({
       </div>
 
       {showTitleBelowSearch ? (
-        <div className="rounded-xl border border-black/10 dark:border-white/15 p-4 sm:p-5">
+        <div className="rounded-xl border surface-card p-4 sm:p-5">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Notes</h1>
           <p className="mt-1 text-sm text-foreground/70">
             Organize your scripture notes with folders and tags, then export when you need to share or archive.
@@ -890,7 +890,7 @@ export default function NotesWorkspace({
               />
             ))}
         {notesByFolder.unfiled.length === 0 ? (
-          <div className="rounded-md border border-dashed border-black/10 dark:border-white/15 px-3 py-2 text-xs text-foreground/60">
+          <div className="rounded-md border border-dashed surface-card-soft px-3 py-2 text-xs text-foreground/60">
             Drag notes or folders here to move them to root.
           </div>
         ) : null}
@@ -902,21 +902,21 @@ export default function NotesWorkspace({
 
       {isFolderModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-md rounded-lg border border-black/10 dark:border-white/15 bg-background p-4 space-y-3">
+          <div className="w-full max-w-md rounded-lg border surface-card-strong p-4 space-y-3">
             <h2 className="text-lg font-semibold">New folder</h2>
             <input
               autoFocus
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               placeholder="Folder name"
-              className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
             />
             <label className="block space-y-1">
               <span className="text-xs text-foreground/70">Parent folder (optional)</span>
               <select
                 value={newFolderParent}
                 onChange={(e) => setNewFolderParent(e.target.value)}
-                className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+                className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
               >
                 <option value="">Root level</option>
                 {folderOptions.map((option) => (
@@ -929,7 +929,7 @@ export default function NotesWorkspace({
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setIsFolderModalOpen(false)}
-                className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm"
+                className="rounded-md border surface-button px-3 py-2 text-sm"
               >
                 Cancel
               </button>
@@ -948,7 +948,7 @@ export default function NotesWorkspace({
       ) : null}
 
       {showTipsTooltip ? (
-        <div className="fixed bottom-20 right-4 z-40 w-[280px] rounded-lg border border-black/10 dark:border-white/15 bg-background/95 p-3 shadow-lg backdrop-blur">
+        <div className="fixed bottom-20 right-4 z-40 w-[280px] rounded-lg border surface-card-strong p-3 shadow-lg backdrop-blur">
           <p className="text-xs text-foreground/80">
             Need help with nested folders, drag-and-drop, exports, or sharing?
           </p>
@@ -958,7 +958,7 @@ export default function NotesWorkspace({
             </Link>
             <button
               onClick={onDismissTips}
-              className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+              className="rounded-md border surface-button px-2 py-1 text-xs"
             >
               Dismiss
             </button>
@@ -969,18 +969,18 @@ export default function NotesWorkspace({
       <div className="fixed right-4 bottom-4 z-40">
         <div className="relative">
           {isMenuOpen ? (
-            <div className="absolute right-0 bottom-12 z-20 w-44 rounded-md border border-black/10 dark:border-white/15 bg-background shadow-lg p-1.5 space-y-1">
+            <div className="absolute right-0 bottom-12 z-20 w-44 rounded-md border surface-card-strong shadow-lg p-1.5 space-y-1">
               <button
                 onClick={() => {
                   void onCreateNewNote();
                 }}
-                className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                className="w-full rounded-md border surface-button px-3 py-2 text-left text-sm"
               >
                 New note
               </button>
               <button
                 onClick={onOpenNewFolderModal}
-                className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                className="w-full rounded-md border surface-button px-3 py-2 text-left text-sm"
               >
                 New folder
               </button>
@@ -1056,7 +1056,7 @@ function NoteRow({
       draggable
       onDragStart={(e) => onDragStart(note.id, e)}
       onDragEnd={() => onDragEnd(note.id)}
-      className={`rounded-md border border-black/10 dark:border-white/15 p-3 bg-background ${isDragging ? "opacity-50" : ""}`}
+      className={`rounded-md border surface-card p-3 ${isDragging ? "opacity-50" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -1074,7 +1074,7 @@ function NoteRow({
                     key={`${note.id}-${tag}`}
                     onClick={() => removeTag(tag)}
                     disabled={note.status !== "draft" || tagsSaving}
-                    className="group inline-flex items-center gap-1 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] text-foreground/70 disabled:opacity-60"
+                    className="group inline-flex items-center gap-1 rounded-full border surface-button px-2 py-0.5 text-[11px] text-foreground/70 disabled:opacity-60"
                     style={getTagChipStyle(tag)}
                     title={note.status === "draft" ? "Remove tag" : "Tag editing only available for drafts"}
                   >
@@ -1091,7 +1091,7 @@ function NoteRow({
             <button
               onClick={() => setIsTagEditorOpen((prev) => !prev)}
               disabled={tagsSaving}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-black/10 dark:border-white/15 text-sm disabled:opacity-60"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full border surface-button text-sm disabled:opacity-60"
               title="Add tag"
               aria-label="Add tag"
             >
@@ -1102,7 +1102,7 @@ function NoteRow({
             ::
           </span>
           {isTagEditorOpen ? (
-            <div className="absolute right-8 top-7 z-10 w-44 rounded-md border border-black/10 dark:border-white/15 bg-background shadow-lg p-2 space-y-2">
+            <div className="absolute right-8 top-7 z-10 w-44 rounded-md border surface-card-strong shadow-lg p-2 space-y-2">
               <input
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
@@ -1113,19 +1113,19 @@ function NoteRow({
                   }
                 }}
                 placeholder="Tag name"
-                className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-2 py-1 text-xs"
+                className="w-full rounded-md border surface-card-soft bg-transparent px-2 py-1 text-xs"
               />
               <div className="flex items-center justify-end gap-1">
                 <button
                   onClick={() => setIsTagEditorOpen(false)}
-                  className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+                  className="rounded-md border surface-button px-2 py-1 text-xs"
                 >
                   Close
                 </button>
                 <button
                   onClick={addTag}
                   disabled={tagsSaving}
-                  className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs disabled:opacity-60"
+                  className="rounded-md border surface-button px-2 py-1 text-xs disabled:opacity-60"
                 >
                   {tagsSaving ? "..." : "Add"}
                 </button>
@@ -1136,18 +1136,18 @@ function NoteRow({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Link href={`/insights/shared/${note.id}`} className="rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1.5 text-xs">
+        <Link href={`/insights/shared/${note.id}`} className="rounded-md border surface-button px-2.5 py-1.5 text-xs">
           View
         </Link>
         {note.status === "draft" ? (
-          <button onClick={() => void onEdit()} className="rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1.5 text-xs">
+          <button onClick={() => void onEdit()} className="rounded-md border surface-button px-2.5 py-1.5 text-xs">
             Edit
           </button>
         ) : null}
         <button
           onClick={onExport}
           disabled={exporting}
-          className="rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1.5 text-xs disabled:opacity-60"
+          className="rounded-md border surface-button px-2.5 py-1.5 text-xs disabled:opacity-60"
         >
           {exporting ? "Exporting..." : "Export"}
         </button>

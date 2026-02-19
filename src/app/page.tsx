@@ -110,7 +110,7 @@ export default function Home() {
       </section>
 
       {/* Call to Action */}
-      <section className="mx-auto max-w-3xl text-center space-y-6 py-12 rounded-2xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5">
+      <section className="mx-auto max-w-3xl text-center space-y-6 py-12 rounded-2xl border surface-card-soft">
         <h2 className="text-2xl sm:text-3xl font-bold">Ready to Begin?</h2>
         <p className="text-base sm:text-lg text-foreground/70">
           Join the community and start sharing your favorite verses today.
@@ -150,7 +150,7 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="rounded-lg border border-black/10 dark:border-white/15 p-6 hover:border-foreground/30 transition-colors">
+    <div className="rounded-lg border surface-card p-6 hover:border-foreground/30 transition-colors">
       <div className="text-3xl mb-3">{icon}</div>
       <h3 className="text-lg font-semibold mb-2">{title}</h3>
       <p className="text-sm text-foreground/70 leading-relaxed">{description}</p>

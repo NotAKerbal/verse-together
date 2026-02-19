@@ -69,7 +69,7 @@ function InsightCard({ row }: { row: PublishedInsight }) {
   }, [row.author_name, row.user_id]);
 
   return (
-    <article className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
+    <article className="rounded-lg border surface-card-strong p-4 space-y-3">
       <header className="flex items-center justify-between">
         <h3 className="font-medium">{row.title}</h3>
         <div className="text-xs text-foreground/60">{new Date(row.published_at).toLocaleDateString()}</div>
@@ -81,18 +81,18 @@ function InsightCard({ row }: { row: PublishedInsight }) {
       {row.tags.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1">
           {row.tags.map((tag) => (
-            <span
-              key={`${row.id}-${tag}`}
-              className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] text-foreground/70"
-            >
-              #{tag}
-            </span>
+              <span
+                key={`${row.id}-${tag}`}
+                className="rounded-full border surface-button px-2 py-0.5 text-[11px] text-foreground/70"
+              >
+                #{tag}
+              </span>
           ))}
         </div>
       ) : null}
       <ul className="space-y-2">
         {row.blocks.map((block) => (
-          <li key={block.id} className="rounded-md border border-black/5 dark:border-white/10 p-3">
+          <li key={block.id} className="rounded-md border surface-card-soft p-3">
             {block.type === "scripture" ? (
               <div className="space-y-2">
                 <button
@@ -108,7 +108,7 @@ function InsightCard({ row }: { row: PublishedInsight }) {
                     });
                     openBuilder();
                   }}
-                  className="text-left w-full rounded-md border border-black/10 dark:border-white/15 px-3 py-2 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="text-left w-full rounded-md border surface-button px-3 py-2"
                 >
                   <div className="text-xs font-medium text-foreground/70 uppercase tracking-wide">Scripture</div>
                   <div className="text-sm font-medium">{block.scripture_ref?.reference ?? "Unknown reference"}</div>
@@ -156,14 +156,14 @@ function InsightCard({ row }: { row: PublishedInsight }) {
                       {block.dictionary_meta?.pronounce ? ` - ${block.dictionary_meta.pronounce}` : ""}
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[10px] text-foreground/70">
+                  <span className="shrink-0 rounded-full border surface-button px-2 py-0.5 text-[10px] text-foreground/70">
                     {block.dictionary_meta?.edition === "ETY" ? "Etymology" : "Dictionary"}
                   </span>
                 </div>
                 {block.dictionary_meta?.heading ? (
                   <div className="text-[11px] uppercase tracking-wide text-foreground/60">{block.dictionary_meta.heading}</div>
                 ) : null}
-                <div className="rounded-md border border-black/10 dark:border-white/15 p-2">
+                <div className="rounded-md border surface-card-soft p-2">
                   <DictionaryEntryBody entryText={block.text ?? ""} />
                 </div>
               </div>

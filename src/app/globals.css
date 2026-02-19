@@ -1,8 +1,18 @@
 @import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f8fa;
+  --foreground: #151a22;
+  --surface-card: rgba(255, 255, 255, 0.84);
+  --surface-card-strong: rgba(255, 255, 255, 0.96);
+  --surface-card-soft: rgba(248, 250, 255, 0.8);
+  --surface-border: rgba(25, 33, 49, 0.14);
+  --surface-shadow: 0 10px 28px rgba(16, 24, 40, 0.08);
+  --surface-button: rgba(255, 255, 255, 0.66);
+  --surface-button-hover: rgba(255, 255, 255, 0.86);
+  --surface-button-active: rgba(22, 29, 41, 0.9);
+  --surface-button-active-text: #f9fbff;
 }
 
 @theme inline {
@@ -12,17 +22,111 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-theme="dark"] {
+  --background: #0b1018;
+  --foreground: #e9edf5;
+  --surface-card: rgba(17, 24, 36, 0.78);
+  --surface-card-strong: rgba(18, 27, 39, 0.92);
+  --surface-card-soft: rgba(26, 35, 50, 0.74);
+  --surface-border: rgba(191, 206, 232, 0.18);
+  --surface-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+  --surface-button: rgba(33, 45, 64, 0.66);
+  --surface-button-hover: rgba(44, 58, 80, 0.82);
+  --surface-button-active: rgba(238, 245, 255, 0.9);
+  --surface-button-active-text: #0f1726;
+}
+
+[data-theme="sepia"] {
+  --background: #f2e8d6;
+  --foreground: #3a2f23;
+  --surface-card: rgba(255, 248, 236, 0.82);
+  --surface-card-strong: rgba(255, 250, 240, 0.95);
+  --surface-card-soft: rgba(244, 230, 202, 0.66);
+  --surface-border: rgba(108, 76, 45, 0.2);
+  --surface-shadow: 0 12px 30px rgba(99, 74, 47, 0.12);
+  --surface-button: rgba(250, 238, 214, 0.72);
+  --surface-button-hover: rgba(255, 245, 224, 0.92);
+  --surface-button-active: rgba(110, 78, 42, 0.9);
+  --surface-button-active-text: #fff8ea;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 420px at 10% -20%, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 70%),
+    radial-gradient(900px 380px at 90% -10%, color-mix(in oklab, var(--foreground) 7%, transparent), transparent 70%),
+    var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+.surface-card {
+  background: var(--surface-card);
+  border-color: var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+.surface-card-strong {
+  background: var(--surface-card-strong);
+  border-color: var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+.surface-card-soft {
+  background: var(--surface-card-soft);
+  border-color: var(--surface-border);
+}
+
+.surface-button {
+  background: var(--surface-button);
+  border-color: var(--surface-border);
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.surface-button:hover {
+  background: var(--surface-button-hover);
+}
+
+.surface-button[data-active="true"] {
+  background: var(--surface-button-active);
+  border-color: color-mix(in oklab, var(--surface-button-active) 78%, var(--surface-border));
+  color: var(--surface-button-active-text);
+}
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.6rem;
+  overflow: hidden;
+  padding: 0;
+  background: var(--surface-card-soft);
+}
+
+.segmented-control-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.1rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-button);
+  color: inherit;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.segmented-control-button + .segmented-control-button {
+  border-left: 1px solid var(--surface-border);
+}
+
+.segmented-control-button:hover {
+  background: var(--surface-button-hover);
+}
+
+.segmented-control-button[data-active="true"] {
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
 }
 
 /* Ripple effect for buttons and opt-in elements */

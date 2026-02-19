@@ -71,7 +71,7 @@ const VerseActionBar: FC<Props> = ({
           onClick={onClear}
           aria-label="Clear selection"
           title="Clear selection"
-          className="inline-flex items-center justify-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+          className="inline-flex items-center justify-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
         >
           Clear
         </button>
@@ -80,7 +80,7 @@ const VerseActionBar: FC<Props> = ({
             <button
               onClick={onInsight}
               disabled={!actionsEnabled}
-              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+              className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
             >
               ✍ Add to Note
             </button>
@@ -89,14 +89,14 @@ const VerseActionBar: FC<Props> = ({
               <button
                 onClick={onNewInsight}
                 disabled={!actionsEnabled}
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+                className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
               >
                 + New Note
               </button>
               <button
                 onClick={onLoadInsights}
                 disabled={!actionsEnabled}
-                className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+                className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
               >
                 Open Notes
               </button>
@@ -107,7 +107,7 @@ const VerseActionBar: FC<Props> = ({
             aria-expanded={menuOpen}
             aria-label="More actions"
             title="More"
-            className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+            className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
           >
             + More
           </button>
@@ -133,7 +133,7 @@ const VerseActionBar: FC<Props> = ({
                 toggleMenu();
                 onCitations();
               }}
-              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/90 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
               title="Citations"
               aria-label="Citations"
             >
@@ -145,7 +145,7 @@ const VerseActionBar: FC<Props> = ({
                 toggleMenu();
                 onExplore();
               }}
-              className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/90 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10"
+              className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
               title="Verse Explorer"
               aria-label="Verse Explorer"
             >
@@ -159,4 +159,3 @@ const VerseActionBar: FC<Props> = ({
 };
 
 export default VerseActionBar;
-

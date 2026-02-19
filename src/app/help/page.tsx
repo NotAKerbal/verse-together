@@ -10,7 +10,7 @@ export default function HelpPage() {
         </p>
       </header>
 
-      <div className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
+      <div className="rounded-lg border surface-card p-4 space-y-3">
         <h2 className="text-base font-semibold">Core flow</h2>
         <ol className="list-decimal pl-5 text-sm text-foreground/80 space-y-1">
           <li>Open scriptures in Browse and tap verses to reveal actions.</li>
@@ -20,7 +20,7 @@ export default function HelpPage() {
         </ol>
       </div>
 
-      <div className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
+      <div className="rounded-lg border surface-card p-4 space-y-3">
         <h2 className="text-base font-semibold">Folders and drag/drop</h2>
         <ul className="text-sm text-foreground/80 space-y-1">
           <li>Create folders from the + button in Notes.</li>
@@ -30,7 +30,7 @@ export default function HelpPage() {
         </ul>
       </div>
 
-      <div className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
+      <div className="rounded-lg border surface-card p-4 space-y-3">
         <h2 className="text-base font-semibold">Exports and sharing</h2>
         <ul className="text-sm text-foreground/80 space-y-1">
           <li>Use Export on a note for a single markdown file.</li>
@@ -40,10 +40,10 @@ export default function HelpPage() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Link href="/feed" className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm">
+        <Link href="/feed" className="rounded-md border surface-button px-3 py-2 text-sm">
           Open Notes
         </Link>
-        <Link href="/browse" className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm">
+        <Link href="/browse" className="rounded-md border surface-button px-3 py-2 text-sm">
           Browse Scriptures
         </Link>
       </div>

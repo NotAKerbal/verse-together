@@ -50,20 +50,21 @@ export default function SavedInsightsPage() {
       </div>
 
       <div className="mx-auto max-w-3xl space-y-3">
-        <div className="rounded-lg border border-black/10 dark:border-white/15 p-3 space-y-3">
+        <div className="rounded-lg border surface-card-strong p-3 space-y-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search notes..."
-            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
           />
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setSelectedTag("all")}
-              className={`rounded-full border px-3 py-1 text-xs ${
+              data-active={selectedTag === "all" ? "true" : "false"}
+              className={`rounded-full border surface-button px-3 py-1 text-xs ${
                 selectedTag === "all"
-                  ? "border-foreground text-foreground"
-                  : "border-black/10 dark:border-white/15 text-foreground/75"
+                  ? ""
+                  : "text-foreground/75"
               }`}
             >
               All tags
@@ -72,10 +73,11 @@ export default function SavedInsightsPage() {
               <button
                 key={tag}
                 onClick={() => setSelectedTag((prev) => (prev === tag ? "all" : tag))}
-                className={`rounded-full border px-3 py-1 text-xs ${
+                data-active={selectedTag === tag ? "true" : "false"}
+                className={`rounded-full border surface-button px-3 py-1 text-xs ${
                   selectedTag === tag
-                    ? "border-foreground text-foreground"
-                    : "border-black/10 dark:border-white/15 text-foreground/75"
+                    ? ""
+                    : "text-foreground/75"
                 }`}
               >
                 #{tag}
@@ -91,7 +93,7 @@ export default function SavedInsightsPage() {
           <p className="text-sm text-foreground/70">No notes match your filters.</p>
         ) : null}
         {filteredRows.map((row) => (
-          <article key={row.id} className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
+          <article key={row.id} className="rounded-lg border surface-card p-4 space-y-3">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <h2 className="text-base font-medium">{row.title}</h2>
@@ -104,7 +106,7 @@ export default function SavedInsightsPage() {
                 {row.tags.map((tag) => (
                   <span
                     key={`${row.id}-${tag}`}
-                    className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] text-foreground/70"
+                    className="rounded-full border surface-button px-2 py-0.5 text-[11px] text-foreground/70"
                   >
                     #{tag}
                   </span>
@@ -118,14 +120,14 @@ export default function SavedInsightsPage() {
                     await switchDraft(row.id);
                     openBuilder();
                   }}
-                  className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm"
+                  className="rounded-md border surface-button px-3 py-2 text-sm"
                 >
                   Edit note
                 </button>
               ) : null}
               <Link
                 href={`/insights/shared/${row.id}`}
-                className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm"
+                className="rounded-md border surface-button px-3 py-2 text-sm"
               >
                 Open shared view
               </Link>

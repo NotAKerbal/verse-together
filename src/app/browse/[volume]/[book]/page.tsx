@@ -73,7 +73,7 @@ function ChapterCards({ volume, book, chapters, delineation }: { volume: string;
               <li key={c._id}>
                 <Link
                   href={`/browse/${volume}/${book}/${n}`}
-                  className="block rounded-lg border border-black/10 dark:border-white/15 p-4 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
                   data-ripple
                 >
                   <div className="font-medium">{delineation} {n}</div>
@@ -83,7 +83,7 @@ function ChapterCards({ volume, book, chapters, delineation }: { volume: string;
                   {points.length ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {points.map((p, i) => (
-                        <span key={i} className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-xs text-foreground/80">{p}</span>
+                        <span key={i} className="inline-flex items-center rounded-full border surface-button px-2 py-0.5 text-xs text-foreground/80">{p}</span>
                       ))}
                     </div>
                   ) : null}
@@ -96,4 +96,3 @@ function ChapterCards({ volume, book, chapters, delineation }: { volume: string;
     </div>
   );
 }
-
