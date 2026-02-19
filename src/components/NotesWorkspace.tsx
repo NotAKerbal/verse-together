@@ -103,18 +103,18 @@ function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
 
 function getTagChipStyle(tag: string) {
   const palette = [
-    { backgroundColor: "rgba(59, 130, 246, 0.28)", borderColor: "rgba(96, 165, 250, 0.7)", color: "rgb(191, 219, 254)" }, // blue
-    { backgroundColor: "rgba(34, 197, 94, 0.28)", borderColor: "rgba(74, 222, 128, 0.7)", color: "rgb(187, 247, 208)" }, // green
-    { backgroundColor: "rgba(244, 63, 94, 0.28)", borderColor: "rgba(251, 113, 133, 0.7)", color: "rgb(254, 205, 211)" }, // rose
-    { backgroundColor: "rgba(245, 158, 11, 0.28)", borderColor: "rgba(251, 191, 36, 0.72)", color: "rgb(254, 243, 199)" }, // amber
-    { backgroundColor: "rgba(168, 85, 247, 0.28)", borderColor: "rgba(196, 181, 253, 0.72)", color: "rgb(221, 214, 254)" }, // violet
-    { backgroundColor: "rgba(14, 165, 233, 0.28)", borderColor: "rgba(56, 189, 248, 0.72)", color: "rgb(186, 230, 253)" }, // sky
-    { backgroundColor: "rgba(234, 88, 12, 0.28)", borderColor: "rgba(251, 146, 60, 0.72)", color: "rgb(254, 215, 170)" }, // orange
-    { backgroundColor: "rgba(20, 184, 166, 0.28)", borderColor: "rgba(45, 212, 191, 0.72)", color: "rgb(153, 246, 228)" }, // teal
-    { backgroundColor: "rgba(236, 72, 153, 0.28)", borderColor: "rgba(244, 114, 182, 0.72)", color: "rgb(251, 207, 232)" }, // pink
-    { backgroundColor: "rgba(99, 102, 241, 0.28)", borderColor: "rgba(129, 140, 248, 0.72)", color: "rgb(199, 210, 254)" }, // indigo
-    { backgroundColor: "rgba(132, 204, 22, 0.28)", borderColor: "rgba(163, 230, 53, 0.72)", color: "rgb(217, 249, 157)" }, // lime
-    { backgroundColor: "rgba(239, 68, 68, 0.28)", borderColor: "rgba(248, 113, 113, 0.72)", color: "rgb(254, 202, 202)" }, // red
+    { backgroundColor: "rgba(59, 130, 246, 0.2)", borderColor: "rgba(96, 165, 250, 0.55)" }, // blue
+    { backgroundColor: "rgba(34, 197, 94, 0.2)", borderColor: "rgba(74, 222, 128, 0.55)" }, // green
+    { backgroundColor: "rgba(244, 63, 94, 0.2)", borderColor: "rgba(251, 113, 133, 0.55)" }, // rose
+    { backgroundColor: "rgba(245, 158, 11, 0.2)", borderColor: "rgba(251, 191, 36, 0.6)" }, // amber
+    { backgroundColor: "rgba(168, 85, 247, 0.2)", borderColor: "rgba(196, 181, 253, 0.6)" }, // violet
+    { backgroundColor: "rgba(14, 165, 233, 0.2)", borderColor: "rgba(56, 189, 248, 0.6)" }, // sky
+    { backgroundColor: "rgba(234, 88, 12, 0.2)", borderColor: "rgba(251, 146, 60, 0.6)" }, // orange
+    { backgroundColor: "rgba(20, 184, 166, 0.2)", borderColor: "rgba(45, 212, 191, 0.6)" }, // teal
+    { backgroundColor: "rgba(236, 72, 153, 0.2)", borderColor: "rgba(244, 114, 182, 0.6)" }, // pink
+    { backgroundColor: "rgba(99, 102, 241, 0.2)", borderColor: "rgba(129, 140, 248, 0.6)" }, // indigo
+    { backgroundColor: "rgba(132, 204, 22, 0.2)", borderColor: "rgba(163, 230, 53, 0.6)" }, // lime
+    { backgroundColor: "rgba(239, 68, 68, 0.2)", borderColor: "rgba(248, 113, 113, 0.6)" }, // red
   ];
 
   let hash = 2166136261;
@@ -198,6 +198,8 @@ export default function NotesWorkspace({
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderParent, setNewFolderParent] = useState<string>("");
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const [renameFolderName, setRenameFolderName] = useState("");
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [isBulkExporting, setIsBulkExporting] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
@@ -451,6 +453,93 @@ export default function NotesWorkspace({
     saveFolderParentMap(nextParents);
   }
 
+  function deleteFolder(folder: string) {
+    const name = folder.trim();
+    if (!name) return;
+
+    const nextNames = allFolders.filter((value) => value !== name);
+    setFolderNames(nextNames);
+    saveFolderNames(nextNames);
+
+    const nextNoteFolderMap: Record<string, string> = {};
+    for (const [noteId, value] of Object.entries(noteFolderMap)) {
+      if (value === name) continue;
+      nextNoteFolderMap[noteId] = value;
+    }
+    setNoteFolderMap(nextNoteFolderMap);
+    saveNoteFolderMap(nextNoteFolderMap);
+
+    const nextParentMap: FolderParentMap = {};
+    for (const [child, parent] of Object.entries(folderParentMap)) {
+      if (child === name) continue;
+      if (parent === name) continue;
+      nextParentMap[child] = parent;
+    }
+    setFolderParentMap(nextParentMap);
+    saveFolderParentMap(nextParentMap);
+
+    setExpandedFolders((prev) => {
+      const out = { ...prev };
+      delete out[name];
+      return out;
+    });
+    setActiveFilters((prev) => prev.filter((filter) => !(filter.kind === "folder" && filter.value === name)));
+  }
+
+  function renameFolder(from: string, to: string) {
+    const fromName = from.trim();
+    const toName = to.trim();
+    if (!fromName || !toName) return false;
+    if (fromName === toName) return true;
+    if (allFolders.includes(toName)) return false;
+
+    const nextNames = allFolders
+      .map((folder) => (folder === fromName ? toName : folder))
+      .sort((a, b) => a.localeCompare(b));
+    setFolderNames(nextNames);
+    saveFolderNames(nextNames);
+
+    const nextNoteFolderMap: Record<string, string> = {};
+    for (const [noteId, folder] of Object.entries(noteFolderMap)) {
+      nextNoteFolderMap[noteId] = folder === fromName ? toName : folder;
+    }
+    setNoteFolderMap(nextNoteFolderMap);
+    saveNoteFolderMap(nextNoteFolderMap);
+
+    const nextParentMap: FolderParentMap = {};
+    for (const [child, parent] of Object.entries(folderParentMap)) {
+      const nextChild = child === fromName ? toName : child;
+      const nextParent = parent === fromName ? toName : parent;
+      if (!nextChild || !nextParent || nextChild === nextParent) continue;
+      nextParentMap[nextChild] = nextParent;
+    }
+    setFolderParentMap(nextParentMap);
+    saveFolderParentMap(nextParentMap);
+
+    setExpandedFolders((prev) => {
+      const out = { ...prev };
+      if (fromName in out) {
+        out[toName] = out[fromName];
+        delete out[fromName];
+      }
+      return out;
+    });
+
+    setActiveFilters((prev) =>
+      prev.map((filter) =>
+        filter.kind === "folder" && filter.value === fromName
+          ? {
+              ...filter,
+              id: `folder:${toName}`,
+              label: `In folder: ${toName}`,
+              value: toName,
+            }
+          : filter
+      )
+    );
+    return true;
+  }
+
   async function saveNoteTags(noteId: string, tags: string[]) {
     const normalized = Array.from(
       new Set(
@@ -623,6 +712,31 @@ export default function NotesWorkspace({
             </span>
               <span className="ml-2 text-xs text-foreground/60">{notes.length} notes</span>
             </button>
+          <button
+            onClick={() => {
+              setRenamingFolder(folder);
+              setRenameFolderName(folder);
+            }}
+            className="rounded-md border surface-button px-2 py-0.5 text-xs"
+            title={`Rename folder ${folder}`}
+            aria-label={`Rename folder ${folder}`}
+          >
+            Rename
+          </button>
+          <button
+            onClick={() => {
+              const confirmed = window.confirm(
+                `Delete "${folder}"? Notes in this folder will move to root and child folders will move to root.`
+              );
+              if (!confirmed) return;
+              deleteFolder(folder);
+            }}
+            className="rounded-md border surface-button px-2 py-0.5 text-xs text-red-700 dark:text-red-300"
+            title={`Delete folder ${folder}`}
+            aria-label={`Delete folder ${folder}`}
+          >
+            Delete
+          </button>
           <span
             draggable
             onDragStart={(e) => {
@@ -947,6 +1061,38 @@ export default function NotesWorkspace({
         </div>
       ) : null}
 
+      {renamingFolder ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-md rounded-lg border surface-card-strong p-4 space-y-3">
+            <h2 className="text-lg font-semibold">Rename folder</h2>
+            <input
+              autoFocus
+              value={renameFolderName}
+              onChange={(e) => setRenameFolderName(e.target.value)}
+              placeholder="Folder name"
+              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setRenamingFolder(null)}
+                className="rounded-md border surface-button px-3 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const renamed = renameFolder(renamingFolder, renameFolderName);
+                  if (renamed) setRenamingFolder(null);
+                }}
+                className="rounded-md bg-foreground text-background px-3 py-2 text-sm"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {showTipsTooltip ? (
         <div className="fixed bottom-20 right-4 z-40 w-[280px] rounded-lg border surface-card-strong p-3 shadow-lg backdrop-blur">
           <p className="text-xs text-foreground/80">
@@ -1074,7 +1220,7 @@ function NoteRow({
                     key={`${note.id}-${tag}`}
                     onClick={() => removeTag(tag)}
                     disabled={note.status !== "draft" || tagsSaving}
-                    className="group inline-flex items-center gap-1 rounded-full border surface-button px-2 py-0.5 text-[11px] text-foreground/70 disabled:opacity-60"
+                    className="group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-foreground disabled:opacity-60"
                     style={getTagChipStyle(tag)}
                     title={note.status === "draft" ? "Remove tag" : "Tag editing only available for drafts"}
                   >
