@@ -82,7 +82,7 @@ const VerseActionBar: FC<Props> = ({
               disabled={!actionsEnabled}
               className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
             >
-              ✍ Add to Insight
+              ✍ Add to Note
             </button>
           ) : (
             <>
@@ -91,14 +91,14 @@ const VerseActionBar: FC<Props> = ({
                 disabled={!actionsEnabled}
                 className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
               >
-                + New Insight
+                + New Note
               </button>
               <button
                 onClick={onLoadInsights}
                 disabled={!actionsEnabled}
                 className="inline-flex items-center rounded-full border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-4 py-2 text-base shadow-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
               >
-                Load
+                Open Notes
               </button>
             </>
           )}
@@ -159,5 +159,4 @@ const VerseActionBar: FC<Props> = ({
 };
 
 export default VerseActionBar;
-
 

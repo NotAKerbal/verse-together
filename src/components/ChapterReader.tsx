@@ -349,8 +349,8 @@ export default function ChapterReader({
     const m = text.match(/[A-Za-z][A-Za-z'\-]*/);
     return m?.[0]?.toLowerCase() ?? "";
   }, [verses, selected]);
-  const hasActiveInsight = !!activeDraftId;
-  const availableInsights = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
+  const hasActiveNote = !!activeDraftId;
+  const availableNotes = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
     (compareChapters ?? []).forEach((chapterData) => {
@@ -523,9 +523,9 @@ export default function ChapterReader({
     setSelected(new Set());
   }
 
-  async function onAddToInsight() {
+  async function onAddToNote() {
     if (!user) {
-      alert("Please sign in to build insights.");
+      alert("Please sign in to build notes.");
       return;
     }
     if (!selectedBounds) return;
@@ -543,25 +543,25 @@ export default function ChapterReader({
     clearSelection();
   }
 
-  async function onNewInsightFromActions() {
+  async function onNewNoteFromActions() {
     if (!user) {
-      alert("Please sign in to build insights.");
+      alert("Please sign in to build notes.");
       return;
     }
-    const createdId = await createDraft("New insight");
+    const createdId = await createDraft("New note");
     if (!createdId) return;
     await switchDraft(createdId);
     openBuilder();
   }
 
-  async function onLoadInsightsFromActions() {
+  async function onLoadNotesFromActions() {
     if (!user) {
-      alert("Please sign in to build insights.");
+      alert("Please sign in to build notes.");
       return;
     }
-    const targetId = activeDraftId ?? availableInsights[0]?.id ?? null;
+    const targetId = activeDraftId ?? availableNotes[0]?.id ?? null;
     if (!targetId) {
-      await onNewInsightFromActions();
+      await onNewNoteFromActions();
       return;
     }
     await switchDraft(targetId);
@@ -612,17 +612,17 @@ export default function ChapterReader({
           <DesktopVerseActionList
             visible={!openFootnote}
             hasSelection={hasSelection}
-            hasActiveInsight={hasActiveInsight}
+            hasActiveInsight={hasActiveNote}
             actionsEnabled={!!user}
             onClear={clearSelection}
             onInsight={() => {
-              void onAddToInsight();
+              void onAddToNote();
             }}
             onNewInsight={() => {
-              void onNewInsightFromActions();
+              void onNewNoteFromActions();
             }}
             onLoadInsights={() => {
-              void onLoadInsightsFromActions();
+              void onLoadNotesFromActions();
             }}
             onCitations={onOpenCitations}
             onExplore={onOpenExplore}
@@ -812,7 +812,7 @@ export default function ChapterReader({
               <div className="text-sm flex items-start gap-3">
                 <div className="text-lg select-none" aria-hidden>👉</div>
                 <div className="flex-1">
-                  Tap a scripture to view available actions.
+                  Tap a verse to see note, citation, and exploration actions.
                 </div>
                 <button
                   onClick={() => {
@@ -867,17 +867,17 @@ export default function ChapterReader({
 
       <VerseActionBar
         visible={hasSelection && !overlayOpen}
-        hasActiveInsight={hasActiveInsight}
+        hasActiveInsight={hasActiveNote}
         actionsEnabled={!!user}
         onClear={clearSelection}
         onInsight={() => {
-          void onAddToInsight();
+          void onAddToNote();
         }}
         onNewInsight={() => {
-          void onNewInsightFromActions();
+          void onNewNoteFromActions();
         }}
         onLoadInsights={() => {
-          void onLoadInsightsFromActions();
+          void onLoadNotesFromActions();
         }}
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}

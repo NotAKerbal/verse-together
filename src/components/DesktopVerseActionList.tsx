@@ -36,15 +36,15 @@ export default function DesktopVerseActionList({
       <div className="grid grid-cols-2 gap-1.5">
         {hasActiveInsight ? (
           <button onClick={onInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
-            Add to Insight
+            Add to Note
           </button>
         ) : (
           <>
             <button onClick={onNewInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
-              New Insight
+              New Note
             </button>
             <button onClick={onLoadInsights} disabled={!actionsEnabled} className={baseBtn}>
-              Open Insights
+              Open Notes
             </button>
           </>
         )}

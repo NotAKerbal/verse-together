@@ -54,7 +54,7 @@ export default function PublishInsightPage() {
       });
       router.push("/feed");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to publish insight";
+      const msg = e instanceof Error ? e.message : "Failed to publish note";
       setError(msg);
     } finally {
       setLoading(false);
@@ -68,9 +68,9 @@ export default function PublishInsightPage() {
   return (
     <section className="mx-auto max-w-2xl py-8 space-y-4">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Publish insight</h1>
+        <h1 className="text-2xl font-semibold">Publish note</h1>
         <p className="text-sm text-foreground/70">
-          Insights are personal by default. Publishing makes this insight visible in the community feed.
+          Notes are private by default. Publishing makes this note visible in the public notes stream.
         </p>
       </header>
 
@@ -92,7 +92,7 @@ export default function PublishInsightPage() {
             onChange={(e) => setSummary(e.target.value)}
             rows={3}
             className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
-            placeholder="Add a brief summary for the feed..."
+            placeholder="Add a brief summary for this note..."
           />
         </label>
         <label className="block space-y-1">

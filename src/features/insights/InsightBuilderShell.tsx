@@ -315,7 +315,7 @@ function BuilderContent() {
 
   async function onDeleteDraft() {
     if (!activeDraftId) return;
-    const sure = window.confirm("Delete this insight?");
+    const sure = window.confirm("Delete this note?");
     if (!sure) return;
     setBusy(true);
     try {
@@ -394,27 +394,27 @@ function BuilderContent() {
     <div className="h-full flex flex-col">
       <div className="p-3 border-b border-black/10 dark:border-white/15 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Insights</h2>
+          <h2 className="text-sm font-semibold">Notes</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsLoadSavedOpen((prev) => !prev)}
               className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
             >
-              Load insights
+              Load notes
             </button>
             <button
               onClick={onCreateDraft}
               disabled={busy}
               className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
             >
-              + Insight
+              + Note
             </button>
           </div>
         </div>
         {isLoadSavedOpen ? (
           <div className="rounded-md border border-black/10 dark:border-white/15 p-2 space-y-1 max-h-40 overflow-y-auto">
             {hiddenDraftTabs.length === 0 ? (
-              <p className="text-xs text-foreground/60 px-1 py-1">No hidden insights.</p>
+              <p className="text-xs text-foreground/60 px-1 py-1">No hidden notes.</p>
             ) : (
               hiddenDraftTabs.map((draft) => (
                 <button
@@ -428,22 +428,22 @@ function BuilderContent() {
             )}
           </div>
         ) : null}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex items-end gap-1 overflow-x-auto border-b border-black/10 dark:border-white/15 pb-0">
           {openDraftTabs.map((draft) => (
             <div
               key={draft.id}
-              className={`whitespace-nowrap rounded-full border pl-3 pr-1 py-1 text-xs flex items-center gap-1 ${
+              className={`whitespace-nowrap rounded-t-md border border-b-0 px-2 py-1.5 text-xs flex items-center gap-1 ${
                 draft.id === activeDraftId
-                  ? "border-foreground text-foreground"
-                  : "border-black/10 dark:border-white/15 text-foreground/75"
+                  ? "border-foreground bg-background text-foreground"
+                  : "border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-foreground/75"
               }`}
             >
-              <button onClick={() => switchDraft(draft.id)} className="text-left">
+              <button onClick={() => switchDraft(draft.id)} className="text-left px-1">
                 {draft.title}
               </button>
               <button
                 onClick={() => void onCloseTab(draft.id)}
-                className="hidden lg:inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10"
+                className="inline-flex h-4 w-4 items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10"
                 title="Close tab"
                 aria-label={`Close ${draft.title}`}
               >
@@ -452,16 +452,16 @@ function BuilderContent() {
             </div>
           ))}
           {openDraftTabs.length === 0 ? (
-            <span className="text-xs text-foreground/60">No insights yet.</span>
+            <span className="text-xs text-foreground/60">No notes yet.</span>
           ) : null}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 pb-0 space-y-3">
-        {isLoading ? <p className="text-sm text-foreground/60">Loading insight...</p> : null}
+        {isLoading ? <p className="text-sm text-foreground/60">Loading note...</p> : null}
         {!isLoading && !activeDraft ? (
           <p className="text-sm text-foreground/70">
-            Start an insight by tapping a scripture, or create a blank insight here.
+            Start a note by tapping a scripture, or create a blank note here.
           </p>
         ) : null}
         {activeDraft ? (
@@ -473,7 +473,7 @@ function BuilderContent() {
                 void onRenameDraft();
               }}
               className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm font-medium"
-              placeholder="Insight title"
+              placeholder="Note title"
             />
             <ul
               className="space-y-2"
@@ -572,7 +572,7 @@ function BuilderContent() {
                 onClick={onDeleteDraft}
                 className="rounded-md border border-red-200 text-red-700 dark:border-red-400/30 px-2 py-1 text-xs"
               >
-                Delete insight
+                Delete note
               </button>
             </div>
             <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-black/10 dark:border-white/15 mt-3 -mx-3 px-3 py-3 space-y-2">
@@ -602,18 +602,18 @@ function BuilderContent() {
               </button>
               {isShareMenuOpen ? (
                 <div className="space-y-2 rounded-md border border-black/10 dark:border-white/15 p-2">
-                  <div className="text-xs text-foreground/70">Who can view this insight?</div>
+                  <div className="text-xs text-foreground/70">Who can view this note?</div>
                   {(
                     [
                       {
                         key: "private",
                         title: "Private",
-                        description: "Only you can view this insight.",
+                        description: "Only you can view this note.",
                       },
                       {
                         key: "friends",
                         title: "Visible to friends",
-                        description: "Only friends can open this insight.",
+                        description: "Only friends can open this note.",
                       },
                       {
                         key: "link",
@@ -623,7 +623,7 @@ function BuilderContent() {
                       {
                         key: "public",
                         title: "Public",
-                        description: "Visible in the community feed.",
+                        description: "Visible in the public notes stream.",
                       },
                     ] as Array<{ key: InsightVisibility; title: string; description: string }>
                   ).map((option) => (
@@ -746,7 +746,7 @@ export default function InsightBuilderShell() {
         className="lg:hidden fixed z-50 right-4 rounded-full bg-foreground text-background px-4 py-3 text-sm font-medium shadow-lg transition-[bottom] duration-150"
         style={{ bottom: `${mobileToggleBottom}px` }}
       >
-        {isMobileOpen ? "Close Insight" : "Open Insight"}
+        {isMobileOpen ? "Close Note" : "Open Note"}
       </button>
 
       {isMobileOpen ? (

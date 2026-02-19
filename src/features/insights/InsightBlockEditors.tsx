@@ -250,7 +250,7 @@ export function TextBlockEditor({ block, onTextChange }: BlockEditorProps) {
       onChange={(e) => onTextChange(e.target.value)}
       rows={4}
       className="w-full bg-transparent px-1 py-1 text-sm focus:outline-none"
-      placeholder="Write your insight..."
+      placeholder="Write your note..."
     />
   );
 }

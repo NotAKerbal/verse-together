@@ -2,16 +2,29 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { SignInButton, UserButton } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth";
-import { SignInButton } from "@clerk/nextjs";
 
 type Props = {
   open: boolean;
   onClose: () => void;
 };
 
+const navItems = [
+  { href: "/browse", label: "Browse" },
+  { href: "/feed", label: "Notes" },
+  { href: "/help", label: "Guide" },
+];
+
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function MobileNavDrawer({ open, onClose }: Props) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const pathname = usePathname();
   const [isClosing, setIsClosing] = useState(false);
   const [hasEntered, setHasEntered] = useState(false);
 
@@ -29,25 +42,17 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
     if (open) {
       setIsClosing(false);
       setHasEntered(false);
-      // Ensure the element renders off-screen first, then animate in (double rAF)
       requestAnimationFrame(() => requestAnimationFrame(() => setHasEntered(true)));
-      // Lock background scroll
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = prev;
       };
-    } else {
-      setHasEntered(false);
     }
+    setHasEntered(false);
   }, [open]);
 
   if (!open && !isClosing) return null;
-
-  async function handleSignOut() {
-    await signOut();
-    requestClose();
-  }
 
   function requestClose() {
     setIsClosing(true);
@@ -71,26 +76,39 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
           <span className="text-sm font-semibold">Menu</span>
           <button onClick={requestClose} className="px-2 py-1 text-sm rounded-md border border-black/10 dark:border-white/15">Close</button>
         </div>
+
         <nav className="grid gap-2">
-          <Link href="/browse" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">Browse</Link>
-          <Link href="/feed" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">Feed</Link>
-          {user ? (
-            <>
-              <Link href="/insights/saved" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">My Insights</Link>
-              <Link href="/account" onClick={requestClose} className="px-3 py-2 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10">Account</Link>
-              <button onClick={handleSignOut} className="px-3 py-2 rounded-md bg-foreground text-background">Sign out</button>
-            </>
-          ) : (
-            <div className="pt-1">
-              <SignInButton mode="modal">
-                <button className="px-3 py-2 rounded-md bg-foreground text-background">Sign in</button>
-              </SignInButton>
-            </div>
-          )}
+          {navItems.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={requestClose}
+                className={`px-3 py-2 rounded-md border text-sm ${
+                  active
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
+
+        <div className="pt-1 border-t border-black/10 dark:border-white/15">
+          {user ? (
+            <div className="py-2">
+              <UserButton afterSignOutUrl="/" />
+            </div>
+          ) : (
+            <SignInButton mode="modal">
+              <button className="px-3 py-2 rounded-md bg-foreground text-background text-sm">Sign in</button>
+            </SignInButton>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
-

@@ -137,7 +137,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const ensureActiveDraftId = useCallback(async () => {
     if (activeDraftId) return activeDraftId;
-    const createdId = await createDraft("New insight");
+    const createdId = await createDraft("New note");
     return createdId;
   }, [activeDraftId, createDraft]);
 

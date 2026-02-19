@@ -59,7 +59,7 @@ export default function SharedDraftPage() {
   }, [draft]);
 
   if (draft === undefined) {
-    return <div className="mx-auto max-w-3xl py-8">Loading insight...</div>;
+    return <div className="mx-auto max-w-3xl py-8">Loading note...</div>;
   }
 
   return (

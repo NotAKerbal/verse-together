@@ -16,7 +16,7 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
 
   async function onAddCardToInsight() {
     if (!user) {
-      alert("Please sign in to build insights.");
+      alert("Please sign in to build notes.");
       return;
     }
     await addDictionaryBlock({
@@ -43,7 +43,7 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
             void onAddCardToInsight();
           }}
           className="shrink-0 rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-          title="Add this etymology card to insight"
+          title="Add this etymology card to a note"
         >
           Add card
         </button>

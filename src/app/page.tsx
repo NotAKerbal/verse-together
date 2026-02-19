@@ -15,7 +15,7 @@ export default function Home() {
         </p>
         <p className="text-base sm:text-lg text-foreground/60 max-w-2xl mx-auto">
           A community platform for discovering, sharing, and discussing scripture. 
-          Highlight verses, add your insights, find related conference talks, and 
+          Highlight verses, add your notes, find related conference talks, and 
           connect with others on their spiritual journey.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -30,7 +30,7 @@ export default function Home() {
             href="/feed"
             className="inline-flex items-center rounded-md border-2 border-foreground/20 px-6 py-3 text-base font-medium hover:bg-foreground/5 transition-colors"
           >
-            View Community Feed
+            Open Notes Workspace
           </Link>
         </div>
       </section>
@@ -43,7 +43,7 @@ export default function Home() {
           <h2 className="text-3xl sm:text-4xl font-bold">What is Verse Together?</h2>
           <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
             Verse Together is a modern platform designed to enhance your scripture study 
-            and help you share insights with a community of believers.
+            and help you capture, organize, and share meaningful scripture notes.
           </p>
         </div>
         
@@ -55,13 +55,13 @@ export default function Home() {
           />
           <FeatureCard
             icon="✨"
-            title="Share Highlights"
-            description="Select verses that inspire you, add personal notes and insights, then share them with the community or your friends."
+            title="Capture Notes"
+            description="Select verses that inspire you, add your thoughts, and keep study notes tied directly to scripture references."
           />
           <FeatureCard
-            icon="💬"
-            title="Engage & Discuss"
-            description="Comment on shared verses, react to insights, and participate in meaningful discussions about the scriptures."
+            icon="🗂️"
+            title="Organize Notes"
+            description="Use tags, folders, and filters so your notes are easy to revisit for talks, lessons, and personal study."
           />
           <FeatureCard
             icon="🎙️"
@@ -98,13 +98,13 @@ export default function Home() {
           />
           <StepCard
             number="2"
-            title="Share & Annotate"
-            description="Highlight verses and add your thoughts, insights, or testimony. Share publicly or with friends."
+            title="Capture Your Note"
+            description="Tap verses and add a new note or append to an existing note from the action panel."
           />
           <StepCard
             number="3"
-            title="Connect & Learn"
-            description="Explore the community feed to see what others are sharing. Comment, react, and discover new perspectives."
+            title="Organize & Reuse"
+            description="Move notes into folders, apply tags, and export notes when you want to share or archive."
           />
         </div>
       </section>

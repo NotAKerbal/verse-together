@@ -45,8 +45,8 @@ export default function SavedInsightsPage() {
   return (
     <section className="py-8 sm:py-12 space-y-6">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Saved insights</h1>
-        <p className="mt-2 text-sm text-foreground/70">Review insights, jump back into editing, and manage sharing settings.</p>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Saved notes</h1>
+        <p className="mt-2 text-sm text-foreground/70">Review notes, jump back into editing, and manage visibility.</p>
       </div>
 
       <div className="mx-auto max-w-3xl space-y-3">
@@ -54,7 +54,7 @@ export default function SavedInsightsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search insights..."
+            placeholder="Search notes..."
             className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
           />
           <div className="flex flex-wrap items-center gap-2">
@@ -83,12 +83,12 @@ export default function SavedInsightsPage() {
             ))}
           </div>
         </div>
-        {rows === undefined ? <p className="text-sm text-foreground/70">Loading saved insights...</p> : null}
+        {rows === undefined ? <p className="text-sm text-foreground/70">Loading saved notes...</p> : null}
         {rows !== undefined && rows.length === 0 ? (
-          <p className="text-sm text-foreground/70">No saved insights yet.</p>
+          <p className="text-sm text-foreground/70">No saved notes yet.</p>
         ) : null}
         {rows !== undefined && rows.length > 0 && filteredRows.length === 0 ? (
-          <p className="text-sm text-foreground/70">No insights match your filters.</p>
+          <p className="text-sm text-foreground/70">No notes match your filters.</p>
         ) : null}
         {filteredRows.map((row) => (
           <article key={row.id} className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
@@ -120,7 +120,7 @@ export default function SavedInsightsPage() {
                   }}
                   className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm"
                 >
-                  Edit in builder
+                  Edit note
                 </button>
               ) : null}
               <Link
