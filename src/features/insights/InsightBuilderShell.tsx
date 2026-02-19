@@ -109,7 +109,7 @@ function BlockCard({
         event.stopPropagation();
         onDrop();
       }}
-      className={`rounded-md border border-black/10 dark:border-white/15 p-3 space-y-2 bg-background/70 ${dragId === block.id ? "opacity-60" : ""}`}
+      className={`rounded-md border surface-card p-3 space-y-2 ${dragId === block.id ? "opacity-60" : ""}`}
     >
       <div className="relative flex items-center justify-between gap-2">
         <span className="min-w-0 pr-10 text-xs font-medium text-foreground/70 truncate">{title}</span>
@@ -125,7 +125,7 @@ function BlockCard({
         </div>
         <button
           onClick={onRemove}
-          className="text-foreground/50 hover:text-red-600 text-sm leading-none px-1"
+          className="rounded-md border surface-button text-foreground/70 hover:text-red-600 text-sm leading-none px-1.5 py-0.5"
           title="Remove block"
           aria-label="Remove block"
         >
@@ -392,27 +392,27 @@ function BuilderContent() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="p-3 border-b border-black/10 dark:border-white/15 space-y-2">
+      <div className="p-3 pb-0 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Notes</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsLoadSavedOpen((prev) => !prev)}
-              className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+              className="rounded-md border surface-button px-2 py-1 text-xs"
             >
               Load notes
             </button>
             <button
               onClick={onCreateDraft}
               disabled={busy}
-              className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+              className="rounded-md border surface-button px-2 py-1 text-xs"
             >
               + Note
             </button>
           </div>
         </div>
         {isLoadSavedOpen ? (
-          <div className="rounded-md border border-black/10 dark:border-white/15 p-2 space-y-1 max-h-40 overflow-y-auto">
+          <div className="rounded-md border surface-card p-2 space-y-1 max-h-40 overflow-y-auto">
             {hiddenDraftTabs.length === 0 ? (
               <p className="text-xs text-foreground/60 px-1 py-1">No hidden notes.</p>
             ) : (
@@ -420,7 +420,7 @@ function BuilderContent() {
                 <button
                   key={draft.id}
                   onClick={() => void onLoadSaved(draft.id)}
-                  className="w-full text-left rounded-md px-2 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                  className="w-full text-left rounded-md border surface-button px-2 py-1.5 text-xs"
                 >
                   {draft.title}
                 </button>
@@ -428,14 +428,14 @@ function BuilderContent() {
             )}
           </div>
         ) : null}
-        <div className="flex items-end gap-1 overflow-x-auto border-b border-black/10 dark:border-white/15 pb-0">
+        <div className="flex items-end gap-1 overflow-x-auto overflow-y-hidden no-scrollbar border-b border-[var(--surface-border)] pb-0">
           {openDraftTabs.map((draft) => (
             <div
               key={draft.id}
               className={`whitespace-nowrap rounded-t-md border border-b-0 px-2 py-1.5 text-xs flex items-center gap-1 ${
                 draft.id === activeDraftId
-                  ? "border-foreground bg-background text-foreground"
-                  : "border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-foreground/75"
+                  ? "surface-card text-foreground relative top-px"
+                  : "surface-card-soft text-foreground/75"
               }`}
             >
               <button onClick={() => switchDraft(draft.id)} className="text-left px-1">
@@ -443,7 +443,7 @@ function BuilderContent() {
               </button>
               <button
                 onClick={() => void onCloseTab(draft.id)}
-                className="inline-flex h-4 w-4 items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10"
+                className="inline-flex h-4 w-4 items-center justify-center rounded border surface-button"
                 title="Close tab"
                 aria-label={`Close ${draft.title}`}
               >
@@ -457,7 +457,7 @@ function BuilderContent() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 pb-0 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 pt-0 pb-0 space-y-3">
         {isLoading ? <p className="text-sm text-foreground/60">Loading note...</p> : null}
         {!isLoading && !activeDraft ? (
           <p className="text-sm text-foreground/70">
@@ -465,14 +465,14 @@ function BuilderContent() {
           </p>
         ) : null}
         {activeDraft ? (
-          <>
+          <div className="-mt-px rounded-b-lg border border-t-0 surface-card p-3 space-y-3">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => {
                 void onRenameDraft();
               }}
-              className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm font-medium"
+              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm font-medium"
               placeholder="Note title"
             />
             <ul
@@ -558,13 +558,13 @@ function BuilderContent() {
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => addTextBlock("")}
-                className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+                className="rounded-md border surface-button px-2 py-1 text-xs"
               >
                 + Text
               </button>
               <button
                 onClick={() => addQuoteBlock("", "")}
-                className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+                className="rounded-md border surface-button px-2 py-1 text-xs"
               >
                 + Quote
               </button>
@@ -575,7 +575,7 @@ function BuilderContent() {
                 Delete note
               </button>
             </div>
-            <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-black/10 dark:border-white/15 mt-3 -mx-3 px-3 py-3 space-y-2">
+            <div className="rounded-md border-t border-[var(--surface-border)] mt-2 pt-3 space-y-2">
               <div className="text-xs font-medium text-foreground/75">Tags</div>
               <input
                 value={tagsInput}
@@ -590,7 +590,7 @@ function BuilderContent() {
                     tags: nextTags,
                   });
                 }}
-                className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+                className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
                 placeholder="Tags (comma separated)"
               />
               <button
@@ -601,7 +601,7 @@ function BuilderContent() {
                 Share
               </button>
               {isShareMenuOpen ? (
-                <div className="space-y-2 rounded-md border border-black/10 dark:border-white/15 p-2">
+                <div className="space-y-2 rounded-md border surface-card-soft p-2">
                   <div className="text-xs text-foreground/70">Who can view this note?</div>
                   {(
                     [
@@ -632,8 +632,8 @@ function BuilderContent() {
                       onClick={() => void onSelectVisibility(option.key)}
                       className={`w-full rounded-md border px-3 py-2 text-left ${
                         visibility === option.key
-                          ? "border-foreground bg-black/5 dark:bg-white/10"
-                          : "border-black/10 dark:border-white/15"
+                          ? "surface-button"
+                          : "surface-card-soft"
                       }`}
                     >
                       <div className="text-sm font-medium">{option.title}</div>
@@ -643,7 +643,7 @@ function BuilderContent() {
                 </div>
               ) : null}
               {visibility === "link" ? (
-                <div className="rounded-md border border-black/10 dark:border-white/15 p-2 text-xs space-y-2">
+                <div className="rounded-md border surface-card-soft p-2 text-xs space-y-2">
                   <div className="text-foreground/70">Sharable link</div>
                   <div className="break-all text-foreground/90">
                     {origin ? `${origin}/insights/shared/${activeDraft.id}` : `/insights/shared/${activeDraft.id}`}
@@ -657,7 +657,7 @@ function BuilderContent() {
                       setShareMessage("Link copied");
                       window.setTimeout(() => setShareMessage(""), 1200);
                     }}
-                    className="rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-xs"
+                    className="rounded-md border surface-button px-2 py-1 text-xs"
                   >
                     Copy link
                   </button>
@@ -665,7 +665,7 @@ function BuilderContent() {
               ) : null}
               {shareMessage ? <p className="text-xs text-foreground/70 text-center">{shareMessage}</p> : null}
             </div>
-          </>
+          </div>
         ) : null}
       </div>
     </div>
@@ -756,7 +756,7 @@ export default function InsightBuilderShell() {
           </div>
           <button
             onClick={closeBuilder}
-            className="fixed z-[60] right-4 bottom-20 rounded-full border border-black/10 dark:border-white/15 bg-background/95 px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+            className="fixed z-[60] right-4 bottom-20 rounded-full border surface-button px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
           >
             Close
           </button>
@@ -764,7 +764,7 @@ export default function InsightBuilderShell() {
       ) : null}
 
       {activeDraftId ? (
-        <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] xl:w-[420px] 2xl:w-[480px] border-l border-black/10 dark:border-white/15 bg-background/95 backdrop-blur">
+        <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] xl:w-[420px] 2xl:w-[480px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] backdrop-blur">
           <BuilderContent />
         </aside>
       ) : null}

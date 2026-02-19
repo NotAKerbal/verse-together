@@ -129,6 +129,15 @@ body {
   color: var(--surface-button-active-text);
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Ripple effect for buttons and opt-in elements */
 .ripple {
   position: absolute;

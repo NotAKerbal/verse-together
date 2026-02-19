@@ -192,7 +192,7 @@ function WordHighlightEditor({
   }
 
   return (
-    <div className="px-1 py-1 text-sm whitespace-pre-wrap select-none rounded-md border border-black/10 dark:border-white/15 bg-background/40">
+    <div className="px-1 py-1 text-sm whitespace-pre-wrap select-none rounded-md border surface-card-soft">
       {sourceText ? (
         displayTokens.map((token, idx) => {
           if (token.type === "newline") {
@@ -215,7 +215,7 @@ function WordHighlightEditor({
                       prevHighlighted ? "" : "rounded-l-sm",
                       nextHighlighted ? "" : "rounded-r-sm",
                     ].join(" ")
-                  : "hover:bg-black/10 dark:hover:bg-white/10"
+                  : "hover:bg-[var(--surface-button-hover)]"
               } ${wordStyleHints?.[wordIdx]?.bold ? "font-semibold" : ""} ${wordStyleHints?.[wordIdx]?.italic ? "italic" : ""}`}
               title="Toggle highlight"
             >
@@ -320,7 +320,7 @@ export function QuoteBlockEditor({ block, onTextChange, onLinkChange, onHighligh
             <button
               type="button"
               onClick={() => setExpanded((prev) => !prev)}
-              className="text-[11px] text-foreground/70 underline underline-offset-2"
+              className="rounded-md border surface-button px-2 py-1 text-[11px] text-foreground/80"
             >
               {expanded ? "Show less" : "Show full card"}
             </button>
