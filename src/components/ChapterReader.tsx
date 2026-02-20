@@ -391,6 +391,12 @@ export default function ChapterReader({
   );
   const hasCompareSelections = compareByTranslation.size > 0;
 
+  useEffect(() => {
+    if (hasSelection) return;
+    setOpenCitations(false);
+    setOpenExplorer(false);
+  }, [hasSelection]);
+
   // first/last verse values not currently used
 
   function renderVerseText(v: Verse) {
@@ -650,7 +656,7 @@ export default function ChapterReader({
               verseEnd={selectedBounds.end}
             />
           ) : null}
-          {openExplorer ? (
+          {openExplorer && hasSelection ? (
             <VerseExplorerSidebarPanel
               open={true}
               onClose={() => setOpenExplorer(false)}
@@ -865,7 +871,7 @@ export default function ChapterReader({
         </div>
       ) : null}
 
-      {openExplorer ? (
+      {openExplorer && hasSelection ? (
         <div className="lg:hidden">
           <VerseExplorer
             open={true}
