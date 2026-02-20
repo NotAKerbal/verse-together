@@ -221,6 +221,7 @@ export default function ChapterReader({
   const [openTranslations, setOpenTranslations] = useState(false);
   const [hoverActionsOpen, setHoverActionsOpen] = useState(false);
   const [actionsPinned, setActionsPinned] = useState(false);
+  const [isAtTop, setIsAtTop] = useState(true);
   const overlayOpen = !!openFootnote || openCitations || openExplorer || openTranslations;
   const [showTapHint, setShowTapHint] = useState(false);
 
@@ -395,6 +396,11 @@ export default function ChapterReader({
     [compareByTranslation, translationNameById]
   );
   const hasCompareSelections = compareByTranslation.size > 0;
+  const headerBreadcrumbs = useMemo(() => {
+    if (!breadcrumbs?.length) return breadcrumbs;
+    const leading = breadcrumbs.slice(0, -1).map((item) => ({ ...item }));
+    return [...leading, { label: reference }];
+  }, [breadcrumbs, reference]);
 
   useEffect(() => {
     if (hasSelection) {
@@ -404,6 +410,15 @@ export default function ChapterReader({
     setOpenCitations(false);
     setOpenExplorer(false);
   }, [hasSelection]);
+
+  useEffect(() => {
+    function syncTopState() {
+      setIsAtTop(window.scrollY <= 8);
+    }
+    syncTopState();
+    window.addEventListener("scroll", syncTopState, { passive: true });
+    return () => window.removeEventListener("scroll", syncTopState);
+  }, []);
 
   // first/last verse values not currently used
 
@@ -699,38 +714,44 @@ export default function ChapterReader({
             : "lg:grid-cols-1"
         }`}
       >
-        <aside className="hidden lg:block self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-3">
+        <aside
+          className={`hidden lg:block self-start sticky overflow-y-auto pr-1 space-y-3 ${
+            isAtTop ? "top-2 max-h-[calc(100vh-1rem)]" : "top-4 max-h-[calc(100vh-2rem)]"
+          }`}
+        >
           <div
             className={`overflow-hidden transition-opacity duration-200 ease-out ${
               hasSelection || actionsPinned ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
             }`}
           >
-            <DesktopVerseActionList
-              visible={!openFootnote}
-              hasSelection={hasSelection}
-              hasActiveInsight={hasActiveNote}
-              showTranslations={!!translationControls}
-              showPinToggle={true}
-              pinned={actionsPinned}
-              actionsEnabled={!!user}
-              onClear={clearSelection}
-              onInsight={() => {
-                void onAddToNote();
-              }}
-              onNewInsight={() => {
-                void onNewNoteFromActions();
-              }}
-              onLoadInsights={() => {
-                void onLoadNotesFromActions();
-              }}
-              onCitations={onOpenCitations}
-              onExplore={onOpenExplore}
-              onTranslations={onOpenTranslations}
-              onTogglePin={() => {
-                setActionsPinned((prev) => !prev);
-                setHoverActionsOpen(false);
-              }}
-            />
+            <div className="sticky top-0 z-20 bg-background/95 pb-2 backdrop-blur">
+              <DesktopVerseActionList
+                visible={!openFootnote}
+                hasSelection={hasSelection}
+                hasActiveInsight={hasActiveNote}
+                showTranslations={!!translationControls}
+                showPinToggle={true}
+                pinned={actionsPinned}
+                actionsEnabled={!!user}
+                onClear={clearSelection}
+                onInsight={() => {
+                  void onAddToNote();
+                }}
+                onNewInsight={() => {
+                  void onNewNoteFromActions();
+                }}
+                onLoadInsights={() => {
+                  void onLoadNotesFromActions();
+                }}
+                onCitations={onOpenCitations}
+                onExplore={onOpenExplore}
+                onTranslations={onOpenTranslations}
+                onTogglePin={() => {
+                  setActionsPinned((prev) => !prev);
+                  setHoverActionsOpen(false);
+                }}
+              />
+            </div>
           </div>
           {openCitations && selectedBounds ? (
             <CitationsSidebarPanel
@@ -763,18 +784,25 @@ export default function ChapterReader({
           style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
           className="relative w-full max-w-6xl mx-auto"
         >
-          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
+          <header
+            className={`sticky top-0 z-10 border-b border-black/5 dark:border-white/10 ${
+              isAtTop ? "py-0.5" : "py-3"
+            }`}
+          >
             <div className="relative flex flex-col gap-1">
-              <div className="text-xs sm:text-sm pr-10">
-                <Breadcrumbs items={breadcrumbs} />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <h1 className="text-base sm:text-xl font-semibold">{reference}</h1>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="inline-flex max-w-full rounded-lg border surface-card backdrop-blur px-2.5 py-1">
+                    <div className="text-xs sm:text-sm">
+                      <Breadcrumbs items={headerBreadcrumbs} />
+                    </div>
+                  </div>
+                </div>
                 <button
                   aria-label="Reader settings"
                   title="Reader settings"
                   onClick={() => setSettingsOpen(true)}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-button"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-button shrink-0"
                 >
                   ⚙
                 </button>
