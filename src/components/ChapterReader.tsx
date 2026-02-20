@@ -667,7 +667,7 @@ export default function ChapterReader({
         <div
           onTransitionEnd={onTransitionEnd}
           style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
-          className="relative w-full max-w-6xl"
+          className="relative w-full max-w-6xl mx-auto"
         >
           {translationControls ? (
             <div className="lg:hidden mb-3">
