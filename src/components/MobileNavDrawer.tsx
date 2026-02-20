@@ -74,7 +74,19 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
         className={`absolute inset-y-0 left-0 w-72 max-w-[80vw] bg-background shadow-2xl border-r border-black/10 dark:border-white/15 p-4 space-y-4 transform transition-transform duration-200 ease-out will-change-[transform] ${open && !isClosing && hasEntered ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold">Menu</span>
+          <div className="flex items-center gap-2">
+            {user ? (
+              <UserButton
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: "h-7 w-7",
+                  },
+                }}
+                afterSignOutUrl="/"
+              />
+            ) : null}
+            <span className="text-sm font-semibold">Menu</span>
+          </div>
           <button onClick={requestClose} className="px-2 py-1 text-sm rounded-md border border-black/10 dark:border-white/15">Close</button>
         </div>
 
@@ -103,15 +115,11 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
         </div>
 
         <div className="pt-1 border-t border-black/10 dark:border-white/15">
-          {user ? (
-            <div className="py-2">
-              <UserButton afterSignOutUrl="/" />
-            </div>
-          ) : (
+          {!user ? (
             <SignInButton mode="modal">
               <button className="px-3 py-2 rounded-md bg-foreground text-background text-sm">Sign in</button>
             </SignInButton>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

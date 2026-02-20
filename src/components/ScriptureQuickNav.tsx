@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 
@@ -38,7 +38,6 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
   const inputRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const locationData = useMemo(() => parseBrowseLocation(pathname), [pathname]);
   const activeVolume = normalizeScriptureVolume(currentVolume ?? locationData.volume ?? "");
   const activeBook = currentBook ?? locationData.book;
@@ -147,8 +146,9 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
 
   function navigateTo(href: string, targetVolume: string) {
     const nextUrl = new URL(href, window.location.origin);
-    const currentTranslation = searchParams.get("translation");
-    const compare = searchParams.getAll("compare");
+    const currentParams = new URLSearchParams(window.location.search);
+    const currentTranslation = currentParams.get("translation");
+    const compare = currentParams.getAll("compare");
     if ((targetVolume === "oldtestament" || targetVolume === "newtestament") && currentTranslation) {
       nextUrl.searchParams.set("translation", currentTranslation);
       compare.forEach((value) => nextUrl.searchParams.append("compare", value));
