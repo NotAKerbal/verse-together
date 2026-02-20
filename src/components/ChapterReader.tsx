@@ -581,7 +581,7 @@ export default function ChapterReader({
   }
 
   return (
-    <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <section className="mx-auto max-w-6xl space-y-4 pb-20" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       {/* Preview overlay behind the sliding content */}
       {isDragging || animTargetX !== null ? (
         <div className="pointer-events-none fixed inset-0 z-0">
