@@ -10,7 +10,10 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
         {items.map((c, idx) => (
           <li key={idx} className="flex items-center gap-2">
             {c.href ? (
-              <Link href={c.href} className="hover:underline">
+              <Link
+                href={c.href}
+                className="rounded-md px-1.5 py-0.5 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+              >
                 {c.label}
               </Link>
             ) : (
@@ -25,5 +28,4 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
     </nav>
   );
 }
-
 
