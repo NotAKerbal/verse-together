@@ -14,7 +14,7 @@ const ONBOARDING_KEY = "reader_onboarding_v1";
 
 export function getDefaultPreferences(): ReaderPreferences {
   return {
-    showFootnotes: false,
+    showFootnotes: true,
     fontScale: 1,
     fontFamily: "serif",
     comparisonView: "inline",
@@ -135,5 +135,4 @@ export function setSeenTapToActionsHint(): void {
   const next: OnboardingFlags = { seenTapHint: true };
   writeOnboardingFlags(next);
 }
-
 

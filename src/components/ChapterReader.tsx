@@ -12,6 +12,7 @@ import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import VerseExplorerSidebarPanel from "./VerseExplorerSidebarPanel";
 import TranslationSidebarPanel from "./TranslationSidebarPanel";
 import TranslationModal from "./TranslationModal";
+import ScriptureQuickNav from "./ScriptureQuickNav";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -208,7 +209,7 @@ export default function ChapterReader({
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number | null>(null);
-  const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string }>(null);
+  const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string; verse: number; index: number }>(null);
   const [dragDx, setDragDx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [animTargetX, setAnimTargetX] = useState<number | null>(null);
@@ -222,6 +223,8 @@ export default function ChapterReader({
   const [hoverActionsOpen, setHoverActionsOpen] = useState(false);
   const [actionsPinned, setActionsPinned] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
+  const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
+  const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = !!openFootnote || openCitations || openExplorer || openTranslations;
   const [showTapHint, setShowTapHint] = useState(false);
 
@@ -330,6 +333,7 @@ export default function ChapterReader({
     return picked.map((v) => `${v.verse}. ${v.text}`).join("\n");
   }, [verses, selected]);
   const hasSelection = selected.size > 0;
+  const hasSidebarPanelOpen = hasSelection || actionsPinned || !!openFootnote;
   const selectedBounds = useMemo(() => {
     if (!hasSelection) return null;
     const verseList = Array.from(selected);
@@ -420,6 +424,47 @@ export default function ChapterReader({
     return () => window.removeEventListener("scroll", syncTopState);
   }, []);
 
+  useEffect(() => {
+    function markJumpVerse(verse: number) {
+      setJumpHighlightVerse(verse);
+      if (jumpHighlightTimeout.current !== null) {
+        window.clearTimeout(jumpHighlightTimeout.current);
+      }
+      jumpHighlightTimeout.current = window.setTimeout(() => {
+        setJumpHighlightVerse(null);
+        jumpHighlightTimeout.current = null;
+      }, 1800);
+    }
+
+    function applyHashJump() {
+      const hashMatch = window.location.hash.match(/^#v-(\d+)$/);
+      if (!hashMatch) return;
+      const verse = Number(hashMatch[1]);
+      if (!Number.isFinite(verse) || verse <= 0) return;
+      const target = document.getElementById(`v-${verse}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      markJumpVerse(verse);
+    }
+
+    function onQuickNavJump(event: Event) {
+      const detail = (event as CustomEvent<{ verse?: number }>).detail;
+      const verse = Number(detail?.verse);
+      if (!Number.isFinite(verse) || verse <= 0) return;
+      markJumpVerse(verse);
+    }
+
+    applyHashJump();
+    window.addEventListener("hashchange", applyHashJump);
+    window.addEventListener("quick-nav-jump", onQuickNavJump as EventListener);
+    return () => {
+      window.removeEventListener("hashchange", applyHashJump);
+      window.removeEventListener("quick-nav-jump", onQuickNavJump as EventListener);
+      if (jumpHighlightTimeout.current !== null) {
+        window.clearTimeout(jumpHighlightTimeout.current);
+      }
+    };
+  }, []);
+
   // first/last verse values not currently used
 
   function renderVerseText(v: Verse) {
@@ -446,13 +491,27 @@ export default function ChapterReader({
       }
       if (displayEnd >= start) {
         const highlighted = v.text.slice(start, displayEnd + 1);
+        const isActiveFootnote = openFootnote?.verse === v.verse && openFootnote?.index === idx;
         parts.push(
           <span
             key={`fn-${v.verse}-${idx}-${start}-${displayEnd}`}
-            className="bg-sky-200/50 dark:bg-sky-400/25 rounded px-0.5 cursor-pointer ring-1 ring-sky-600/20"
+            className={`rounded px-0.5 cursor-pointer ${
+              isActiveFootnote
+                ? "bg-amber-300/70 dark:bg-amber-400/35"
+                : "bg-sky-200/50 dark:bg-sky-400/25"
+            }`}
             onClick={(e) => {
               e.stopPropagation();
-              setOpenFootnote({ footnote: fn.footnote, verseText: v.text, highlightText: highlighted });
+              setOpenCitations(false);
+              setOpenExplorer(false);
+              setOpenTranslations(false);
+              setOpenFootnote({
+                footnote: fn.footnote,
+                verseText: v.text,
+                highlightText: highlighted,
+                verse: v.verse,
+                index: idx,
+              });
             }}
             role="button"
             aria-label="Show footnote"
@@ -639,7 +698,7 @@ export default function ChapterReader({
             <div className="pointer-events-auto space-y-3">
               <div className="flex items-start gap-2">
                 <DesktopVerseActionList
-                  visible={!openFootnote}
+                  visible={true}
                   hasSelection={hasSelection}
                   hasActiveInsight={hasActiveNote}
                   showTranslations={!!translationControls}
@@ -709,7 +768,7 @@ export default function ChapterReader({
 
       <div
         className={`lg:grid lg:items-start ${
-          hasSelection || actionsPinned
+          hasSidebarPanelOpen
             ? "lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:gap-6 xl:gap-8"
             : "lg:grid-cols-1"
         }`}
@@ -721,12 +780,12 @@ export default function ChapterReader({
         >
           <div
             className={`overflow-hidden transition-opacity duration-200 ease-out ${
-              hasSelection || actionsPinned ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+              hasSidebarPanelOpen ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
             }`}
           >
             <div className="sticky top-0 z-20 bg-background/95 pb-2 backdrop-blur">
               <DesktopVerseActionList
-                visible={!openFootnote}
+                visible={true}
                 hasSelection={hasSelection}
                 hasActiveInsight={hasActiveNote}
                 showTranslations={!!translationControls}
@@ -778,6 +837,16 @@ export default function ChapterReader({
               controls={translationControls}
             />
           ) : null}
+          {openFootnote ? (
+            <FootnoteModal
+              open={true}
+              variant="panel"
+              onClose={() => setOpenFootnote(null)}
+              footnote={openFootnote.footnote}
+              verseText={openFootnote.verseText}
+              highlightText={openFootnote.highlightText}
+            />
+          ) : null}
         </aside>
         <div
           onTransitionEnd={onTransitionEnd}
@@ -791,7 +860,12 @@ export default function ChapterReader({
           >
             <div className="relative flex flex-col gap-1">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex items-center gap-2">
+                  <ScriptureQuickNav
+                    currentVolume={volume}
+                    currentBook={book}
+                    verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
+                  />
                   <div className="inline-flex max-w-full rounded-lg border surface-card backdrop-blur px-2.5 py-1">
                     <div className="text-xs sm:text-sm">
                       <Breadcrumbs items={headerBreadcrumbs} />
@@ -841,6 +915,7 @@ export default function ChapterReader({
           >
             {verses.map((v) => {
               const isSelected = selected.has(v.verse);
+              const isJumpHighlighted = jumpHighlightVerse === v.verse;
               const verseComparisons = Array.from(compareByTranslation.entries())
                 .map(([translationId, byVerse]) => {
                   const text = byVerse.get(v.verse);
@@ -864,7 +939,11 @@ export default function ChapterReader({
                   key={v.verse}
                   id={`v-${v.verse}`}
                   className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
-                    isSelected ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : ""
+                    isSelected
+                      ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30"
+                      : isJumpHighlighted
+                      ? "bg-sky-200/45 dark:bg-sky-400/20 ring-1 ring-sky-600/35 transition-colors duration-300"
+                      : ""
                   }`}
                 >
                   <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
@@ -965,13 +1044,15 @@ export default function ChapterReader({
       ) : null}
 
       {openFootnote ? (
-        <FootnoteModal
-          open={true}
-          onClose={() => setOpenFootnote(null)}
-          footnote={openFootnote.footnote}
-          verseText={openFootnote.verseText}
-          highlightText={openFootnote.highlightText}
-        />
+        <div className="lg:hidden">
+          <FootnoteModal
+            open={true}
+            onClose={() => setOpenFootnote(null)}
+            footnote={openFootnote.footnote}
+            verseText={openFootnote.verseText}
+            highlightText={openFootnote.highlightText}
+          />
+        </div>
       ) : null}
 
       {openCitations && selectedBounds ? (

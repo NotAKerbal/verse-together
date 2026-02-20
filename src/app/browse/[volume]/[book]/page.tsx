@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import ScriptureQuickNav from "@/components/ScriptureQuickNav";
 import { fetchBook } from "@/lib/openscripture";
 import { getBibleBookBySlug, isBibleVolume } from "@/lib/bibleCanon";
 import {
@@ -37,13 +38,16 @@ export default async function BookLanding({ params }: { params: Promise<{ volume
   const compactNumberGrid = canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants";
   return (
     <section className="space-y-6">
-      <Breadcrumbs
-        items={[
-          { label: "Browse", href: "/browse" },
-          ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
-          { label: bookLabel },
-        ]}
-      />
+      <div className="flex items-start justify-between gap-3">
+        <Breadcrumbs
+          items={[
+            { label: "Browse", href: "/browse" },
+            ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
+            { label: bookLabel },
+          ]}
+        />
+        <ScriptureQuickNav currentVolume={canonicalVolume} currentBook={book} />
+      </div>
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold capitalize">{bookLabel}</h1>
         {bookData.summary ? (

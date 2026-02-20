@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import ScriptureQuickNav from "@/components/ScriptureQuickNav";
 import { getBibleBooksForVolume } from "@/lib/bibleCanon";
 import {
   getScriptureVolumeLabel,
   normalizeScriptureVolume,
   toScriptureVolumeUrlSlug,
 } from "@/lib/scriptureVolumes";
+import { getBookAbbreviation } from "@/lib/scriptureQuickNav";
 
 const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   bookofmormon: [
@@ -56,7 +58,10 @@ export default async function VolumePage({ params }: { params: Promise<{ volume:
 
   return (
     <section className="space-y-6">
-      <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: volumeLabel }]} />
+      <div className="flex items-start justify-between gap-3">
+        <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: volumeLabel }]} />
+        <ScriptureQuickNav currentVolume={canonicalVolume} />
+      </div>
       <h1 className="text-2xl font-semibold">{volumeLabel}</h1>
       {books.length === 0 ? (
         <p className="text-foreground/80">No book list available for this volume yet.</p>
@@ -69,7 +74,12 @@ export default async function VolumePage({ params }: { params: Promise<{ volume:
                 className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
                 data-ripple
               >
-                {b.label}
+                <div className="font-medium">{b.label}</div>
+                {getBookAbbreviation(b.id) ? (
+                  <div className="mt-1 inline-flex items-center rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-xs text-foreground/70">
+                    {getBookAbbreviation(b.id)}
+                  </div>
+                ) : null}
               </Link>
             </li>
           ))}
