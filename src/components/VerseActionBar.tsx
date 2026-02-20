@@ -5,6 +5,7 @@ import type { FC } from "react";
 export type Props = {
   visible: boolean;
   hasActiveInsight: boolean;
+  showTranslations?: boolean;
   actionsEnabled?: boolean;
   onClear: () => void;
   onInsight: () => void;
@@ -12,11 +13,13 @@ export type Props = {
   onLoadInsights: () => void;
   onCitations: () => void;
   onExplore: () => void;
+  onTranslations: () => void;
 };
 
 const VerseActionBar: FC<Props> = ({
   visible,
   hasActiveInsight,
+  showTranslations = false,
   actionsEnabled = true,
   onClear,
   onInsight,
@@ -24,6 +27,7 @@ const VerseActionBar: FC<Props> = ({
   onLoadInsights,
   onCitations,
   onExplore,
+  onTranslations,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
@@ -151,6 +155,22 @@ const VerseActionBar: FC<Props> = ({
             >
               🔎 Explore
             </button>
+            {showTranslations ? (
+              <>
+                <div className="h-1" />
+                <button
+                  onClick={() => {
+                    toggleMenu();
+                    onTranslations();
+                  }}
+                  className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
+                  title="Translations"
+                  aria-label="Translations"
+                >
+                  🌐 Translations
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

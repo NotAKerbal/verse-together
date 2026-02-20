@@ -112,54 +112,47 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
   }
 
   return (
-    <details className="rounded-lg border border-black/10 dark:border-white/15 p-3">
-      <summary className="cursor-pointer select-none text-sm font-medium list-none">
-        <span className="inline-flex items-center gap-2">
-          <span>Translations</span>
-          <span className="text-xs text-foreground/60">({selectedCount} selected)</span>
-        </span>
-      </summary>
-      <div className="mt-2 space-y-3">
-        <div className="text-xs text-foreground/70">Bible source: bible-api.com + bible.helloao.org</div>
-        <div className="text-xs text-foreground/70">Select one or more translations to compare wording differences.</div>
-        <TranslationCatalogPicker
-          existingIds={optionIds}
-          onAddFavorite={(item) => addFavorite(item)}
-        />
-        <div className="grid gap-2 grid-cols-1">
-          {options.map((option) => {
-            const isSelected = selectedIds.has(option.id);
-            const description = TRANSLATION_DESCRIPTIONS[option.id] ?? `${option.label} is included for comparison. Select it to view wording differences.`;
-            return (
-              <Link
-                key={option.id}
-                href={`/browse/${volume}/${book}/${chapter}?${buildToggleQuery(option.id, translation, compare, optionIds)}`}
-                className={`rounded-md border p-2 transition-colors ${
-                  isSelected
-                    ? "border-sky-600/40 bg-sky-500/10"
-                    : "border-black/10 dark:border-white/15"
-                }`}
-              >
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium">{option.id.toUpperCase()}</div>
-                  <div className="flex items-center gap-2">
-                    {option.source === "favorite" ? (
-                      <span className="text-[10px] uppercase tracking-wide text-foreground/60">Favorite</span>
-                    ) : null}
-                    {isSelected ? (
-                      <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">Selected</span>
-                    ) : null}
-                  </div>
+    <div className="space-y-3">
+      <div className="text-xs text-foreground/70">Bible source: bible-api.com + bible.helloao.org</div>
+      <div className="text-xs text-foreground/70">Select one or more translations to compare wording differences.</div>
+      <div className="text-xs text-foreground/60">{selectedCount} selected</div>
+      <TranslationCatalogPicker
+        existingIds={optionIds}
+        onAddFavorite={(item) => addFavorite(item)}
+      />
+      <div className="grid gap-2 grid-cols-1">
+        {options.map((option) => {
+          const isSelected = selectedIds.has(option.id);
+          const description = TRANSLATION_DESCRIPTIONS[option.id] ?? `${option.label} is included for comparison. Select it to view wording differences.`;
+          return (
+            <Link
+              key={option.id}
+              href={`/browse/${volume}/${book}/${chapter}?${buildToggleQuery(option.id, translation, compare, optionIds)}`}
+              className={`rounded-md border p-2 transition-colors ${
+                isSelected
+                  ? "border-sky-600/40 bg-sky-500/10"
+                  : "border-black/10 dark:border-white/15"
+              }`}
+            >
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">{option.id.toUpperCase()}</div>
+                <div className="flex items-center gap-2">
+                  {option.source === "favorite" ? (
+                    <span className="text-[10px] uppercase tracking-wide text-foreground/60">Favorite</span>
+                  ) : null}
+                  {isSelected ? (
+                    <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">Selected</span>
+                  ) : null}
                 </div>
-                <div className="text-[11px] text-foreground/70">{option.label}.</div>
-                <div className="mt-1 text-[11px] leading-relaxed text-foreground/60">
-                  {description}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+              </div>
+              <div className="text-[11px] text-foreground/70">{option.label}.</div>
+              <div className="mt-1 text-[11px] leading-relaxed text-foreground/60">
+                {description}
+              </div>
+            </Link>
+          );
+        })}
       </div>
-    </details>
+    </div>
   );
 }

@@ -143,15 +143,26 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
     };
   }, [open, activeWord]);
 
+  const hasDictionaryEntries = dictEnabled && (entries1828.length > 0 || entries1844.length > 0 || entries1913.length > 0);
+  const hasEtymologyEntries = etymologyItems.length > 0;
+  const availableTabs = useMemo(() => {
+    const next: ExplorerTab[] = [];
+    if (hasDictionaryEntries) next.push("dict");
+    if (tgAvailable) next.push("tg");
+    if (bdAvailable) next.push("bd");
+    if (hasEtymologyEntries) next.push("ety");
+    return next;
+  }, [hasDictionaryEntries, tgAvailable, bdAvailable, hasEtymologyEntries]);
+
   const currentUrl = tab === "tg" ? tgUrl : tab === "bd" ? bdUrl : "";
-  const inAppDictionaryTab = dictEnabled && tab === "dict";
+  const inAppDictionaryTab = tab === "dict" && hasDictionaryEntries;
 
   useEffect(() => {
-    if (tab === "tg" && !tgAvailable) setTab("dict");
-  }, [tgAvailable, tab]);
-  useEffect(() => {
-    if (tab === "bd" && !bdAvailable) setTab("dict");
-  }, [bdAvailable, tab]);
+    if (availableTabs.length === 0) return;
+    if (!availableTabs.includes(tab)) {
+      setTab(availableTabs[0]);
+    }
+  }, [availableTabs, tab]);
   if (!open) return null;
 
   return (
@@ -197,17 +208,21 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <div className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 overflow-hidden">
-          <button
-            onClick={() => setTab("dict")}
-            className={`px-2.5 py-1 text-sm ${tab === "dict" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
-          >
-            Dictionary
-          </button>
+        <div className="segmented-control" role="group" aria-label="Explore source">
+          {hasDictionaryEntries ? (
+            <button
+              onClick={() => setTab("dict")}
+              className="segmented-control-button px-2.5 text-sm"
+              data-active={tab === "dict"}
+            >
+              Dictionary
+            </button>
+          ) : null}
           {tgAvailable ? (
             <button
               onClick={() => setTab("tg")}
-              className={`px-2.5 py-1 text-sm ${tab === "tg" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
+              className="segmented-control-button px-2.5 text-sm"
+              data-active={tab === "tg"}
               title="Topical Guide"
             >
               TG
@@ -216,19 +231,23 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
           {bdAvailable ? (
             <button
               onClick={() => setTab("bd")}
-              className={`px-2.5 py-1 text-sm ${tab === "bd" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
+              className="segmented-control-button px-2.5 text-sm"
+              data-active={tab === "bd"}
               title="Bible Dictionary"
             >
               BD
             </button>
           ) : null}
-          <button
-            onClick={() => setTab("ety")}
-            className={`px-2.5 py-1 text-sm ${tab === "ety" ? "bg-background/70" : "bg-transparent hover:bg-black/5 dark:hover:bg-white/10"}`}
-            title="Etymology"
-          >
-            Etymology
-          </button>
+          {hasEtymologyEntries ? (
+            <button
+              onClick={() => setTab("ety")}
+              className="segmented-control-button px-2.5 text-sm"
+              data-active={tab === "ety"}
+              title="Etymology"
+            >
+              Etymology
+            </button>
+          ) : null}
         </div>
         {activeWord && currentUrl ? (
           <a
@@ -243,19 +262,13 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
       </div>
 
       <div className="rounded-md overflow-hidden border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 h-[44vh]">
-        {activeWord && tab === "ety" ? (
+        {activeWord && tab === "ety" && hasEtymologyEntries ? (
           <div className="w-full h-full overflow-y-auto p-3 space-y-3">
-            {etymologyItems.length > 0 ? (
-              etymologyItems.map((item) => (
-                <EtymologyEntryCard key={item.id} item={item} />
-              ))
-            ) : (
-              <div className="w-full h-full grid place-items-center text-sm text-foreground/60 p-3 text-center">
-                No etymology found for this word.
-              </div>
-            )}
+            {etymologyItems.map((item) => (
+              <EtymologyEntryCard key={item.id} item={item} />
+            ))}
           </div>
-        ) : activeWord && inAppDictionaryTab && (entries1828.length > 0 || entries1844.length > 0 || entries1913.length > 0) ? (
+        ) : activeWord && inAppDictionaryTab ? (
           <div className="w-full h-full overflow-y-auto p-3 space-y-3">
             {([
               { edition: "1828", rows: entries1828 },
@@ -290,7 +303,7 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
           />
         ) : (
           <div className="w-full h-full grid place-items-center text-sm text-foreground/60 p-3 text-center">
-            {activeWord ? "No entry found for this tool." : "Select a word to preview"}
+            {activeWord ? "No entries found for this word." : "Select a word to preview"}
           </div>
         )}
       </div>

@@ -10,6 +10,8 @@ import CitationsModal from "./CitationsModal";
 import VerseExplorer from "./VerseExplorer";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import VerseExplorerSidebarPanel from "./VerseExplorerSidebarPanel";
+import TranslationSidebarPanel from "./TranslationSidebarPanel";
+import TranslationModal from "./TranslationModal";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -216,7 +218,10 @@ export default function ChapterReader({
   const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
-  const overlayOpen = !!openFootnote || openCitations || openExplorer;
+  const [openTranslations, setOpenTranslations] = useState(false);
+  const [hoverActionsOpen, setHoverActionsOpen] = useState(false);
+  const [actionsPinned, setActionsPinned] = useState(false);
+  const overlayOpen = !!openFootnote || openCitations || openExplorer || openTranslations;
   const [showTapHint, setShowTapHint] = useState(false);
 
   function parseBrowseHref(
@@ -392,7 +397,10 @@ export default function ChapterReader({
   const hasCompareSelections = compareByTranslation.size > 0;
 
   useEffect(() => {
-    if (hasSelection) return;
+    if (hasSelection) {
+      setHoverActionsOpen(false);
+      return;
+    }
     setOpenCitations(false);
     setOpenExplorer(false);
   }, [hasSelection]);
@@ -577,17 +585,89 @@ export default function ChapterReader({
   function onOpenCitations() {
     if (!selectedBounds) return;
     setOpenExplorer(false);
+    setOpenTranslations(false);
     setOpenCitations(true);
   }
 
   function onOpenExplore() {
     if (!selectedBounds) return;
     setOpenCitations(false);
+    setOpenTranslations(false);
     setOpenExplorer(true);
+  }
+
+  function onOpenTranslations() {
+    if (!translationControls) return;
+    setOpenCitations(false);
+    setOpenExplorer(false);
+    setOpenTranslations(true);
   }
 
   return (
     <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      {!hasSelection && !actionsPinned ? (
+        <div className="hidden lg:block">
+          <div
+            className="fixed left-0 top-24 bottom-0 z-30 w-4"
+            onMouseEnter={() => setHoverActionsOpen(true)}
+            aria-hidden
+          />
+          <div
+            className={`fixed left-0 top-24 z-40 w-[24rem] max-w-[85vw] p-3 transition-transform duration-200 ${
+              hoverActionsOpen ? "translate-x-0" : "-translate-x-[calc(100%-1rem)]"
+            }`}
+            onMouseEnter={() => setHoverActionsOpen(true)}
+            onMouseLeave={() => {
+              setHoverActionsOpen(false);
+            }}
+          >
+            <div className="pointer-events-auto space-y-3">
+              <div className="flex items-start gap-2">
+                <DesktopVerseActionList
+                  visible={!openFootnote}
+                  hasSelection={hasSelection}
+                  hasActiveInsight={hasActiveNote}
+                  showTranslations={!!translationControls}
+                  showPinToggle={true}
+                  pinned={actionsPinned}
+                  actionsEnabled={!!user}
+                  onClear={clearSelection}
+                  onInsight={() => {
+                    void onAddToNote();
+                  }}
+                  onNewInsight={() => {
+                    void onNewNoteFromActions();
+                  }}
+                  onLoadInsights={() => {
+                    void onLoadNotesFromActions();
+                  }}
+                  onCitations={onOpenCitations}
+                  onExplore={onOpenExplore}
+                  onTranslations={onOpenTranslations}
+                  onTogglePin={() => {
+                    setActionsPinned((prev) => {
+                      const next = !prev;
+                      setHoverActionsOpen(false);
+                      return next;
+                    });
+                  }}
+                />
+                <div className="mt-2 rounded-r-md border border-l-0 border-black/10 dark:border-white/15 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-wide text-foreground/60">
+                  Actions
+                </div>
+              </div>
+              {openTranslations && translationControls ? (
+                <TranslationSidebarPanel
+                  open={true}
+                  onClose={() => setOpenTranslations(false)}
+                  controls={translationControls}
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Preview overlay behind the sliding content */}
       {isDragging || animTargetX !== null ? (
         <div className="pointer-events-none fixed inset-0 z-0">
@@ -614,22 +694,24 @@ export default function ChapterReader({
 
       <div
         className={`lg:grid lg:items-start ${
-          hasSelection
+          hasSelection || actionsPinned
             ? "lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:gap-6 xl:gap-8"
             : "lg:grid-cols-1"
         }`}
       >
         <aside className="hidden lg:block self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1 space-y-3">
-          {translationControls ? <div>{translationControls}</div> : null}
           <div
             className={`overflow-hidden transition-opacity duration-200 ease-out ${
-              hasSelection ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+              hasSelection || actionsPinned ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
             }`}
           >
             <DesktopVerseActionList
               visible={!openFootnote}
               hasSelection={hasSelection}
               hasActiveInsight={hasActiveNote}
+              showTranslations={!!translationControls}
+              showPinToggle={true}
+              pinned={actionsPinned}
               actionsEnabled={!!user}
               onClear={clearSelection}
               onInsight={() => {
@@ -643,6 +725,11 @@ export default function ChapterReader({
               }}
               onCitations={onOpenCitations}
               onExplore={onOpenExplore}
+              onTranslations={onOpenTranslations}
+              onTogglePin={() => {
+                setActionsPinned((prev) => !prev);
+                setHoverActionsOpen(false);
+              }}
             />
           </div>
           {openCitations && selectedBounds ? (
@@ -663,17 +750,19 @@ export default function ChapterReader({
               verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
             />
           ) : null}
+          {openTranslations && (hasSelection || actionsPinned) && translationControls ? (
+            <TranslationSidebarPanel
+              open={true}
+              onClose={() => setOpenTranslations(false)}
+              controls={translationControls}
+            />
+          ) : null}
         </aside>
         <div
           onTransitionEnd={onTransitionEnd}
           style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
           className="relative w-full max-w-6xl mx-auto"
         >
-          {translationControls ? (
-            <div className="lg:hidden mb-3">
-              {translationControls}
-            </div>
-          ) : null}
           <header className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-black/5 dark:border-white/10 py-2">
             <div className="relative flex flex-col gap-1">
               <div className="text-xs sm:text-sm pr-10">
@@ -880,12 +969,18 @@ export default function ChapterReader({
           />
         </div>
       ) : null}
+      {openTranslations && translationControls ? (
+        <div className="lg:hidden">
+          <TranslationModal open={true} onClose={() => setOpenTranslations(false)} controls={translationControls} />
+        </div>
+      ) : null}
 
       {/* dictionary and etymology now live inside VerseExplorer */}
 
       <VerseActionBar
         visible={hasSelection && !overlayOpen}
         hasActiveInsight={hasActiveNote}
+        showTranslations={!!translationControls}
         actionsEnabled={!!user}
         onClear={clearSelection}
         onInsight={() => {
@@ -899,6 +994,7 @@ export default function ChapterReader({
         }}
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}
+        onTranslations={onOpenTranslations}
       />
     </section>
   );
