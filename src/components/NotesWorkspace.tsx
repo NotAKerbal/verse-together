@@ -11,6 +11,7 @@ import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 const FOLDER_NAMES_KEY = "vt_note_folder_names_v1";
 const NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
 const FOLDER_PARENT_MAP_KEY = "vt_folder_parent_map_v1";
+const EXPANDED_FOLDERS_KEY = "vt_expanded_folders_v1";
 const NOTES_TIP_DISMISSED_KEY = "vt_notes_tip_dismissed_v1";
 
 type FolderParentMap = Record<string, string>;
@@ -91,6 +92,31 @@ function saveFolderParentMap(map: FolderParentMap) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(FOLDER_PARENT_MAP_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function loadExpandedFolders(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(EXPANDED_FOLDERS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const name = String(key).trim();
+      if (!name) continue;
+      out[name] = !!value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveExpandedFolders(map: Record<string, boolean>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(EXPANDED_FOLDERS_KEY, JSON.stringify(map));
   } catch {}
 }
 
@@ -214,6 +240,7 @@ export default function NotesWorkspace({
     setFolderNames(loadFolderNames());
     setNoteFolderMap(loadNoteFolderMap());
     setFolderParentMap(loadFolderParentMap());
+    setExpandedFolders(loadExpandedFolders());
     try {
       setShowTipsTooltip(!window.localStorage.getItem(NOTES_TIP_DISMISSED_KEY));
     } catch {
@@ -405,7 +432,11 @@ export default function NotesWorkspace({
   }, [childrenByParent, rootFolders]);
 
   function toggleFolder(folder: string) {
-    setExpandedFolders((prev) => ({ ...prev, [folder]: !prev[folder] }));
+    setExpandedFolders((prev) => {
+      const next = { ...prev, [folder]: !(prev[folder] ?? true) };
+      saveExpandedFolders(next);
+      return next;
+    });
   }
 
   function upsertFolder(name: string, parent?: string | null) {
@@ -423,7 +454,11 @@ export default function NotesWorkspace({
       saveFolderParentMap(nextParents);
     }
 
-    setExpandedFolders((prev) => ({ ...prev, [trimmed]: true }));
+    setExpandedFolders((prev) => {
+      const next = { ...prev, [trimmed]: true };
+      saveExpandedFolders(next);
+      return next;
+    });
     return true;
   }
 
@@ -481,6 +516,7 @@ export default function NotesWorkspace({
     setExpandedFolders((prev) => {
       const out = { ...prev };
       delete out[name];
+      saveExpandedFolders(out);
       return out;
     });
     setActiveFilters((prev) => prev.filter((filter) => !(filter.kind === "folder" && filter.value === name)));
@@ -522,6 +558,7 @@ export default function NotesWorkspace({
         out[toName] = out[fromName];
         delete out[fromName];
       }
+      saveExpandedFolders(out);
       return out;
     });
 

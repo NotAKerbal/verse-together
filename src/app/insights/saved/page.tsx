@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import Link from "next/link";
 import { api } from "../../../../convex/_generated/api";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import { useAuth } from "@/lib/auth";
 import type { InsightDraftSummary } from "@/lib/appData";
 
 function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
@@ -15,7 +16,8 @@ function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
 }
 
 export default function SavedInsightsPage() {
-  const rows = useQuery(api.insights.listMyDrafts, {}) as InsightDraftSummary[] | undefined;
+  const { user, loading } = useAuth();
+  const rows = useQuery(api.insights.listMyDrafts, user ? {} : "skip") as InsightDraftSummary[] | undefined;
   const { switchDraft, openBuilder } = useInsightBuilder();
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<string>("all");
@@ -85,11 +87,13 @@ export default function SavedInsightsPage() {
             ))}
           </div>
         </div>
-        {rows === undefined ? <p className="text-sm text-foreground/70">Loading saved notes...</p> : null}
-        {rows !== undefined && rows.length === 0 ? (
+        {loading ? <p className="text-sm text-foreground/70">Loading saved notes...</p> : null}
+        {!loading && !user ? <p className="text-sm text-foreground/70">Sign in to view your saved notes.</p> : null}
+        {!loading && user && rows === undefined ? <p className="text-sm text-foreground/70">Loading saved notes...</p> : null}
+        {!loading && user && rows !== undefined && rows.length === 0 ? (
           <p className="text-sm text-foreground/70">No saved notes yet.</p>
         ) : null}
-        {rows !== undefined && rows.length > 0 && filteredRows.length === 0 ? (
+        {!loading && user && rows !== undefined && rows.length > 0 && filteredRows.length === 0 ? (
           <p className="text-sm text-foreground/70">No notes match your filters.</p>
         ) : null}
         {filteredRows.map((row) => (
