@@ -342,7 +342,7 @@ export default function ChapterReader({
     return picked.map((v) => `${v.verse}. ${v.text}`).join("\n");
   }, [verses, selected]);
   const hasSelection = selected.size > 0;
-  const showMobileActionBar = hasSelection && !overlayOpen;
+  const showMobileActionBar = !overlayOpen;
   const hasSidebarPanelOpen = hasSelection || actionsPinned || !!openFootnote;
   const selectedBounds = useMemo(() => {
     if (!hasSelection) return null;
@@ -1144,12 +1144,13 @@ export default function ChapterReader({
         <div
           aria-hidden
           className="lg:hidden pointer-events-none"
-          style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 14rem)" }}
+          style={{ height: hasSelection ? "calc(env(safe-area-inset-bottom, 0px) + 14rem)" : "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
         />
       ) : null}
 
       <VerseActionBar
         visible={showMobileActionBar}
+        hasSelection={hasSelection}
         hasActiveInsight={hasActiveNote}
         targetLabel={lessonMode ? "Lesson" : "Note"}
         showTranslations={!!translationControls}

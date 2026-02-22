@@ -4,6 +4,7 @@ import type { FC } from "react";
 
 export type Props = {
   visible: boolean;
+  hasSelection: boolean;
   hasActiveInsight: boolean;
   showTranslations?: boolean;
   actionsEnabled?: boolean;
@@ -19,6 +20,7 @@ export type Props = {
 
 const VerseActionBar: FC<Props> = ({
   visible,
+  hasSelection,
   hasActiveInsight,
   showTranslations = false,
   actionsEnabled = true,
@@ -34,12 +36,12 @@ const VerseActionBar: FC<Props> = ({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    if (visible) {
-      setExpanded(true);
+    if (!visible) {
+      setExpanded(false);
       return;
     }
-    setExpanded(false);
-  }, [visible]);
+    setExpanded(hasSelection);
+  }, [visible, hasSelection]);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -66,7 +68,8 @@ const VerseActionBar: FC<Props> = ({
               onClick={onClear}
               aria-label="Clear selection"
               title="Clear selection"
-              className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+              disabled={!hasSelection}
+              className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
             >
               Clear
             </button>
@@ -95,7 +98,7 @@ const VerseActionBar: FC<Props> = ({
                 {hasActiveInsight ? (
                   <button
                     onClick={onInsight}
-                    disabled={!actionsEnabled}
+                    disabled={!actionsEnabled || !hasSelection}
                     className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
                   >
                     Add to {targetLabel}
@@ -103,7 +106,7 @@ const VerseActionBar: FC<Props> = ({
                 ) : (
                   <button
                     onClick={onNewInsight}
-                    disabled={!actionsEnabled}
+                    disabled={!actionsEnabled || !hasSelection}
                     className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
                   >
                     New {targetLabel}
@@ -118,7 +121,8 @@ const VerseActionBar: FC<Props> = ({
                 </button>
                 <button
                   onClick={onCitations}
-                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+                  disabled={!hasSelection}
+                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
                   title="Citations"
                   aria-label="Citations"
                 >
@@ -126,7 +130,8 @@ const VerseActionBar: FC<Props> = ({
                 </button>
                 <button
                   onClick={onExplore}
-                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+                  disabled={!hasSelection}
+                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
                   title="Verse Explorer"
                   aria-label="Verse Explorer"
                 >
