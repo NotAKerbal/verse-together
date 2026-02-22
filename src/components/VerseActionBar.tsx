@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FC } from "react";
 
 export type Props = {
@@ -31,151 +31,123 @@ const VerseActionBar: FC<Props> = ({
   onTranslations,
   targetLabel = "Note",
 }) => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuMounted, setMenuMounted] = useState(false);
-  const closeTimerRef = useRef<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
-  function toggleMenu() {
-    if (!menuOpen) {
-      if (closeTimerRef.current != null) {
-        window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-      setMenuMounted(true);
-      requestAnimationFrame(() => setMenuOpen(true));
-    } else {
-      setMenuOpen(false);
-      closeTimerRef.current = window.setTimeout(() => {
-        setMenuMounted(false);
-        closeTimerRef.current = null;
-      }, 180);
+  useEffect(() => {
+    if (visible) {
+      setExpanded(true);
+      return;
     }
-  }
-
-  useEffect(() => () => {
-    if (closeTimerRef.current != null) window.clearTimeout(closeTimerRef.current);
-  }, []);
+    setExpanded(false);
+  }, [visible]);
 
   useEffect(() => {
     window.dispatchEvent(
       new CustomEvent("mobile-verse-action-menu-toggle", {
-        detail: { open: menuOpen },
+        detail: { open: visible && expanded },
       })
     );
-  }, [menuOpen]);
+  }, [visible, expanded]);
 
   if (!visible) return null;
   return (
     <div
       data-mobile-verse-action-bar="true"
-      data-mobile-verse-action-menu-open={menuOpen ? "true" : "false"}
-      className="fixed inset-x-0 z-50 pointer-events-none lg:hidden"
-      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
+      data-mobile-verse-action-menu-open={expanded ? "true" : "false"}
+      className="fixed inset-x-0 bottom-0 z-50 pointer-events-none lg:hidden"
     >
-      <div className="mx-auto max-w-3xl flex items-center justify-between gap-3 sm:gap-4 px-3 sm:px-4 pointer-events-auto">
-        <button
-          onClick={onClear}
-          aria-label="Clear selection"
-          title="Clear selection"
-          className="inline-flex items-center justify-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
-        >
-          Clear
-        </button>
-        <div className="ml-auto flex items-center gap-3 sm:gap-4">
-          {hasActiveInsight ? (
-            <button
-              onClick={onInsight}
-              disabled={!actionsEnabled}
-              className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
-            >
-              ✍ Add to {targetLabel}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={onNewInsight}
-                disabled={!actionsEnabled}
-                className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
-              >
-                + New {targetLabel}
-              </button>
-              <button
-                onClick={onLoadInsights}
-                disabled={!actionsEnabled}
-                className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
-              >
-                Open {targetLabel === "Lesson" ? "Lesson" : "Notes"}
-              </button>
-            </>
-          )}
-          <button
-            onClick={toggleMenu}
-            aria-expanded={menuOpen}
-            aria-label="More actions"
-            title="More"
-            className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
-          >
-            + More
-          </button>
-        </div>
-      </div>
-
-      {menuMounted ? (
+      <div className="mx-auto max-w-3xl px-2 sm:px-3 pointer-events-auto">
         <div
-          data-mobile-verse-action-menu-panel="true"
-          className="fixed right-3 sm:right-4 z-[60] flex flex-col items-end gap-1 pointer-events-auto"
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.5rem)" }}
+          className="rounded-t-2xl border border-b-0 surface-card backdrop-blur-lg shadow-xl"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
+          <div className="flex items-center gap-2 px-2.5 py-2.5">
+            <button
+              onClick={onClear}
+              aria-label="Clear selection"
+              title="Clear selection"
+              className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+            >
+              Clear
+            </button>
+            <div className="min-w-0 flex-1 text-xs text-foreground/65">
+              Verse actions
+            </div>
+            <button
+              onClick={() => setExpanded((prev) => !prev)}
+              aria-expanded={expanded}
+              aria-controls="mobile-verse-actions-panel"
+              className="inline-flex items-center rounded-md border surface-button px-3 py-2 text-sm"
+            >
+              {expanded ? "Hide" : "Actions"}
+            </button>
+          </div>
+
           <div
-            style={{
-              transform: menuOpen ? "translateY(0) scale(1)" : "translateY(12px) scale(0.95)",
-              opacity: menuOpen ? 1 : 0,
-              transition: "opacity 180ms ease, transform 180ms ease",
-              transformOrigin: "bottom right",
-            }}
+            id="mobile-verse-actions-panel"
+            data-mobile-verse-action-menu-panel="true"
+            className={`overflow-hidden transition-all duration-200 ease-out ${
+              expanded ? "max-h-72 opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+            }`}
           >
-            <button
-              onClick={() => {
-                toggleMenu();
-                onCitations();
-              }}
-              className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
-              title="Citations"
-              aria-label="Citations"
-            >
-              🎤 Citations
-            </button>
-            <div className="h-1" />
-            <button
-              onClick={() => {
-                toggleMenu();
-                onExplore();
-              }}
-              className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
-              title="Verse Explorer"
-              aria-label="Verse Explorer"
-            >
-              🔎 Explore
-            </button>
-            {showTranslations ? (
-              <>
-                <div className="h-1" />
+            <div className="border-t border-black/10 dark:border-white/10 px-2.5 py-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                {hasActiveInsight ? (
+                  <button
+                    onClick={onInsight}
+                    disabled={!actionsEnabled}
+                    className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
+                  >
+                    Add to {targetLabel}
+                  </button>
+                ) : (
+                  <button
+                    onClick={onNewInsight}
+                    disabled={!actionsEnabled}
+                    className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
+                  >
+                    New {targetLabel}
+                  </button>
+                )}
                 <button
-                  onClick={() => {
-                    toggleMenu();
-                    onTranslations();
-                  }}
-                  className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md"
-                  title="Translations"
-                  aria-label="Translations"
+                  onClick={onLoadInsights}
+                  disabled={!actionsEnabled}
+                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
                 >
-                  🌐 Translations
+                  Open {targetLabel === "Lesson" ? "Lesson" : "Notes"}
                 </button>
-              </>
-            ) : null}
+                <button
+                  onClick={onCitations}
+                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+                  title="Citations"
+                  aria-label="Citations"
+                >
+                  Citations
+                </button>
+                <button
+                  onClick={onExplore}
+                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+                  title="Verse Explorer"
+                  aria-label="Verse Explorer"
+                >
+                  Explore
+                </button>
+                {showTranslations ? (
+                  <button
+                    onClick={onTranslations}
+                    className="col-span-2 inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm"
+                    title="Translations"
+                    aria-label="Translations"
+                  >
+                    Translations
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
-      ) : null}
+      </div>
+      <div className="h-px bg-black/10 dark:bg-white/10 pointer-events-none" />
     </div>
   );
 };

@@ -342,6 +342,7 @@ export default function ChapterReader({
     return picked.map((v) => `${v.verse}. ${v.text}`).join("\n");
   }, [verses, selected]);
   const hasSelection = selected.size > 0;
+  const showMobileActionBar = hasSelection && !overlayOpen;
   const hasSidebarPanelOpen = hasSelection || actionsPinned || !!openFootnote;
   const selectedBounds = useMemo(() => {
     if (!hasSelection) return null;
@@ -1139,8 +1140,16 @@ export default function ChapterReader({
 
       {/* dictionary and etymology now live inside VerseExplorer */}
 
+      {showMobileActionBar ? (
+        <div
+          aria-hidden
+          className="lg:hidden pointer-events-none"
+          style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 14rem)" }}
+        />
+      ) : null}
+
       <VerseActionBar
-        visible={hasSelection && !overlayOpen}
+        visible={showMobileActionBar}
         hasActiveInsight={hasActiveNote}
         targetLabel={lessonMode ? "Lesson" : "Note"}
         showTranslations={!!translationControls}
