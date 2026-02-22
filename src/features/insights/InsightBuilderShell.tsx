@@ -854,6 +854,7 @@ function BuilderContent() {
 export default function InsightBuilderShell() {
   const { canUseInsights, isMobileOpen, toggleMobileBuilder, closeBuilder, activeDraftId } = useInsightBuilder();
   const [mobileToggleBottom, setMobileToggleBottom] = useState(16);
+  const [mobileActionMenuOpen, setMobileActionMenuOpen] = useState(false);
 
   useEffect(() => {
     const baseBottom = 16;
@@ -863,8 +864,11 @@ export default function InsightBuilderShell() {
       const actionBar = document.querySelector<HTMLElement>('[data-mobile-verse-action-bar="true"]');
       if (!actionBar) {
         setMobileToggleBottom(baseBottom);
+        setMobileActionMenuOpen(false);
         return;
       }
+      const actionMenuOpen = actionBar.dataset.mobileVerseActionMenuOpen === "true";
+      setMobileActionMenuOpen(actionMenuOpen);
       const rect = actionBar.getBoundingClientRect();
       if (rect.height <= 0) {
         setMobileToggleBottom(baseBottom);
@@ -922,7 +926,9 @@ export default function InsightBuilderShell() {
     <>
       <button
         onClick={toggleMobileBuilder}
-        className="lg:hidden fixed z-50 right-4 rounded-full bg-foreground text-background px-4 py-3 text-sm font-medium shadow-lg transition-[bottom] duration-150"
+        className={`lg:hidden fixed z-50 right-4 rounded-full bg-foreground text-background px-4 py-3 text-sm font-medium shadow-lg transition-[bottom,opacity] duration-150 ${
+          mobileActionMenuOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+        }`}
         style={{ bottom: `${mobileToggleBottom}px` }}
       >
         {isMobileOpen ? "Close Note" : "Open Note"}
