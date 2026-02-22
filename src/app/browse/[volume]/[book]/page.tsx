@@ -10,12 +10,21 @@ import {
   toScriptureVolumeUrlSlug,
 } from "@/lib/scriptureVolumes";
 
-export default async function BookLanding({ params }: { params: Promise<{ volume: string; book: string }> }) {
+export default async function BookLanding({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ volume: string; book: string }>;
+  searchParams: Promise<{ lessonId?: string | string[] }>;
+}) {
   const { volume, book } = await params;
+  const query = await searchParams;
+  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
+  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   const canonicalVolume = normalizeScriptureVolume(volume);
   const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
   if (volume !== volumeSlug) {
-    redirect(`/browse/${volumeSlug}/${book}`);
+    redirect(`/browse/${volumeSlug}/${book}${lessonSuffix}`);
   }
 
   const bibleBook = isBibleVolume(canonicalVolume) ? getBibleBookBySlug(book) : undefined;
@@ -41,8 +50,17 @@ export default async function BookLanding({ params }: { params: Promise<{ volume
       <div className="flex items-start justify-between gap-3">
         <Breadcrumbs
           items={[
-            { label: "Browse", href: "/browse" },
-            ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
+            { label: "Browse", href: lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse" },
+            ...(duplicateVolumeBook
+              ? []
+              : [
+                  {
+                    label: volumeLabel,
+                    href: lessonId
+                      ? `/browse/${volumeSlug}?lessonId=${encodeURIComponent(lessonId)}`
+                      : `/browse/${volumeSlug}`,
+                  },
+                ]),
             { label: bookLabel },
           ]}
         />
@@ -57,6 +75,7 @@ export default async function BookLanding({ params }: { params: Promise<{ volume
       <ChapterCards
         volume={volumeSlug}
         book={book}
+        lessonId={lessonId ?? null}
         chapters={chapters}
         delineation={delineation}
         compactNumberGrid={compactNumberGrid}
@@ -69,12 +88,14 @@ export default async function BookLanding({ params }: { params: Promise<{ volume
 function ChapterCards({
   volume,
   book,
+  lessonId,
   chapters,
   delineation,
   compactNumberGrid,
 }: {
   volume: string;
   book: string;
+  lessonId: string | null;
   chapters: Array<{ _id: string; summary?: string }>;
   delineation: string;
   compactNumberGrid: boolean;
@@ -89,6 +110,7 @@ function ChapterCards({
     const points = parts.slice(1, 3).map((p) => (p.length > 80 ? p.slice(0, 77).trimEnd() + "…" : p));
     return { preview, points };
   }
+  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-medium">Select a chapter</h2>
@@ -102,7 +124,7 @@ function ChapterCards({
             return (
               <li key={c._id}>
                 <Link
-                  href={`/browse/${volume}/${book}/${n}`}
+                  href={`/browse/${volume}/${book}/${n}${lessonSuffix}`}
                   className={compactNumberGrid ? "block rounded-lg border surface-card px-2 py-3 text-center hover:bg-[var(--surface-button-hover)]" : "block rounded-lg border surface-card p-3 hover:bg-[var(--surface-button-hover)]"}
                   aria-label={`${delineation} ${n}`}
                   data-ripple

@@ -9,7 +9,14 @@ const commonVolumes = [
   { id: "pearl", label: "Pearl of Great Price" },
 ];
 
-export default function BrowsePage() {
+export default async function BrowsePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lessonId?: string | string[] }>;
+}) {
+  const query = await searchParams;
+  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
+  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   return (
     <section className="space-y-6">
       <header className="flex items-start justify-between gap-3">
@@ -23,7 +30,7 @@ export default function BrowsePage() {
         {commonVolumes.map((v) => (
           <li key={v.id}>
             <Link
-              href={`/browse/${v.id}`}
+              href={`/browse/${v.id}${lessonSuffix}`}
               className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
               data-ripple
             >

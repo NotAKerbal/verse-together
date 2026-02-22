@@ -74,6 +74,80 @@ export type PublishedInsight = {
   }>;
 };
 
+export type LessonParticipantMode = "guest_only" | "user_only" | "both";
+export type LessonCardType = "notes" | "question" | "assignment";
+export type LessonQuestionResponseStatus = "pending" | "visible" | "hidden";
+export type LessonParticipantIdentity = "guest" | "user";
+
+export type LessonPlanSummary = {
+  id: string;
+  title: string;
+  description: string | null;
+  participant_mode: LessonParticipantMode;
+  link_state: "active" | "disabled";
+  active_token: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LessonCard = {
+  id: string;
+  order: number;
+  type: LessonCardType;
+  title: string | null;
+  body: string | null;
+  note_component_type: "text" | "scripture" | "quote" | "dictionary";
+  link_url: string | null;
+  highlight_text: string | null;
+  highlight_word_indices: number[];
+  scripture_ref: InsightScriptureRef | null;
+  dictionary_meta: {
+    edition: "1828" | "1844" | "1913" | "ETY";
+    word: string;
+    heading?: string | null;
+    pronounce?: string | null;
+  } | null;
+  notes_visibility: "teacher_only" | "shared_readonly" | null;
+  question_prompt: string | null;
+  is_anonymous: boolean;
+  moderation_mode: "moderated_reveal" | "auto_publish" | "hidden_only";
+  reveal_state: "hidden" | "revealed";
+  group_mode: "manual" | "auto_even" | "self_select";
+  question_mode: "shared" | "per_group" | "both";
+  shared_question: string | null;
+  groups: Array<{
+    id: string;
+    name: string;
+    order: number;
+    scripture_refs: string[];
+    prompt: string | null;
+  }>;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LessonPlan = {
+  id: string;
+  title: string;
+  description: string | null;
+  participant_mode: LessonParticipantMode;
+  link_state: "active" | "disabled";
+  active_token: string | null;
+  created_at: string;
+  updated_at: string;
+  cards: LessonCard[];
+};
+
+export type LessonQuestionResponse = {
+  id: string;
+  body: string;
+  status: LessonQuestionResponseStatus;
+  created_at: string;
+  participant_id: string;
+  participant_name: string;
+  identity_type: LessonParticipantIdentity;
+};
+
 export type AccountData = {
   friends: Array<{
     id: string;
@@ -308,6 +382,29 @@ export async function publishInsightDraft(
     },
     token
   );
+}
+
+export async function listMyLessons(token: string): Promise<LessonPlanSummary[]> {
+  return await convexQuery("lessons:listMyLessons", {}, token);
+}
+
+export async function createLesson(
+  token: string,
+  payload?: { title?: string | null; description?: string | null; participantMode?: LessonParticipantMode }
+): Promise<{ id: string; token: string }> {
+  return await convexMutation(
+    "lessons:createLesson",
+    {
+      title: payload?.title ?? undefined,
+      description: payload?.description ?? undefined,
+      participantMode: payload?.participantMode ?? undefined,
+    },
+    token
+  );
+}
+
+export async function getLessonEditor(token: string, lessonId: string): Promise<LessonPlan> {
+  return await convexQuery("lessons:getLessonEditor", { lessonId }, token);
 }
 
 export async function getAccountData(token: string): Promise<AccountData> {

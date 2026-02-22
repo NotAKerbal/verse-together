@@ -166,6 +166,135 @@ export default defineSchema({
     .index("by_insight_order", ["insightId", "order"])
     .index("by_insight", ["insightId"]),
 
+  lessonPlans: defineTable({
+    ownerClerkId: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    participantMode: v.union(v.literal("guest_only"), v.literal("user_only"), v.literal("both")),
+    linkState: v.union(v.literal("active"), v.literal("disabled")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner_updated", ["ownerClerkId", "updatedAt"])
+    .index("by_owner_created", ["ownerClerkId", "createdAt"]),
+
+  lessonPlanCards: defineTable({
+    lessonId: v.id("lessonPlans"),
+    order: v.number(),
+    type: v.union(v.literal("notes"), v.literal("question"), v.literal("assignment")),
+    title: v.optional(v.string()),
+    body: v.optional(v.string()),
+    noteComponentType: v.optional(
+      v.union(v.literal("text"), v.literal("scripture"), v.literal("quote"), v.literal("dictionary"))
+    ),
+    linkUrl: v.optional(v.string()),
+    highlightText: v.optional(v.string()),
+    highlightWordIndices: v.optional(v.array(v.number())),
+    scriptureRef: v.optional(
+      v.object({
+        volume: v.string(),
+        book: v.string(),
+        chapter: v.number(),
+        verseStart: v.number(),
+        verseEnd: v.number(),
+        reference: v.string(),
+      })
+    ),
+    dictionaryMeta: v.optional(
+      v.object({
+        edition: v.union(v.literal("1828"), v.literal("1844"), v.literal("1913"), v.literal("ETY")),
+        word: v.string(),
+        heading: v.optional(v.string()),
+        pronounce: v.optional(v.string()),
+      })
+    ),
+    notesVisibility: v.optional(v.union(v.literal("teacher_only"), v.literal("shared_readonly"))),
+    questionPrompt: v.optional(v.string()),
+    isAnonymous: v.optional(v.boolean()),
+    moderationMode: v.optional(v.union(v.literal("moderated_reveal"), v.literal("auto_publish"), v.literal("hidden_only"))),
+    revealState: v.optional(v.union(v.literal("hidden"), v.literal("revealed"))),
+    groupMode: v.optional(v.union(v.literal("manual"), v.literal("auto_even"), v.literal("self_select"))),
+    questionMode: v.optional(v.union(v.literal("shared"), v.literal("per_group"), v.literal("both"))),
+    sharedQuestion: v.optional(v.string()),
+    archivedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_lesson_order", ["lessonId", "order"])
+    .index("by_lesson", ["lessonId"]),
+
+  lessonParticipants: defineTable({
+    lessonId: v.id("lessonPlans"),
+    identityType: v.union(v.literal("guest"), v.literal("user")),
+    clerkId: v.optional(v.string()),
+    guestName: v.optional(v.string()),
+    displayName: v.string(),
+    joinedAt: v.number(),
+    lastSeenAt: v.number(),
+  })
+    .index("by_lesson", ["lessonId"])
+    .index("by_lesson_clerk", ["lessonId", "clerkId"]),
+
+  lessonQuestionResponses: defineTable({
+    lessonId: v.id("lessonPlans"),
+    cardId: v.id("lessonPlanCards"),
+    participantId: v.id("lessonParticipants"),
+    body: v.string(),
+    status: v.union(v.literal("pending"), v.literal("visible"), v.literal("hidden")),
+    deletedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_card_created", ["cardId", "createdAt"])
+    .index("by_participant_card", ["participantId", "cardId"])
+    .index("by_lesson_created", ["lessonId", "createdAt"]),
+
+  lessonCardGroups: defineTable({
+    lessonId: v.id("lessonPlans"),
+    cardId: v.id("lessonPlanCards"),
+    name: v.string(),
+    order: v.number(),
+    scriptureRefs: v.array(v.string()),
+    prompt: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_card_order", ["cardId", "order"])
+    .index("by_lesson_card", ["lessonId", "cardId"]),
+
+  lessonGroupMembers: defineTable({
+    lessonId: v.id("lessonPlans"),
+    cardId: v.id("lessonPlanCards"),
+    groupId: v.id("lessonCardGroups"),
+    participantId: v.id("lessonParticipants"),
+    assignedBy: v.union(v.literal("teacher"), v.literal("auto"), v.literal("self")),
+    createdAt: v.number(),
+  })
+    .index("by_group", ["groupId"])
+    .index("by_card_participant", ["cardId", "participantId"]),
+
+  lessonActivityEvents: defineTable({
+    lessonId: v.id("lessonPlans"),
+    actorParticipantId: v.optional(v.id("lessonParticipants")),
+    actorClerkId: v.optional(v.string()),
+    eventType: v.string(),
+    cardId: v.optional(v.id("lessonPlanCards")),
+    payload: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_lesson_created", ["lessonId", "createdAt"]),
+
+  lessonShareLinks: defineTable({
+    lessonId: v.id("lessonPlans"),
+    token: v.string(),
+    active: v.boolean(),
+    createdByClerkId: v.string(),
+    createdAt: v.number(),
+    rotatedAt: v.optional(v.number()),
+    disabledAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_lesson_active", ["lessonId", "active"]),
+
   friendships: defineTable({
     requesterClerkId: v.string(),
     addresseeClerkId: v.string(),

@@ -46,12 +46,21 @@ const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   ],
 };
 
-export default async function VolumePage({ params }: { params: Promise<{ volume: string }> }) {
+export default async function VolumePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ volume: string }>;
+  searchParams: Promise<{ lessonId?: string | string[] }>;
+}) {
   const { volume } = await params;
+  const query = await searchParams;
+  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
+  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   const canonicalVolume = normalizeScriptureVolume(volume);
   const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
   if (canonicalVolume === "doctrineandcovenants") {
-    redirect(`/browse/${volumeSlug}/doctrineandcovenants`);
+    redirect(`/browse/${volumeSlug}/doctrineandcovenants${lessonSuffix}`);
   }
   const books = volumeToBooks[canonicalVolume] ?? [];
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
@@ -59,7 +68,9 @@ export default async function VolumePage({ params }: { params: Promise<{ volume:
   return (
     <section className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <Breadcrumbs items={[{ label: "Browse", href: "/browse" }, { label: volumeLabel }]} />
+        <Breadcrumbs
+          items={[{ label: "Browse", href: lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse" }, { label: volumeLabel }]}
+        />
         <ScriptureQuickNav currentVolume={canonicalVolume} />
       </div>
       <h1 className="text-2xl font-semibold">{volumeLabel}</h1>
@@ -70,7 +81,7 @@ export default async function VolumePage({ params }: { params: Promise<{ volume:
           {books.map((b) => (
             <li key={b.id}>
               <Link
-                href={`/browse/${volumeSlug}/${b.id}`}
+                href={`/browse/${volumeSlug}/${b.id}${lessonSuffix}`}
                 className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
                 data-ripple
               >

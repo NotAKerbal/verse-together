@@ -14,6 +14,7 @@ export type Props = {
   onCitations: () => void;
   onExplore: () => void;
   onTranslations: () => void;
+  targetLabel?: string;
 };
 
 const VerseActionBar: FC<Props> = ({
@@ -28,6 +29,7 @@ const VerseActionBar: FC<Props> = ({
   onCitations,
   onExplore,
   onTranslations,
+  targetLabel = "Note",
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
@@ -86,7 +88,7 @@ const VerseActionBar: FC<Props> = ({
               disabled={!actionsEnabled}
               className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
             >
-              ✍ Add to Note
+              ✍ Add to {targetLabel}
             </button>
           ) : (
             <>
@@ -95,14 +97,14 @@ const VerseActionBar: FC<Props> = ({
                 disabled={!actionsEnabled}
                 className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
               >
-                + New Note
+                + New {targetLabel}
               </button>
               <button
                 onClick={onLoadInsights}
                 disabled={!actionsEnabled}
                 className="inline-flex items-center rounded-full border surface-button backdrop-blur px-4 py-2 text-base shadow-md disabled:opacity-50"
               >
-                Open Notes
+                Open {targetLabel === "Lesson" ? "Lesson" : "Notes"}
               </button>
             </>
           )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
@@ -69,12 +69,18 @@ type InsightBuilderContextValue = {
 };
 
 const InsightBuilderContext = createContext<InsightBuilderContextValue | null>(null);
+const ACTIVE_DRAFT_STORAGE_PREFIX = "vt_reader_active_draft_v1";
 
 export function InsightBuilderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const canUseInsights = !!user;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const activeDraftStorageKey = useMemo(
+    () => (user?.id ? `${ACTIVE_DRAFT_STORAGE_PREFIX}:${user.id}` : null),
+    [user?.id]
+  );
+  const hasRestoredActiveDraftRef = useRef(false);
 
   const draftRows = useQuery(api.insights.listMyDrafts, canUseInsights ? {} : "skip") as
     | InsightDraftSummary[]
@@ -98,6 +104,43 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const drafts = draftRows ?? [];
   const isLoading = canUseInsights && (draftRows === undefined || (activeDraftId !== null && activeDraft === undefined));
+
+  useEffect(() => {
+    hasRestoredActiveDraftRef.current = false;
+  }, [activeDraftStorageKey]);
+
+  useEffect(() => {
+    if (!canUseInsights) return;
+    if (!activeDraftStorageKey) return;
+    if (draftRows === undefined) return;
+    if (hasRestoredActiveDraftRef.current) return;
+
+    hasRestoredActiveDraftRef.current = true;
+    if (activeDraftId) return;
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(activeDraftStorageKey);
+      if (!raw) return;
+      const stored = raw.trim();
+      if (!stored) return;
+      if (!draftRows.some((d) => d.id === stored)) return;
+      setActiveDraftId(stored);
+    } catch {
+      // ignore storage errors
+    }
+  }, [canUseInsights, activeDraftStorageKey, draftRows, activeDraftId]);
+
+  useEffect(() => {
+    if (!activeDraftStorageKey) return;
+    if (!hasRestoredActiveDraftRef.current) return;
+    if (typeof window === "undefined") return;
+    try {
+      if (activeDraftId) window.localStorage.setItem(activeDraftStorageKey, activeDraftId);
+      else window.localStorage.removeItem(activeDraftStorageKey);
+    } catch {
+      // ignore storage errors
+    }
+  }, [activeDraftId, activeDraftStorageKey]);
 
   useEffect(() => {
     if (!canUseInsights) {

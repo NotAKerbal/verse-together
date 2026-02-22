@@ -148,7 +148,11 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
     const nextUrl = new URL(href, window.location.origin);
     const currentParams = new URLSearchParams(window.location.search);
     const currentTranslation = currentParams.get("translation");
+    const lessonId = currentParams.get("lessonId");
     const compare = currentParams.getAll("compare");
+    if (lessonId) {
+      nextUrl.searchParams.set("lessonId", lessonId);
+    }
     if ((targetVolume === "oldtestament" || targetVolume === "newtestament") && currentTranslation) {
       nextUrl.searchParams.set("translation", currentTranslation);
       compare.forEach((value) => nextUrl.searchParams.append("compare", value));

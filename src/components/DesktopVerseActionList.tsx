@@ -16,6 +16,7 @@ type Props = {
   onExplore: () => void;
   onTranslations: () => void;
   onTogglePin?: () => void;
+  targetLabel?: string;
 };
 
 export default function DesktopVerseActionList({
@@ -34,6 +35,7 @@ export default function DesktopVerseActionList({
   onExplore,
   onTranslations,
   onTogglePin,
+  targetLabel = "Note",
 }: Props) {
   if (!visible) return null;
 
@@ -68,18 +70,18 @@ export default function DesktopVerseActionList({
           <div />
         )}
         <button onClick={onLoadInsights} disabled={!actionsEnabled} className={topBtn}>
-          Open Notes
+          Open {targetLabel === "Lesson" ? "Lesson" : "Notes"}
         </button>
       </div>
       <div className="h-px bg-black/10 dark:bg-white/10" />
       <div className="grid grid-cols-2 gap-1.5">
         {hasActiveInsight ? (
           <button onClick={onInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
-            Add to Note
+            Add to {targetLabel}
           </button>
         ) : (
           <button onClick={onNewInsight} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
-            New Note
+            New {targetLabel}
           </button>
         )}
         <button onClick={onCitations} disabled={!hasSelection} className={baseBtn}>

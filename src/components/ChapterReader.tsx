@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar from "./VerseActionBar";
 import DesktopVerseActionList from "./DesktopVerseActionList";
@@ -13,6 +14,7 @@ import VerseExplorerSidebarPanel from "./VerseExplorerSidebarPanel";
 import TranslationSidebarPanel from "./TranslationSidebarPanel";
 import TranslationModal from "./TranslationModal";
 import ScriptureQuickNav from "./ScriptureQuickNav";
+import LessonBrowserPanel from "./LessonBrowserPanel";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -22,6 +24,7 @@ import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
+import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type CompareChapter = { translation: string; verses: Verse[] };
@@ -201,7 +204,12 @@ export default function ChapterReader({
   compareChapters?: CompareChapter[];
 }) {
   const { user, getToken } = useAuth();
-  const { appendScriptureBlock, openBuilder, activeDraftId, drafts, switchDraft, createDraft } = useInsightBuilder();
+  const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
+  const searchParams = useSearchParams();
+  const lessonId = searchParams.get("lessonId");
+  const lessonMode = !!lessonId;
+  const lessonsApi = (api as any).lessons;
+  const addLessonCard = useMutation(lessonsApi.addCard);
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -227,6 +235,7 @@ export default function ChapterReader({
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = !!openFootnote || openCitations || openExplorer || openTranslations;
   const [showTapHint, setShowTapHint] = useState(false);
+  const [lessonPanelOpen, setLessonPanelOpen] = useState(false);
 
   function parseBrowseHref(
     href: string | undefined
@@ -359,8 +368,7 @@ export default function ChapterReader({
     const m = text.match(/[A-Za-z][A-Za-z'\-]*/);
     return m?.[0]?.toLowerCase() ?? "";
   }, [verses, selected]);
-  const hasActiveNote = !!activeDraftId;
-  const availableNotes = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
+  const hasActiveNote = lessonMode ? true : !!activeDraftId;
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
     (compareChapters ?? []).forEach((chapterData) => {
@@ -613,11 +621,32 @@ export default function ChapterReader({
 
   async function onAddToNote() {
     if (!user) {
-      alert("Please sign in to build notes.");
+      alert("Please sign in to build notes or lessons.");
       return;
     }
     if (!selectedBounds) return;
     const reference = `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
+    if (lessonMode && lessonId) {
+      await addLessonCard({
+        lessonId: lessonId as any,
+        type: "notes",
+        title: reference,
+        body: selectedText || null,
+        noteComponentType: "scripture",
+        notesVisibility: "shared_readonly",
+        scriptureRef: {
+          volume,
+          book,
+          chapter,
+          verseStart: selectedBounds.start,
+          verseEnd: selectedBounds.end,
+          reference,
+        },
+      });
+      clearSelection();
+      setLessonPanelOpen(true);
+      return;
+    }
     await appendScriptureBlock({
       volume,
       book,
@@ -636,6 +665,18 @@ export default function ChapterReader({
       alert("Please sign in to build notes.");
       return;
     }
+    if (lessonMode && lessonId) {
+      await addLessonCard({
+        lessonId: lessonId as any,
+        type: "notes",
+        title: "Lesson note",
+        body: "",
+        noteComponentType: "text",
+        notesVisibility: "teacher_only",
+      });
+      setLessonPanelOpen(true);
+      return;
+    }
     const createdId = await createDraft("New note");
     if (!createdId) return;
     await switchDraft(createdId);
@@ -647,12 +688,17 @@ export default function ChapterReader({
       alert("Please sign in to build notes.");
       return;
     }
-    const targetId = activeDraftId ?? availableNotes[0]?.id ?? null;
-    if (!targetId) {
-      await onNewNoteFromActions();
+    if (lessonMode && lessonId) {
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        router.push(`/lessons/${lessonId}`);
+      } else {
+        setLessonPanelOpen(true);
+      }
       return;
     }
-    await switchDraft(targetId);
+    if (activeDraftId) {
+      await switchDraft(activeDraftId);
+    }
     openBuilder();
   }
 
@@ -678,7 +724,12 @@ export default function ChapterReader({
   }
 
   return (
-    <section className="space-y-4 pb-20" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <section
+      className={`space-y-4 pb-20 ${lessonMode && lessonPanelOpen ? "lg:pr-[380px] xl:pr-[440px] 2xl:pr-[500px]" : ""}`}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       {!hasSelection && !actionsPinned ? (
         <div className="hidden lg:block">
           <div
@@ -701,6 +752,7 @@ export default function ChapterReader({
                   visible={true}
                   hasSelection={hasSelection}
                   hasActiveInsight={hasActiveNote}
+                  targetLabel={lessonMode ? "Lesson" : "Note"}
                   showTranslations={!!translationControls}
                   showPinToggle={true}
                   pinned={actionsPinned}
@@ -788,6 +840,7 @@ export default function ChapterReader({
                 visible={true}
                 hasSelection={hasSelection}
                 hasActiveInsight={hasActiveNote}
+                targetLabel={lessonMode ? "Lesson" : "Note"}
                 showTranslations={!!translationControls}
                 showPinToggle={true}
                 pinned={actionsPinned}
@@ -1089,6 +1142,7 @@ export default function ChapterReader({
       <VerseActionBar
         visible={hasSelection && !overlayOpen}
         hasActiveInsight={hasActiveNote}
+        targetLabel={lessonMode ? "Lesson" : "Note"}
         showTranslations={!!translationControls}
         actionsEnabled={!!user}
         onClear={clearSelection}
@@ -1105,6 +1159,9 @@ export default function ChapterReader({
         onExplore={onOpenExplore}
         onTranslations={onOpenTranslations}
       />
+      {lessonMode && lessonId ? (
+        <LessonBrowserPanel lessonId={lessonId} open={lessonPanelOpen} onClose={() => setLessonPanelOpen(false)} />
+      ) : null}
     </section>
   );
 }

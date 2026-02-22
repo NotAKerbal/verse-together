@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 import type { InsightDraftBlock, InsightVisibility } from "@/lib/appData";
+import { useAuth } from "@/lib/auth";
 import { useInsightBuilder } from "./InsightBuilderProvider";
 import {
   DictionaryBlockEditor,
@@ -46,6 +47,78 @@ function getHighlightedTextByIndices(text: string, highlightWordIndices: number[
     .filter((_, idx) => selected.has(idx))
     .join("")
     .trim();
+}
+
+const OPEN_DRAFTS_STORAGE_PREFIX = "vt_reader_open_drafts_v1";
+const NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
+const FOLDER_PARENT_MAP_KEY = "vt_folder_parent_map_v1";
+
+type FolderParentMap = Record<string, string>;
+
+function readStoredDraftIds(storageKey: string | null): string[] {
+  if (!storageKey || typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function readStoredNoteFolderMap(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(NOTE_FOLDER_MAP_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, string> = {};
+    for (const [draftId, folder] of Object.entries(parsed as Record<string, unknown>)) {
+      const id = String(draftId).trim();
+      const value = String(folder ?? "").trim();
+      if (!id) continue;
+      out[id] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function readStoredFolderParentMap(): FolderParentMap {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(FOLDER_PARENT_MAP_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: FolderParentMap = {};
+    for (const [childRaw, parentRaw] of Object.entries(parsed as Record<string, unknown>)) {
+      const child = String(childRaw).trim();
+      const parent = String(parentRaw ?? "").trim();
+      if (!child || !parent || child === parent) continue;
+      out[child] = parent;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function buildFolderPath(folder: string, parentMap: FolderParentMap): string {
+  const trimmed = folder.trim();
+  if (!trimmed) return "";
+  const chain: string[] = [];
+  const seen = new Set<string>();
+  let current: string | undefined = trimmed;
+  while (current) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    chain.push(current);
+    current = parentMap[current];
+  }
+  return chain.reverse().join(" / ");
 }
 
 function BlockCard({
@@ -199,6 +272,7 @@ function BlockCard({
 }
 
 function BuilderContent() {
+  const { user } = useAuth();
   const {
     drafts,
     activeDraftId,
@@ -227,15 +301,37 @@ function BuilderContent() {
   const [isLoadSavedOpen, setIsLoadSavedOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [noteFolderMap, setNoteFolderMap] = useState<Record<string, string>>({});
+  const [folderParentMap, setFolderParentMap] = useState<FolderParentMap>({});
   const tagAutosaveTimeoutRef = useRef<number | null>(null);
   const dragIdRef = useRef<string | null>(null);
   const dropIndexRef = useRef<number | null>(null);
   const didDropRef = useRef(false);
+  const hasRestoredOpenDraftsRef = useRef(false);
+  const openDraftStorageKey = useMemo(
+    () => (user?.id ? `${OPEN_DRAFTS_STORAGE_PREFIX}:${user.id}` : null),
+    [user?.id]
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncFolders = () => {
+      setNoteFolderMap(readStoredNoteFolderMap());
+      setFolderParentMap(readStoredFolderParentMap());
+    };
+    syncFolders();
+    window.addEventListener("storage", syncFolders);
+    window.addEventListener("focus", syncFolders);
+    return () => {
+      window.removeEventListener("storage", syncFolders);
+      window.removeEventListener("focus", syncFolders);
+    };
   }, []);
 
   useEffect(() => {
@@ -271,20 +367,50 @@ function BuilderContent() {
   }, [tagsInput, activeDraftId, activeDraft, saveDraftSettings]);
 
   useEffect(() => {
+    hasRestoredOpenDraftsRef.current = false;
+    setOpenDraftIds([]);
+  }, [openDraftStorageKey]);
+
+  useEffect(() => {
+    if (isLoading) return;
     const draftIds = drafts.filter((d) => d.status === "draft").map((d) => d.id);
     const draftIdSet = new Set(draftIds);
+
+    if (!hasRestoredOpenDraftsRef.current) {
+      const restored = readStoredDraftIds(openDraftStorageKey).filter((id) => draftIdSet.has(id));
+      if (activeDraftId && draftIdSet.has(activeDraftId) && !restored.includes(activeDraftId)) {
+        restored.push(activeDraftId);
+      }
+      setOpenDraftIds(restored);
+      hasRestoredOpenDraftsRef.current = true;
+      return;
+    }
+
     setOpenDraftIds((prev) => {
       const kept = prev.filter((id) => draftIdSet.has(id));
-      const keptSet = new Set(kept);
-      const additions = draftIds.filter((id) => !keptSet.has(id));
-      return [...kept, ...additions];
+      if (activeDraftId && draftIdSet.has(activeDraftId) && !kept.includes(activeDraftId)) {
+        return [...kept, activeDraftId];
+      }
+      return kept;
     });
-  }, [drafts]);
+  }, [isLoading, drafts, activeDraftId, openDraftStorageKey]);
+
+  useEffect(() => {
+    if (!openDraftStorageKey) return;
+    if (!hasRestoredOpenDraftsRef.current) return;
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(openDraftStorageKey, JSON.stringify(openDraftIds));
+    } catch {
+      // ignore storage errors
+    }
+  }, [openDraftIds, openDraftStorageKey]);
 
   const orderedBlocks = useMemo(
     () => (activeDraft?.blocks ? [...activeDraft.blocks].sort((a, b) => a.order - b.order) : []),
     [activeDraft?.blocks]
   );
+  const hasDraftNotes = useMemo(() => drafts.some((d) => d.status === "draft"), [drafts]);
   const openDraftTabs = useMemo(() => {
     const byId = new Map(drafts.filter((d) => d.status === "draft").map((d) => [d.id, d]));
     return openDraftIds
@@ -295,6 +421,31 @@ function BuilderContent() {
     const openSet = new Set(openDraftIds);
     return drafts.filter((d) => d.status === "draft" && !openSet.has(d.id));
   }, [drafts, openDraftIds]);
+  const hiddenDraftTabsByFolder = useMemo(() => {
+    const buckets = new Map<string, (typeof hiddenDraftTabs)[number][]>();
+    hiddenDraftTabs.forEach((draft) => {
+      const folder = noteFolderMap[draft.id] ?? "";
+      const folderPath = buildFolderPath(folder, folderParentMap);
+      const key = folderPath || "Root";
+      const current = buckets.get(key) ?? [];
+      current.push(draft);
+      buckets.set(key, current);
+    });
+    for (const [key, draftList] of buckets.entries()) {
+      draftList.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+      buckets.set(key, draftList);
+    }
+    return Array.from(buckets.entries())
+      .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: "base" }))
+      .map(([folderLabel, draftList]) => ({ folderLabel, draftList }));
+  }, [hiddenDraftTabs, noteFolderMap, folderParentMap]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (openDraftTabs.length > 0) return;
+    if (hiddenDraftTabs.length === 0) return;
+    setIsLoadSavedOpen(true);
+  }, [isLoading, openDraftTabs.length, hiddenDraftTabs.length]);
 
   async function onCreateDraft() {
     setBusy(true);
@@ -414,16 +565,23 @@ function BuilderContent() {
         {isLoadSavedOpen ? (
           <div className="rounded-md border surface-card p-2 space-y-1 max-h-40 overflow-y-auto">
             {hiddenDraftTabs.length === 0 ? (
-              <p className="text-xs text-foreground/60 px-1 py-1">No hidden notes.</p>
+              <p className="text-xs text-foreground/60 px-1 py-1">No notes available to load.</p>
             ) : (
-              hiddenDraftTabs.map((draft) => (
-                <button
-                  key={draft.id}
-                  onClick={() => void onLoadSaved(draft.id)}
-                  className="w-full text-left rounded-md border surface-button px-2 py-1.5 text-xs"
-                >
-                  {draft.title}
-                </button>
+              hiddenDraftTabsByFolder.map((group) => (
+                <div key={group.folderLabel} className="space-y-1">
+                  <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-foreground/55">
+                    {group.folderLabel}
+                  </p>
+                  {group.draftList.map((draft) => (
+                    <button
+                      key={draft.id}
+                      onClick={() => void onLoadSaved(draft.id)}
+                      className="w-full text-left rounded-md border surface-button px-2 py-1.5 text-xs"
+                    >
+                      {draft.title}
+                    </button>
+                  ))}
+                </div>
               ))
             )}
           </div>
@@ -452,7 +610,16 @@ function BuilderContent() {
             </div>
           ))}
           {openDraftTabs.length === 0 ? (
-            <span className="text-xs text-foreground/60">No notes yet.</span>
+            hasDraftNotes ? (
+              <button
+                onClick={() => setIsLoadSavedOpen(true)}
+                className="text-xs text-foreground/70 underline underline-offset-2 px-1 py-1"
+              >
+                Load notes to select one.
+              </button>
+            ) : (
+              <span className="text-xs text-foreground/60 px-1 py-1">No saved notes yet.</span>
+            )
           ) : null}
         </div>
       </div>
@@ -460,9 +627,21 @@ function BuilderContent() {
       <div className="flex-1 overflow-y-auto p-3 pt-0 pb-0 space-y-3">
         {isLoading ? <p className="text-sm text-foreground/60">Loading note...</p> : null}
         {!isLoading && !activeDraft ? (
-          <p className="text-sm text-foreground/70">
-            Start a note by tapping a scripture, or create a blank note here.
-          </p>
+          hasDraftNotes ? (
+            <div className="rounded-md border surface-card p-3 space-y-2">
+              <p className="text-sm text-foreground/70">No note loaded. Load notes and select one.</p>
+              <button
+                onClick={() => setIsLoadSavedOpen(true)}
+                className="rounded-md border surface-button px-2 py-1 text-xs"
+              >
+                Load notes
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-foreground/70">
+              Start a note by tapping a scripture, or create a blank note here.
+            </p>
+          )
         ) : null}
         {activeDraft ? (
           <div className="-mt-px rounded-b-lg border border-t-0 surface-card p-3 space-y-3">

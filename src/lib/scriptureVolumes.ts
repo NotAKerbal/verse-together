@@ -1,5 +1,7 @@
 const VOLUME_ALIAS_MAP: Record<string, string> = {
   dnc: "doctrineandcovenants",
+  "old-testament": "oldtestament",
+  "new-testament": "newtestament",
 };
 
 const VOLUME_SHORT_SLUG_MAP: Record<string, string> = {

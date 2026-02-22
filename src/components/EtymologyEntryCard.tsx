@@ -1,7 +1,10 @@
 "use client";
 
 import { useAuth } from "@/lib/auth";
+import { useSearchParams } from "next/navigation";
+import { useMutation } from "convex/react";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import { api } from "../../convex/_generated/api";
 
 type EtymologyItem = {
   id: string;
@@ -13,10 +16,30 @@ type EtymologyItem = {
 export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
   const { user } = useAuth();
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
+  const searchParams = useSearchParams();
+  const lessonId = searchParams.get("lessonId");
+  const lessonsApi = (api as any).lessons;
+  const addLessonCard = useMutation(lessonsApi.addCard);
 
   async function onAddCardToInsight() {
     if (!user) {
       alert("Please sign in to build notes.");
+      return;
+    }
+    if (lessonId) {
+      await addLessonCard({
+        lessonId: lessonId as any,
+        type: "notes",
+        title: item.word?.trim() || "Etymology",
+        body: item.text?.trim() || "",
+        noteComponentType: "dictionary",
+        notesVisibility: "shared_readonly",
+        dictionaryMeta: {
+          edition: "ETY",
+          word: item.word?.trim() || "Etymology",
+          heading: item.source?.trim() || "Etymology",
+        },
+      });
       return;
     }
     await addDictionaryBlock({
@@ -43,7 +66,7 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
             void onAddCardToInsight();
           }}
           className="shrink-0 rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-          title="Add this etymology card to a note"
+          title={lessonId ? "Add this etymology card to the lesson" : "Add this etymology card to a note"}
         >
           Add card
         </button>

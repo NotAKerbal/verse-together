@@ -12,7 +12,7 @@ import {
 
 type Params = {
   params: Promise<{ volume: string; book: string; chapter: string }>;
-  searchParams: Promise<{ translation?: string | string[]; compare?: string | string[] }>;
+  searchParams: Promise<{ translation?: string | string[]; compare?: string | string[]; lessonId?: string | string[] }>;
 };
 
 export default async function ChapterPage({ params, searchParams }: Params) {
@@ -31,7 +31,9 @@ export default async function ChapterPage({ params, searchParams }: Params) {
       : query.compare
         ? [query.compare]
         : [];
+    const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
     compareValues.forEach((value) => redirectParams.append("compare", value));
+    if (lessonId) redirectParams.set("lessonId", lessonId);
     const redirectSuffix = redirectParams.toString() ? `?${redirectParams.toString()}` : "";
     redirect(`/browse/${volumeSlug}/${book}/${chapter}${redirectSuffix}`);
   }
@@ -40,6 +42,7 @@ export default async function ChapterPage({ params, searchParams }: Params) {
   const translationParam = Array.isArray(query.translation) ? query.translation[0] : query.translation;
   const translation = bibleMode ? normalizeBibleTranslationId(translationParam) : undefined;
   const activeTranslation = translation ?? "kjv";
+  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
   const compareParams = Array.isArray(query.compare)
     ? query.compare
     : query.compare
@@ -88,9 +91,15 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         const params = new URLSearchParams();
         params.set("translation", activeTranslation);
         compareTranslations.forEach((id) => params.append("compare", id));
+        if (lessonId) params.set("lessonId", lessonId);
         return `?${params.toString()}`;
       })()
-    : "";
+    : (() => {
+        const params = new URLSearchParams();
+        if (lessonId) params.set("lessonId", lessonId);
+        const out = params.toString();
+        return out ? `?${out}` : "";
+      })();
 
   const currentChapter = Number(chapter);
   const prevHref =
@@ -104,9 +113,23 @@ export default async function ChapterPage({ params, searchParams }: Params) {
     (canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants");
 
   const breadcrumbs: Crumb[] = [
-    { label: "Browse", href: "/browse" },
-    ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
-    { label: bookLabel, href: `/browse/${volumeSlug}/${book}` },
+    { label: "Browse", href: lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse" },
+    ...(duplicateVolumeBook
+      ? []
+      : [
+          {
+            label: volumeLabel,
+            href: lessonId
+              ? `/browse/${volumeSlug}?lessonId=${encodeURIComponent(lessonId)}`
+              : `/browse/${volumeSlug}`,
+          },
+        ]),
+    {
+      label: bookLabel,
+      href: lessonId
+        ? `/browse/${volumeSlug}/${book}?lessonId=${encodeURIComponent(lessonId)}`
+        : `/browse/${volumeSlug}/${book}`,
+    },
     { label: `Chapter ${chapter}` },
   ];
 
