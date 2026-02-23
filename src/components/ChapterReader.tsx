@@ -908,7 +908,7 @@ export default function ChapterReader({
           className="relative w-full max-w-6xl mx-auto"
         >
           <header
-            className={`sticky top-0 z-10 border-b border-black/5 dark:border-white/10 ${
+            className={`sticky top-0 z-10 ${
               isAtTop ? "py-0.5" : "py-3"
             }`}
           >
