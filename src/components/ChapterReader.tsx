@@ -913,15 +913,15 @@ export default function ChapterReader({
             }`}
           >
             <div className="relative flex flex-col gap-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex flex-1 items-center gap-2">
                   <ScriptureQuickNav
                     currentVolume={volume}
                     currentBook={book}
                     verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
                   />
-                  <div className="inline-flex max-w-full rounded-lg border surface-card backdrop-blur px-2.5 py-1">
-                    <div className="text-xs sm:text-sm">
+                  <div className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-lg border surface-card backdrop-blur px-2 sm:h-auto sm:flex-none sm:px-2.5 sm:py-1">
+                    <div className="min-w-0 w-full text-xs sm:text-sm">
                       <Breadcrumbs items={headerBreadcrumbs} />
                     </div>
                   </div>
