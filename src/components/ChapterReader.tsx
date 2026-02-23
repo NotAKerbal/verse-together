@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
@@ -236,6 +236,9 @@ export default function ChapterReader({
   const overlayOpen = !!openFootnote || openCitations || openExplorer || openTranslations;
   const [showTapHint, setShowTapHint] = useState(false);
   const [lessonPanelOpen, setLessonPanelOpen] = useState(false);
+  const layoutGridRef = useRef<HTMLDivElement | null>(null);
+  const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
+  const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
 
   function parseBrowseHref(
     href: string | undefined
@@ -432,6 +435,54 @@ export default function ChapterReader({
     window.addEventListener("scroll", syncTopState, { passive: true });
     return () => window.removeEventListener("scroll", syncTopState);
   }, []);
+
+  useLayoutEffect(() => {
+    function updateDesktopScriptureOffset() {
+      if (typeof window === "undefined" || window.innerWidth < 1024 || !hasSidebarPanelOpen) {
+        setDesktopScriptureOffset(0);
+        return;
+      }
+      const layoutGridEl = layoutGridRef.current;
+      const scriptureColumnEl = scriptureColumnRef.current;
+      if (!layoutGridEl || !scriptureColumnEl) {
+        setDesktopScriptureOffset(0);
+        return;
+      }
+
+      const style = window.getComputedStyle(layoutGridEl);
+      const columnMatches = Array.from(style.gridTemplateColumns.matchAll(/(-?\d*\.?\d+)px/g));
+      if (columnMatches.length < 2) {
+        setDesktopScriptureOffset(0);
+        return;
+      }
+
+      const sidebarWidth = Number(columnMatches[0][1]);
+      const scriptureTrackWidth = Number(columnMatches[1][1]);
+      const columnGap = Number.parseFloat(style.columnGap || "0") || 0;
+      const scriptureWidth = scriptureColumnEl.getBoundingClientRect().width;
+      const maxShiftWithinTrack = Math.max(0, (scriptureTrackWidth - scriptureWidth) / 2);
+      const shiftNeededToCenter = (sidebarWidth + columnGap) / 2;
+      const nextOffset = Math.round(Math.max(0, Math.min(shiftNeededToCenter, maxShiftWithinTrack)));
+      setDesktopScriptureOffset((prev) => (Math.abs(prev - nextOffset) < 0.5 ? prev : nextOffset));
+    }
+
+    updateDesktopScriptureOffset();
+    window.addEventListener("resize", updateDesktopScriptureOffset);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        updateDesktopScriptureOffset();
+      });
+      if (layoutGridRef.current) resizeObserver.observe(layoutGridRef.current);
+      if (scriptureColumnRef.current) resizeObserver.observe(scriptureColumnRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateDesktopScriptureOffset);
+      resizeObserver?.disconnect();
+    };
+  }, [hasSidebarPanelOpen, lessonPanelOpen]);
 
   useEffect(() => {
     function markJumpVerse(verse: number) {
@@ -820,6 +871,7 @@ export default function ChapterReader({
       ) : null}
 
       <div
+        ref={layoutGridRef}
         className={`lg:grid lg:items-start ${
           hasSidebarPanelOpen
             ? "lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:gap-6 xl:gap-8"
@@ -905,8 +957,17 @@ export default function ChapterReader({
         <div
           onTransitionEnd={onTransitionEnd}
           style={{ transform: `translateX(${translateX}px)`, transition, willChange: "transform" }}
-          className="relative w-full max-w-6xl mx-auto"
+          className="relative w-full"
         >
+          <div
+            ref={scriptureColumnRef}
+            className="relative w-full max-w-6xl mx-auto"
+            style={
+              hasSidebarPanelOpen && desktopScriptureOffset > 0
+                ? { left: `-${desktopScriptureOffset}px` }
+                : undefined
+            }
+          >
           <header
             className={`sticky top-0 z-10 ${
               isAtTop ? "py-0.5" : "py-3"
@@ -1048,6 +1109,7 @@ export default function ChapterReader({
               );
             })}
           </ol>
+          </div>
         </div>
       </div>
 

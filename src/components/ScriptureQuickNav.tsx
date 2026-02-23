@@ -183,7 +183,7 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
         aria-label="Quick scripture navigation"
         title="Quick scripture navigation"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-button"
+        className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-card backdrop-blur"
       >
         🔎
       </button>
