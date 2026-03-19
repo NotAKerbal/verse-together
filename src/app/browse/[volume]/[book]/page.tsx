@@ -127,7 +127,7 @@ function ChapterCards({
                   href={`/browse/${volume}/${book}/${n}${lessonSuffix}`}
                   className={compactNumberGrid ? "block rounded-lg border surface-card px-2 py-3 text-center hover:bg-[var(--surface-button-hover)]" : "block rounded-lg border surface-card p-3 hover:bg-[var(--surface-button-hover)]"}
                   aria-label={`${delineation} ${n}`}
-                  data-ripple
+                  data-tap
                 >
                   <div className={compactNumberGrid ? "text-base font-semibold" : "font-medium"}>
                     {compactNumberGrid ? n : `${delineation} ${n}`}

@@ -83,7 +83,7 @@ export default async function VolumePage({
               <Link
                 href={`/browse/${volumeSlug}/${b.id}${lessonSuffix}`}
                 className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
-                data-ripple
+                data-tap
               >
                 <div className="font-medium">{b.label}</div>
                 {getBookAbbreviation(b.id) ? (

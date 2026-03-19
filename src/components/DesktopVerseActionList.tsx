@@ -12,6 +12,7 @@ type Props = {
   onInsight: () => void;
   onNewInsight: () => void;
   onLoadInsights: () => void;
+  onAnnotation: () => void;
   onCitations: () => void;
   onExplore: () => void;
   onTranslations: () => void;
@@ -31,6 +32,7 @@ export default function DesktopVerseActionList({
   onInsight,
   onNewInsight,
   onLoadInsights,
+  onAnnotation,
   onCitations,
   onExplore,
   onTranslations,
@@ -89,6 +91,9 @@ export default function DesktopVerseActionList({
         </button>
         <button onClick={onExplore} disabled={!hasSelection} className={baseBtn}>
           Explore
+        </button>
+        <button onClick={onAnnotation} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
+          Add annotation
         </button>
         <button onClick={onClear} disabled={!hasSelection} className={baseBtn}>
           Clear Selection

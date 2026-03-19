@@ -129,6 +129,35 @@ body {
   color: var(--surface-button-active-text);
 }
 
+.tap-feedback {
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 160ms ease;
+  transform: translateY(0) scale(1);
+}
+
+.tap-feedback:active {
+  transform: translateY(1px) scale(0.985);
+  filter: saturate(0.98) brightness(0.98);
+}
+
+:where(button, [role="button"], .segmented-control-button, a.surface-button, a[data-tap], [data-tap]) {
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transform: translateY(0) scale(1);
+}
+
+:where(button, [role="button"], .segmented-control-button, a.surface-button, a[data-tap], [data-tap]):active {
+  transform: translateY(1px) scale(0.985);
+  filter: saturate(0.98) brightness(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tap-feedback,
+  :where(button, [role="button"], .segmented-control-button, a.surface-button, a[data-tap], [data-tap]) {
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+    transform: none;
+    filter: none;
+  }
+}
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -136,29 +165,4 @@ body {
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
-}
-
-/* Ripple effect for buttons and opt-in elements */
-.ripple {
-  position: absolute;
-  left: var(--ripple-x);
-  top: var(--ripple-y);
-  width: var(--ripple-size);
-  height: var(--ripple-size);
-  border-radius: 9999px;
-  background: currentColor;
-  opacity: 0.25;
-  transform: translate(-50%, -50%) scale(0);
-  pointer-events: none;
-}
-
-.ripple.rippling {
-  animation: ripple-expand 480ms ease-out forwards;
-}
-
-@keyframes ripple-expand {
-  to {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0;
-  }
 }

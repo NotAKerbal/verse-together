@@ -21,7 +21,7 @@ export default function Home() {
           <Link
             href="/browse"
             className="inline-flex items-center rounded-md bg-foreground text-background px-6 py-3 text-base font-medium hover:opacity-90 transition-opacity"
-            data-ripple
+            data-tap
           >
             Open Scripture Reader
           </Link>
@@ -156,7 +156,7 @@ export default function Home() {
           <Link
             href="/browse"
             className="inline-flex items-center rounded-md bg-foreground text-background px-6 py-3 text-base font-medium hover:opacity-90 transition-opacity"
-            data-ripple
+            data-tap
           >
             Start Studying
           </Link>

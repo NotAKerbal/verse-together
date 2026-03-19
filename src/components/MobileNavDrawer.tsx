@@ -15,6 +15,7 @@ type Props = {
 const navItems = [
   { href: "/browse", label: "Browse" },
   { href: "/feed", label: "Notes" },
+  { href: "/plans", label: "Plans" },
   { href: "/help", label: "Guide" },
 ];
 

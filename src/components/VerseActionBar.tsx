@@ -12,6 +12,7 @@ export type Props = {
   onInsight: () => void;
   onNewInsight: () => void;
   onLoadInsights: () => void;
+  onAnnotation: () => void;
   onCitations: () => void;
   onExplore: () => void;
   onTranslations: () => void;
@@ -28,6 +29,7 @@ const VerseActionBar: FC<Props> = ({
   onInsight,
   onNewInsight,
   onLoadInsights,
+  onAnnotation,
   onCitations,
   onExplore,
   onTranslations,
@@ -118,6 +120,15 @@ const VerseActionBar: FC<Props> = ({
                   className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
                 >
                   Open {targetLabel === "Lesson" ? "Lesson" : "Notes"}
+                </button>
+                <button
+                  onClick={onAnnotation}
+                  disabled={!actionsEnabled || !hasSelection}
+                  className="inline-flex items-center justify-center rounded-md border surface-button px-3 py-2 text-sm disabled:opacity-50"
+                  title="Add annotation"
+                  aria-label="Add annotation"
+                >
+                  Add annotation
                 </button>
                 <button
                   onClick={onCitations}

@@ -8,9 +8,10 @@ import { useAuth } from "@/lib/auth";
 import { getInsightDraft, type InsightDraftSummary } from "@/lib/appData";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
-const FOLDER_NAMES_KEY = "vt_note_folder_names_v1";
-const NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
-const FOLDER_PARENT_MAP_KEY = "vt_folder_parent_map_v1";
+const LEGACY_FOLDER_NAMES_KEY = "vt_note_folder_names_v1";
+const LEGACY_NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
+const LEGACY_FOLDER_PARENT_MAP_KEY = "vt_folder_parent_map_v1";
+const FOLDER_MIGRATION_DONE_KEY = "vt_note_folder_cloud_migration_done_v1";
 const NOTES_TIP_DISMISSED_KEY = "vt_notes_tip_dismissed_v1";
 
 type FolderParentMap = Record<string, string>;
@@ -27,10 +28,15 @@ type FilterOption = {
   keywords: string;
 };
 
-function loadFolderNames(): string[] {
+type CloudFolderWorkspace = {
+  folders: Array<{ id: string; name: string; parent_folder_id: string | null }>;
+  assignments: Array<{ draft_id: string; folder_id: string }>;
+};
+
+function loadLegacyFolderNames(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(FOLDER_NAMES_KEY);
+    const raw = window.localStorage.getItem(LEGACY_FOLDER_NAMES_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     if (!Array.isArray(parsed)) return [];
     return parsed
@@ -42,17 +48,10 @@ function loadFolderNames(): string[] {
   }
 }
 
-function saveFolderNames(names: string[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(FOLDER_NAMES_KEY, JSON.stringify(names));
-  } catch {}
-}
-
-function loadNoteFolderMap(): Record<string, string> {
+function loadLegacyNoteFolderMap(): Record<string, string> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(NOTE_FOLDER_MAP_KEY);
+    const raw = window.localStorage.getItem(LEGACY_NOTE_FOLDER_MAP_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : {};
     if (!parsed || typeof parsed !== "object") return {};
     return parsed as Record<string, string>;
@@ -61,17 +60,10 @@ function loadNoteFolderMap(): Record<string, string> {
   }
 }
 
-function saveNoteFolderMap(map: Record<string, string>) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(NOTE_FOLDER_MAP_KEY, JSON.stringify(map));
-  } catch {}
-}
-
-function loadFolderParentMap(): FolderParentMap {
+function loadLegacyFolderParentMap(): FolderParentMap {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(FOLDER_PARENT_MAP_KEY);
+    const raw = window.localStorage.getItem(LEGACY_FOLDER_PARENT_MAP_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : {};
     if (!parsed || typeof parsed !== "object") return {};
     const out: FolderParentMap = {};
@@ -85,13 +77,6 @@ function loadFolderParentMap(): FolderParentMap {
   } catch {
     return {};
   }
-}
-
-function saveFolderParentMap(map: FolderParentMap) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(FOLDER_PARENT_MAP_KEY, JSON.stringify(map));
-  } catch {}
 }
 
 function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
@@ -183,7 +168,17 @@ export default function NotesWorkspace({
 }) {
   const { user, getToken, loading } = useAuth();
   const rows = useQuery(api.insights.listMyDrafts, user ? {} : "skip") as InsightDraftSummary[] | undefined;
+  const noteFoldersApi = (api as any).noteFolders;
+  const folderWorkspace = useQuery(
+    noteFoldersApi.getWorkspace,
+    user ? {} : "skip"
+  ) as CloudFolderWorkspace | undefined;
   const saveDraftSettingsMutation = useMutation(api.insights.saveDraftSettings);
+  const createFolderMutation = useMutation(noteFoldersApi.createFolder);
+  const renameFolderMutation = useMutation(noteFoldersApi.renameFolder);
+  const moveFolderMutation = useMutation(noteFoldersApi.moveFolder);
+  const deleteFolderMutation = useMutation(noteFoldersApi.deleteFolder);
+  const assignFolderMutation = useMutation(noteFoldersApi.assignDraftFolder);
   const { switchDraft, openBuilder, createDraft } = useInsightBuilder();
 
   const [search, setSearch] = useState("");
@@ -211,15 +206,89 @@ export default function NotesWorkspace({
   const filterBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setFolderNames(loadFolderNames());
-    setNoteFolderMap(loadNoteFolderMap());
-    setFolderParentMap(loadFolderParentMap());
     try {
       setShowTipsTooltip(!window.localStorage.getItem(NOTES_TIP_DISMISSED_KEY));
     } catch {
       setShowTipsTooltip(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!folderWorkspace) return;
+    const folderNamesFromCloud = folderWorkspace.folders.map((folder) => folder.name).sort((a, b) => a.localeCompare(b));
+    const nameById = new Map(folderWorkspace.folders.map((folder) => [folder.id, folder.name]));
+    const nextParentMap: FolderParentMap = {};
+    folderWorkspace.folders.forEach((folder) => {
+      const parentName = folder.parent_folder_id ? nameById.get(folder.parent_folder_id) : null;
+      if (parentName && parentName !== folder.name) nextParentMap[folder.name] = parentName;
+    });
+    const nextNoteFolderMap: Record<string, string> = {};
+    folderWorkspace.assignments.forEach((row) => {
+      const folderName = nameById.get(row.folder_id);
+      if (folderName) nextNoteFolderMap[row.draft_id] = folderName;
+    });
+    setFolderNames(folderNamesFromCloud);
+    setFolderParentMap(nextParentMap);
+    setNoteFolderMap(nextNoteFolderMap);
+  }, [folderWorkspace]);
+
+  useEffect(() => {
+    if (!user || !folderWorkspace) return;
+    let cancelled = false;
+    (async () => {
+      if (typeof window === "undefined") return;
+      if (window.localStorage.getItem(FOLDER_MIGRATION_DONE_KEY) === "1") return;
+      const legacyNames = loadLegacyFolderNames();
+      const legacyParentMap = loadLegacyFolderParentMap();
+      const legacyNoteFolderMap = loadLegacyNoteFolderMap();
+      const hasLegacyData =
+        legacyNames.length > 0 ||
+        Object.keys(legacyParentMap).length > 0 ||
+        Object.keys(legacyNoteFolderMap).length > 0;
+      if (!hasLegacyData) {
+        window.localStorage.setItem(FOLDER_MIGRATION_DONE_KEY, "1");
+        return;
+      }
+      if (folderWorkspace.folders.length > 0 || folderWorkspace.assignments.length > 0) {
+        window.localStorage.setItem(FOLDER_MIGRATION_DONE_KEY, "1");
+        return;
+      }
+
+      const createdIds = new Map<string, string>();
+      const pending = new Set<string>(legacyNames);
+      let guard = legacyNames.length * 2 + 1;
+      while (pending.size > 0 && guard > 0) {
+        guard -= 1;
+        let progressed = false;
+        for (const name of Array.from(pending)) {
+          const parent = legacyParentMap[name];
+          if (parent && !createdIds.has(parent)) continue;
+          const result = await createFolderMutation({
+            name,
+            parentFolderId: parent ? (createdIds.get(parent) as any) : undefined,
+          });
+          if (!cancelled) {
+            createdIds.set(name, String(result.id));
+            pending.delete(name);
+            progressed = true;
+          }
+        }
+        if (!progressed) break;
+      }
+      for (const [draftId, folderName] of Object.entries(legacyNoteFolderMap)) {
+        const folderId = createdIds.get(folderName);
+        if (!folderId) continue;
+        await assignFolderMutation({
+          draftId: draftId as any,
+          folderId: folderId as any,
+        });
+      }
+      if (!cancelled) window.localStorage.setItem(FOLDER_MIGRATION_DONE_KEY, "1");
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, folderWorkspace, createFolderMutation, assignFolderMutation]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent | TouchEvent) {
@@ -262,6 +331,12 @@ export default function NotesWorkspace({
     });
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [folderNames, noteFolderMap, folderParentMap]);
+
+  const folderIdByName = useMemo(() => {
+    const out = new Map<string, string>();
+    (folderWorkspace?.folders ?? []).forEach((folder) => out.set(folder.name, folder.id));
+    return out;
+  }, [folderWorkspace]);
 
   const filteredRows = useMemo(() => {
     if (!rows) return [];
@@ -408,76 +483,49 @@ export default function NotesWorkspace({
     setExpandedFolders((prev) => ({ ...prev, [folder]: !prev[folder] }));
   }
 
-  function upsertFolder(name: string, parent?: string | null) {
+  async function upsertFolder(name: string, parent?: string | null) {
     const trimmed = name.trim();
     if (!trimmed) return false;
     if (allFolders.includes(trimmed)) return false;
-
-    const nextNames = [...allFolders, trimmed].sort((a, b) => a.localeCompare(b));
-    setFolderNames(nextNames);
-    saveFolderNames(nextNames);
-
-    if (parent) {
-      const nextParents = { ...folderParentMap, [trimmed]: parent };
-      setFolderParentMap(nextParents);
-      saveFolderParentMap(nextParents);
-    }
-
+    const parentId = parent ? folderIdByName.get(parent) : undefined;
+    if (parent && !parentId) return false;
+    await createFolderMutation({
+      name: trimmed,
+      parentFolderId: parentId as any,
+    });
     setExpandedFolders((prev) => ({ ...prev, [trimmed]: true }));
     return true;
   }
 
-  function assignFolder(noteId: string, folder: string | null) {
-    const nextMap = { ...noteFolderMap };
-    if (!folder) {
-      delete nextMap[noteId];
-    } else {
-      nextMap[noteId] = folder;
-    }
-    setNoteFolderMap(nextMap);
-    saveNoteFolderMap(nextMap);
+  async function assignFolder(noteId: string, folder: string | null) {
+    const folderId = folder ? folderIdByName.get(folder) : undefined;
+    if (folder && !folderId) return;
+    await assignFolderMutation({
+      draftId: noteId as any,
+      folderId: folderId as any,
+    });
   }
 
-  function moveFolder(folder: string, targetParent: string | null) {
+  async function moveFolder(folder: string, targetParent: string | null) {
     if (!folder) return;
     if (targetParent === folder) return;
     if (targetParent && isDescendant(targetParent, folder, normalizedParentMap)) return;
-
-    const nextParents = { ...folderParentMap };
-    if (!targetParent) {
-      delete nextParents[folder];
-    } else {
-      nextParents[folder] = targetParent;
-    }
-    setFolderParentMap(nextParents);
-    saveFolderParentMap(nextParents);
+    const folderId = folderIdByName.get(folder);
+    if (!folderId) return;
+    const parentId = targetParent ? folderIdByName.get(targetParent) : undefined;
+    if (targetParent && !parentId) return;
+    await moveFolderMutation({
+      folderId: folderId as any,
+      parentFolderId: parentId as any,
+    });
   }
 
-  function deleteFolder(folder: string) {
+  async function deleteFolder(folder: string) {
     const name = folder.trim();
     if (!name) return;
-
-    const nextNames = allFolders.filter((value) => value !== name);
-    setFolderNames(nextNames);
-    saveFolderNames(nextNames);
-
-    const nextNoteFolderMap: Record<string, string> = {};
-    for (const [noteId, value] of Object.entries(noteFolderMap)) {
-      if (value === name) continue;
-      nextNoteFolderMap[noteId] = value;
-    }
-    setNoteFolderMap(nextNoteFolderMap);
-    saveNoteFolderMap(nextNoteFolderMap);
-
-    const nextParentMap: FolderParentMap = {};
-    for (const [child, parent] of Object.entries(folderParentMap)) {
-      if (child === name) continue;
-      if (parent === name) continue;
-      nextParentMap[child] = parent;
-    }
-    setFolderParentMap(nextParentMap);
-    saveFolderParentMap(nextParentMap);
-
+    const folderId = folderIdByName.get(name);
+    if (!folderId) return;
+    await deleteFolderMutation({ folderId: folderId as any });
     setExpandedFolders((prev) => {
       const out = { ...prev };
       delete out[name];
@@ -486,35 +534,15 @@ export default function NotesWorkspace({
     setActiveFilters((prev) => prev.filter((filter) => !(filter.kind === "folder" && filter.value === name)));
   }
 
-  function renameFolder(from: string, to: string) {
+  async function renameFolder(from: string, to: string) {
     const fromName = from.trim();
     const toName = to.trim();
     if (!fromName || !toName) return false;
     if (fromName === toName) return true;
     if (allFolders.includes(toName)) return false;
-
-    const nextNames = allFolders
-      .map((folder) => (folder === fromName ? toName : folder))
-      .sort((a, b) => a.localeCompare(b));
-    setFolderNames(nextNames);
-    saveFolderNames(nextNames);
-
-    const nextNoteFolderMap: Record<string, string> = {};
-    for (const [noteId, folder] of Object.entries(noteFolderMap)) {
-      nextNoteFolderMap[noteId] = folder === fromName ? toName : folder;
-    }
-    setNoteFolderMap(nextNoteFolderMap);
-    saveNoteFolderMap(nextNoteFolderMap);
-
-    const nextParentMap: FolderParentMap = {};
-    for (const [child, parent] of Object.entries(folderParentMap)) {
-      const nextChild = child === fromName ? toName : child;
-      const nextParent = parent === fromName ? toName : parent;
-      if (!nextChild || !nextParent || nextChild === nextParent) continue;
-      nextParentMap[nextChild] = nextParent;
-    }
-    setFolderParentMap(nextParentMap);
-    saveFolderParentMap(nextParentMap);
+    const folderId = folderIdByName.get(fromName);
+    if (!folderId) return false;
+    await renameFolderMutation({ folderId: folderId as any, name: toName });
 
     setExpandedFolders((prev) => {
       const out = { ...prev };
@@ -687,10 +715,10 @@ export default function NotesWorkspace({
           const draggedFolder = draggedFolderName || e.dataTransfer.getData("text/folder-name");
 
           if (noteId) {
-            assignFolder(noteId, folder);
+            void assignFolder(noteId, folder);
             noteDropHandledRef.current = true;
           }
-          else if (draggedFolder) moveFolder(draggedFolder, folder);
+          else if (draggedFolder) void moveFolder(draggedFolder, folder);
 
           setDraggedNoteId(null);
           setDraggedFolderName(null);
@@ -729,7 +757,7 @@ export default function NotesWorkspace({
                 `Delete "${folder}"? Notes in this folder will move to root and child folders will move to root.`
               );
               if (!confirmed) return;
-              deleteFolder(folder);
+              void deleteFolder(folder);
             }}
             className="rounded-md border surface-button px-2 py-0.5 text-xs text-red-700 dark:text-red-300"
             title={`Delete folder ${folder}`}
@@ -774,7 +802,7 @@ export default function NotesWorkspace({
                 }}
                 onDragEnd={(noteId) => {
                   if (!noteDropHandledRef.current) {
-                    assignFolder(noteId, null);
+                    void assignFolder(noteId, null);
                   }
                   setDraggedNoteId(null);
                   setDragOverFolder(null);
@@ -961,8 +989,8 @@ export default function NotesWorkspace({
           e.preventDefault();
           const noteId = draggedNoteId || e.dataTransfer.getData("text/note-id");
           const folderName = draggedFolderName || e.dataTransfer.getData("text/folder-name");
-          if (noteId) assignFolder(noteId, null);
-          else if (folderName) moveFolder(folderName, null);
+          if (noteId) void assignFolder(noteId, null);
+          else if (folderName) void moveFolder(folderName, null);
           if (noteId) noteDropHandledRef.current = true;
           setDraggedNoteId(null);
           setDraggedFolderName(null);
@@ -984,7 +1012,7 @@ export default function NotesWorkspace({
             }}
             onDragEnd={(noteId) => {
               if (!noteDropHandledRef.current) {
-                assignFolder(noteId, null);
+                void assignFolder(noteId, null);
               }
               setDraggedNoteId(null);
               setDragOverFolder(null);
@@ -1048,8 +1076,8 @@ export default function NotesWorkspace({
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const created = upsertFolder(newFolderName, newFolderParent || null);
+                onClick={async () => {
+                  const created = await upsertFolder(newFolderName, newFolderParent || null);
                   if (created) setIsFolderModalOpen(false);
                 }}
                 className="rounded-md bg-foreground text-background px-3 py-2 text-sm"
@@ -1080,8 +1108,8 @@ export default function NotesWorkspace({
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const renamed = renameFolder(renamingFolder, renameFolderName);
+                onClick={async () => {
+                  const renamed = await renameFolder(renamingFolder, renameFolderName);
                   if (renamed) setRenamingFolder(null);
                 }}
                 className="rounded-md bg-foreground text-background px-3 py-2 text-sm"

@@ -12,6 +12,7 @@ import { upsertCurrentUser } from "@/lib/appData";
 const navItems = [
   { href: "/browse", label: "Browse" },
   { href: "/feed", label: "Notes" },
+  { href: "/plans", label: "Plans" },
   { href: "/help", label: "Guide" },
 ];
 

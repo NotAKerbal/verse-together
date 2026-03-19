@@ -32,7 +32,7 @@ export default async function BrowsePage({
             <Link
               href={`/browse/${v.id}${lessonSuffix}`}
               className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
-              data-ripple
+              data-tap
             >
               <div className="font-medium">{v.label}</div>
               <div className="text-sm text-foreground/70">English (LDS)</div>

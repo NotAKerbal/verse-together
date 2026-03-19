@@ -8,13 +8,16 @@
  * @module
  */
 
+import type * as annotations from "../annotations.js";
 import type * as cache from "../cache.js";
 import type * as crons from "../crons.js";
 import type * as feedback from "../feedback.js";
 import type * as insights from "../insights.js";
 import type * as lessons from "../lessons.js";
+import type * as noteFolders from "../noteFolders.js";
 import type * as preferences from "../preferences.js";
 import type * as social from "../social.js";
+import type * as studyPlans from "../studyPlans.js";
 import type * as users from "../users.js";
 import type * as utils from "../utils.js";
 
@@ -25,13 +28,16 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  annotations: typeof annotations;
   cache: typeof cache;
   crons: typeof crons;
   feedback: typeof feedback;
   insights: typeof insights;
   lessons: typeof lessons;
+  noteFolders: typeof noteFolders;
   preferences: typeof preferences;
   social: typeof social;
+  studyPlans: typeof studyPlans;
   users: typeof users;
   utils: typeof utils;
 }>;

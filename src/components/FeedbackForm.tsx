@@ -96,7 +96,7 @@ export default function FeedbackForm() {
             type="submit"
             className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium disabled:opacity-50"
             disabled={submitting}
-            data-ripple
+            data-tap
           >
             {submitting ? "Sending..." : "Send feedback"}
           </button>
