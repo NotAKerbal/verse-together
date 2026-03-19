@@ -2,13 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import ScriptureQuickNav from "@/components/ScriptureQuickNav";
+import VolumeBookBrowser, { type VolumeBookBrowserItem } from "@/components/VolumeBookBrowser";
 import { getBibleBooksForVolume } from "@/lib/bibleCanon";
 import {
   getScriptureVolumeLabel,
   normalizeScriptureVolume,
   toScriptureVolumeUrlSlug,
 } from "@/lib/scriptureVolumes";
-import { getBookAbbreviation } from "@/lib/scriptureQuickNav";
 
 const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   bookofmormon: [
@@ -46,6 +46,95 @@ const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
   ],
 };
 
+const OLD_TESTAMENT_GROUPS: Array<{ label: string; books: string[] }> = [
+  { label: "Law", books: ["genesis", "exodus", "leviticus", "numbers", "deuteronomy"] },
+  {
+    label: "History",
+    books: [
+      "joshua",
+      "judges",
+      "ruth",
+      "1samuel",
+      "2samuel",
+      "1kings",
+      "2kings",
+      "1chronicles",
+      "2chronicles",
+      "ezra",
+      "nehemiah",
+      "esther",
+    ],
+  },
+  { label: "Wisdom", books: ["job", "psalms", "proverbs", "ecclesiastes", "songofsolomon"] },
+  { label: "Major Prophets", books: ["isaiah", "jeremiah", "lamentations", "ezekiel", "daniel"] },
+  {
+    label: "Minor Prophets",
+    books: [
+      "hosea",
+      "joel",
+      "amos",
+      "obadiah",
+      "jonah",
+      "micah",
+      "nahum",
+      "habakkuk",
+      "zephaniah",
+      "haggai",
+      "zechariah",
+      "malachi",
+    ],
+  },
+];
+
+const NEW_TESTAMENT_GROUPS: Array<{ label: string; books: string[] }> = [
+  { label: "Gospels", books: ["matthew", "mark", "luke", "john"] },
+  { label: "History", books: ["acts"] },
+  {
+    label: "Pauline Epistles",
+    books: [
+      "romans",
+      "1corinthians",
+      "2corinthians",
+      "galatians",
+      "ephesians",
+      "philippians",
+      "colossians",
+      "1thessalonians",
+      "2thessalonians",
+      "1timothy",
+      "2timothy",
+      "titus",
+      "philemon",
+      "hebrews",
+    ],
+  },
+  { label: "General Epistles", books: ["james", "1peter", "2peter", "1john", "2john", "3john", "jude"] },
+  { label: "Apocalypse", books: ["revelation"] },
+];
+
+function buildCategorizedBooks(volume: string): VolumeBookBrowserItem[] {
+  const books = volumeToBooks[volume] ?? [];
+  const bibleBooks = getBibleBooksForVolume(volume);
+  const chaptersBySlug = new Map(bibleBooks.map((book) => [book.slug, book.chapters]));
+  const groups =
+    volume === "oldtestament"
+      ? OLD_TESTAMENT_GROUPS
+      : volume === "newtestament"
+      ? NEW_TESTAMENT_GROUPS
+      : [];
+  const categoryBySlug = new Map<string, string>();
+  groups.forEach((group) => {
+    group.books.forEach((slug) => categoryBySlug.set(slug, group.label));
+  });
+
+  return books.map((book) => ({
+    id: book.id,
+    label: book.label,
+    chapters: chaptersBySlug.get(book.id),
+    category: categoryBySlug.get(book.id),
+  }));
+}
+
 export default async function VolumePage({
   params,
   searchParams,
@@ -62,7 +151,7 @@ export default async function VolumePage({
   if (canonicalVolume === "doctrineandcovenants") {
     redirect(`/browse/${volumeSlug}/doctrineandcovenants${lessonSuffix}`);
   }
-  const books = volumeToBooks[canonicalVolume] ?? [];
+  const books = buildCategorizedBooks(canonicalVolume);
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
 
   return (
@@ -73,28 +162,15 @@ export default async function VolumePage({
         />
         <ScriptureQuickNav currentVolume={canonicalVolume} />
       </div>
-      <h1 className="text-2xl font-semibold">{volumeLabel}</h1>
       {books.length === 0 ? (
         <p className="text-foreground/80">No book list available for this volume yet.</p>
       ) : (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {books.map((b) => (
-            <li key={b.id}>
-              <Link
-                href={`/browse/${volumeSlug}/${b.id}${lessonSuffix}`}
-                className="block rounded-lg border surface-card p-4 hover:bg-[var(--surface-button-hover)]"
-                data-tap
-              >
-                <div className="font-medium">{b.label}</div>
-                {getBookAbbreviation(b.id) ? (
-                  <div className="mt-1 inline-flex items-center rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-xs text-foreground/70">
-                    {getBookAbbreviation(b.id)}
-                  </div>
-                ) : null}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <VolumeBookBrowser
+          books={books}
+          volumeLabel={volumeLabel}
+          volumeSlug={volumeSlug}
+          lessonSuffix={lessonSuffix}
+        />
       )}
     </section>
   );

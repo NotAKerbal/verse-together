@@ -45,6 +45,9 @@ export default async function BookLanding({
   const bookLabel = bookData.title || book.replace(/-/g, " ");
   const duplicateVolumeBook = bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase();
   const compactNumberGrid = canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants";
+  const summaryPreview = bookData.summary
+    ? bookData.summary.split("â€”")[0]?.trim() || bookData.summary
+    : "";
   return (
     <section className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -66,11 +69,22 @@ export default async function BookLanding({
         />
         <ScriptureQuickNav currentVolume={canonicalVolume} currentBook={book} />
       </div>
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold capitalize">{bookLabel}</h1>
-        {bookData.summary ? (
-          <p className="text-foreground/80 text-sm max-w-3xl">{bookData.summary}</p>
-        ) : null}
+      <header className="rounded-[1.75rem] border px-5 py-6 surface-card-strong sm:px-7 sm:py-8">
+        <div className="space-y-4">
+          {!duplicateVolumeBook ? (
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/45">
+              {volumeLabel}
+            </div>
+          ) : null}
+          <h1 className="text-[2rem] font-semibold leading-none tracking-[-0.03em] sm:text-[2.6rem]">
+            {bookLabel}
+          </h1>
+          {summaryPreview ? (
+            <p className="max-w-3xl text-base italic leading-8 text-foreground/70 sm:text-lg">
+              "{summaryPreview}"
+            </p>
+          ) : null}
+        </div>
       </header>
       <ChapterCards
         volume={volumeSlug}
@@ -112,12 +126,23 @@ function ChapterCards({
   }
   const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   return (
-    <div className="space-y-3">
-      <h2 className="text-lg font-medium">Select a chapter</h2>
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-3">
+        <h2 className="text-lg font-medium">Select a chapter</h2>
+        <div className="pb-0.5 text-xs font-medium uppercase tracking-[0.14em] text-foreground/45">
+          {chapters.length} total
+        </div>
+      </div>
       {chapters.length === 0 ? (
         <p className="text-foreground/70 text-sm">No chapter list available.</p>
       ) : (
-        <ul className={compactNumberGrid ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2" : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5"}>
+        <ul
+          className={
+            compactNumberGrid
+              ? "grid grid-cols-4 gap-2.5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8"
+              : "grid grid-cols-4 gap-2.5 sm:grid-cols-5 md:grid-cols-6"
+          }
+        >
           {chapters.map((c, idx) => {
             const n = idx + 1;
             const { preview, points } = extractSummary(c.summary);
@@ -125,21 +150,30 @@ function ChapterCards({
               <li key={c._id}>
                 <Link
                   href={`/browse/${volume}/${book}/${n}${lessonSuffix}`}
-                  className={compactNumberGrid ? "block rounded-lg border surface-card px-2 py-3 text-center hover:bg-[var(--surface-button-hover)]" : "block rounded-lg border surface-card p-3 hover:bg-[var(--surface-button-hover)]"}
+                  className="group flex aspect-square min-h-[4.2rem] flex-col justify-between rounded-[1rem] border p-2.5 transition-all duration-200 surface-card hover:bg-[var(--surface-button-hover)]"
                   aria-label={`${delineation} ${n}`}
                   data-tap
                 >
-                  <div className={compactNumberGrid ? "text-base font-semibold" : "font-medium"}>
-                    {compactNumberGrid ? n : `${delineation} ${n}`}
-                  </div>
-                  {!compactNumberGrid && preview ? (
-                    <p className="text-xs text-foreground/80 mt-1">{preview}</p>
+                  {!compactNumberGrid && idx === 0 ? (
+                    <div className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-foreground/45">
+                      Start
+                    </div>
                   ) : null}
-                  {!compactNumberGrid && points.length ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {points.map((p, i) => (
-                        <span key={i} className="inline-flex items-center rounded-full border surface-button px-2 py-0.5 text-xs text-foreground/80">{p}</span>
-                      ))}
+                  <div className="flex flex-1 items-center justify-center text-center">
+                    <div className="space-y-1">
+                      <div className="text-xl font-semibold leading-none tracking-[-0.02em] text-foreground/88">
+                        {n}
+                      </div>
+                      {!compactNumberGrid && preview ? (
+                        <div className="line-clamp-2 text-[0.64rem] leading-4 text-foreground/55">
+                          {preview}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  {!compactNumberGrid && points.length > 0 ? (
+                    <div className="text-[0.58rem] uppercase tracking-[0.12em] text-foreground/35">
+                      {points[0]}
                     </div>
                   ) : null}
                 </Link>

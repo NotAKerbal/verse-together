@@ -9,7 +9,7 @@ export default function AppMain({ children }: PropsWithChildren) {
 
   return (
     <main
-      className={`w-full px-4 py-8 ${
+      className={`w-full px-4 pb-28 pt-8 sm:pb-8 ${
         hasDesktopInsightPanel ? "lg:pr-[380px] xl:pr-[440px] 2xl:pr-[500px]" : ""
       }`}
     >

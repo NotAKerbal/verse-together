@@ -8,17 +8,24 @@ import MobileNavDrawer from "@/components/MobileNavDrawer";
 import ThemeSelect from "@/components/ThemeSelect";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
+import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
-const navItems = [
-  { href: "/browse", label: "Browse" },
-  { href: "/feed", label: "Notes" },
-  { href: "/plans", label: "Plans" },
-  { href: "/help", label: "Guide" },
-];
-
-function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+function MenuIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    >
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </svg>
+  );
 }
 
 export default function Navbar() {
@@ -45,30 +52,27 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="w-full border-b border-black/10 dark:border-white/15 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
+      <header className="app-header w-full">
+        <div className="mx-auto grid max-w-6xl grid-cols-[32px_1fr_32px] items-center gap-2 px-4 py-1.5 sm:flex sm:justify-between sm:gap-3 sm:py-3">
           <div className="flex items-center gap-3 sm:gap-5">
             <button
-              className="sm:hidden inline-flex items-center justify-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm"
+              className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--foreground)] sm:hidden"
               aria-label="Open menu"
               onClick={() => setDrawerOpen(true)}
             >
-              Menu
+              <MenuIcon />
             </button>
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              Verse Together
-            </Link>
             <nav className="hidden sm:flex items-center gap-2">
-              {navItems.map((item) => {
-                const active = isActive(pathname, item.href);
+              {primaryNavItems.map((item) => {
+                const active = isPathActive(pathname, item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`inline-flex items-center rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                    className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition-colors ${
                       active
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                        ? "border-[color:var(--surface-button-active)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
+                        : "border-[color:var(--surface-border)] bg-[color:var(--surface-button)] hover:bg-[color:var(--surface-button-hover)]"
                     }`}
                   >
                     {item.label}
@@ -76,6 +80,15 @@ export default function Navbar() {
                 );
               })}
             </nav>
+          </div>
+
+          <div className="flex justify-center sm:block">
+            <Link
+              href="/"
+              className="text-center text-[1.1rem] font-semibold tracking-[0.01em] leading-none sm:text-left sm:text-lg"
+            >
+              Verse Together
+            </Link>
           </div>
 
           <div className="hidden sm:flex items-center gap-2">
@@ -91,12 +104,14 @@ export default function Navbar() {
               />
             ) : (
               <SignInButton mode="modal">
-                <button className="inline-flex items-center rounded-md bg-foreground text-background px-3 py-1.5 text-sm font-medium hover:opacity-90">
+                <button className="inline-flex items-center rounded-full bg-[color:var(--surface-button-active)] px-3 py-1.5 text-sm font-medium text-[color:var(--surface-button-active-text)] hover:opacity-90">
                   Sign in
                 </button>
               </SignInButton>
             )}
           </div>
+
+          <div className="h-8 w-8 sm:hidden" aria-hidden="true" />
         </div>
       </header>
       <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />

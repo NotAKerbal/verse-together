@@ -2,17 +2,25 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --background: #f7f8fa;
-  --foreground: #151a22;
-  --surface-card: rgba(255, 255, 255, 0.84);
-  --surface-card-strong: rgba(255, 255, 255, 0.96);
-  --surface-card-soft: rgba(248, 250, 255, 0.8);
-  --surface-border: rgba(25, 33, 49, 0.14);
-  --surface-shadow: 0 10px 28px rgba(16, 24, 40, 0.08);
-  --surface-button: rgba(255, 255, 255, 0.66);
-  --surface-button-hover: rgba(255, 255, 255, 0.86);
-  --surface-button-active: rgba(22, 29, 41, 0.9);
-  --surface-button-active-text: #f9fbff;
+  --background: #f4f1e9;
+  --foreground: #27313a;
+  --surface-card: rgba(255, 252, 246, 0.82);
+  --surface-card-strong: rgba(255, 252, 246, 0.94);
+  --surface-card-soft: rgba(242, 238, 230, 0.78);
+  --surface-border: rgba(54, 62, 70, 0.14);
+  --surface-shadow: 0 14px 34px rgba(33, 42, 48, 0.08);
+  --surface-button: rgba(255, 252, 246, 0.68);
+  --surface-button-hover: rgba(255, 252, 246, 0.92);
+  --surface-button-active: #1b3022;
+  --surface-button-active-text: #f7f5ee;
+  --accent-primary: #1b3022;
+  --accent-secondary: #59635c;
+  --accent-tertiary: #727996;
+  --mobile-nav-shell: rgba(245, 242, 235, 0.92);
+  --mobile-nav-ring: rgba(30, 40, 34, 0.08);
+  --mobile-nav-active: #d7ead2;
+  --mobile-nav-active-text: #213b2b;
+  --mobile-nav-icon: rgba(39, 49, 58, 0.68);
 }
 
 @theme inline {
@@ -23,17 +31,25 @@
 }
 
 [data-theme="dark"] {
-  --background: #0b1018;
-  --foreground: #e9edf5;
-  --surface-card: rgba(17, 24, 36, 0.78);
-  --surface-card-strong: rgba(18, 27, 39, 0.92);
-  --surface-card-soft: rgba(26, 35, 50, 0.74);
-  --surface-border: rgba(191, 206, 232, 0.18);
-  --surface-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
-  --surface-button: rgba(33, 45, 64, 0.66);
-  --surface-button-hover: rgba(44, 58, 80, 0.82);
-  --surface-button-active: rgba(238, 245, 255, 0.9);
-  --surface-button-active-text: #0f1726;
+  --background: #0f1318;
+  --foreground: #edf0ea;
+  --surface-card: rgba(18, 24, 31, 0.82);
+  --surface-card-strong: rgba(20, 27, 35, 0.94);
+  --surface-card-soft: rgba(30, 38, 48, 0.8);
+  --surface-border: rgba(214, 224, 236, 0.12);
+  --surface-shadow: 0 18px 40px rgba(0, 0, 0, 0.36);
+  --surface-button: rgba(32, 40, 52, 0.72);
+  --surface-button-hover: rgba(42, 52, 66, 0.9);
+  --surface-button-active: rgba(236, 243, 251, 0.92);
+  --surface-button-active-text: #121821;
+  --accent-primary: #6f8a75;
+  --accent-secondary: #8e9992;
+  --accent-tertiary: #8f96b5;
+  --mobile-nav-shell: rgba(22, 28, 33, 0.94);
+  --mobile-nav-ring: rgba(255, 255, 255, 0.06);
+  --mobile-nav-active: #cfe5c8;
+  --mobile-nav-active-text: #18271d;
+  --mobile-nav-icon: rgba(237, 240, 234, 0.76);
 }
 
 [data-theme="sepia"] {
@@ -52,11 +68,13 @@
 
 body {
   background:
-    radial-gradient(1200px 420px at 10% -20%, color-mix(in oklab, var(--foreground) 8%, transparent), transparent 70%),
-    radial-gradient(900px 380px at 90% -10%, color-mix(in oklab, var(--foreground) 7%, transparent), transparent 70%),
+    radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 10%, transparent) 1.15px, transparent 0),
+    radial-gradient(920px 420px at 8% -18%, color-mix(in oklab, var(--accent-primary) 8%, transparent), transparent 70%),
+    radial-gradient(780px 360px at 96% -12%, color-mix(in oklab, var(--accent-tertiary) 12%, transparent), transparent 72%),
     var(--background);
+  background-size: 22px 22px, auto, auto, auto;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), sans-serif;
   min-height: 100vh;
 }
 
@@ -91,6 +109,11 @@ body {
   background: var(--surface-button-active);
   border-color: color-mix(in oklab, var(--surface-button-active) 78%, var(--surface-border));
   color: var(--surface-button-active-text);
+}
+
+.app-header {
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .segmented-control {
