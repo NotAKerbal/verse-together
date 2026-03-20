@@ -10,6 +10,9 @@ type Props = {
   open: boolean;
   onClose: () => void;
   verses: Verse[];
+  initialWord?: string;
+  selectionText?: string;
+  referenceLabel?: string | null;
 };
 
 type ExplorerTab = "dict" | "tg" | "bd" | "ety";
@@ -50,7 +53,7 @@ function tokenize(text: string): Array<{ type: "word" | "sep"; value: string }> 
   return tokens;
 }
 
-export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Props) {
+export default function VerseExplorerSidebarPanel({ open, onClose, verses, initialWord, selectionText = "", referenceLabel = null }: Props) {
   const [activeWord, setActiveWord] = useState<string>("");
   const [tab, setTab] = useState<ExplorerTab>("dict");
   const [dictEnabled, setDictEnabled] = useState<boolean>(false);
@@ -66,11 +69,13 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
 
   useEffect(() => {
     if (!open) return;
-    const joined = verses.map((v) => v.text).join(" ");
-    const m = joined.match(/[A-Za-z][A-Za-z'\-]*/);
-    setActiveWord(m?.[0]?.toLowerCase() ?? "");
+    const fallbackWord =
+      selectionText.match(/[A-Za-z][A-Za-z'\-]*/)?.[0]?.toLowerCase() ??
+      verses.map((v) => v.text).join(" ").match(/[A-Za-z][A-Za-z'\-]*/)?.[0]?.toLowerCase() ??
+      "";
+    setActiveWord(initialWord?.trim().toLowerCase() || fallbackWord);
     setTab("dict");
-  }, [open, verses]);
+  }, [open, verses, initialWord, selectionText]);
 
   const tgUrl = useMemo(
     () => (tgAvailable && tgSlug ? `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(tgSlug)}?lang=eng` : ""),
@@ -173,7 +178,10 @@ export default function VerseExplorerSidebarPanel({ open, onClose, verses }: Pro
           Close
         </button>
       </div>
-      <div className="text-sm text-foreground/70">Select a word to explore dictionary entries and related tools.</div>
+      <div className="text-sm text-foreground/70">
+        {referenceLabel ? `${referenceLabel} selected. ` : ""}
+        Select a word to explore dictionary entries and related tools.
+      </div>
 
       <div className="space-y-2 p-2.5 rounded-md border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 max-h-[24vh] overflow-y-auto">
         {verses.map((v) => {

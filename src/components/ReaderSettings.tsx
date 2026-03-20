@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { ReaderPreferences } from "@/lib/preferences";
 
@@ -8,9 +9,10 @@ type Props = {
   onClose: () => void;
   prefs: ReaderPreferences;
   onChange: (next: ReaderPreferences) => void;
+  translationControls?: ReactNode;
 };
 
-export default function ReaderSettings({ open, onClose, prefs, onChange }: Props) {
+export default function ReaderSettings({ open, onClose, prefs, onChange, translationControls }: Props) {
   const [local, setLocal] = useState<ReaderPreferences>(prefs);
   const MIN_SCALE = 0.85;
   const MAX_SCALE = 1.3;
@@ -29,12 +31,12 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
   return (
     <div className="fixed inset-0 z-50">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 w-[min(92vw,22rem)] rounded-lg border border-black/10 dark:border-white/15 bg-background shadow-xl">
-        <header className="px-3 py-2 border-b border-black/10 dark:border-white/15 flex items-center justify-between">
+      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 w-[min(92vw,24rem)] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2rem)] overflow-hidden rounded-lg border border-black/10 dark:border-white/15 bg-background shadow-xl">
+        <header className="flex items-center justify-between border-b border-black/10 px-3 py-2 dark:border-white/15">
           <h3 className="text-sm font-semibold">Reader settings</h3>
-          <button onClick={onClose} className="text-sm text-foreground/70 hover:text-foreground">✕</button>
+          <button onClick={onClose} className="text-sm text-foreground/70 hover:text-foreground">x</button>
         </header>
-        <div className="p-3 space-y-3 text-sm">
+        <div className="max-h-[calc(100vh-7rem)] overflow-y-auto p-3 text-sm space-y-4">
           <div className="flex items-center justify-between gap-3">
             <span className="text-foreground/80">Footnotes</span>
             <button
@@ -63,7 +65,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
 
           <div className="space-y-1">
             <div className="text-xs font-medium tracking-wide text-foreground/80">
-              {`Text size · ${Math.round(local.fontScale * 100)}%`}
+              {`Text size - ${Math.round(local.fontScale * 100)}%`}
             </div>
             <div
               className="relative h-10 select-none"
@@ -74,10 +76,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
               onMouseDown={stopTouchPropagation}
             >
               <div className="absolute inset-0 rounded-md bg-black/10 dark:bg-white/15" />
-              <div
-                className="absolute left-0 top-0 h-full rounded-md bg-foreground"
-                style={{ width: `${pct}%` }}
-              />
+              <div className="absolute left-0 top-0 h-full rounded-md bg-foreground" style={{ width: `${pct}%` }} />
               <input
                 type="range"
                 min={MIN_SCALE}
@@ -90,7 +89,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
                   setLocal(next);
                   onChange(next);
                 }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
             </div>
           </div>
@@ -125,7 +124,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
                   setLocal(next);
                   onChange(next);
                 }}
-                className={`flex-1 px-3 py-1.5 text-sm border-l border-black/10 dark:border-white/15 ${
+                className={`flex-1 border-l border-black/10 px-3 py-1.5 text-sm dark:border-white/15 ${
                   local.fontFamily === "sans"
                     ? "bg-foreground text-background"
                     : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
@@ -166,7 +165,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
                   setLocal(next);
                   onChange(next);
                 }}
-                className={`flex-1 px-3 py-1.5 text-sm border-l border-black/10 dark:border-white/15 ${
+                className={`flex-1 border-l border-black/10 px-3 py-1.5 text-sm dark:border-white/15 ${
                   local.comparisonView === "sideBySide"
                     ? "bg-foreground text-background"
                     : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
@@ -176,13 +175,20 @@ export default function ReaderSettings({ open, onClose, prefs, onChange }: Props
               </button>
             </div>
           </fieldset>
+
+          {translationControls ? (
+            <section className="space-y-2 border-t border-black/10 pt-3 dark:border-white/15">
+              <div className="text-foreground/80">Translations</div>
+              <div className="space-y-3">{translationControls}</div>
+            </section>
+          ) : null}
         </div>
-        <footer className="px-3 py-2 border-t border-black/10 dark:border-white/15 text-right">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/15">Close</button>
+        <footer className="border-t border-black/10 px-3 py-2 text-right dark:border-white/15">
+          <button onClick={onClose} className="rounded-md border border-black/10 px-3 py-1.5 text-sm dark:border-white/15">
+            Close
+          </button>
         </footer>
       </div>
     </div>
   );
 }
-
-

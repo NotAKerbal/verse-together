@@ -10,6 +10,9 @@ type Props = {
   open: boolean;
   onClose: () => void;
   verses: Verse[];
+  initialWord?: string;
+  selectionText?: string;
+  referenceLabel?: string | null;
 };
 
 type ExplorerTab = "dict" | "tg" | "bd" | "ety";
@@ -50,7 +53,14 @@ function tokenize(text: string): Array<{ type: "word" | "sep"; value: string }> 
   return tokens;
 }
 
-export default function VerseExplorer({ open, onClose, verses }: Props) {
+export default function VerseExplorer({
+  open,
+  onClose,
+  verses,
+  initialWord,
+  selectionText = "",
+  referenceLabel = null,
+}: Props) {
   const [activeWord, setActiveWord] = useState<string>("");
   const [tab, setTab] = useState<ExplorerTab>("dict");
   const [dictEnabled, setDictEnabled] = useState<boolean>(false);
@@ -66,12 +76,13 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    // pick the first plausible word from provided verses
-    const joined = verses.map((v) => v.text).join(" ");
-    const m = joined.match(/[A-Za-z][A-Za-z'\-]*/);
-    setActiveWord(m?.[0]?.toLowerCase() ?? "");
+    const fallbackWord =
+      selectionText.match(/[A-Za-z][A-Za-z'\-]*/)?.[0]?.toLowerCase() ??
+      verses.map((v) => v.text).join(" ").match(/[A-Za-z][A-Za-z'\-]*/)?.[0]?.toLowerCase() ??
+      "";
+    setActiveWord(initialWord?.trim().toLowerCase() || fallbackWord);
     setTab("dict");
-  }, [open, verses]);
+  }, [open, verses, initialWord, selectionText]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -84,13 +95,20 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
   }, [open, onClose]);
 
   const tgUrl = useMemo(
-    () => (tgAvailable && tgSlug ? `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(tgSlug)}?lang=eng` : ""),
+    () =>
+      tgAvailable && tgSlug
+        ? `https://www.churchofjesuschrist.org/study/scriptures/tg/${encodeURIComponent(tgSlug)}?lang=eng`
+        : "",
     [tgAvailable, tgSlug]
   );
   const bdUrl = useMemo(
-    () => (bdAvailable && bdSlug ? `https://www.churchofjesuschrist.org/study/scriptures/bd/${encodeURIComponent(bdSlug)}?lang=eng` : ""),
+    () =>
+      bdAvailable && bdSlug
+        ? `https://www.churchofjesuschrist.org/study/scriptures/bd/${encodeURIComponent(bdSlug)}?lang=eng`
+        : "",
     [bdAvailable, bdSlug]
   );
+
   useEffect(() => {
     let cancelled = false;
     async function checkAvailability() {
@@ -111,11 +129,7 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
           fetch(`/api/tools/exists?type=bd&term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
           fetch(`/api/tools/dictionary?term=${encodeURIComponent(activeWord)}`, { cache: "no-store" }),
         ]);
-        const [tgJson, bdJson, dictJson] = await Promise.all([
-          tgRes.json(),
-          bdRes.json(),
-          dictRes.json(),
-        ]);
+        const [tgJson, bdJson, dictJson] = await Promise.all([tgRes.json(), bdRes.json(), dictRes.json()]);
         if (!cancelled) {
           const tgOk = !!tgJson.available;
           const bdOk = !!bdJson.available;
@@ -148,7 +162,7 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
         }
       }
     }
-    checkAvailability();
+    void checkAvailability();
     return () => {
       cancelled = true;
     };
@@ -174,149 +188,144 @@ export default function VerseExplorer({ open, onClose, verses }: Props) {
       setTab(availableTabs[0]);
     }
   }, [availableTabs, tab]);
+
   if (!open) return null;
+
   return (
     <div className="fixed inset-0 z-50">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div className="absolute left-3 right-3 sm:left-4 sm:right-4 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-black/10 dark:border-white/15 p-3 sm:p-4 space-y-3 max-h-[80vh] overflow-hidden">
-        <div className="h-1 w-10 bg-foreground/20 rounded-full mx-auto mb-1" />
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold">Verse Explorer</h3>
-          <button onClick={onClose} className="px-3 py-1 text-sm rounded-md border border-black/10 dark:border-white/15">Close</button>
-        </div>
-        <div className="text-sm text-foreground/70">Tap a word below to explore dictionary entries and related tools.</div>
+      <div className="absolute bottom-0 left-3 right-3 max-h-[80vh] overflow-hidden rounded-t-2xl border-t border-black/10 bg-background p-3 shadow-2xl dark:border-white/15 sm:left-4 sm:right-4 sm:p-4">
+        <div className="mb-1 mx-auto h-1 w-10 rounded-full bg-foreground/20" />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold">Verse Explorer</h3>
+            <button onClick={onClose} className="rounded-md border border-black/10 px-3 py-1 text-sm dark:border-white/15">
+              Close
+            </button>
+          </div>
+          <div className="text-sm text-foreground/70">
+            {referenceLabel ? `${referenceLabel} selected. ` : ""}
+            Tap a word below to explore dictionary entries and related tools.
+          </div>
 
-        <div className="space-y-2 p-2 rounded-md border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 max-h-[26vh] overflow-y-auto">
-          {verses.map((v) => {
-            const parts = tokenize(v.text);
-            return (
-              <div key={v.verse} className="leading-7">
-                <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top select-none">{v.verse}</span>
-                {parts.map((p, idx) =>
-                  p.type === "word" ? (
-                    <button
-                      key={`${v.verse}-${idx}`}
-                      onClick={() => {
-                        setActiveWord(p.value.toLowerCase());
-                        setTab("dict");
-                      }}
-                      className={`px-0.5 rounded ${activeWord && activeWord.toLowerCase() === p.value.toLowerCase() ? "bg-amber-300/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30" : "hover:bg-black/10 dark:hover:bg-white/10"}`}
-                      title={`Look up “${p.value}”`}
-                    >
-                      {p.value}
-                    </button>
-                  ) : (
-                    <span key={`${v.verse}-s-${idx}`}>{p.value}</span>
-                  )
-                )}
-              </div>
-            );
-          })}
-        </div>
+          <div className="max-h-[26vh] overflow-y-auto rounded-md border border-black/10 bg-black/5 p-2 dark:border-white/15 dark:bg-white/5">
+            <div className="space-y-2">
+              {verses.map((v) => {
+                const parts = tokenize(v.text);
+                return (
+                  <div key={v.verse} className="leading-7">
+                    <span className="mr-2 select-none align-top text-xs text-foreground/60 sm:text-sm">{v.verse}</span>
+                    {parts.map((p, idx) =>
+                      p.type === "word" ? (
+                        <button
+                          key={`${v.verse}-${idx}`}
+                          onClick={() => {
+                            setActiveWord(p.value.toLowerCase());
+                            setTab("dict");
+                          }}
+                          className={`rounded px-0.5 ${
+                            activeWord && activeWord.toLowerCase() === p.value.toLowerCase()
+                              ? "bg-amber-300/50 ring-1 ring-amber-600/30 dark:bg-amber-400/25"
+                              : "hover:bg-black/10 dark:hover:bg-white/10"
+                          }`}
+                          title={`Look up ${p.value}`}
+                        >
+                          {p.value}
+                        </button>
+                      ) : (
+                        <span key={`${v.verse}-s-${idx}`}>{p.value}</span>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="segmented-control" role="group" aria-label="Explore source">
-            {hasDictionaryEntries ? (
-              <button
-                onClick={() => setTab("dict")}
-                className="segmented-control-button px-3 text-sm"
-                data-active={tab === "dict"}
+          <div className="flex items-center justify-between gap-2">
+            <div className="segmented-control" role="group" aria-label="Explore source">
+              {hasDictionaryEntries ? (
+                <button onClick={() => setTab("dict")} className="segmented-control-button px-3 text-sm" data-active={tab === "dict"}>
+                  Dictionary
+                </button>
+              ) : null}
+              {tgAvailable ? (
+                <button onClick={() => setTab("tg")} className="segmented-control-button px-3 text-sm" data-active={tab === "tg"} title="Topical Guide">
+                  TG
+                </button>
+              ) : null}
+              {bdAvailable ? (
+                <button onClick={() => setTab("bd")} className="segmented-control-button px-3 text-sm" data-active={tab === "bd"} title="Bible Dictionary">
+                  BD
+                </button>
+              ) : null}
+              {hasEtymologyEntries ? (
+                <button onClick={() => setTab("ety")} className="segmented-control-button px-3 text-sm" data-active={tab === "ety"} title="Etymology">
+                  Etymology
+                </button>
+              ) : null}
+            </div>
+            {activeWord && currentUrl ? (
+              <a
+                href={currentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                title="Open in new tab"
               >
-                📖 Dictionary
-              </button>
-            ) : null}
-            {tgAvailable ? (
-              <button
-                onClick={() => setTab("tg")}
-                className="segmented-control-button px-3 text-sm"
-                data-active={tab === "tg"}
-                title="Topical Guide"
-              >
-                🗂️ TG
-              </button>
-            ) : null}
-            {bdAvailable ? (
-              <button
-                onClick={() => setTab("bd")}
-                className="segmented-control-button px-3 text-sm"
-                data-active={tab === "bd"}
-                title="Bible Dictionary"
-              >
-                📘 BD
-              </button>
-            ) : null}
-            {hasEtymologyEntries ? (
-              <button
-                onClick={() => setTab("ety")}
-                className="segmented-control-button px-3 text-sm"
-                data-active={tab === "ety"}
-                title="Etymology"
-              >
-                🧭 Etymology
-              </button>
+                Open
+              </a>
             ) : null}
           </div>
-          {activeWord && currentUrl ? (
-            <a
-              href={currentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-2 py-1 text-xs rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
-              title="Open in new tab"
-            >
-              ↗ {activeWord}
-            </a>
-          ) : null}
-        </div>
 
-        <div className="rounded-md overflow-hidden border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5" style={{ height: "40vh" }}>
-          {activeWord && tab === "ety" && hasEtymologyEntries ? (
-            <div className="w-full h-full overflow-y-auto p-3 space-y-3">
-              {etymologyItems.map((item) => (
-                <EtymologyEntryCard key={item.id} item={item} />
-              ))}
-            </div>
-          ) : activeWord && inAppDictionaryTab ? (
-            <div className="w-full h-full overflow-y-auto p-3 space-y-3">
-              {([
-                { edition: "1828", rows: entries1828 },
-                { edition: "1844", rows: entries1844 },
-                { edition: "1913", rows: entries1913 },
-              ] as DictionaryGroup[])
-                .filter((group) => group.rows.length > 0)
-                .map((group) => (
-                  <section key={group.edition} className="space-y-2">
-                    <h4 className="text-xs font-semibold tracking-wide text-foreground/60">
-                      {providerLabels[group.edition] || "Dictionary Source"}
-                    </h4>
-                    {group.rows.map((entry) => (
-                      <DictionaryEntryCard key={entry.id} entry={entry} edition={group.edition as DictionaryEdition} />
-                    ))}
-                  </section>
+          <div className="h-[40vh] overflow-hidden rounded-md border border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/5">
+            {activeWord && tab === "ety" && hasEtymologyEntries ? (
+              <div className="h-full w-full overflow-y-auto p-3 space-y-3">
+                {etymologyItems.map((item) => (
+                  <EtymologyEntryCard key={item.id} item={item} />
                 ))}
-            </div>
-          ) : activeWord && currentUrl ? (
-            <iframe
-              title={
-                tab === "dict"
-                  ? `Dictionary: ${activeWord}`
-                  : tab === "tg"
-                  ? `Topical Guide: ${activeWord}`
-                  : `Bible Dictionary: ${activeWord}`
-              }
-              src={currentUrl}
-              className="w-full h-full bg-background"
-              referrerPolicy="no-referrer"
-              sandbox="allow-same-origin allow-scripts"
-            />
-          ) : (
-            <div className="w-full h-full grid place-items-center text-sm text-foreground/60">
-              {activeWord ? "No entries found for this word." : "Select a word to preview"}
-            </div>
-          )}
+              </div>
+            ) : activeWord && inAppDictionaryTab ? (
+              <div className="h-full w-full overflow-y-auto p-3 space-y-3">
+                {([
+                  { edition: "1828", rows: entries1828 },
+                  { edition: "1844", rows: entries1844 },
+                  { edition: "1913", rows: entries1913 },
+                ] as DictionaryGroup[])
+                  .filter((group) => group.rows.length > 0)
+                  .map((group) => (
+                    <section key={group.edition} className="space-y-2">
+                      <h4 className="text-xs font-semibold tracking-wide text-foreground/60">
+                        {providerLabels[group.edition] || "Dictionary Source"}
+                      </h4>
+                      {group.rows.map((entry) => (
+                        <DictionaryEntryCard key={entry.id} entry={entry} edition={group.edition as DictionaryEdition} />
+                      ))}
+                    </section>
+                  ))}
+              </div>
+            ) : activeWord && currentUrl ? (
+              <iframe
+                title={
+                  tab === "dict"
+                    ? `Dictionary: ${activeWord}`
+                    : tab === "tg"
+                      ? `Topical Guide: ${activeWord}`
+                      : `Bible Dictionary: ${activeWord}`
+                }
+                src={currentUrl}
+                className="h-full w-full bg-background"
+                referrerPolicy="no-referrer"
+                sandbox="allow-same-origin allow-scripts"
+              />
+            ) : (
+              <div className="grid h-full w-full place-items-center text-sm text-foreground/60">
+                {activeWord ? "No entries found for this word." : "Select a word to preview"}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

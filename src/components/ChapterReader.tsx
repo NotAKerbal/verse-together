@@ -5,14 +5,11 @@ import type { ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
-import VerseActionBar from "./VerseActionBar";
-import DesktopVerseActionList from "./DesktopVerseActionList";
+import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
 import VerseExplorer from "./VerseExplorer";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import VerseExplorerSidebarPanel from "./VerseExplorerSidebarPanel";
-import TranslationSidebarPanel from "./TranslationSidebarPanel";
-import TranslationModal from "./TranslationModal";
 import ScriptureQuickNav from "./ScriptureQuickNav";
 import LessonBrowserPanel from "./LessonBrowserPanel";
 import { useAuth } from "@/lib/auth";
@@ -41,6 +38,14 @@ type VerseAnnotation = {
 };
 
 type AnnotationHighlightColor = "none" | "yellow" | "blue" | "green" | "pink" | "purple";
+type SelectedVerse = { verse: number; text: string };
+type ChapterSelectionState = {
+  selectedText: string;
+  selectedVerses: SelectedVerse[];
+  selectedBounds: { start: number; end: number } | null;
+  selectedWord: string;
+  anchorRect: VerseActionAnchorRect | null;
+};
 
 function annotationHighlightClass(color: AnnotationHighlightColor) {
   if (color === "yellow") return "border-amber-500/40 bg-amber-500/7";
@@ -49,6 +54,68 @@ function annotationHighlightClass(color: AnnotationHighlightColor) {
   if (color === "pink") return "border-pink-500/40 bg-pink-500/7";
   if (color === "purple") return "border-violet-500/40 bg-violet-500/7";
   return "border-black/15 dark:border-white/20 bg-black/[0.015] dark:bg-white/[0.025]";
+}
+
+function extractFirstWord(value: string): string {
+  const match = value.match(/[A-Za-z][A-Za-z'\-]*/);
+  return match?.[0]?.toLowerCase() ?? "";
+}
+
+function containsNode(container: HTMLElement, node: Node) {
+  return node === container || container.contains(node);
+}
+
+function toAnchorRect(range: Range): VerseActionAnchorRect | null {
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+  const fallbackRect = range.getBoundingClientRect();
+  const rect = rects[0] ?? (fallbackRect.width > 0 || fallbackRect.height > 0 ? fallbackRect : null);
+  if (!rect) return null;
+  return {
+    top: rect.top,
+    left: rect.left,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function getChapterSelectionState(
+  selection: Selection | null,
+  container: HTMLOListElement | null,
+  verses: Verse[]
+): ChapterSelectionState | null {
+  if (!selection || !container || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  const range = selection.getRangeAt(0);
+  if (!containsNode(container, range.startContainer) || !containsNode(container, range.endContainer)) {
+    return null;
+  }
+
+  const selectedText = selection.toString().replace(/\s+/g, " ").trim();
+  if (!selectedText) return null;
+
+  const selectedVerseNumbers = Array.from(container.querySelectorAll<HTMLElement>("[data-verse]"))
+    .filter((element) => range.intersectsNode(element))
+    .map((element) => Number(element.dataset.verse))
+    .filter((verseNumber) => Number.isFinite(verseNumber));
+  if (selectedVerseNumbers.length === 0) return null;
+
+  const selectedVerseSet = new Set(selectedVerseNumbers);
+  const selectedVerses = verses
+    .filter((verse) => selectedVerseSet.has(verse.verse))
+    .map((verse) => ({ verse: verse.verse, text: verse.text }));
+  if (selectedVerses.length === 0) return null;
+
+  return {
+    selectedText,
+    selectedVerses,
+    selectedBounds: {
+      start: Math.min(...selectedVerseNumbers),
+      end: Math.max(...selectedVerseNumbers),
+    },
+    selectedWord: extractFirstWord(selectedText),
+    anchorRect: toAnchorRect(range),
+  };
 }
 
 const ANNOTATION_HIGHLIGHT_OPTIONS: Array<{
@@ -255,7 +322,7 @@ export default function ChapterReader({
   }) as { by_verse: Record<number, VerseAnnotation[]> } | undefined;
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
   const router = useRouter();
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -270,9 +337,7 @@ export default function ChapterReader({
   const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
-  const [openTranslations, setOpenTranslations] = useState(false);
-  const [hoverActionsOpen, setHoverActionsOpen] = useState(false);
-  const [actionsPinned, setActionsPinned] = useState(false);
+  const [isPointerSelecting, setIsPointerSelecting] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
   const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
   const [annotationEditorVerse, setAnnotationEditorVerse] = useState<number | null>(null);
@@ -280,11 +345,12 @@ export default function ChapterReader({
   const [annotationHighlightColor, setAnnotationHighlightColor] = useState<AnnotationHighlightColor>("none");
   const [annotationSaving, setAnnotationSaving] = useState(false);
   const jumpHighlightTimeout = useRef<number | null>(null);
-  const overlayOpen = !!openFootnote || openCitations || openExplorer || openTranslations;
+  const overlayOpen = !!openFootnote || openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
   const [lessonPanelOpen, setLessonPanelOpen] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
+  const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
 
   function parseBrowseHref(
@@ -373,52 +439,14 @@ export default function ChapterReader({
     }
   }, []);
 
-  function toggleVerse(n: number) {
-    if (showTapHint) {
-      try { setSeenTapToActionsHint(); } catch {}
-      setShowTapHint(false);
-    }
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(n)) next.delete(n); else next.add(n);
-      return next;
-    });
-  }
-
-  // range selection removed from UI for simplicity
-
-  const selectedText = useMemo(() => {
-    const picked = verses.filter((v) => selected.has(v.verse));
-    return picked.map((v) => `${v.verse}. ${v.text}`).join("\n");
-  }, [verses, selected]);
-  const hasSelection = selected.size > 0;
-  const showMobileActionBar = !overlayOpen;
-  const hasSidebarPanelOpen = hasSelection || actionsPinned || !!openFootnote;
-  const selectedBounds = useMemo(() => {
-    if (!hasSelection) return null;
-    const verseList = Array.from(selected);
-    return {
-      start: Math.min(...verseList),
-      end: Math.max(...verseList),
-    };
-  }, [hasSelection, selected]);
-
-  const selectedFirstWord = useMemo(() => {
-    // Prefer DOM text selection when available
-    if (typeof window !== "undefined") {
-      const sel = window.getSelection?.();
-      const raw = sel ? String(sel.toString()) : "";
-      const trimmed = raw.trim();
-      if (trimmed) {
-        const mSel = trimmed.match(/[A-Za-z][A-Za-z'\-]*/);
-        if (mSel?.[0]) return mSel[0].toLowerCase();
-      }
-    }
-    const picked = verses.filter((v) => selected.has(v.verse));
-    const text = picked.map((v) => v.text).join(" ");
-    const m = text.match(/[A-Za-z][A-Za-z'\-]*/);
-    return m?.[0]?.toLowerCase() ?? "";
-  }, [verses, selected]);
+  const selectedText = selectionState?.selectedText ?? "";
+  const selectedVerses = selectionState?.selectedVerses ?? [];
+  const hasSelection = selectedVerses.length > 0;
+  const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting;
+  const hasSidebarPanelOpen = !!openFootnote || openCitations || openExplorer;
+  const selectedBounds = selectionState?.selectedBounds ?? null;
+  const selectedFirstWord = selectionState?.selectedWord ?? "";
+  const selectionPopoverAnchor = selectionState?.anchorRect ?? null;
   const hasActiveNote = lessonMode ? true : !!activeDraftId;
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
@@ -464,6 +492,10 @@ export default function ChapterReader({
     const leading = breadcrumbs.slice(0, -1).map((item) => ({ ...item }));
     return [...leading, { label: reference }];
   }, [breadcrumbs, reference]);
+  const selectionReferenceLabel = useMemo(() => {
+    if (!selectedBounds) return null;
+    return `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
+  }, [book, chapter, selectedBounds]);
   const annotationsByVerse = useMemo(
     () => chapterAnnotationData?.by_verse ?? {},
     [chapterAnnotationData]
@@ -505,9 +537,8 @@ export default function ChapterReader({
 
   function onOpenAnnotation() {
     if (!hasSelection) return;
-    const verseList = Array.from(selected);
-    if (verseList.length === 0) return;
-    openAnnotationEditor(Math.min(...verseList));
+    if (!selectedBounds) return;
+    openAnnotationEditor(selectedBounds.start);
   }
 
   async function onDeleteAnnotation() {
@@ -527,13 +558,99 @@ export default function ChapterReader({
   }
 
   useEffect(() => {
-    if (hasSelection) {
-      setHoverActionsOpen(false);
-      return;
-    }
     setOpenCitations(false);
     setOpenExplorer(false);
   }, [hasSelection]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    function syncSelectionState() {
+      const nextSelectionState = getChapterSelectionState(window.getSelection?.() ?? null, verseListRef.current, verses);
+      setSelectionState((prev) => {
+        if (
+          prev?.selectedText === nextSelectionState?.selectedText &&
+          prev?.selectedWord === nextSelectionState?.selectedWord &&
+          prev?.selectedBounds?.start === nextSelectionState?.selectedBounds?.start &&
+          prev?.selectedBounds?.end === nextSelectionState?.selectedBounds?.end &&
+          prev?.selectedVerses.length === nextSelectionState?.selectedVerses.length &&
+          prev?.selectedVerses.every((verse, index) => verse.verse === nextSelectionState?.selectedVerses[index]?.verse) &&
+          prev?.anchorRect?.top === nextSelectionState?.anchorRect?.top &&
+          prev?.anchorRect?.left === nextSelectionState?.anchorRect?.left &&
+          prev?.anchorRect?.width === nextSelectionState?.anchorRect?.width &&
+          prev?.anchorRect?.height === nextSelectionState?.anchorRect?.height
+        ) {
+          return prev;
+        }
+        if (nextSelectionState && showTapHint) {
+          try { setSeenTapToActionsHint(); } catch {}
+          setShowTapHint(false);
+        }
+        return nextSelectionState;
+      });
+    }
+
+    syncSelectionState();
+    document.addEventListener("selectionchange", syncSelectionState);
+    window.addEventListener("resize", syncSelectionState);
+    window.addEventListener("scroll", syncSelectionState, true);
+    return () => {
+      document.removeEventListener("selectionchange", syncSelectionState);
+      window.removeEventListener("resize", syncSelectionState);
+      window.removeEventListener("scroll", syncSelectionState, true);
+    };
+  }, [showTapHint, verses]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    function finishPointerSelection() {
+      setIsPointerSelecting(false);
+    }
+
+    window.addEventListener("pointerup", finishPointerSelection);
+    window.addEventListener("pointercancel", finishPointerSelection);
+
+    return () => {
+      window.removeEventListener("pointerup", finishPointerSelection);
+      window.removeEventListener("pointercancel", finishPointerSelection);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasSelection || overlayOpen) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-selection-popover='true']")) return;
+      if (target.closest("[data-verse-selectable='true']")) return;
+      clearSelection();
+    }
+
+    function onEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") clearSelection();
+    }
+
+    let dismissedByScroll = false;
+    function onScrollDismiss() {
+      if (dismissedByScroll) return;
+      dismissedByScroll = true;
+      clearSelection();
+    }
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onEscape);
+    window.addEventListener("scroll", onScrollDismiss, { passive: true });
+    window.addEventListener("resize", onScrollDismiss, { passive: true });
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onEscape);
+      window.removeEventListener("scroll", onScrollDismiss);
+      window.removeEventListener("resize", onScrollDismiss);
+    };
+  }, [hasSelection, overlayOpen]);
 
   useEffect(() => {
     function syncTopState() {
@@ -672,7 +789,6 @@ export default function ChapterReader({
               e.stopPropagation();
               setOpenCitations(false);
               setOpenExplorer(false);
-              setOpenTranslations(false);
               setOpenFootnote({
                 footnote: fn.footnote,
                 verseText: v.text,
@@ -776,7 +892,10 @@ export default function ChapterReader({
   const transition = animTargetX !== null ? "transform 240ms ease-out" : isDragging ? "none" : undefined;
 
   function clearSelection() {
-    setSelected(new Set());
+    if (typeof window !== "undefined") {
+      window.getSelection?.()?.removeAllRanges();
+    }
+    setSelectionState(null);
   }
 
   async function onAddToNote() {
@@ -784,8 +903,8 @@ export default function ChapterReader({
       alert("Please sign in to build notes or lessons.");
       return;
     }
-    if (!selectedBounds) return;
-    const reference = `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
+    if (!selectedBounds || !selectionReferenceLabel) return;
+    const reference = selectionReferenceLabel;
     if (lessonMode && lessonId) {
       await addLessonCard({
         lessonId: lessonId as any,
@@ -865,22 +984,13 @@ export default function ChapterReader({
   function onOpenCitations() {
     if (!selectedBounds) return;
     setOpenExplorer(false);
-    setOpenTranslations(false);
     setOpenCitations(true);
   }
 
   function onOpenExplore() {
     if (!selectedBounds) return;
     setOpenCitations(false);
-    setOpenTranslations(false);
     setOpenExplorer(true);
-  }
-
-  function onOpenTranslations() {
-    if (!translationControls) return;
-    setOpenCitations(false);
-    setOpenExplorer(false);
-    setOpenTranslations(true);
   }
 
   return (
@@ -890,71 +1000,6 @@ export default function ChapterReader({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {!hasSelection && !actionsPinned ? (
-        <div className="hidden lg:block">
-          <div
-            className="fixed left-0 top-24 bottom-0 z-30 w-4"
-            onMouseEnter={() => setHoverActionsOpen(true)}
-            aria-hidden
-          />
-          <div
-            className={`fixed left-0 top-24 z-40 w-[24rem] max-w-[85vw] p-3 transition-transform duration-200 ${
-              hoverActionsOpen ? "translate-x-0" : "-translate-x-[calc(100%-1rem)]"
-            }`}
-            onMouseEnter={() => setHoverActionsOpen(true)}
-            onMouseLeave={() => {
-              setHoverActionsOpen(false);
-            }}
-          >
-            <div className="pointer-events-auto space-y-3">
-              <div className="flex items-start gap-2">
-                <DesktopVerseActionList
-                  visible={true}
-                  hasSelection={hasSelection}
-                  hasActiveInsight={hasActiveNote}
-                  targetLabel={lessonMode ? "Lesson" : "Note"}
-                  showTranslations={!!translationControls}
-                  showPinToggle={true}
-                  pinned={actionsPinned}
-                  actionsEnabled={!!user}
-                  onClear={clearSelection}
-                  onInsight={() => {
-                    void onAddToNote();
-                  }}
-                  onNewInsight={() => {
-                    void onNewNoteFromActions();
-                  }}
-                  onLoadInsights={() => {
-                    void onLoadNotesFromActions();
-                  }}
-                  onAnnotation={onOpenAnnotation}
-                  onCitations={onOpenCitations}
-                  onExplore={onOpenExplore}
-                  onTranslations={onOpenTranslations}
-                  onTogglePin={() => {
-                    setActionsPinned((prev) => {
-                      const next = !prev;
-                      setHoverActionsOpen(false);
-                      return next;
-                    });
-                  }}
-                />
-                <div className="mt-2 rounded-r-md border border-l-0 border-black/10 dark:border-white/15 bg-background/80 px-2 py-1 text-[10px] uppercase tracking-wide text-foreground/60">
-                  Actions
-                </div>
-              </div>
-              {openTranslations && translationControls ? (
-                <TranslationSidebarPanel
-                  open={true}
-                  onClose={() => setOpenTranslations(false)}
-                  controls={translationControls}
-                />
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {/* Preview overlay behind the sliding content */}
       {isDragging || animTargetX !== null ? (
         <div className="pointer-events-none fixed inset-0 z-0">
@@ -992,42 +1037,6 @@ export default function ChapterReader({
             isAtTop ? "top-2 max-h-[calc(100vh-1rem)]" : "top-4 max-h-[calc(100vh-2rem)]"
           }`}
         >
-          <div
-            className={`overflow-hidden transition-opacity duration-200 ease-out ${
-              hasSidebarPanelOpen ? "opacity-100" : "max-h-0 opacity-0 pointer-events-none"
-            }`}
-          >
-            <div className="sticky top-0 z-20 bg-background/95 pb-2 backdrop-blur">
-              <DesktopVerseActionList
-                visible={true}
-                hasSelection={hasSelection}
-                hasActiveInsight={hasActiveNote}
-                targetLabel={lessonMode ? "Lesson" : "Note"}
-                showTranslations={!!translationControls}
-                showPinToggle={true}
-                pinned={actionsPinned}
-                actionsEnabled={!!user}
-                onClear={clearSelection}
-                onInsight={() => {
-                  void onAddToNote();
-                }}
-                onNewInsight={() => {
-                  void onNewNoteFromActions();
-                }}
-                onLoadInsights={() => {
-                  void onLoadNotesFromActions();
-                }}
-                onAnnotation={onOpenAnnotation}
-                onCitations={onOpenCitations}
-                onExplore={onOpenExplore}
-                onTranslations={onOpenTranslations}
-                onTogglePin={() => {
-                  setActionsPinned((prev) => !prev);
-                  setHoverActionsOpen(false);
-                }}
-              />
-            </div>
-          </div>
           {openCitations && selectedBounds ? (
             <CitationsSidebarPanel
               open={true}
@@ -1043,14 +1052,10 @@ export default function ChapterReader({
             <VerseExplorerSidebarPanel
               open={true}
               onClose={() => setOpenExplorer(false)}
-              verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
-            />
-          ) : null}
-          {openTranslations && (hasSelection || actionsPinned) && translationControls ? (
-            <TranslationSidebarPanel
-              open={true}
-              onClose={() => setOpenTranslations(false)}
-              controls={translationControls}
+              verses={selectedVerses}
+              initialWord={selectedFirstWord}
+              selectionText={selectedText}
+              referenceLabel={selectionReferenceLabel}
             />
           ) : null}
           {openFootnote ? (
@@ -1147,11 +1152,16 @@ export default function ChapterReader({
           </header>
 
           <ol
+            ref={verseListRef}
+            onPointerDown={(event) => {
+              const target = event.target as HTMLElement | null;
+              if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
+              setIsPointerSelecting(true);
+            }}
             className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
             style={{ fontSize: `${prefs.fontScale}rem` }}
           >
             {verses.map((v) => {
-              const isSelected = selected.has(v.verse);
               const isJumpHighlighted = jumpHighlightVerse === v.verse;
               const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
               const verseComparisons = Array.from(compareByTranslation.entries())
@@ -1176,16 +1186,19 @@ export default function ChapterReader({
                 <li
                   key={v.verse}
                   id={`v-${v.verse}`}
+                  data-verse={v.verse}
+                  data-verse-selectable="true"
                   className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
-                    isSelected
-                      ? "bg-amber-200/50 dark:bg-amber-400/25 ring-1 ring-amber-600/30"
-                      : isJumpHighlighted
+                    isJumpHighlighted
                       ? "bg-sky-200/45 dark:bg-sky-400/20 ring-1 ring-sky-600/35 transition-colors duration-300"
                       : ""
                   }`}
                 >
-                  <button onClick={() => toggleVerse(v.verse)} className="text-left w-full">
-                    <span className="mr-2 text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
+                  <div
+                    className="w-full text-left select-text selection:bg-amber-200/70 selection:text-foreground dark:selection:bg-amber-300/35"
+                    data-verse-selectable="true"
+                  >
+                    <span className="mr-2 select-none text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
                     {verseComparisons.length === 0 ? (
                       <span>{renderVerseText(v)}</span>
                     ) : prefs.comparisonView === "sideBySide" ? (
@@ -1227,7 +1240,7 @@ export default function ChapterReader({
                         ))}
                       </span>
                     )}
-                  </button>
+                  </div>
                   {myVerseAnnotation ? (
                     <div
                       className={`mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
@@ -1250,6 +1263,7 @@ export default function ChapterReader({
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         prefs={prefs}
+        translationControls={translationControls}
         onChange={(next) => {
           setPrefs(next);
           void (async () => {
@@ -1347,7 +1361,7 @@ export default function ChapterReader({
       ) : null}
 
       {/* One-time onboarding tooltip */}
-      {showTapHint && !overlayOpen && selected.size === 0 ? (
+      {showTapHint && !overlayOpen && !hasSelection ? (
         <div
           className="fixed inset-x-0 z-40 pointer-events-none"
           style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
@@ -1362,7 +1376,7 @@ export default function ChapterReader({
               <div className="text-sm flex items-start gap-3">
                 <div className="text-lg select-none" aria-hidden>Tip</div>
                 <div className="flex-1">
-                  Tap a verse to see note, citation, and exploration actions.
+                  Select passage text to see note, citation, and exploration actions.
                 </div>
                 <button
                   onClick={() => {
@@ -1410,32 +1424,22 @@ export default function ChapterReader({
           <VerseExplorer
             open={true}
             onClose={() => setOpenExplorer(false)}
-            verses={verses.filter((v) => selected.has(v.verse)).map((v) => ({ verse: v.verse, text: v.text }))}
+            verses={selectedVerses}
+            initialWord={selectedFirstWord}
+            selectionText={selectedText}
+            referenceLabel={selectionReferenceLabel}
           />
         </div>
       ) : null}
-      {openTranslations && translationControls ? (
-        <div className="lg:hidden">
-          <TranslationModal open={true} onClose={() => setOpenTranslations(false)} controls={translationControls} />
-        </div>
-      ) : null}
-
       {/* dictionary and etymology now live inside VerseExplorer */}
-
-      {showMobileActionBar ? (
-        <div
-          aria-hidden
-          className="lg:hidden pointer-events-none"
-          style={{ height: hasSelection ? "calc(env(safe-area-inset-bottom, 0px) + 14rem)" : "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
-        />
-      ) : null}
 
       <VerseActionBar
         visible={showMobileActionBar}
+        anchorRect={selectionPopoverAnchor}
+        referenceLabel={selectionReferenceLabel}
         hasSelection={hasSelection}
         hasActiveInsight={hasActiveNote}
         targetLabel={lessonMode ? "Lesson" : "Note"}
-        showTranslations={!!translationControls}
         actionsEnabled={!!user}
         onClear={clearSelection}
         onInsight={() => {
@@ -1450,7 +1454,6 @@ export default function ChapterReader({
         onAnnotation={onOpenAnnotation}
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}
-        onTranslations={onOpenTranslations}
       />
       {lessonMode && lessonId ? (
         <LessonBrowserPanel lessonId={lessonId} open={lessonPanelOpen} onClose={() => setLessonPanelOpen(false)} />
