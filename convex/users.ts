@@ -70,3 +70,11 @@ export const lookupUserByEmail = query({
     return row?.clerkId ?? null;
   },
 });
+
+export const isAdmin = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.query("users").withIndex("by_clerk_id", (q: any) => q.eq("clerkId", args.clerkId)).unique();
+    return row?.isAdmin === true;
+  },
+});
