@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
 import { getInsightDraft, type InsightDraftSummary } from "@/lib/appData";
+import InsightEditorPanel from "@/features/insights/InsightEditorPanel";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 const LEGACY_FOLDER_NAMES_KEY = "vt_note_folder_names_v1";
@@ -179,9 +180,10 @@ export default function NotesWorkspace({
   const moveFolderMutation = useMutation(noteFoldersApi.moveFolder);
   const deleteFolderMutation = useMutation(noteFoldersApi.deleteFolder);
   const assignFolderMutation = useMutation(noteFoldersApi.assignDraftFolder);
-  const { switchDraft, openBuilder, createDraft } = useInsightBuilder();
+  const { switchDraft, createDraft, activeDraftId } = useInsightBuilder();
 
   const [search, setSearch] = useState("");
+  const [notesPage, setNotesPage] = useState<"library" | "editor">(activeDraftId ? "editor" : "library");
   const [activeFilters, setActiveFilters] = useState<SearchFilter[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [highlightedFilterIndex, setHighlightedFilterIndex] = useState(0);
@@ -189,13 +191,11 @@ export default function NotesWorkspace({
   const [noteFolderMap, setNoteFolderMap] = useState<Record<string, string>>({});
   const [folderParentMap, setFolderParentMap] = useState<FolderParentMap>({});
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderParent, setNewFolderParent] = useState<string>("");
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
-  const [exportingId, setExportingId] = useState<string | null>(null);
   const [isBulkExporting, setIsBulkExporting] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [draggedFolderName, setDraggedFolderName] = useState<string | null>(null);
@@ -608,15 +608,13 @@ export default function NotesWorkspace({
   }
 
   async function onCreateNewNote() {
-    setIsMenuOpen(false);
     const createdId = await createDraft("New note");
     if (!createdId) return;
     await switchDraft(createdId);
-    openBuilder();
+    setNotesPage("editor");
   }
 
   function onOpenNewFolderModal() {
-    setIsMenuOpen(false);
     setNewFolderName("");
     setNewFolderParent("");
     setIsFolderModalOpen(true);
@@ -627,29 +625,6 @@ export default function NotesWorkspace({
     try {
       window.localStorage.setItem(NOTES_TIP_DISMISSED_KEY, "1");
     } catch {}
-  }
-
-  async function exportNote(noteId: string, fallbackTitle: string) {
-    if (!user) return;
-    setExportingId(noteId);
-    try {
-      const token = await getToken({ template: "convex" });
-      if (!token) return;
-      const draft = await getInsightDraft(token, noteId);
-      const fileBody = toMarkdownFromDraft(draft);
-      const blob = new Blob([fileBody], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const safeTitle = (draft.title || fallbackTitle || "note").replace(/[^a-z0-9]+/gi, "-").replace(/(^-|-$)/g, "");
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safeTitle || "note"}.md`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } finally {
-      setExportingId(null);
-    }
   }
 
   async function exportAllNotes() {
@@ -792,6 +767,7 @@ export default function NotesWorkspace({
               <NoteRow
                 key={note.id}
                 note={note}
+                isActive={activeDraftId === note.id}
                 isDragging={draggedNoteId === note.id}
                 onDragStart={(noteId, event) => {
                   setDraggedFolderName(null);
@@ -807,14 +783,10 @@ export default function NotesWorkspace({
                   setDraggedNoteId(null);
                   setDragOverFolder(null);
                 }}
-                onEdit={async () => {
+              onEdit={async () => {
                   await switchDraft(note.id);
-                  openBuilder();
+                  setNotesPage("editor");
                 }}
-              onExport={() => {
-                void exportNote(note.id, note.title);
-              }}
-              exporting={exportingId === note.id}
               onSaveTags={(tags) => {
                 void saveNoteTags(note.id, tags);
               }}
@@ -852,195 +824,241 @@ export default function NotesWorkspace({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 pb-24">
-      <div
-        ref={filterBoxRef}
-        className={`border surface-card p-2 space-y-2 ${
-          searchAsHeaderExtension ? "rounded-b-xl rounded-t-none border-t-0 -mt-4" : "rounded-lg"
-        }`}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[260px] flex-1">
-            <div className="flex min-h-[36px] w-full flex-wrap items-center gap-1 rounded-md border surface-card-soft bg-transparent px-2 py-0.5">
-              {activeFilters.map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => removeFilter(filter.id)}
-                className="inline-flex items-center gap-1 rounded-full border surface-button px-2 py-0.5 text-[11px]"
-                title="Remove filter"
-              >
-                  <span>{filter.label}</span>
-                  <span>x</span>
-                </button>
-              ))}
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onFocus={() => setIsFilterMenuOpen(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setIsFilterMenuOpen(false);
-                    return;
-                  }
-                  if (e.key === "Backspace" && search.length === 0 && activeFilters.length > 0) {
-                    const last = activeFilters[activeFilters.length - 1];
-                    removeFilter(last.id);
-                    return;
-                  }
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
-                    if (visibleFilterOptions.length > 0) {
-                      setHighlightedFilterIndex((prev) => (prev + 1) % visibleFilterOptions.length);
-                    }
-                    return;
-                  }
-                  if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
-                    if (visibleFilterOptions.length > 0) {
-                      setHighlightedFilterIndex((prev) => (prev - 1 + visibleFilterOptions.length) % visibleFilterOptions.length);
-                    }
-                    return;
-                  }
-                  if (e.key === "Enter" && isFilterMenuOpen) {
-                    e.preventDefault();
-                    applyHighlightedFilter();
-                  }
-                }}
-                placeholder="Search notes..."
-                className="min-w-[140px] flex-1 bg-transparent px-1 py-1 text-sm outline-none"
-              />
-            </div>
-            {isFilterMenuOpen ? (
-              <div className="absolute left-0 top-[calc(100%+0.35rem)] z-20 w-full max-h-80 overflow-auto rounded-md border surface-card-strong shadow-lg p-2 space-y-2">
-                {visibleFilterOptions.length === 0 ? (
-                  <div className="px-2 py-1 text-xs text-foreground/60">No matching filters.</div>
-                ) : (
-                  <div className="space-y-1">
-                    {visibleFilterOptions.map((option, idx) => (
-                      <button
-                        key={option.key}
-                        onMouseEnter={() => setHighlightedFilterIndex(idx)}
-                        onClick={() => {
-                          addFilter(option.filter);
-                          setSearch("");
-                          setHighlightedFilterIndex(0);
-                        }}
-                        className={`w-full rounded-md px-2.5 py-2 text-left text-xs ${
-                          idx === highlightedFilterIndex
-                            ? "bg-foreground text-background"
-                            : "border surface-button"
-                        }`}
-                      >
-                        {option.filter.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-          {activeFilters.length > 0 ? (
-            <button
-              onClick={() => setActiveFilters([])}
-              className="rounded-md border surface-button px-3 py-1.5 text-sm"
-            >
-              Clear
-            </button>
-          ) : null}
-          <button
-            onClick={() => {
-              void exportAllNotes();
-            }}
-            disabled={isBulkExporting || !rows || rows.length === 0}
-            className="rounded-md border surface-button px-3 py-1.5 text-sm disabled:opacity-60"
-          >
-            {isBulkExporting ? "Exporting all..." : "Export all notes"}
-          </button>
-        </div>
-      </div>
-
+    <div className="mx-auto max-w-[1400px] space-y-5 pb-24">
       {showTitleBelowSearch ? (
-        <div className="rounded-xl border surface-card p-4 sm:p-5">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Notes</h1>
-          <p className="mt-1 text-sm text-foreground/70">
-            Organize your scripture notes with folders and tags, then export when you need to share or archive.
-          </p>
+        <div
+          className="flex justify-center"
+        >
+          <div className="grid grid-cols-2 gap-1 rounded-[1.2rem] p-1 surface-card-soft">
+            <button
+              onClick={() => setNotesPage("library")}
+              className="rounded-[0.95rem] px-4 py-2 text-sm"
+              style={
+                notesPage === "library"
+                  ? {
+                      background: "var(--mobile-nav-active)",
+                      color: "var(--mobile-nav-active-text)",
+                      boxShadow: "0 8px 18px rgba(0,0,0,0.1)",
+                    }
+                  : undefined
+              }
+            >
+              Library
+            </button>
+            <button
+              onClick={() => setNotesPage("editor")}
+              className="rounded-[0.95rem] px-4 py-2 text-sm"
+              style={
+                notesPage === "editor"
+                  ? {
+                      background: "var(--mobile-nav-active)",
+                      color: "var(--mobile-nav-active-text)",
+                      boxShadow: "0 8px 18px rgba(0,0,0,0.1)",
+                    }
+                  : undefined
+              }
+            >
+              Editor
+            </button>
+          </div>
         </div>
       ) : null}
 
-      {rows === undefined ? <p className="text-sm text-foreground/70">Loading notes...</p> : null}
-      {rows !== undefined && rows.length === 0 ? <p className="text-sm text-foreground/70">No saved notes yet.</p> : null}
-      {rows !== undefined && rows.length > 0 && filteredRows.length === 0 ? (
-        <p className="text-sm text-foreground/70">No notes match your current filters.</p>
-      ) : null}
+      {notesPage === "library" ? (
+        <section className="space-y-4">
+          <div
+            ref={filterBoxRef}
+            className={`rounded-[1.7rem] border p-4 surface-card space-y-3 ${
+              searchAsHeaderExtension ? "rounded-t-none border-t-0 -mt-4" : ""
+            }`}
+          >
+            <div className="relative min-w-[260px]">
+              <div className="flex min-h-[44px] w-full flex-wrap items-center gap-1 rounded-[1rem] border surface-card-soft bg-transparent px-2 py-1">
+                {activeFilters.map((filter) => (
+                  <button
+                    key={filter.id}
+                    onClick={() => removeFilter(filter.id)}
+                    className="inline-flex items-center gap-1 rounded-full border surface-button px-2 py-1 text-[11px]"
+                    title="Remove filter"
+                  >
+                    <span>{filter.label}</span>
+                    <span>x</span>
+                  </button>
+                ))}
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onFocus={() => setIsFilterMenuOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setIsFilterMenuOpen(false);
+                      return;
+                    }
+                    if (e.key === "Backspace" && search.length === 0 && activeFilters.length > 0) {
+                      const last = activeFilters[activeFilters.length - 1];
+                      removeFilter(last.id);
+                      return;
+                    }
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
+                      if (visibleFilterOptions.length > 0) {
+                        setHighlightedFilterIndex((prev) => (prev + 1) % visibleFilterOptions.length);
+                      }
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
+                      if (visibleFilterOptions.length > 0) {
+                        setHighlightedFilterIndex((prev) => (prev - 1 + visibleFilterOptions.length) % visibleFilterOptions.length);
+                      }
+                      return;
+                    }
+                    if (e.key === "Enter" && isFilterMenuOpen) {
+                      e.preventDefault();
+                      applyHighlightedFilter();
+                    }
+                  }}
+                  placeholder="Search notes, tags, or folders..."
+                  className="min-w-[160px] flex-1 bg-transparent px-2 py-1 text-sm outline-none"
+                />
+              </div>
+              {isFilterMenuOpen ? (
+                <div className="absolute left-0 top-[calc(100%+0.45rem)] z-20 w-full max-h-80 overflow-auto rounded-[1rem] border surface-card-strong p-2 shadow-lg">
+                  {visibleFilterOptions.length === 0 ? (
+                    <div className="px-2 py-1 text-xs text-foreground/60">No matching filters.</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {visibleFilterOptions.map((option, idx) => (
+                        <button
+                          key={option.key}
+                          onMouseEnter={() => setHighlightedFilterIndex(idx)}
+                          onClick={() => {
+                            addFilter(option.filter);
+                            setSearch("");
+                            setHighlightedFilterIndex(0);
+                          }}
+                          className={`w-full rounded-[0.9rem] px-2.5 py-2 text-left text-xs ${
+                            idx === highlightedFilterIndex ? "bg-foreground text-background" : "border surface-button"
+                          }`}
+                        >
+                          {option.filter.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
 
-      <div
-        onDragOver={(e) => {
-          if (!draggedNoteId && !draggedFolderName) return;
-          e.preventDefault();
-          setDragOverFolder("__root__");
-        }}
-        onDragLeave={() => {
-          if (dragOverFolder === "__root__") setDragOverFolder(null);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          const noteId = draggedNoteId || e.dataTransfer.getData("text/note-id");
-          const folderName = draggedFolderName || e.dataTransfer.getData("text/folder-name");
-          if (noteId) void assignFolder(noteId, null);
-          else if (folderName) void moveFolder(folderName, null);
-          if (noteId) noteDropHandledRef.current = true;
-          setDraggedNoteId(null);
-          setDraggedFolderName(null);
-          setDragOverFolder(null);
-        }}
-        className={`space-y-2 ${dragOverFolder === "__root__" ? "rounded-lg ring-2 ring-sky-500/70 ring-offset-2 ring-offset-background p-1" : ""}`}
-      >
-        {notesByFolder.unfiled.map((note) => (
-          <NoteRow
-            key={note.id}
-            note={note}
-            isDragging={draggedNoteId === note.id}
-            onDragStart={(noteId, event) => {
-              setDraggedFolderName(null);
-              setDraggedNoteId(noteId);
-              noteDropHandledRef.current = false;
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/note-id", noteId);
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  void onCreateNewNote();
+                }}
+                className="rounded-full px-4 py-2 text-sm font-medium text-[color:var(--mobile-nav-active-text)]"
+                style={{ background: "var(--mobile-nav-active)", boxShadow: "0 8px 18px rgba(0,0,0,0.1)" }}
+              >
+                New note
+              </button>
+              <button onClick={onOpenNewFolderModal} className="rounded-full border surface-button px-4 py-2 text-sm">
+                New folder
+              </button>
+              <button
+                onClick={() => {
+                  void exportAllNotes();
+                }}
+                disabled={isBulkExporting || !rows || rows.length === 0}
+                className="rounded-full border surface-button px-4 py-2 text-sm disabled:opacity-60"
+              >
+                {isBulkExporting ? "Exporting..." : "Export all"}
+              </button>
+              {activeFilters.length > 0 ? (
+                <button onClick={() => setActiveFilters([])} className="rounded-full border surface-button px-3 py-1.5 text-sm">
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {rows === undefined ? <p className="text-sm text-foreground/70">Loading notes...</p> : null}
+          {rows !== undefined && rows.length === 0 ? <p className="text-sm text-foreground/70">No saved notes yet.</p> : null}
+          {rows !== undefined && rows.length > 0 && filteredRows.length === 0 ? (
+            <p className="text-sm text-foreground/70">No notes match your current filters.</p>
+          ) : null}
+
+          <div
+            onDragOver={(e) => {
+              if (!draggedNoteId && !draggedFolderName) return;
+              e.preventDefault();
+              setDragOverFolder("__root__");
             }}
-            onDragEnd={(noteId) => {
-              if (!noteDropHandledRef.current) {
-                void assignFolder(noteId, null);
-              }
+            onDragLeave={() => {
+              if (dragOverFolder === "__root__") setDragOverFolder(null);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const noteId = draggedNoteId || e.dataTransfer.getData("text/note-id");
+              const folderName = draggedFolderName || e.dataTransfer.getData("text/folder-name");
+              if (noteId) void assignFolder(noteId, null);
+              else if (folderName) void moveFolder(folderName, null);
+              if (noteId) noteDropHandledRef.current = true;
               setDraggedNoteId(null);
+              setDraggedFolderName(null);
               setDragOverFolder(null);
             }}
-            onEdit={async () => {
-              await switchDraft(note.id);
-              openBuilder();
-            }}
-                onExport={() => {
-                  void exportNote(note.id, note.title);
+            className={`space-y-3 ${dragOverFolder === "__root__" ? "rounded-[1.2rem] ring-2 ring-sky-500/70 ring-offset-2 ring-offset-background p-1" : ""}`}
+          >
+            <div className="rounded-[1.2rem] border border-dashed surface-card-soft px-3 py-2 text-xs text-foreground/60">
+              Root notes
+            </div>
+            {notesByFolder.unfiled.map((note) => (
+              <NoteRow
+                key={note.id}
+                note={note}
+                isActive={activeDraftId === note.id}
+                isDragging={draggedNoteId === note.id}
+                onDragStart={(noteId, event) => {
+                  setDraggedFolderName(null);
+                  setDraggedNoteId(noteId);
+                  noteDropHandledRef.current = false;
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/note-id", noteId);
                 }}
-                exporting={exportingId === note.id}
+                onDragEnd={(noteId) => {
+                  if (!noteDropHandledRef.current) {
+                    void assignFolder(noteId, null);
+                  }
+                  setDraggedNoteId(null);
+                  setDragOverFolder(null);
+                }}
+                onEdit={async () => {
+                  await switchDraft(note.id);
+                  setNotesPage("editor");
+                }}
                 onSaveTags={(tags) => {
                   void saveNoteTags(note.id, tags);
                 }}
                 tagsSaving={!!tagSavingById[note.id]}
               />
             ))}
-        {notesByFolder.unfiled.length === 0 ? (
-          <div className="rounded-md border border-dashed surface-card-soft px-3 py-2 text-xs text-foreground/60">
-            Drag notes or folders here to move them to root.
+            {notesByFolder.unfiled.length === 0 ? (
+              <div className="rounded-[1rem] border border-dashed surface-card-soft px-3 py-2 text-xs text-foreground/60">
+                Drag notes or folders here to move them to root.
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      <div className="space-y-2">
-        {rootFolders.map((folder) => renderFolderNode(folder, 0))}
-      </div>
+          <div className="space-y-3">
+            {rootFolders.map((folder) => renderFolderNode(folder, 0))}
+          </div>
+        </section>
+      ) : (
+        <section>
+          <InsightEditorPanel variant="embedded" />
+        </section>
+      )}
 
       {isFolderModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
@@ -1139,85 +1157,34 @@ export default function NotesWorkspace({
           </div>
         </div>
       ) : null}
-
-      <div className="fixed right-4 bottom-4 z-40">
-        <div className="relative">
-          {isMenuOpen ? (
-            <div className="absolute right-0 bottom-12 z-20 w-44 rounded-md border surface-card-strong shadow-lg p-1.5 space-y-1">
-              <button
-                onClick={() => {
-                  void onCreateNewNote();
-                }}
-                className="w-full rounded-md border surface-button px-3 py-2 text-left text-sm"
-              >
-                New note
-              </button>
-              <button
-                onClick={onOpenNewFolderModal}
-                className="w-full rounded-md border surface-button px-3 py-2 text-left text-sm"
-              >
-                New folder
-              </button>
-            </div>
-          ) : null}
-          <button
-            onClick={() => setIsMenuOpen((prev) => !prev)}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background text-2xl shadow-lg hover:opacity-90"
-            aria-label="Create"
-            title="Create"
-          >
-            +
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
 
 function NoteRow({
   note,
+  isActive,
   isDragging,
   onDragStart,
   onDragEnd,
   onEdit,
-  onExport,
-  exporting,
   onSaveTags,
   tagsSaving,
 }: {
   note: InsightDraftSummary;
+  isActive: boolean;
   isDragging: boolean;
   onDragStart: (noteId: string, event: DragEvent<HTMLElement>) => void;
   onDragEnd: (noteId: string) => void;
   onEdit: () => Promise<void>;
-  onExport: () => void;
-  exporting: boolean;
   onSaveTags: (tags: string[]) => void;
   tagsSaving: boolean;
 }) {
-  const [tagInput, setTagInput] = useState("");
   const [localTags, setLocalTags] = useState<string[]>(note.tags ?? []);
-  const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
 
   useEffect(() => {
     setLocalTags(note.tags ?? []);
-    setTagInput("");
-    setIsTagEditorOpen(false);
   }, [note.id, note.tags]);
-
-  function addTag() {
-    const nextTag = tagInput.trim().replace(/^#+/, "").toLowerCase();
-    if (!nextTag) return;
-    if (localTags.includes(nextTag)) {
-      setTagInput("");
-      return;
-    }
-    const next = [...localTags, nextTag].slice(0, 20);
-    setLocalTags(next);
-    setTagInput("");
-    onSaveTags(next);
-    setIsTagEditorOpen(false);
-  }
 
   function removeTag(tagToRemove: string) {
     const next = localTags.filter((tag) => tag !== tagToRemove);
@@ -1227,10 +1194,20 @@ function NoteRow({
 
   return (
     <article
-      draggable
-      onDragStart={(e) => onDragStart(note.id, e)}
-      onDragEnd={() => onDragEnd(note.id)}
-      className={`rounded-md border surface-card p-3 ${isDragging ? "opacity-50" : ""}`}
+      onClick={() => {
+        void onEdit();
+      }}
+      className={`rounded-[1.15rem] border p-3 transition-colors ${
+        isActive ? "surface-card-strong" : "surface-card"
+      } ${isDragging ? "opacity-50" : ""} ${note.status === "draft" ? "cursor-pointer" : ""}`}
+      style={
+        isActive
+          ? {
+              borderColor: "color-mix(in oklab, var(--mobile-nav-active) 70%, var(--surface-border))",
+              background: "color-mix(in oklab, var(--mobile-nav-active) 32%, var(--surface-card-strong))",
+            }
+          : undefined
+      }
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -1246,7 +1223,10 @@ function NoteRow({
                 {localTags.map((tag) => (
                   <button
                     key={`${note.id}-${tag}`}
-                    onClick={() => removeTag(tag)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeTag(tag);
+                    }}
                     disabled={note.status !== "draft" || tagsSaving}
                     className="group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-foreground disabled:opacity-60"
                     style={getTagChipStyle(tag)}
@@ -1261,70 +1241,18 @@ function NoteRow({
               </div>
             </div>
           ) : null}
-          {note.status === "draft" ? (
-            <button
-              onClick={() => setIsTagEditorOpen((prev) => !prev)}
-              disabled={tagsSaving}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full border surface-button text-sm disabled:opacity-60"
-              title="Add tag"
-              aria-label="Add tag"
-            >
-              +
-            </button>
-          ) : null}
-          <span className="cursor-grab text-foreground/50" aria-hidden>
+          <button
+            draggable
+            onClick={(e) => e.stopPropagation()}
+            onDragStart={(e) => onDragStart(note.id, e)}
+            onDragEnd={() => onDragEnd(note.id)}
+            className="cursor-grab rounded-full px-1.5 text-foreground/50 active:cursor-grabbing"
+            aria-label={`Drag ${note.title}`}
+            title="Drag note"
+          >
             ::
-          </span>
-          {isTagEditorOpen ? (
-            <div className="absolute right-8 top-7 z-10 w-44 rounded-md border surface-card-strong shadow-lg p-2 space-y-2">
-              <input
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-                placeholder="Tag name"
-                className="w-full rounded-md border surface-card-soft bg-transparent px-2 py-1 text-xs"
-              />
-              <div className="flex items-center justify-end gap-1">
-                <button
-                  onClick={() => setIsTagEditorOpen(false)}
-                  className="rounded-md border surface-button px-2 py-1 text-xs"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={addTag}
-                  disabled={tagsSaving}
-                  className="rounded-md border surface-button px-2 py-1 text-xs disabled:opacity-60"
-                >
-                  {tagsSaving ? "..." : "Add"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Link href={`/insights/shared/${note.id}`} className="rounded-md border surface-button px-2.5 py-1.5 text-xs">
-          View
-        </Link>
-        {note.status === "draft" ? (
-          <button onClick={() => void onEdit()} className="rounded-md border surface-button px-2.5 py-1.5 text-xs">
-            Edit
           </button>
-        ) : null}
-        <button
-          onClick={onExport}
-          disabled={exporting}
-          className="rounded-md border surface-button px-2.5 py-1.5 text-xs disabled:opacity-60"
-        >
-          {exporting ? "Exporting..." : "Export"}
-        </button>
+        </div>
       </div>
     </article>
   );

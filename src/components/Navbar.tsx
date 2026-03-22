@@ -8,6 +8,7 @@ import MobileNavDrawer from "@/components/MobileNavDrawer";
 import ThemeSelect from "@/components/ThemeSelect";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
+import { useBrowseNavHref } from "@/lib/browseNavigation";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
 function MenuIcon() {
@@ -32,6 +33,7 @@ export default function Navbar() {
   const { user, getToken } = useAuth();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const browseHref = useBrowseNavHref();
 
   useEffect(() => {
     async function syncCurrentUser() {
@@ -65,10 +67,11 @@ export default function Navbar() {
             <nav className="hidden sm:flex items-center gap-2">
               {primaryNavItems.map((item) => {
                 const active = isPathActive(pathname, item.href);
+                const href = item.href === "/browse" ? browseHref : item.href;
                 return (
                   <Link
                     key={item.href}
-                    href={item.href}
+                    href={href}
                     className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition-colors ${
                       active
                         ? "border-[color:var(--surface-button-active)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"

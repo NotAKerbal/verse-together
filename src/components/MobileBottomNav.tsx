@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { useBrowseNavHref } from "@/lib/browseNavigation";
 import { isBrowseDiscoveryPath, isPathActive, isReaderPath } from "@/lib/navigation";
 
 type NavItem = {
@@ -92,6 +93,7 @@ const navItems: NavItem[] = [
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
+  const browseHref = useBrowseNavHref();
 
   return (
     <nav
@@ -111,10 +113,11 @@ export default function MobileBottomNav() {
         {navItems.map((item) => {
           const active = item.active(pathname);
           const Icon = item.icon;
+          const href = item.href === "/browse" ? browseHref : item.href;
           return (
             <Link
               key={item.label}
-              href={item.href}
+              href={href}
               className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.35rem] px-1.5 transition-all duration-200"
               data-active={active ? "true" : "false"}
               aria-current={active ? "page" : undefined}

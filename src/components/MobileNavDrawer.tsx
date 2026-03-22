@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth";
+import { useBrowseNavHref } from "@/lib/browseNavigation";
 import ThemeSelect from "@/components/ThemeSelect";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
@@ -118,6 +119,7 @@ const drawerIcons: Record<(typeof primaryNavItems)[number]["href"], typeof BookI
 export default function MobileNavDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
   const pathname = usePathname();
+  const browseHref = useBrowseNavHref();
   const [isClosing, setIsClosing] = useState(false);
   const [hasEntered, setHasEntered] = useState(false);
 
@@ -191,10 +193,11 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
           {primaryNavItems.map((item) => {
             const active = isPathActive(pathname, item.href);
             const Icon = drawerIcons[item.href];
+            const href = item.href === "/browse" ? browseHref : item.href;
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={href}
                 onClick={requestClose}
                 className="flex min-h-16 items-center gap-3 rounded-[1.35rem] border px-4 py-3 transition-all duration-200"
                 aria-current={active ? "page" : undefined}

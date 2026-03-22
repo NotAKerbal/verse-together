@@ -1,11 +1,13 @@
 "use client";
 
 import type { PropsWithChildren } from "react";
+import { usePathname } from "next/navigation";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 export default function AppMain({ children }: PropsWithChildren) {
+  const pathname = usePathname();
   const { activeDraftId } = useInsightBuilder();
-  const hasDesktopInsightPanel = Boolean(activeDraftId);
+  const hasDesktopInsightPanel = Boolean(activeDraftId) && pathname !== "/feed" && !pathname.startsWith("/feed/");
 
   return (
     <main

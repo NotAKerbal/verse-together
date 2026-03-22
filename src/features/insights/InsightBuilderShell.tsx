@@ -1,53 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent as ReactDragEvent } from "react";
-import type { InsightDraftBlock, InsightVisibility } from "@/lib/appData";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import InsightEditorPanel from "./InsightEditorPanel";
 import { useInsightBuilder } from "./InsightBuilderProvider";
-import {
-  DictionaryBlockEditor,
-  QuoteBlockEditor,
-  ScriptureBlockEditor,
-  TextBlockEditor,
-  normalizeDictionaryEntryText,
-} from "./InsightBlockEditors";
-
-function blockLabel(type: InsightDraftBlock["type"]) {
-  if (type === "scripture") return "Scripture";
-  if (type === "quote") return "Quote";
-  if (type === "dictionary") return "Dictionary";
-  return "Text";
-}
-
-function parseTags(raw: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of raw.split(",")) {
-    const tag = part.trim().replace(/^#+/, "").toLowerCase();
-    if (!tag || seen.has(tag)) continue;
-    seen.add(tag);
-    out.push(tag);
-  }
-  return out;
-}
-
-function tagsEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-
-function getHighlightedTextByIndices(text: string, highlightWordIndices: number[]) {
-  const tokens = text.match(/\S+\s*/g) ?? [];
-  const selected = new Set(highlightWordIndices);
-  return tokens
-    .filter((_, idx) => selected.has(idx))
-    .join("")
-    .trim();
-}
 
 const OPEN_DRAFTS_STORAGE_PREFIX = "vt_reader_open_drafts_v1";
 const NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
@@ -136,10 +93,9 @@ function groupDraftsByFolder<TDraft extends DraftListItem>(
       rootDrafts.push(draft);
       return;
     }
-    const key = folderPath;
-    const current = buckets.get(key) ?? [];
+    const current = buckets.get(folderPath) ?? [];
     current.push(draft);
-    buckets.set(key, current);
+    buckets.set(folderPath, current);
   });
   rootDrafts.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
   for (const [key, items] of buckets.entries()) {
@@ -147,9 +103,7 @@ function groupDraftsByFolder<TDraft extends DraftListItem>(
     buckets.set(key, items);
   }
   const folderGroups = Array.from(buckets.entries())
-    .sort(([left], [right]) => {
-      return left.localeCompare(right, undefined, { sensitivity: "base" });
-    })
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: "base" }))
     .map(([folderLabel, groupedDrafts]) => ({ folderLabel, draftList: groupedDrafts }));
   return { rootDrafts, folderGroups };
 }
@@ -158,204 +112,20 @@ function renderFolderLabel(folderLabel: string): string {
   return folderLabel.replaceAll(" / ", " > ");
 }
 
-function BlockCard({
-  block,
-  dragId,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
-  onRemove,
-  onSave,
-}: {
-  block: InsightDraftBlock;
-  dragId: string | null;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: (event: ReactDragEvent<HTMLLIElement>) => void;
-  onDrop: () => void;
-  onRemove: () => void;
-  onSave: (patch: { text?: string; linkUrl?: string; highlightText?: string; highlightWordIndices?: number[] }) => Promise<void>;
-}) {
-  const [text, setText] = useState(block.text ?? "");
-  const [linkUrl, setLinkUrl] = useState(block.link_url ?? "");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setText(block.text ?? "");
-    setLinkUrl(block.link_url ?? "");
-  }, [block.id, block.text, block.link_url]);
-
-  async function saveIfChanged() {
-    if (saving) return;
-    const nextText = text.trim();
-    const nextLink = linkUrl.trim();
-    const currentText = (block.text ?? "").trim();
-    const currentLink = (block.link_url ?? "").trim();
-    if (nextText === currentText && nextLink === currentLink) return;
-    setSaving(true);
-    try {
-      await onSave({
-        text,
-        linkUrl: block.type === "quote" ? linkUrl : undefined,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const title =
-    block.type === "scripture"
-      ? block.scripture_ref?.reference ?? "Scripture"
-      : block.type === "dictionary"
-      ? block.dictionary_meta?.word ?? "Dictionary"
-      : blockLabel(block.type);
-
-  return (
-    <li
-      onDragOver={onDragOver}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDrop();
-      }}
-      className={`rounded-md border surface-card p-3 space-y-2 ${dragId === block.id ? "opacity-60" : ""}`}
-    >
-      <div className="relative flex items-center justify-between gap-2">
-        <span className="min-w-0 pr-10 text-xs font-medium text-foreground/70 truncate">{title}</span>
-        <div
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          className="absolute left-1/2 -translate-x-1/2 flex cursor-grab active:cursor-grabbing items-center justify-center px-1"
-          title="Drag to reorder"
-          aria-label="Drag block"
-        >
-          <div className="h-1.5 w-8 rounded-full bg-foreground/20" />
-        </div>
-        <button
-          onClick={onRemove}
-          className="rounded-md border surface-button text-foreground/70 hover:text-red-600 text-sm leading-none px-1.5 py-0.5"
-          title="Remove block"
-          aria-label="Remove block"
-        >
-          ×
-        </button>
-      </div>
-      <div onBlur={block.type === "scripture" || block.type === "dictionary" ? undefined : saveIfChanged}>
-        {block.type === "scripture" ? (
-          <ScriptureBlockEditor
-            block={{ ...block, text }}
-            onTextChange={() => {}}
-            onLinkChange={() => {}}
-            onHighlightWordsChange={async (highlightWordIndices) => {
-              setSaving(true);
-              try {
-                const selectedWords = getHighlightedTextByIndices(text ?? "", highlightWordIndices);
-                await onSave({
-                  highlightWordIndices,
-                  highlightText: selectedWords || "",
-                });
-              } finally {
-                setSaving(false);
-              }
-            }}
-          />
-        ) : null}
-        {block.type === "text" ? (
-          <TextBlockEditor block={{ ...block, text }} onTextChange={(value) => setText(value)} onLinkChange={() => {}} />
-        ) : null}
-        {block.type === "quote" ? (
-          <QuoteBlockEditor
-            block={{ ...block, text, link_url: linkUrl }}
-            onTextChange={(value) => setText(value)}
-            onLinkChange={(value) => setLinkUrl(value)}
-            onHighlightWordsChange={async (highlightWordIndices) => {
-              setSaving(true);
-              try {
-                const selectedWords = getHighlightedTextByIndices(text ?? "", highlightWordIndices);
-                await onSave({
-                  highlightWordIndices,
-                  highlightText: selectedWords || "",
-                });
-              } finally {
-                setSaving(false);
-              }
-            }}
-          />
-        ) : null}
-        {block.type === "dictionary" ? (
-          <DictionaryBlockEditor
-            block={{ ...block, text }}
-            onHighlightWordsChange={async (highlightWordIndices) => {
-              setSaving(true);
-              try {
-                const normalizedText = normalizeDictionaryEntryText(text ?? "");
-                const selectedWords = getHighlightedTextByIndices(normalizedText, highlightWordIndices);
-                await onSave({
-                  highlightWordIndices,
-                  highlightText: selectedWords || "",
-                });
-              } finally {
-                setSaving(false);
-              }
-            }}
-          />
-        ) : null}
-      </div>
-      {saving ? <div className="text-[11px] text-foreground/60">Saving…</div> : null}
-    </li>
-  );
-}
-
 function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
   const { user } = useAuth();
-  const {
-    drafts,
-    activeDraftId,
-    activeDraft,
-    isLoading,
-    createDraft,
-    switchDraft,
-    clearActiveDraft,
-    renameDraft,
-    saveDraftSettings,
-    deleteDraft,
-    addTextBlock,
-    addQuoteBlock,
-    updateBlock,
-    removeBlock,
-    reorderBlocks,
-  } = useInsightBuilder();
-  const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [shareMessage, setShareMessage] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
-  const [visibility, setVisibility] = useState<InsightVisibility>("private");
-  const [origin, setOrigin] = useState("");
-  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const { drafts, activeDraftId, isLoading, createDraft, switchDraft, clearActiveDraft } = useInsightBuilder();
   const [openDraftIds, setOpenDraftIds] = useState<string[]>([]);
   const [isLoadSavedOpen, setIsLoadSavedOpen] = useState(false);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [noteFolderMap, setNoteFolderMap] = useState<Record<string, string>>({});
   const [folderParentMap, setFolderParentMap] = useState<FolderParentMap>({});
-  const tagAutosaveTimeoutRef = useRef<number | null>(null);
-  const dragIdRef = useRef<string | null>(null);
-  const dropIndexRef = useRef<number | null>(null);
-  const didDropRef = useRef(false);
-  const hasRestoredOpenDraftsRef = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [hasRestoredOpenDrafts, setHasRestoredOpenDrafts] = useState(false);
   const openDraftStorageKey = useMemo(
     () => (user?.id ? `${OPEN_DRAFTS_STORAGE_PREFIX}:${user.id}` : null),
     [user?.id]
   );
-  const draftNotes = useMemo(() => drafts.filter((d) => d.status === "draft"), [drafts]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setOrigin(window.location.origin);
-    }
-  }, []);
+  const draftNotes = useMemo(() => drafts.filter((draft) => draft.status === "draft"), [drafts]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -373,54 +143,22 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
   }, []);
 
   useEffect(() => {
-    setTitle(activeDraft?.title ?? "");
-    setTagsInput((activeDraft?.tags ?? []).map((tag) => `#${tag}`).join(", "));
-    setVisibility(activeDraft?.visibility ?? "private");
-    setShareMessage("");
-    setIsShareMenuOpen(false);
-  }, [activeDraft?.id, activeDraft?.title, activeDraft?.tags, activeDraft?.visibility]);
-
-  useEffect(() => {
-    if (!activeDraftId) return;
-    if (!activeDraft) return;
-    const nextTags = parseTags(tagsInput);
-    const currentTags = activeDraft.tags ?? [];
-    if (tagsEqual(nextTags, currentTags)) return;
-
-    if (tagAutosaveTimeoutRef.current) {
-      window.clearTimeout(tagAutosaveTimeoutRef.current);
-    }
-    tagAutosaveTimeoutRef.current = window.setTimeout(() => {
-      void saveDraftSettings({
-        draftId: activeDraftId,
-        tags: nextTags,
-      });
-    }, 700);
-
-    return () => {
-      if (tagAutosaveTimeoutRef.current) {
-        window.clearTimeout(tagAutosaveTimeoutRef.current);
-      }
-    };
-  }, [tagsInput, activeDraftId, activeDraft, saveDraftSettings]);
-
-  useEffect(() => {
-    hasRestoredOpenDraftsRef.current = false;
+    setHasRestoredOpenDrafts(false);
     setOpenDraftIds([]);
   }, [openDraftStorageKey]);
 
   useEffect(() => {
     if (isLoading) return;
-    const draftIds = draftNotes.map((d) => d.id);
+    const draftIds = draftNotes.map((draft) => draft.id);
     const draftIdSet = new Set(draftIds);
 
-    if (!hasRestoredOpenDraftsRef.current) {
+    if (!hasRestoredOpenDrafts) {
       const restored = readStoredDraftIds(openDraftStorageKey).filter((id) => draftIdSet.has(id));
       if (activeDraftId && draftIdSet.has(activeDraftId) && !restored.includes(activeDraftId)) {
         restored.push(activeDraftId);
       }
       setOpenDraftIds(restored);
-      hasRestoredOpenDraftsRef.current = true;
+      setHasRestoredOpenDrafts(true);
       return;
     }
 
@@ -431,42 +169,37 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
       }
       return kept;
     });
-  }, [isLoading, draftNotes, activeDraftId, openDraftStorageKey]);
+  }, [isLoading, draftNotes, activeDraftId, openDraftStorageKey, hasRestoredOpenDrafts]);
 
   useEffect(() => {
-    if (!openDraftStorageKey) return;
-    if (!hasRestoredOpenDraftsRef.current) return;
-    if (typeof window === "undefined") return;
+    if (!openDraftStorageKey || !hasRestoredOpenDrafts || typeof window === "undefined") return;
     try {
       window.localStorage.setItem(openDraftStorageKey, JSON.stringify(openDraftIds));
     } catch {
       // ignore storage errors
     }
-  }, [openDraftIds, openDraftStorageKey]);
+  }, [openDraftIds, openDraftStorageKey, hasRestoredOpenDrafts]);
 
-  const orderedBlocks = useMemo(
-    () => (activeDraft?.blocks ? [...activeDraft.blocks].sort((a, b) => a.order - b.order) : []),
-    [activeDraft?.blocks]
-  );
   const hasDraftNotes = draftNotes.length > 0;
   const openDraftTabs = useMemo(() => {
-    const byId = new Map(draftNotes.map((d) => [d.id, d]));
+    const byId = new Map(draftNotes.map((draft) => [draft.id, draft]));
     return openDraftIds
       .map((id) => byId.get(id))
       .filter((draft): draft is (typeof drafts)[number] => Boolean(draft));
-  }, [draftNotes, openDraftIds]);
+  }, [draftNotes, openDraftIds, drafts]);
   const hiddenDraftTabs = useMemo(() => {
     const openSet = new Set(openDraftIds);
-    return draftNotes.filter((d) => !openSet.has(d.id));
+    return draftNotes.filter((draft) => !openSet.has(draft.id));
   }, [draftNotes, openDraftIds]);
   const allDraftGroups = useMemo(
     () => groupDraftsByFolder(draftNotes, noteFolderMap, folderParentMap),
     [draftNotes, noteFolderMap, folderParentMap]
   );
-  const hiddenDraftGroups = useMemo(() => {
-    return groupDraftsByFolder(hiddenDraftTabs, noteFolderMap, folderParentMap);
-  }, [hiddenDraftTabs, noteFolderMap, folderParentMap]);
-  const showMobileFullList = isMobile && !isLoading && !activeDraft && hasDraftNotes;
+  const hiddenDraftGroups = useMemo(
+    () => groupDraftsByFolder(hiddenDraftTabs, noteFolderMap, folderParentMap),
+    [hiddenDraftTabs, noteFolderMap, folderParentMap]
+  );
+  const showMobileFullList = isMobile && !isLoading && !activeDraftId && hasDraftNotes;
 
   useEffect(() => {
     if (isLoading) return;
@@ -482,30 +215,6 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function onRenameDraft() {
-    if (!activeDraftId) return;
-    const next = title.trim();
-    if (!next) return;
-    if (next === (activeDraft?.title ?? "").trim()) return;
-    await renameDraft(activeDraftId, next);
-  }
-
-  async function onDeleteDraft() {
-    if (!activeDraftId) return;
-    const sure = window.confirm("Delete this note?");
-    if (!sure) return;
-    setBusy(true);
-    try {
-      await deleteDraft(activeDraftId);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onShareInsight() {
-    setIsShareMenuOpen((prev) => !prev);
   }
 
   async function onCloseTab(draftId: string) {
@@ -526,52 +235,9 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
     setIsLoadSavedOpen(false);
   }
 
-  async function onSelectVisibility(nextVisibility: InsightVisibility) {
-    if (!activeDraftId) return;
-    setBusy(true);
-    try {
-      await saveDraftSettings({
-        draftId: activeDraftId,
-        title: title.trim() || undefined,
-        tags: parseTags(tagsInput),
-        visibility: nextVisibility,
-      });
-      setVisibility(nextVisibility);
-      setIsShareMenuOpen(false);
-      setShareMessage("Sharing updated");
-      window.setTimeout(() => setShareMessage(""), 1200);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function setDragState(nextDragId: string | null, nextDropIndex: number | null) {
-    dragIdRef.current = nextDragId;
-    dropIndexRef.current = nextDropIndex;
-    setDragId(nextDragId);
-    setDropIndex(nextDropIndex);
-  }
-
-  function commitDrop() {
-    const draggingId = dragIdRef.current;
-    const insertionIndex = dropIndexRef.current;
-    if (!draggingId || insertionIndex === null) return;
-    const from = orderedBlocks.findIndex((b) => b.id === draggingId);
-    if (from < 0) {
-      setDragState(null, null);
-      return;
-    }
-    const insertion = Math.max(0, Math.min(insertionIndex, orderedBlocks.length));
-    const to = from < insertion ? insertion - 1 : insertion;
-    if (to !== from && to >= 0 && to < orderedBlocks.length) {
-      void reorderBlocks(from, to);
-    }
-    setDragState(null, null);
-  }
-
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-3 pb-0 space-y-2">
+    <div className="flex h-full flex-col">
+      <div className="space-y-2 p-3 pb-0">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Notes</h2>
           <div className="flex items-center gap-2">
@@ -582,7 +248,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
               Load notes
             </button>
             <button
-              onClick={onCreateDraft}
+              onClick={() => void onCreateDraft()}
               disabled={busy}
               className="rounded-md border surface-button px-2 py-1 text-xs"
             >
@@ -591,9 +257,9 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
           </div>
         </div>
         {isLoadSavedOpen && !showMobileFullList ? (
-          <div className="rounded-md border surface-card p-2 space-y-2 max-h-56 overflow-y-auto">
+          <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border surface-card p-2">
             {hiddenDraftTabs.length === 0 ? (
-              <p className="text-xs text-foreground/60 px-1 py-1">No notes available to load.</p>
+              <p className="px-1 py-1 text-xs text-foreground/60">No notes available to load.</p>
             ) : (
               <>
                 {hiddenDraftGroups.rootDrafts.length > 0 ? (
@@ -602,7 +268,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
                       <button
                         key={draft.id}
                         onClick={() => void onLoadSaved(draft.id)}
-                        className="w-full text-left rounded-md border surface-button px-2.5 py-2 text-sm"
+                        className="w-full rounded-md border surface-button px-2.5 py-2 text-left text-sm"
                       >
                         {draft.title}
                       </button>
@@ -612,7 +278,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
                 {hiddenDraftGroups.folderGroups.map((group) => (
                   <section key={group.folderLabel} className="space-y-1 rounded-md border surface-card-soft p-2">
                     <div className="flex items-center justify-between gap-2 px-1">
-                      <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/55 truncate">
+                      <p className="truncate pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/55">
                         {renderFolderLabel(group.folderLabel)}
                       </p>
                       <span className="shrink-0 rounded-full border surface-button px-1.5 py-0.5 text-[10px] text-foreground/60">
@@ -623,7 +289,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
                       <button
                         key={draft.id}
                         onClick={() => void onLoadSaved(draft.id)}
-                        className="w-full text-left rounded-md border surface-button px-2.5 py-2 text-sm"
+                        className="w-full rounded-md border surface-button px-2.5 py-2 text-left text-sm"
                       >
                         {draft.title}
                       </button>
@@ -635,17 +301,15 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
           </div>
         ) : null}
         {!showMobileFullList ? (
-          <div className="flex items-end gap-1 overflow-x-auto overflow-y-hidden no-scrollbar border-b border-[var(--surface-border)] pb-0">
+          <div className="no-scrollbar flex items-end gap-1 overflow-x-auto overflow-y-hidden border-b border-[var(--surface-border)] pb-0">
             {openDraftTabs.map((draft) => (
               <div
                 key={draft.id}
-                className={`whitespace-nowrap rounded-t-md border border-b-0 px-2 py-1.5 text-xs flex items-center gap-1 ${
-                  draft.id === activeDraftId
-                    ? "surface-card text-foreground relative top-px"
-                    : "surface-card-soft text-foreground/75"
+                className={`relative top-px flex items-center gap-1 whitespace-nowrap rounded-t-md border border-b-0 px-2 py-1.5 text-xs ${
+                  draft.id === activeDraftId ? "surface-card text-foreground" : "surface-card-soft text-foreground/75"
                 }`}
               >
-                <button onClick={() => switchDraft(draft.id)} className="text-left px-1">
+                <button onClick={() => void switchDraft(draft.id)} className="px-1 text-left">
                   {draft.title}
                 </button>
                 <button
@@ -654,7 +318,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
                   title="Close tab"
                   aria-label={`Close ${draft.title}`}
                 >
-                  ×
+                  x
                 </button>
               </div>
             ))}
@@ -662,12 +326,12 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
               hasDraftNotes ? (
                 <button
                   onClick={() => setIsLoadSavedOpen(true)}
-                  className="text-xs text-foreground/70 underline underline-offset-2 px-1 py-1"
+                  className="px-1 py-1 text-xs text-foreground/70 underline underline-offset-2"
                 >
                   Load notes to select one.
                 </button>
               ) : (
-                <span className="text-xs text-foreground/60 px-1 py-1">No saved notes yet.</span>
+                <span className="px-1 py-1 text-xs text-foreground/60">No saved notes yet.</span>
               )
             ) : null}
           </div>
@@ -675,15 +339,15 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
       </div>
 
       {showMobileFullList ? (
-        <div className="flex-1 overflow-y-auto p-3 pt-1 pb-3 space-y-2">
-          <p className="text-xs text-foreground/65 px-1">Select a note to open it.</p>
+        <div className="flex-1 space-y-2 overflow-y-auto p-3 pt-1 pb-3">
+          <p className="px-1 text-xs text-foreground/65">Select a note to open it.</p>
           {allDraftGroups.rootDrafts.length > 0 ? (
             <div className="space-y-1.5">
               {allDraftGroups.rootDrafts.map((draft) => (
                 <button
                   key={draft.id}
                   onClick={() => void onLoadSaved(draft.id)}
-                  className="w-full text-left rounded-md border surface-button px-3 py-2.5 text-sm"
+                  className="w-full rounded-md border surface-button px-3 py-2.5 text-left text-sm"
                 >
                   {draft.title}
                 </button>
@@ -691,9 +355,9 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
             </div>
           ) : null}
           {allDraftGroups.folderGroups.map((group) => (
-            <section key={group.folderLabel} className="rounded-lg border surface-card p-2.5 space-y-2">
+            <section key={group.folderLabel} className="space-y-2 rounded-lg border surface-card p-2.5">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/60 truncate">
+                <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-foreground/60">
                   {renderFolderLabel(group.folderLabel)}
                 </p>
                 <span className="shrink-0 rounded-full border surface-button px-2 py-0.5 text-[11px] text-foreground/65">
@@ -705,7 +369,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
                   <button
                     key={draft.id}
                     onClick={() => void onLoadSaved(draft.id)}
-                    className="w-full text-left rounded-md border surface-button px-3 py-2.5 text-sm"
+                    className="w-full rounded-md border surface-button px-3 py-2.5 text-left text-sm"
                   >
                     {draft.title}
                   </button>
@@ -715,228 +379,8 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
           ))}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-3 pt-0 pb-0 space-y-3">
-          {isLoading ? <p className="text-sm text-foreground/60">Loading note...</p> : null}
-          {!isLoading && !activeDraft ? (
-            hasDraftNotes ? (
-              <div className="rounded-md border surface-card p-3 space-y-2">
-                <p className="text-sm text-foreground/70">No note loaded. Load notes and select one.</p>
-                <button
-                  onClick={() => setIsLoadSavedOpen(true)}
-                  className="rounded-md border surface-button px-2 py-1 text-xs"
-                >
-                  Load notes
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-foreground/70">
-                Start a note by tapping a scripture, or create a blank note here.
-              </p>
-            )
-          ) : null}
-          {activeDraft ? (
-            <div className="-mt-px rounded-b-lg border border-t-0 surface-card p-3 space-y-3">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => {
-                void onRenameDraft();
-              }}
-              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm font-medium"
-              placeholder="Note title"
-            />
-            <ul
-              className="space-y-2"
-              onDragOver={(event) => {
-                event.preventDefault();
-                if (!dragIdRef.current) return;
-                if (event.target !== event.currentTarget) return;
-                setDragState(dragIdRef.current, orderedBlocks.length);
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                if (event.target !== event.currentTarget) return;
-                didDropRef.current = true;
-                commitDrop();
-              }}
-            >
-              {orderedBlocks.map((block, index) => (
-                <div key={block.id} className="space-y-2">
-                  {dragId && dropIndex === index ? (
-                    <li
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        didDropRef.current = true;
-                        commitDrop();
-                      }}
-                      className="rounded-md border border-dashed border-sky-500/60 bg-sky-500/10 h-12"
-                    />
-                  ) : null}
-                  <BlockCard
-                    block={block}
-                    dragId={dragId}
-                    onDragStart={() => {
-                      didDropRef.current = false;
-                      setDragState(block.id, index);
-                    }}
-                    onDragEnd={() => {
-                      window.setTimeout(() => {
-                        if (didDropRef.current) {
-                          didDropRef.current = false;
-                          return;
-                        }
-                        setDragState(null, null);
-                      }, 0);
-                    }}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      if (!dragIdRef.current) return;
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      const before = event.clientY < rect.top + rect.height / 2;
-                      setDragState(dragIdRef.current, before ? index : index + 1);
-                    }}
-                    onDrop={() => {
-                      didDropRef.current = true;
-                      commitDrop();
-                    }}
-                    onRemove={() => removeBlock(block.id)}
-                    onSave={(patch) => updateBlock(block.id, patch)}
-                  />
-                </div>
-              ))}
-              {dragId && dropIndex === orderedBlocks.length ? (
-                <li
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    didDropRef.current = true;
-                    commitDrop();
-                  }}
-                  className="rounded-md border border-dashed border-sky-500/60 bg-sky-500/10 h-12"
-                />
-              ) : null}
-            </ul>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={() => addTextBlock("")}
-                className="rounded-md border surface-button px-2 py-1 text-xs"
-              >
-                + Text
-              </button>
-              <button
-                onClick={() => addQuoteBlock("", "")}
-                className="rounded-md border surface-button px-2 py-1 text-xs"
-              >
-                + Quote
-              </button>
-              <button
-                onClick={onDeleteDraft}
-                className="rounded-md border border-red-200 text-red-700 dark:border-red-400/30 px-2 py-1 text-xs"
-              >
-                Delete note
-              </button>
-            </div>
-            <div className="rounded-md border-t border-[var(--surface-border)] mt-2 pt-3 space-y-2">
-              <div className="text-xs font-medium text-foreground/75">Tags</div>
-              <input
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                onBlur={() => {
-                  if (!activeDraftId || !activeDraft) return;
-                  const nextTags = parseTags(tagsInput);
-                  const currentTags = activeDraft.tags ?? [];
-                  if (tagsEqual(nextTags, currentTags)) return;
-                  void saveDraftSettings({
-                    draftId: activeDraftId,
-                    tags: nextTags,
-                  });
-                }}
-                className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
-                placeholder="Tags (comma separated)"
-              />
-              <button
-                onClick={onShareInsight}
-                disabled={busy}
-                className="w-full rounded-md bg-foreground text-background px-3 py-2 text-sm font-medium disabled:opacity-60"
-              >
-                Share
-              </button>
-              {isShareMenuOpen ? (
-                <div className="space-y-2 rounded-md border surface-card-soft p-2">
-                  <div className="text-xs text-foreground/70">Who can view this note?</div>
-                  {(
-                    [
-                      {
-                        key: "private",
-                        title: "Private",
-                        description: "Only you can view this note.",
-                      },
-                      {
-                        key: "friends",
-                        title: "Visible to friends",
-                        description: "Only friends can open this note.",
-                      },
-                      {
-                        key: "link",
-                        title: "Sharable link",
-                        description: "Anyone with the link can view.",
-                      },
-                      {
-                        key: "public",
-                        title: "Public",
-                        description: "Visible in the public notes stream.",
-                      },
-                    ] as Array<{ key: InsightVisibility; title: string; description: string }>
-                  ).map((option) => (
-                    <button
-                      key={option.key}
-                      onClick={() => void onSelectVisibility(option.key)}
-                      className={`w-full rounded-md border px-3 py-2 text-left ${
-                        visibility === option.key
-                          ? "surface-button"
-                          : "surface-card-soft"
-                      }`}
-                    >
-                      <div className="text-sm font-medium">{option.title}</div>
-                      <div className="text-xs text-foreground/70">{option.description}</div>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {visibility === "link" ? (
-                <div className="rounded-md border surface-card-soft p-2 text-xs space-y-2">
-                  <div className="text-foreground/70">Sharable link</div>
-                  <div className="break-all text-foreground/90">
-                    {origin ? `${origin}/insights/shared/${activeDraft.id}` : `/insights/shared/${activeDraft.id}`}
-                  </div>
-                  <button
-                    onClick={async () => {
-                      const shareUrl = origin
-                        ? `${origin}/insights/shared/${activeDraft.id}`
-                        : `/insights/shared/${activeDraft.id}`;
-                      await navigator.clipboard.writeText(shareUrl);
-                      setShareMessage("Link copied");
-                      window.setTimeout(() => setShareMessage(""), 1200);
-                    }}
-                    className="rounded-md border surface-button px-2 py-1 text-xs"
-                  >
-                    Copy link
-                  </button>
-                </div>
-              ) : null}
-              {shareMessage ? <p className="text-xs text-foreground/70 text-center">{shareMessage}</p> : null}
-            </div>
-            </div>
-          ) : null}
+        <div className="flex-1 overflow-y-auto p-3 pt-0">
+          <InsightEditorPanel variant="floating" />
         </div>
       )}
     </div>
@@ -944,20 +388,22 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
 }
 
 export default function InsightBuilderShell() {
+  const pathname = usePathname();
   const { canUseInsights, isMobileOpen, closeBuilder, activeDraftId } = useInsightBuilder();
+  const hideShell = pathname === "/feed" || pathname.startsWith("/feed/");
 
-  if (!canUseInsights) return null;
+  if (!canUseInsights || hideShell) return null;
 
   return (
     <>
       {isMobileOpen ? (
-        <div className="lg:hidden fixed inset-0 z-50 bg-background">
+        <div className="fixed inset-0 z-50 bg-background lg:hidden">
           <div className="h-full overflow-hidden">
             <BuilderContent isMobile={true} />
           </div>
           <button
             onClick={closeBuilder}
-            className="fixed z-[60] right-[calc(env(safe-area-inset-right)+0.5rem)] bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] rounded-full border surface-button px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+            className="fixed right-[calc(env(safe-area-inset-right)+0.5rem)] bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-[60] rounded-full border surface-button px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
           >
             Close
           </button>
@@ -965,7 +411,7 @@ export default function InsightBuilderShell() {
       ) : null}
 
       {activeDraftId ? (
-        <aside className="hidden lg:block fixed right-0 top-16 bottom-0 z-40 w-[360px] xl:w-[420px] 2xl:w-[480px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] backdrop-blur">
+        <aside className="fixed right-0 top-16 bottom-0 z-40 hidden w-[360px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] backdrop-blur lg:block xl:w-[420px] 2xl:w-[480px]">
           <BuilderContent />
         </aside>
       ) : null}
