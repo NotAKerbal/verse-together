@@ -209,7 +209,7 @@ export default function VerseActionBar({
           </button>
           <button type="button" onMouseDown={preserveSelection} onClick={onCitations} className={baseActionClass}>
             <ActionIcon kind="book" />
-            <span>Citations</span>
+            <span>Resources</span>
           </button>
           {showExplore && onExplore ? (
             <button type="button" onMouseDown={preserveSelection} onClick={onExplore} className={baseActionClass}>

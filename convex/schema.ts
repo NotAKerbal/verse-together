@@ -7,6 +7,7 @@ export default defineSchema({
     email: v.optional(v.string()),
     displayName: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
+    isAdmin: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -530,4 +531,23 @@ export default defineSchema({
     refreshAfter: v.number(),
     lastAccessedAt: v.number(),
   }).index("by_ref", ["bookByuId", "chapter", "verseSpec"]),
+
+
+  scriptureResources: defineTable({
+    volume: v.string(),
+    book: v.string(),
+    resourceType: v.union(v.literal("verse"), v.literal("verse_range"), v.literal("chapter"), v.literal("chapter_range")),
+    title: v.string(),
+    description: v.optional(v.string()),
+    url: v.optional(v.string()),
+    chapterStart: v.number(),
+    chapterEnd: v.number(),
+    verseStart: v.optional(v.number()),
+    verseEnd: v.optional(v.number()),
+    createdByClerkId: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_volume_book", ["volume", "book"])
+    .index("by_scope", ["volume", "book", "chapterStart", "chapterEnd"]),
 });
