@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ResourcesManagerSidebar from "@/components/ResourcesManagerSidebar";
+import ResourcesManagerSetup from "@/components/ResourcesManagerSetup";
 
 function parseVerseSpec(value: string): { verseStart: number; verseEnd: number } {
   const [startRaw, endRaw] = value.split("-");
@@ -25,7 +26,13 @@ export default function ResourceManagerPage({
     return (
       <main className="mx-auto w-full max-w-3xl px-4 py-6 space-y-3">
         <h1 className="text-lg font-semibold">Resource Manager</h1>
-        <p className="text-sm text-foreground/70">Missing required query parameters. Open this page from the Resources panel.</p>
+        <p className="text-sm text-foreground/70">Pick a scripture passage first, then add curated resources for that range.</p>
+        <ol className="list-decimal pl-5 text-sm text-foreground/75 space-y-1">
+          <li>Choose the scripture context below (volume, book, chapter, verses).</li>
+          <li>Use the interactive selector to pick chapters or verses.</li>
+          <li>Save your curated resource and return to the chapter.</li>
+        </ol>
+        <ResourcesManagerSetup />
       </main>
     );
   }
@@ -40,6 +47,9 @@ export default function ResourceManagerPage({
       </div>
       <p className="text-sm text-foreground/70">
         Managing resources for <span className="font-medium">{book.replace(/-/g, " ")} {chapter}:{verseStart}{verseEnd !== verseStart ? `-${verseEnd}` : ""}</span>.
+      </p>
+      <p className="text-xs text-foreground/65">
+        Tip: Enter title/link/description, choose chapters or verses in the selector, tap <span className="font-medium">Use selection</span>, then save.
       </p>
       <ResourcesManagerSidebar
         volume={volume}
