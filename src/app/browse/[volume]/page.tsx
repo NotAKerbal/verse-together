@@ -1,7 +1,4 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import Breadcrumbs from "@/components/Breadcrumbs";
-import ScriptureQuickNav from "@/components/ScriptureQuickNav";
 import VolumeBookBrowser, { type VolumeBookBrowserItem } from "@/components/VolumeBookBrowser";
 import { getBibleBooksForVolume } from "@/lib/bibleCanon";
 import {
@@ -153,15 +150,10 @@ export default async function VolumePage({
   }
   const books = buildCategorizedBooks(canonicalVolume);
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
+  const browseHref = lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse";
 
   return (
     <section className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <Breadcrumbs
-          items={[{ label: "Browse", href: lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse" }, { label: volumeLabel }]}
-        />
-        <ScriptureQuickNav currentVolume={canonicalVolume} />
-      </div>
       {books.length === 0 ? (
         <p className="text-foreground/80">No book list available for this volume yet.</p>
       ) : (
@@ -169,6 +161,7 @@ export default async function VolumePage({
           books={books}
           volumeLabel={volumeLabel}
           volumeSlug={volumeSlug}
+          backHref={browseHref}
           lessonSuffix={lessonSuffix}
         />
       )}
