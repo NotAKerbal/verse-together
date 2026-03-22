@@ -1,8 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import ResourcesManagerSidebar from "@/components/ResourcesManagerSidebar";
 
 function parseVerseSpec(value: string): { verseStart: number; verseEnd: number } {
@@ -14,14 +10,16 @@ function parseVerseSpec(value: string): { verseStart: number; verseEnd: number }
   return { verseStart: Math.min(start, end), verseEnd: Math.max(start, end) };
 }
 
-export default function ResourceManagerPage() {
-  const searchParams = useSearchParams();
-  const volume = (searchParams.get("volume") ?? "").toLowerCase();
-  const book = (searchParams.get("book") ?? "").toLowerCase();
-  const chapter = Number(searchParams.get("chapter") ?? "1");
-  const verses = searchParams.get("verses") ?? "1";
-  const { verseStart, verseEnd } = useMemo(() => parseVerseSpec(verses), [verses]);
-  const [saveCount, setSaveCount] = useState(0);
+export default function ResourceManagerPage({
+  searchParams,
+}: {
+  searchParams?: { volume?: string; book?: string; chapter?: string; verses?: string };
+}) {
+  const volume = (searchParams?.volume ?? "").toLowerCase();
+  const book = (searchParams?.book ?? "").toLowerCase();
+  const chapter = Number(searchParams?.chapter ?? "1");
+  const verses = searchParams?.verses ?? "1";
+  const { verseStart, verseEnd } = parseVerseSpec(verses);
 
   if (!volume || !book || !Number.isFinite(chapter) || chapter <= 0) {
     return (
@@ -43,14 +41,13 @@ export default function ResourceManagerPage() {
       <p className="text-sm text-foreground/70">
         Managing resources for <span className="font-medium">{book.replace(/-/g, " ")} {chapter}:{verseStart}{verseEnd !== verseStart ? `-${verseEnd}` : ""}</span>.
       </p>
-      {saveCount > 0 ? <p className="text-sm text-emerald-700 dark:text-emerald-300">Saved successfully.</p> : null}
       <ResourcesManagerSidebar
         volume={volume}
         book={book}
         chapter={chapter}
         verseStart={verseStart}
         verseEnd={verseEnd}
-        onCreated={() => setSaveCount((value) => value + 1)}
+        onCreated={() => {}}
       />
     </main>
   );
