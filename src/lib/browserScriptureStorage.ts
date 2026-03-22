@@ -1,5 +1,7 @@
 "use client";
 
+import { parseScriptureReferenceQuery } from "@/lib/scriptureQuickNav";
+
 type ScriptureVerse = {
   verse: number;
   text: string;
@@ -63,6 +65,7 @@ type StoredChapterRecord = {
   book: string;
   chapter: number;
   reference: string;
+  referenceKey: string;
   volumeTitle: string;
   bookTitle: string;
   verses: ScriptureVerse[];
@@ -74,6 +77,7 @@ type StoredVerseRecord = {
   chapter: number;
   verse: number;
   reference: string;
+  referenceKey: string;
   volumeTitle: string;
   bookTitle: string;
   text: string;
@@ -139,10 +143,13 @@ type EnsureStorageOptions = {
 
 const DATASET_MANIFEST_PATH = "/scripture-data/manifest.json";
 const DB_NAME = "scripture-browser-storage";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const META_STORE = "meta";
 const CHAPTERS_STORE = "chapters";
 const VERSES_STORE = "verses";
+const CHAPTERS_BY_REFERENCE_INDEX = "by_reference_key";
+const VERSES_BY_VOLUME_INDEX = "by_volume";
+const VERSES_BY_BOOK_INDEX = "by_book";
 const LOCAL_STATUS_KEY = "scripture-browser-storage-status";
 
 let manifestPromise: Promise<ScriptureDatasetManifest> | null = null;
@@ -161,6 +168,10 @@ function supportsIndexedDb() {
 
 function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function makeReferenceKey(value: string) {
+  return normalizeText(value);
 }
 
 function makeReference(bookTitle: string, chapter: number) {
@@ -230,7 +241,7 @@ function openDatabase() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (event) => {
       const db = request.result;
-      if (request.transaction && event.oldVersion < 2) {
+      if (request.transaction && event.oldVersion < 3) {
         if (db.objectStoreNames.contains(META_STORE)) {
           db.deleteObjectStore(META_STORE);
         }
@@ -245,10 +256,13 @@ function openDatabase() {
         db.createObjectStore(META_STORE, { keyPath: "key" });
       }
       if (!db.objectStoreNames.contains(CHAPTERS_STORE)) {
-        db.createObjectStore(CHAPTERS_STORE, { keyPath: ["volume", "book", "chapter"] });
+        const chapterStore = db.createObjectStore(CHAPTERS_STORE, { keyPath: ["volume", "book", "chapter"] });
+        chapterStore.createIndex(CHAPTERS_BY_REFERENCE_INDEX, "referenceKey", { unique: false });
       }
       if (!db.objectStoreNames.contains(VERSES_STORE)) {
-        db.createObjectStore(VERSES_STORE, { keyPath: ["volume", "book", "chapter", "verse"] });
+        const verseStore = db.createObjectStore(VERSES_STORE, { keyPath: ["volume", "book", "chapter", "verse"] });
+        verseStore.createIndex(VERSES_BY_VOLUME_INDEX, "volume", { unique: false });
+        verseStore.createIndex(VERSES_BY_BOOK_INDEX, ["volume", "book"], { unique: false });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -347,6 +361,7 @@ async function importBundleIntoDb(
         book: book.book,
         chapter: chapter.chapter,
         reference,
+        referenceKey: makeReferenceKey(reference),
         volumeTitle: bundle.volume.title,
         bookTitle: book.title,
         verses: chapter.verses,
@@ -360,6 +375,7 @@ async function importBundleIntoDb(
           chapter: chapter.chapter,
           verse: verse.verse,
           reference: verseReference,
+          referenceKey: makeReferenceKey(verseReference),
           volumeTitle: bundle.volume.title,
           bookTitle: book.title,
           text: verse.text,
@@ -402,6 +418,30 @@ async function getStoredChapter(
   return result ?? null;
 }
 
+async function getStoredVerse(
+  db: IDBDatabase,
+  volume: string,
+  book: string,
+  chapter: number,
+  verse: number
+) {
+  const transaction = db.transaction(VERSES_STORE, "readonly");
+  const result = await requestToPromise(
+    transaction.objectStore(VERSES_STORE).get([volume, book, chapter, verse])
+  ) as StoredVerseRecord | undefined;
+  await transactionDone(transaction);
+  return result ?? null;
+}
+
+async function getStoredChapterByReferenceKey(db: IDBDatabase, referenceKey: string) {
+  const transaction = db.transaction(CHAPTERS_STORE, "readonly");
+  const result = await requestToPromise(
+    transaction.objectStore(CHAPTERS_STORE).index(CHAPTERS_BY_REFERENCE_INDEX).get(referenceKey)
+  ) as StoredChapterRecord | undefined;
+  await transactionDone(transaction);
+  return result ?? null;
+}
+
 async function searchStoredVerses(
   db: IDBDatabase,
   normalizedQuery: string,
@@ -409,10 +449,22 @@ async function searchStoredVerses(
 ) {
   const transaction = db.transaction(VERSES_STORE, "readonly");
   const store = transaction.objectStore(VERSES_STORE);
+  const source: IDBObjectStore | IDBIndex =
+    options.volume && options.book
+      ? store.index(VERSES_BY_BOOK_INDEX)
+      : options.volume
+      ? store.index(VERSES_BY_VOLUME_INDEX)
+      : store;
+  const range =
+    options.volume && options.book
+      ? IDBKeyRange.only([options.volume, options.book])
+      : options.volume
+      ? IDBKeyRange.only(options.volume)
+      : undefined;
 
   const results = await new Promise<StoredVerseRecord[]>((resolve, reject) => {
     const matches: StoredVerseRecord[] = [];
-    const request = store.openCursor();
+    const request = source.openCursor(range);
     request.onsuccess = () => {
       const cursor = request.result;
       if (!cursor || matches.length >= options.limit) {
@@ -435,6 +487,52 @@ async function searchStoredVerses(
   return results;
 }
 
+function toSearchResult(
+  item: Pick<
+    StoredVerseRecord,
+    "volume" | "book" | "chapter" | "verse" | "reference" | "volumeTitle" | "bookTitle" | "text"
+  >,
+  source: "indexeddb" | "bundle",
+  version: string
+): ScriptureSearchResult {
+  return {
+    volume: item.volume,
+    book: item.book,
+    chapter: item.chapter,
+    verse: item.verse,
+    reference: item.reference,
+    volumeTitle: item.volumeTitle,
+    bookTitle: item.bookTitle,
+    text: item.text,
+    source,
+    version,
+  };
+}
+
+function toChapterSearchResults(
+  chapter: Pick<StoredChapterRecord, "volume" | "book" | "chapter" | "reference" | "volumeTitle" | "bookTitle" | "verses">,
+  source: "indexeddb" | "bundle",
+  version: string,
+  limit: number
+) {
+  return chapter.verses.slice(0, limit).map((verse) =>
+    toSearchResult(
+      {
+        volume: chapter.volume,
+        book: chapter.book,
+        chapter: chapter.chapter,
+        verse: verse.verse,
+        reference: `${chapter.reference}:${verse.verse}`,
+        volumeTitle: chapter.volumeTitle,
+        bookTitle: chapter.bookTitle,
+        text: verse.text,
+      },
+      source,
+      version
+    )
+  );
+}
+
 async function readBundledChapterRecord(volume: string, book: string, chapter: number) {
   const bundle = await getVolumeBundle(volume);
   const bookData = bundle.books.find((item) => item.book === book);
@@ -451,6 +549,48 @@ async function readBundledChapterRecord(volume: string, book: string, chapter: n
     verses: chapterData.verses,
     version: bundle.version,
   };
+}
+
+async function readBundledVerseRecord(volume: string, book: string, chapter: number, verse: number) {
+  const chapterRecord = await readBundledChapterRecord(volume, book, chapter);
+  if (!chapterRecord) return null;
+  const verseRecord = chapterRecord.verses.find((item) => item.verse === verse);
+  if (!verseRecord) return null;
+  return {
+    volume,
+    book,
+    chapter,
+    verse,
+    reference: `${chapterRecord.reference}:${verse}`,
+    volumeTitle: chapterRecord.volumeTitle,
+    bookTitle: chapterRecord.bookTitle,
+    text: verseRecord.text,
+    version: chapterRecord.version,
+  };
+}
+
+async function readBundledChapterByReferenceKey(referenceKey: string) {
+  const manifest = await getManifest();
+  for (const volumeInfo of manifest.volumes) {
+    const bundle = await getVolumeBundle(volumeInfo.volume);
+    for (const bookData of bundle.books) {
+      for (const chapterData of bookData.chapters) {
+        const reference = makeReference(bookData.title, chapterData.chapter);
+        if (makeReferenceKey(reference) !== referenceKey) continue;
+        return {
+          volume: volumeInfo.volume,
+          book: bookData.book,
+          chapter: chapterData.chapter,
+          reference,
+          volumeTitle: volumeInfo.title,
+          bookTitle: bookData.title,
+          verses: chapterData.verses,
+          version: bundle.version,
+        };
+      }
+    }
+  }
+  return null;
 }
 
 async function searchBundledVerses(
@@ -688,6 +828,87 @@ export async function searchBrowserScriptures(
   }
 
   return searchBundledVerses(normalizedQuery, { ...options, limit });
+}
+
+export async function resolveBrowserScriptureReference(
+  query: string,
+  options: ScriptureSearchOptions = {}
+): Promise<ScriptureSearchResult[]> {
+  ensureBrowserEnvironment();
+  const references = parseScriptureReferenceQuery(query, options.limit ?? 12);
+  if (references.length === 0) return [];
+
+  const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
+  const filteredReferences = references.filter((reference) => {
+    if (options.volume && reference.volume !== options.volume) return false;
+    if (options.book && reference.book !== options.book) return false;
+    return true;
+  });
+  if (filteredReferences.length === 0) return [];
+
+  const manifest = await getManifest();
+
+  if (supportsIndexedDb()) {
+    try {
+      const db = await openDatabase();
+      const meta = await readMetaRecord(db);
+      if (meta?.state === "ready" && meta.version === manifest.version) {
+        const matches: ScriptureSearchResult[] = [];
+        for (const reference of filteredReferences) {
+          if (reference.verse) {
+            const storedVerse = await getStoredVerse(
+              db,
+              reference.volume,
+              reference.book,
+              reference.chapter,
+              reference.verse
+            );
+            if (storedVerse) {
+              matches.push(toSearchResult(storedVerse, "indexeddb", manifest.version));
+            }
+          } else {
+            const storedChapter =
+              (await getStoredChapter(db, reference.volume, reference.book, reference.chapter)) ??
+              (await getStoredChapterByReferenceKey(db, makeReferenceKey(reference.label)));
+            if (storedChapter) {
+              matches.push(...toChapterSearchResults(storedChapter, "indexeddb", manifest.version, limit - matches.length));
+            }
+          }
+          if (matches.length >= limit) break;
+        }
+        db.close();
+        return matches.slice(0, limit);
+      }
+      db.close();
+    } catch {
+      // Fall through to bundled dataset.
+    }
+  }
+
+  const bundleMatches: ScriptureSearchResult[] = [];
+  for (const reference of filteredReferences) {
+    if (reference.verse) {
+      const verseRecord = await readBundledVerseRecord(
+        reference.volume,
+        reference.book,
+        reference.chapter,
+        reference.verse
+      );
+      if (verseRecord) {
+        bundleMatches.push(toSearchResult(verseRecord, "bundle", verseRecord.version));
+      }
+    } else {
+      const chapterRecord =
+        (await readBundledChapterRecord(reference.volume, reference.book, reference.chapter)) ??
+        (await readBundledChapterByReferenceKey(makeReferenceKey(reference.label)));
+      if (chapterRecord) {
+        bundleMatches.push(...toChapterSearchResults(chapterRecord, "bundle", chapterRecord.version, limit - bundleMatches.length));
+      }
+    }
+    if (bundleMatches.length >= limit) break;
+  }
+
+  return bundleMatches.slice(0, limit);
 }
 
 export async function getBundledScriptureDatasetVersion() {

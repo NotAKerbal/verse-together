@@ -6,11 +6,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   loadLocalScriptureStore,
   searchLocalScriptures,
-  type LocalScriptureSearchResult,
+  type LocalScriptureReferenceResult,
+  type LocalScriptureSearchResults,
+  type LocalScriptureVerseResult,
   type SearchStoreStatus,
 } from "@/lib/localScriptureSearch";
 
 const MIN_QUERY_LENGTH = 2;
+const EMPTY_RESULTS: LocalScriptureSearchResults = { referenceResults: [], verseResults: [] };
 
 function SearchIcon() {
   return (
@@ -27,20 +30,6 @@ function SearchIcon() {
       <circle cx="11" cy="11" r="5.5" />
       <path d="m15.2 15.2 4.3 4.3" />
     </svg>
-  );
-}
-
-function OfflineBadge({ isOffline }: { isOffline: boolean }) {
-  return (
-    <div
-      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.12em] ${
-        isOffline
-          ? "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
-          : "border-emerald-500/35 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
-      }`}
-    >
-      {isOffline ? "Offline" : "Ready offline"}
-    </div>
   );
 }
 
@@ -73,7 +62,43 @@ function highlightText(text: string, query: string) {
   );
 }
 
-function ResultCard({ result, query }: { result: LocalScriptureSearchResult; query: string }) {
+function ReferenceResultCard({ result }: { result: LocalScriptureReferenceResult }) {
+  return (
+    <li>
+      <Link
+        href={result.href}
+        className="group block rounded-[1.35rem] border p-4 transition-colors surface-card hover:bg-[var(--surface-button-hover)] sm:p-5"
+        data-tap
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-foreground/46">
+              {result.volumeTitle}
+            </div>
+            <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{result.label}</h2>
+          </div>
+          <div className="rounded-full border px-2.5 py-1 text-xs text-foreground/58">
+            {result.verseNumber ? "Direct verse" : "Direct chapter"}
+          </div>
+        </div>
+        <p className="mt-3 text-sm leading-7 text-foreground/78">
+          Jump straight to {result.label} in the reader.
+        </p>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs text-foreground/52">
+          <span>
+            Chapter {result.chapterNumber}
+            {result.verseNumber ? `, verse ${result.verseNumber}` : ""}
+          </span>
+          <span className="font-medium text-foreground/68 transition-transform duration-200 group-hover:translate-x-0.5">
+            Open reference
+          </span>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+function VerseResultCard({ result, query }: { result: LocalScriptureVerseResult; query: string }) {
   return (
     <li>
       <Link
@@ -130,11 +155,11 @@ export default function ScriptureSearchExperience() {
   const [query, setQuery] = useState(initialQuery);
   const deferredQuery = useDeferredValue(query);
   const [storeStatus, setStoreStatus] = useState<SearchStoreStatus>("idle");
-  const [results, setResults] = useState<LocalScriptureSearchResult[]>([]);
+  const [results, setResults] = useState<LocalScriptureSearchResults>(EMPTY_RESULTS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resultState, setResultState] = useState<"idle" | "searching" | "done">("idle");
   const [isOffline, setIsOffline] = useState(false);
-  const [isNavigating, startNavigationTransition] = useTransition();
+  const [, startNavigationTransition] = useTransition();
   const [isSearching, startSearchTransition] = useTransition();
 
   useEffect(() => {
@@ -193,11 +218,11 @@ export default function ScriptureSearchExperience() {
   useEffect(() => {
     const trimmed = deferredQuery.trim();
     if (storeStatus !== "ready") {
-      setResults([]);
+      setResults(EMPTY_RESULTS);
       return;
     }
     if (trimmed.length < MIN_QUERY_LENGTH) {
-      setResults([]);
+      setResults(EMPTY_RESULTS);
       setResultState("idle");
       return;
     }
@@ -214,7 +239,7 @@ export default function ScriptureSearchExperience() {
         })
         .catch(() => {
           if (!active) return;
-          setResults([]);
+          setResults(EMPTY_RESULTS);
           setResultState("done");
           setErrorMessage(
             isOffline
@@ -229,36 +254,30 @@ export default function ScriptureSearchExperience() {
     };
   }, [deferredQuery, isOffline, storeStatus]);
 
+  const totalResults = results.referenceResults.length + results.verseResults.length;
+
   const helperText = useMemo(() => {
     const trimmed = query.trim();
     if (storeStatus === "loading") return "Loading the local scripture library for offline search.";
-    if (trimmed.length === 0) return "Search references, book names, or phrases across the bundled scripture store.";
+    if (trimmed.length === 0) return "Search references like Alma 32 or D&C 4:3, or search verse text across the bundled store.";
     if (trimmed.length < MIN_QUERY_LENGTH) return "Enter at least 2 characters to search.";
-    if (resultState === "searching" || isSearching) return "Searching local verses...";
-    if (results.length === 0) return "No verses matched that search.";
-    return `${results.length} match${results.length === 1 ? "" : "es"} from the local scripture store.`;
-  }, [isSearching, query, resultState, results.length, storeStatus]);
+    if (totalResults === 0) return "No references or verses matched that search.";
+    return null;
+  }, [query, storeStatus, totalResults]);
 
-  const showSkeleton = storeStatus === "loading" || (resultState === "searching" && results.length === 0);
+  const showSkeleton = storeStatus === "loading" || (resultState === "searching" && totalResults === 0);
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
-      <header className="space-y-3">
+      {isOffline ? (
         <div className="flex flex-wrap items-center gap-2">
-          <OfflineBadge isOffline={isOffline} />
-          {isNavigating ? (
-            <div className="inline-flex rounded-full border border-[color:var(--surface-border)] px-3 py-1 text-xs text-foreground/60">
-              Syncing URL
+          {isOffline ? (
+            <div className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.12em] text-amber-900 dark:text-amber-200">
+              Offline
             </div>
           ) : null}
         </div>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Search Scriptures</h1>
-          <p className="max-w-2xl text-foreground/72">
-            Search the bundled scripture library locally, then jump straight into the reader with the matching verse in context.
-          </p>
-        </div>
-      </header>
+      ) : null}
 
       <div className="surface-card-strong rounded-[1.75rem] border p-5 sm:p-6">
         <label
@@ -281,16 +300,7 @@ export default function ScriptureSearchExperience() {
         </label>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-foreground/62">{errorMessage ?? helperText}</p>
-          {query ? (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="rounded-full border px-3 py-1.5 text-xs font-medium text-foreground/65 transition-colors hover:bg-[var(--surface-button-hover)]"
-            >
-              Clear
-            </button>
-          ) : null}
+          {errorMessage ?? helperText ? <p className="text-sm text-foreground/62">{errorMessage ?? helperText}</p> : null}
         </div>
       </div>
 
@@ -302,17 +312,41 @@ export default function ScriptureSearchExperience() {
 
       {showSkeleton ? <LoadingSkeleton /> : null}
 
-      {!showSkeleton && results.length > 0 ? (
-        <ul className="grid gap-3 sm:gap-4">
-          {results.map((result) => (
-            <ResultCard key={result.id} result={result} query={deferredQuery} />
-          ))}
-        </ul>
+      {!showSkeleton && totalResults > 0 ? (
+        <div className="space-y-6">
+          {results.referenceResults.length > 0 ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-foreground/52">Reference Matches</h2>
+                <div className="text-xs text-foreground/52">Jump straight to the passage</div>
+              </div>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {results.referenceResults.map((result) => (
+                  <ReferenceResultCard key={result.id} result={result} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {results.verseResults.length > 0 ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-foreground/52">Verse Text Matches</h2>
+                <div className="text-xs text-foreground/52">Local full-text results</div>
+              </div>
+              <ul className="grid gap-3 sm:gap-4">
+                {results.verseResults.map((result) => (
+                  <VerseResultCard key={result.id} result={result} query={deferredQuery} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       ) : null}
 
-      {!showSkeleton && storeStatus === "ready" && results.length === 0 && query.trim().length >= MIN_QUERY_LENGTH ? (
+      {!showSkeleton && storeStatus === "ready" && totalResults === 0 && query.trim().length >= MIN_QUERY_LENGTH ? (
         <div className="rounded-[1.5rem] border p-5 text-sm leading-7 text-foreground/72 surface-card">
-          No verses matched <span className="font-medium text-foreground">{query.trim()}</span>. Try a shorter phrase, a book name, or a reference like <span className="font-medium text-foreground">Alma 32</span>.
+          No references or verses matched <span className="font-medium text-foreground">{query.trim()}</span>. Try a shorter phrase, a book name, or a reference like <span className="font-medium text-foreground">Alma 32</span> or <span className="font-medium text-foreground">D&C 4:3</span>.
         </div>
       ) : null}
 
@@ -320,11 +354,11 @@ export default function ScriptureSearchExperience() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-[1.25rem] border p-4 surface-card">
             <div className="text-sm font-medium">Reference Search</div>
-            <p className="mt-1 text-sm text-foreground/68">Find verses by book names and references like Genesis 1 or D&C 4.</p>
+            <p className="mt-1 text-sm text-foreground/68">Find direct references like Alma 32, Genesis 1, or D&C 4:3.</p>
           </div>
           <div className="rounded-[1.25rem] border p-4 surface-card">
             <div className="text-sm font-medium">Phrase Search</div>
-            <p className="mt-1 text-sm text-foreground/68">Search exact ideas across the local store without needing a network round trip.</p>
+            <p className="mt-1 text-sm text-foreground/68">Search verse text locally without needing a network round trip.</p>
           </div>
           <div className="rounded-[1.25rem] border p-4 surface-card">
             <div className="text-sm font-medium">Offline Resume</div>

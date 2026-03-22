@@ -19,6 +19,14 @@ export type QuickNavSuggestion = {
   chapter: number;
 };
 
+export type ParsedScriptureReference = {
+  volume: string;
+  book: string;
+  chapter: number;
+  verse?: number;
+  label: string;
+};
+
 const BIBLE_ABBREVIATIONS: Record<string, string[]> = {
   genesis: ["Gen"],
   exodus: ["Ex"],
@@ -220,12 +228,12 @@ function buildSuggestion(book: QuickNavBook, chapter: number, verse?: number): Q
   };
 }
 
-export function getQuickNavSuggestions(query: string, limit = 12): QuickNavSuggestion[] {
+export function parseScriptureReferenceQuery(query: string, limit = 12): ParsedScriptureReference[] {
   const raw = query.trim();
   if (!raw) return [];
 
-  const compactWithColon = raw.toLowerCase().replace(/[\s.\-]+/g, "").replace(/[\u2014\u2013]/g, "");
-  const plainToken = raw.toLowerCase().replace(/[\s.\-:]+/g, "").replace(/[\u2014\u2013]/g, "");
+  const compactWithColon = raw.toLowerCase().replace(/[\u2014\u2013]/g, "").replace(/[^a-z0-9:]/g, "");
+  const plainToken = raw.toLowerCase().replace(/[\u2014\u2013]/g, "").replace(/[^a-z0-9]/g, "");
 
   const suggestions: QuickNavSuggestion[] = [];
   const inputMatch = plainToken.match(/^([1-4]?[a-z]+)(.*)$/);
@@ -248,12 +256,6 @@ export function getQuickNavSuggestions(query: string, limit = 12): QuickNavSugge
     }
   }
 
-  // If there are no numeric candidates, fall back to book-only quick links.
-  if (suggestions.length === 0) {
-    const books = matchBooksByToken(typedBookToken || plainToken).slice(0, limit);
-    return books.map((book) => buildSuggestion(book, 1));
-  }
-
   const dedup = new Map<string, QuickNavSuggestion>();
   for (const suggestion of suggestions) {
     if (!dedup.has(suggestion.key)) dedup.set(suggestion.key, suggestion);
@@ -261,7 +263,47 @@ export function getQuickNavSuggestions(query: string, limit = 12): QuickNavSugge
 
   return Array.from(dedup.values())
     .sort((a, b) => a.label.localeCompare(b.label))
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((suggestion) => ({
+      volume: suggestion.volume,
+      book: suggestion.book,
+      chapter: suggestion.chapter,
+      verse: suggestion.verse,
+      label: suggestion.label,
+    }));
+}
+
+export function getQuickNavSuggestions(query: string, limit = 12): QuickNavSuggestion[] {
+  const parsedReferences = parseScriptureReferenceQuery(query, limit);
+  if (parsedReferences.length > 0) {
+    return parsedReferences.map((reference) => {
+      const book = QUICK_NAV_BOOKS.find(
+        (item) => item.volume === reference.volume && item.book === reference.book
+      );
+      if (!book) {
+        return {
+          key: `${reference.volume}:${reference.book}:${reference.chapter}:${reference.verse ?? ""}`,
+          label: reference.label,
+          href: `/browse/${toScriptureVolumeUrlSlug(reference.volume)}/${reference.book}/${reference.chapter}${
+            reference.verse ? `#v-${reference.verse}` : ""
+          }`,
+          verse: reference.verse,
+          volume: reference.volume,
+          book: reference.book,
+          chapter: reference.chapter,
+        };
+      }
+      return buildSuggestion(book, reference.chapter, reference.verse);
+    });
+  }
+
+  const raw = query.trim();
+  if (!raw) return [];
+  const plainToken = raw.toLowerCase().replace(/[\u2014\u2013]/g, "").replace(/[^a-z0-9]/g, "");
+  const inputMatch = plainToken.match(/^([1-4]?[a-z]+)(.*)$/);
+  const typedBookToken = inputMatch?.[1] ?? "";
+  const books = matchBooksByToken(typedBookToken || plainToken).slice(0, limit);
+  return books.map((book) => buildSuggestion(book, 1));
 }
 
 export function getBookAbbreviation(bookSlug: string): string | null {

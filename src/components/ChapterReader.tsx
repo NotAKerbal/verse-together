@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
@@ -47,6 +47,33 @@ type ChapterSelectionState = {
   anchorRect: VerseActionAnchorRect | null;
 };
 
+type RangePoint = {
+  node: Node;
+  offset: number;
+};
+
+type WordSelection = {
+  start: RangePoint;
+  end: RangePoint;
+};
+
+type WordRange = {
+  startWord: WordSelection;
+  endWord: WordSelection;
+};
+
+type HighlightRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+type HandleKind = "start" | "end";
+
+const MOBILE_SELECTION_EDGE_SCROLL_ZONE = 56;
+const MOBILE_SELECTION_EDGE_SCROLL_STEP = 18;
+
 function annotationHighlightClass(color: AnnotationHighlightColor) {
   if (color === "yellow") return "border-amber-500/40 bg-amber-500/7";
   if (color === "blue") return "border-sky-500/40 bg-sky-500/7";
@@ -64,6 +91,10 @@ function extractFirstWord(value: string): string {
 function extractSingleSelectedWord(value: string): string {
   const matches = value.match(/[A-Za-z][A-Za-z'\-]*/g) ?? [];
   return matches.length === 1 ? matches[0].toLowerCase() : "";
+}
+
+function normalizeSelectionText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function containsNode(container: HTMLElement, node: Node) {
@@ -85,18 +116,17 @@ function toAnchorRect(range: Range): VerseActionAnchorRect | null {
   };
 }
 
-function getChapterSelectionState(
-  selection: Selection | null,
+function buildSelectionStateFromRange(
+  range: Range | null,
   container: HTMLOListElement | null,
   verses: Verse[]
 ): ChapterSelectionState | null {
-  if (!selection || !container || selection.rangeCount === 0 || selection.isCollapsed) return null;
-  const range = selection.getRangeAt(0);
+  if (!range || !container) return null;
   if (!containsNode(container, range.startContainer) || !containsNode(container, range.endContainer)) {
     return null;
   }
 
-  const selectedText = selection.toString().replace(/\s+/g, " ").trim();
+  const selectedText = range.toString().replace(/\s+/g, " ").trim();
   if (!selectedText) return null;
 
   const selectedVerseNumbers = Array.from(container.querySelectorAll<HTMLElement>("[data-verse]"))
@@ -121,6 +151,139 @@ function getChapterSelectionState(
     selectedWord: extractFirstWord(selectedText),
     anchorRect: toAnchorRect(range),
   };
+}
+
+function getChapterSelectionState(
+  selection: Selection | null,
+  container: HTMLOListElement | null,
+  verses: Verse[]
+): ChapterSelectionState | null {
+  if (!selection || !container || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  return buildSelectionStateFromRange(selection.getRangeAt(0), container, verses);
+}
+
+function samePoint(a: RangePoint, b: RangePoint) {
+  return a.node === b.node && a.offset === b.offset;
+}
+
+function comparePoints(a: RangePoint, b: RangePoint): number {
+  if (samePoint(a, b)) return 0;
+  const range = document.createRange();
+  range.setStart(a.node, a.offset);
+  range.setEnd(b.node, b.offset);
+  return range.collapsed ? 1 : -1;
+}
+
+function getCaretPointFromViewport(x: number, y: number): RangePoint | null {
+  const doc = document as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+
+  if (typeof doc.caretPositionFromPoint === "function") {
+    const pos = doc.caretPositionFromPoint(x, y);
+    if (pos?.offsetNode) {
+      return { node: pos.offsetNode, offset: pos.offset };
+    }
+  }
+
+  if (typeof doc.caretRangeFromPoint === "function") {
+    const range = doc.caretRangeFromPoint(x, y);
+    if (range?.startContainer) {
+      return { node: range.startContainer, offset: range.startOffset };
+    }
+  }
+
+  return null;
+}
+
+function normalizeTextPoint(point: RangePoint): RangePoint | null {
+  if (point.node.nodeType === Node.TEXT_NODE) return point;
+
+  const baseNode = point.node;
+  const childNodes = baseNode.childNodes;
+  const forward = childNodes[Math.min(point.offset, childNodes.length - 1)] ?? null;
+  const backward = childNodes[Math.max(0, point.offset - 1)] ?? null;
+  const startNode = forward ?? backward;
+  if (!startNode) return null;
+
+  const walker = document.createTreeWalker(startNode, NodeFilter.SHOW_TEXT);
+  const textNode = walker.nextNode() as Text | null;
+  if (!textNode) return null;
+  return { node: textNode, offset: 0 };
+}
+
+function getWordSelectionFromPoint(x: number, y: number, container: HTMLOListElement | null): WordSelection | null {
+  if (!container) return null;
+  const target = document.elementFromPoint(x, y) as HTMLElement | null;
+  if (!target || !target.closest("[data-verse-selectable='true']") || !container.contains(target)) {
+    return null;
+  }
+
+  const rawPoint = getCaretPointFromViewport(x, y);
+  const point = rawPoint ? normalizeTextPoint(rawPoint) : null;
+  if (!point || point.node.nodeType !== Node.TEXT_NODE) return null;
+
+  const textNode = point.node as Text;
+  const text = textNode.data;
+  if (!text.trim()) return null;
+
+  const isWordChar = (value: string) => /[A-Za-z0-9'\-]/.test(value);
+  let index = Math.max(0, Math.min(point.offset, text.length));
+  if (index >= text.length) index = text.length - 1;
+
+  if (!isWordChar(text.charAt(index))) {
+    if (index > 0 && isWordChar(text.charAt(index - 1))) {
+      index -= 1;
+    } else if (index + 1 < text.length && isWordChar(text.charAt(index + 1))) {
+      index += 1;
+    } else {
+      return null;
+    }
+  }
+
+  let start = index;
+  let end = index;
+  while (start > 0 && isWordChar(text.charAt(start - 1))) start -= 1;
+  while (end + 1 < text.length && isWordChar(text.charAt(end + 1))) end += 1;
+
+  return {
+    start: { node: textNode, offset: start },
+    end: { node: textNode, offset: end + 1 },
+  };
+}
+
+function createRangeFromWordSelection(anchor: WordSelection, current: WordSelection): Range {
+  const start = comparePoints(anchor.start, current.start) <= 0 ? anchor.start : current.start;
+  const end = comparePoints(anchor.end, current.end) >= 0 ? anchor.end : current.end;
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  return range;
+}
+
+function normalizeWordRange(anchor: WordSelection, current: WordSelection): WordRange {
+  return comparePoints(anchor.start, current.start) <= 0
+    ? { startWord: anchor, endWord: current }
+    : { startWord: current, endWord: anchor };
+}
+
+function createRangeFromWordRange(wordRange: WordRange): Range {
+  const range = document.createRange();
+  range.setStart(wordRange.startWord.start.node, wordRange.startWord.start.offset);
+  range.setEnd(wordRange.endWord.end.node, wordRange.endWord.end.offset);
+  return range;
+}
+
+function getHighlightRectsFromRange(range: Range): HighlightRect[] {
+  return Array.from(range.getClientRects())
+    .filter((rect) => rect.width > 0 || rect.height > 0)
+    .map((rect) => ({
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    }));
 }
 
 const ANNOTATION_HIGHLIGHT_OPTIONS: Array<{
@@ -333,6 +496,14 @@ export default function ChapterReader({
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressTouchIdRef = useRef<number | null>(null);
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const lastEdgeScrollAtRef = useRef(0);
+  const customSelectionAnchorRef = useRef<WordSelection | null>(null);
+  const customSelectionActiveRef = useRef(false);
+  const customWordRangeRef = useRef<WordRange | null>(null);
+  const activeHandleRef = useRef<HandleKind | null>(null);
   const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string; verse: number; index: number }>(null);
   const [dragDx, setDragDx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -350,6 +521,9 @@ export default function ChapterReader({
   const [annotationText, setAnnotationText] = useState("");
   const [annotationHighlightColor, setAnnotationHighlightColor] = useState<AnnotationHighlightColor>("none");
   const [annotationSaving, setAnnotationSaving] = useState(false);
+  const [customMobileSelectionEnabled, setCustomMobileSelectionEnabled] = useState(false);
+  const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
+  const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = !!openFootnote || openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
@@ -439,6 +613,153 @@ export default function ChapterReader({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    function syncCustomMobileSelectionMode() {
+      const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+      setCustomMobileSelectionEnabled(isCoarsePointer && window.innerWidth < 1024);
+    }
+
+    syncCustomMobileSelectionMode();
+    window.addEventListener("resize", syncCustomMobileSelectionMode);
+    return () => {
+      window.removeEventListener("resize", syncCustomMobileSelectionMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isCustomTouchSelecting) return;
+
+    function findTrackedTouch(event: TouchEvent) {
+      if (longPressTouchIdRef.current == null) return event.changedTouches[0] ?? null;
+      return Array.from(event.changedTouches).find((touch) => touch.identifier === longPressTouchIdRef.current) ?? null;
+    }
+
+    function onWindowTouchMove(event: TouchEvent) {
+      if (!activeHandleRef.current && !customSelectionActiveRef.current) return;
+      const touch = findTrackedTouch(event);
+      if (!touch) return;
+      event.preventDefault();
+      updateCustomSelectionFromTouch(touch);
+    }
+
+    function finishCustomTouchInteraction() {
+      if (activeHandleRef.current) {
+        activeHandleRef.current = null;
+      }
+      if (customSelectionActiveRef.current) {
+        customSelectionActiveRef.current = false;
+      }
+      setIsCustomTouchSelecting(false);
+      longPressTouchIdRef.current = null;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      touchStartTime.current = null;
+    }
+
+    window.addEventListener("touchmove", onWindowTouchMove, { passive: false });
+    window.addEventListener("touchend", finishCustomTouchInteraction);
+    window.addEventListener("touchcancel", finishCustomTouchInteraction);
+
+    return () => {
+      window.removeEventListener("touchmove", onWindowTouchMove);
+      window.removeEventListener("touchend", finishCustomTouchInteraction);
+      window.removeEventListener("touchcancel", finishCustomTouchInteraction);
+    };
+  }, [isCustomTouchSelecting]);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  function triggerSelectionHaptic(pattern: number | number[] = 8) {
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    navigator.vibrate(pattern);
+  }
+
+  function maybeAutoScrollDuringSelection(clientY: number) {
+    if (typeof window === "undefined") return;
+    const now = Date.now();
+    if (now - lastEdgeScrollAtRef.current < 16) return;
+
+    const viewportHeight = window.innerHeight;
+    const maxScrollTop = Math.max(0, document.documentElement.scrollHeight - viewportHeight);
+    const currentScrollTop = window.scrollY;
+
+    if (clientY <= MOBILE_SELECTION_EDGE_SCROLL_ZONE && currentScrollTop > 0) {
+      window.scrollBy({ top: -MOBILE_SELECTION_EDGE_SCROLL_STEP, behavior: "auto" });
+      lastEdgeScrollAtRef.current = now;
+      return;
+    }
+
+    if (clientY >= viewportHeight - MOBILE_SELECTION_EDGE_SCROLL_ZONE && currentScrollTop < maxScrollTop) {
+      window.scrollBy({ top: MOBILE_SELECTION_EDGE_SCROLL_STEP, behavior: "auto" });
+      lastEdgeScrollAtRef.current = now;
+    }
+  }
+
+  function applyCustomWordRange(nextWordRange: WordRange, options?: { haptic?: boolean }) {
+    const range = createRangeFromWordRange(nextWordRange);
+    const nextState = buildSelectionStateFromRange(range, verseListRef.current, verses);
+    if (!nextState) return false;
+
+    const prevWordRange = customWordRangeRef.current;
+    customWordRangeRef.current = nextWordRange;
+    setSelectionState(nextState);
+    setCustomSelectionRects(getHighlightRectsFromRange(range));
+
+    const changed =
+      !prevWordRange ||
+      !samePoint(prevWordRange.startWord.start, nextWordRange.startWord.start) ||
+      !samePoint(prevWordRange.endWord.end, nextWordRange.endWord.end);
+    if (changed && options?.haptic) {
+      triggerSelectionHaptic();
+    }
+    return true;
+  }
+
+  function updateCustomSelectionFromTouch(activeTouch: { clientX: number; clientY: number } | null) {
+    if (!activeTouch) return;
+
+    if (activeHandleRef.current) {
+      if (!customWordRangeRef.current) return;
+      maybeAutoScrollDuringSelection(activeTouch.clientY);
+      const currentWord = getWordSelectionFromPoint(activeTouch.clientX, activeTouch.clientY, verseListRef.current);
+      if (!currentWord) return;
+
+      if (activeHandleRef.current === "start") {
+        if (comparePoints(currentWord.start, customWordRangeRef.current.endWord.start) > 0) return;
+        void applyCustomWordRange(
+          { startWord: currentWord, endWord: customWordRangeRef.current.endWord },
+          { haptic: true }
+        );
+      } else {
+        if (comparePoints(currentWord.start, customWordRangeRef.current.startWord.start) < 0) return;
+        void applyCustomWordRange(
+          { startWord: customWordRangeRef.current.startWord, endWord: currentWord },
+          { haptic: true }
+        );
+      }
+      return;
+    }
+
+    if (customSelectionActiveRef.current) {
+      const anchor = customSelectionAnchorRef.current;
+      if (!anchor) return;
+      maybeAutoScrollDuringSelection(activeTouch.clientY);
+      const currentWord = getWordSelectionFromPoint(activeTouch.clientX, activeTouch.clientY, verseListRef.current);
+      if (!currentWord) return;
+      const nextWordRange = normalizeWordRange(anchor, currentWord);
+      void applyCustomWordRange(nextWordRange, { haptic: true });
+    }
+  }
+
+  useEffect(() => {
     // Show one-time hint on first use
     try {
       if (!hasSeenTapToActionsHint()) {
@@ -452,13 +773,17 @@ export default function ChapterReader({
   const selectedText = selectionState?.selectedText ?? "";
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
-  const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting;
+  const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting && !isCustomTouchSelecting;
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
   const showInsightAction = hasSelection && !canExploreWord;
   const hasSidebarPanelOpen = !!openFootnote || openCitations || (openExplorer && canExploreWord);
   const selectedBounds = selectionState?.selectedBounds ?? null;
   const selectionPopoverAnchor = selectionState?.anchorRect ?? null;
+  const selectionCoversWholeVerses = useMemo(() => {
+    if (!selectedVerses.length || !selectedText) return false;
+    return normalizeSelectionText(selectedVerses.map((verse) => verse.text).join(" ")) === normalizeSelectionText(selectedText);
+  }, [selectedText, selectedVerses]);
   const hasActiveNote = lessonMode ? true : !!activeDraftId;
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
@@ -579,6 +904,7 @@ export default function ChapterReader({
     if (typeof document === "undefined") return;
 
     function syncSelectionState() {
+      if (customMobileSelectionEnabled || customSelectionActiveRef.current) return;
       const nextSelectionState = getChapterSelectionState(window.getSelection?.() ?? null, verseListRef.current, verses);
       setSelectionState((prev) => {
         if (
@@ -612,7 +938,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [showTapHint, verses]);
+  }, [customMobileSelectionEnabled, showTapHint, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -634,9 +960,21 @@ export default function ChapterReader({
     if (!hasSelection || overlayOpen) return;
 
     function onPointerDown(event: PointerEvent) {
+      if (isCustomTouchSelecting || activeHandleRef.current || customSelectionActiveRef.current) return;
       const target = event.target as HTMLElement | null;
       if (!target) return;
       if (target.closest("[data-selection-popover='true']")) return;
+      if (target.closest("[data-selection-handle='true']")) return;
+      if (target.closest("[data-verse-selectable='true']")) return;
+      clearSelection();
+    }
+
+    function onTouchStartOutside(event: TouchEvent) {
+      if (isCustomTouchSelecting || activeHandleRef.current || customSelectionActiveRef.current) return;
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-selection-popover='true']")) return;
+      if (target.closest("[data-selection-handle='true']")) return;
       if (target.closest("[data-verse-selectable='true']")) return;
       clearSelection();
     }
@@ -653,17 +991,19 @@ export default function ChapterReader({
     }
 
     document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("touchstart", onTouchStartOutside, true);
     window.addEventListener("keydown", onEscape);
     window.addEventListener("scroll", onScrollDismiss, { passive: true });
     window.addEventListener("resize", onScrollDismiss, { passive: true });
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("touchstart", onTouchStartOutside, true);
       window.removeEventListener("keydown", onEscape);
       window.removeEventListener("scroll", onScrollDismiss);
       window.removeEventListener("resize", onScrollDismiss);
     };
-  }, [hasSelection, overlayOpen]);
+  }, [hasSelection, isCustomTouchSelecting, overlayOpen]);
 
   useEffect(() => {
     function syncTopState() {
@@ -833,9 +1173,65 @@ export default function ChapterReader({
     touchStartX.current = t.clientX;
     touchStartY.current = t.clientY;
     touchStartTime.current = Date.now();
+
+    if (!customMobileSelectionEnabled || e.touches.length !== 1) return;
+    const target = e.target as HTMLElement | null;
+    if (!target?.closest("[data-verse-selectable='true']")) return;
+    if (target.closest("[data-selection-handle='true']")) return;
+    if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+    }
+
+    longPressTouchIdRef.current = t.identifier;
+    longPressOriginRef.current = { x: t.clientX, y: t.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      const wordSelection = getWordSelectionFromPoint(t.clientX, t.clientY, verseListRef.current);
+      if (!wordSelection) return;
+      const nextWordRange = normalizeWordRange(wordSelection, wordSelection);
+
+      customSelectionAnchorRef.current = wordSelection;
+      customWordRangeRef.current = null;
+      customSelectionActiveRef.current = true;
+      setIsCustomTouchSelecting(true);
+      if (!applyCustomWordRange(nextWordRange, { haptic: false })) return;
+      if (showTapHint) {
+        try { setSeenTapToActionsHint(); } catch {}
+        setShowTapHint(false);
+      }
+      setOpenCitations(false);
+      setOpenExplorer(false);
+      window.getSelection?.()?.removeAllRanges();
+      triggerSelectionHaptic(10);
+      touchStartX.current = null;
+      touchStartY.current = null;
+      touchStartTime.current = null;
+    }, 360);
   }
 
   function onTouchMove(e: React.TouchEvent) {
+    const activeTouch = longPressTouchIdRef.current == null
+      ? e.changedTouches[0]
+      : Array.from(e.changedTouches).find((touch) => touch.identifier === longPressTouchIdRef.current) ?? e.changedTouches[0];
+
+    if (activeHandleRef.current || customSelectionActiveRef.current) {
+      e.preventDefault();
+      updateCustomSelectionFromTouch(activeTouch);
+      return;
+    }
+
+    if (customMobileSelectionEnabled && longPressTimerRef.current !== null && longPressOriginRef.current && activeTouch) {
+      const dx = activeTouch.clientX - longPressOriginRef.current.x;
+      const dy = activeTouch.clientY - longPressOriginRef.current.y;
+      if (Math.hypot(dx, dy) > 10) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+        longPressOriginRef.current = null;
+        longPressTouchIdRef.current = null;
+      }
+    }
+
     if (touchStartX.current == null || touchStartY.current == null) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStartX.current;
@@ -854,6 +1250,33 @@ export default function ChapterReader({
   }
 
   function onTouchEnd(e: React.TouchEvent) {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressOriginRef.current = null;
+
+    if (activeHandleRef.current) {
+      activeHandleRef.current = null;
+      setIsCustomTouchSelecting(false);
+      longPressTouchIdRef.current = null;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      touchStartTime.current = null;
+      return;
+    }
+
+    if (customSelectionActiveRef.current) {
+      setIsCustomTouchSelecting(false);
+      customSelectionActiveRef.current = false;
+      longPressTouchIdRef.current = null;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      touchStartTime.current = null;
+      return;
+    }
+
+    longPressTouchIdRef.current = null;
     if (touchStartX.current == null || touchStartY.current == null || touchStartTime.current == null) return;
     const t = e.changedTouches[0];
     const dx = (t.clientX - touchStartX.current);
@@ -903,11 +1326,25 @@ export default function ChapterReader({
   const progress = Math.min(1, Math.max(0, Math.abs(translateX) / (typeof window !== "undefined" ? Math.max(120, Math.floor(window.innerWidth * 0.92)) : 120)));
   const overlayOpacity = progress * 0.9; // fade-in intensity
   const transition = animTargetX !== null ? "transform 240ms ease-out" : isDragging ? "none" : undefined;
+  const startHandleRect = customSelectionRects[0] ?? null;
+  const endHandleRect = customSelectionRects[customSelectionRects.length - 1] ?? null;
 
   function clearSelection() {
     if (typeof window !== "undefined") {
       window.getSelection?.()?.removeAllRanges();
     }
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressTouchIdRef.current = null;
+    longPressOriginRef.current = null;
+    customSelectionAnchorRef.current = null;
+    customSelectionActiveRef.current = false;
+    customWordRangeRef.current = null;
+    activeHandleRef.current = null;
+    setIsCustomTouchSelecting(false);
+    setCustomSelectionRects([]);
     setSelectionState(null);
   }
 
@@ -993,6 +1430,11 @@ export default function ChapterReader({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      style={
+        customMobileSelectionEnabled && isCustomTouchSelecting
+          ? ({ touchAction: "none" } as CSSProperties)
+          : undefined
+      }
     >
       {/* Preview overlay behind the sliding content */}
       {isDragging || animTargetX !== null ? (
@@ -1144,6 +1586,11 @@ export default function ChapterReader({
 
           <ol
             ref={verseListRef}
+            onContextMenu={(event) => {
+              if (customMobileSelectionEnabled) {
+                event.preventDefault();
+              }
+            }}
             onPointerDown={(event) => {
               const target = event.target as HTMLElement | null;
               if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
@@ -1186,8 +1633,21 @@ export default function ChapterReader({
                   }`}
                 >
                   <div
-                    className="w-full text-left select-text selection:bg-amber-200/70 selection:text-foreground dark:selection:bg-amber-300/35"
+                    className={`w-full text-left ${
+                      customMobileSelectionEnabled
+                        ? "select-none"
+                        : "select-text selection:bg-amber-200/70 selection:text-foreground dark:selection:bg-amber-300/35"
+                    }`}
                     data-verse-selectable="true"
+                    style={
+                      customMobileSelectionEnabled
+                        ? ({
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
+                            WebkitTouchCallout: "none",
+                          } as CSSProperties)
+                        : undefined
+                    }
                   >
                     <span className="mr-2 select-none text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
                     {verseComparisons.length === 0 ? (
@@ -1249,6 +1709,73 @@ export default function ChapterReader({
           </div>
         </div>
       </div>
+
+      {customMobileSelectionEnabled && customSelectionRects.length > 0 && !selectionCoversWholeVerses ? (
+        <div className="pointer-events-none fixed inset-0 z-30">
+          {customSelectionRects.map((rect, index) => (
+            <div
+              key={`custom-selection-rect-${index}`}
+              className="absolute rounded-sm bg-amber-300/45 dark:bg-amber-400/25"
+              style={{
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+              }}
+            />
+          ))}
+          {startHandleRect ? (
+            <button
+              type="button"
+              aria-label="Adjust selection start"
+              data-selection-handle="true"
+              className="pointer-events-auto absolute h-8 w-8 -translate-x-1/2 bg-transparent"
+              style={{
+                left: startHandleRect.left,
+                top: startHandleRect.top + startHandleRect.height - 3,
+                touchAction: "none",
+              }}
+              onTouchStart={(event) => {
+                const touch = event.changedTouches[0];
+                activeHandleRef.current = "start";
+                longPressTouchIdRef.current = touch.identifier;
+      setIsCustomTouchSelecting(true);
+      triggerSelectionHaptic(10);
+      lastEdgeScrollAtRef.current = 0;
+      event.preventDefault();
+    }}
+            >
+              <span className="pointer-events-none absolute left-1/2 top-0 h-5 w-[2px] -translate-x-1/2 rounded-full bg-amber-600/90 dark:bg-amber-300/90" />
+              <span className="pointer-events-none absolute left-1/2 top-4 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-white/80 bg-amber-500 shadow-[0_2px_8px_rgba(0,0,0,0.18)] dark:border-black/20 dark:bg-amber-300" />
+            </button>
+          ) : null}
+          {endHandleRect ? (
+            <button
+              type="button"
+              aria-label="Adjust selection end"
+              data-selection-handle="true"
+              className="pointer-events-auto absolute h-8 w-8 -translate-x-1/2 bg-transparent"
+              style={{
+                left: endHandleRect.left + endHandleRect.width,
+                top: endHandleRect.top + endHandleRect.height - 3,
+                touchAction: "none",
+              }}
+              onTouchStart={(event) => {
+                const touch = event.changedTouches[0];
+                activeHandleRef.current = "end";
+                longPressTouchIdRef.current = touch.identifier;
+      setIsCustomTouchSelecting(true);
+      triggerSelectionHaptic(10);
+      lastEdgeScrollAtRef.current = 0;
+      event.preventDefault();
+    }}
+            >
+              <span className="pointer-events-none absolute left-1/2 top-0 h-5 w-[2px] -translate-x-1/2 rounded-full bg-amber-600/90 dark:bg-amber-300/90" />
+              <span className="pointer-events-none absolute left-1/2 top-4 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-white/80 bg-amber-500 shadow-[0_2px_8px_rgba(0,0,0,0.18)] dark:border-black/20 dark:bg-amber-300" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {openExplorer && canExploreWord ? (
         <div className="lg:hidden">

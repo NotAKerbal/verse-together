@@ -1,15 +1,28 @@
 import {
   ensureBrowserScriptureStorage,
   getBrowserScriptureStorageStatus,
+  resolveBrowserScriptureReference,
   searchBrowserScriptures,
   type ScriptureStorageStatus,
 } from "@/lib/browserScriptureStorage";
+import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
+import { getScriptureVolumeLabel } from "@/lib/scriptureVolumes";
 
-const MAX_RESULTS = 40;
+const MAX_REFERENCE_RESULTS = 8;
+const MAX_VERSE_RESULTS = 40;
 
 export type SearchStoreStatus = "idle" | "loading" | "ready" | "error";
 
-export type LocalScriptureSearchResult = {
+export type LocalScriptureReferenceResult = {
+  id: string;
+  label: string;
+  href: string;
+  volumeTitle: string;
+  chapterNumber: number;
+  verseNumber?: number;
+};
+
+export type LocalScriptureVerseResult = {
   id: string;
   reference: string;
   shortReference: string;
@@ -19,6 +32,11 @@ export type LocalScriptureSearchResult = {
   volumeTitle: string;
   chapterNumber: number;
   verseNumber: number;
+};
+
+export type LocalScriptureSearchResults = {
+  referenceResults: LocalScriptureReferenceResult[];
+  verseResults: LocalScriptureVerseResult[];
 };
 
 let loadPromise: Promise<ScriptureStorageStatus> | null = null;
@@ -34,6 +52,23 @@ function normalizeText(value: string): string {
 
 function splitTerms(query: string): string[] {
   return normalizeText(query).split(/\s+/).filter(Boolean);
+}
+
+function queryLooksLikeReference(query: string): boolean {
+  return /\d/.test(query);
+}
+
+function buildReferenceResults(query: string): LocalScriptureReferenceResult[] {
+  if (!queryLooksLikeReference(query)) return [];
+
+  return getQuickNavSuggestions(query, MAX_REFERENCE_RESULTS).map((suggestion) => ({
+    id: suggestion.key,
+    label: suggestion.label,
+    href: suggestion.href,
+    volumeTitle: getScriptureVolumeLabel(suggestion.volume),
+    chapterNumber: suggestion.chapter,
+    verseNumber: suggestion.verse,
+  }));
 }
 
 function createSnippet(text: string, query: string): string {
@@ -89,24 +124,42 @@ export async function loadLocalScriptureStore(): Promise<SearchStoreStatus> {
   return toSearchStoreStatus(status);
 }
 
-export async function searchLocalScriptures(query: string): Promise<LocalScriptureSearchResult[]> {
+export async function searchLocalScriptures(query: string): Promise<LocalScriptureSearchResults> {
   const trimmed = query.trim();
-  if (!trimmed) return [];
+  if (!trimmed) {
+    return {
+      referenceResults: [],
+      verseResults: [],
+    };
+  }
 
   const terms = splitTerms(trimmed);
-  if (terms.length === 0) return [];
+  if (terms.length === 0) {
+    return {
+      referenceResults: [],
+      verseResults: [],
+    };
+  }
 
-  const matches = await searchBrowserScriptures(trimmed, { limit: MAX_RESULTS });
+  const referenceResults = buildReferenceResults(trimmed);
+  const verseMatches = queryLooksLikeReference(trimmed)
+    ? await resolveBrowserScriptureReference(trimmed, { limit: MAX_VERSE_RESULTS })
+    : [];
+  const fallbackVerseMatches =
+    verseMatches.length > 0 ? verseMatches : await searchBrowserScriptures(trimmed, { limit: MAX_VERSE_RESULTS });
 
-  return matches.map((record) => ({
-    id: `${record.volume}:${record.book}:${record.chapter}:${record.verse}`,
-    reference: record.reference,
-    shortReference: record.reference,
-    text: record.text,
-    snippet: createSnippet(record.text, trimmed),
-    href: `/browse/${record.volume}/${record.book}/${record.chapter}#v-${record.verse}`,
-    volumeTitle: record.volumeTitle,
-    chapterNumber: record.chapter,
-    verseNumber: record.verse,
-  }));
+  return {
+    referenceResults,
+    verseResults: fallbackVerseMatches.map((record) => ({
+      id: `${record.volume}:${record.book}:${record.chapter}:${record.verse}`,
+      reference: record.reference,
+      shortReference: record.reference,
+      text: record.text,
+      snippet: createSnippet(record.text, trimmed),
+      href: `/browse/${record.volume}/${record.book}/${record.chapter}#v-${record.verse}`,
+      volumeTitle: record.volumeTitle,
+      chapterNumber: record.chapter,
+      verseNumber: record.verse,
+    })),
+  };
 }
