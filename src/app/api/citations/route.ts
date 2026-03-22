@@ -15,21 +15,18 @@ type ScriptureResource = {
   verseEnd: number | null;
 };
 
-function parseAdminIds(): string[] {
-  return (process.env.ADMIN_CLERK_IDS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
-function isAdmin(userId: string | null): boolean {
+async function isAdmin(userId: string | null): Promise<boolean> {
   if (!userId) return false;
-  return parseAdminIds().includes(userId);
+  try {
+    return await convexQuery<boolean>("users:isAdmin", { clerkId: userId });
+  } catch {
+    return false;
+  }
 }
 
 export async function GET(req: NextRequest) {
   const authState = await auth();
-  const canManageResources = isAdmin(authState.userId);
+  const canManageResources = await isAdmin(authState.userId);
   const { searchParams } = new URL(req.url);
   const volume = (searchParams.get("volume") || "").toLowerCase();
   const book = (searchParams.get("book") || "").toLowerCase();
@@ -99,7 +96,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const authState = await auth();
   const userId = authState.userId;
-  if (!isAdmin(userId)) {
+  if (!(await isAdmin(userId))) {
     return NextResponse.json({ error: "Only admins can add resources" }, { status: 403 });
   }
 

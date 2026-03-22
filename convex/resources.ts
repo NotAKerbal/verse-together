@@ -2,13 +2,9 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireClerkId } from "./utils";
 
-function isAdminClerkId(clerkId: string): boolean {
-  const raw = process.env.ADMIN_CLERK_IDS ?? "";
-  const ids = raw
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return ids.includes(clerkId);
+async function isAdminUser(ctx: any, clerkId: string): Promise<boolean> {
+  const user = await ctx.db.query("users").withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId)).unique();
+  return user?.isAdmin === true;
 }
 
 export const listForSelection = query({
@@ -62,7 +58,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
-    if (!isAdminClerkId(clerkId)) {
+    if (!(await isAdminUser(ctx, clerkId))) {
       throw new Error("Only admins can add resources");
     }
 
