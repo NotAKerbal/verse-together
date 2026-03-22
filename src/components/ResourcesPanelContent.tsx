@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type CitationTalk = {
@@ -28,6 +28,7 @@ type ScriptureResource = {
 };
 
 type ResourceTab = "citations" | "curated";
+type SelectionMode = "chapters" | "verses";
 type ParsedCoverage = {
   chapterStart: number;
   chapterEnd: number;
@@ -102,9 +103,81 @@ export default function ResourcesPanelContent({
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
   const [coverage, setCoverage] = useState(`${chapter}:${verseStart}${verseStart === verseEnd ? "" : `-${chapter}:${verseEnd}`}`);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("verses");
+  const [browserChapter, setBrowserChapter] = useState(chapter);
+  const [verseCounts, setVerseCounts] = useState<number[] | null>(null);
+  const [selectedChapters, setSelectedChapters] = useState<number[]>([chapter]);
+  const [selectedVerseKeys, setSelectedVerseKeys] = useState<string[]>(
+    Array.from({ length: verseEnd - verseStart + 1 }, (_, index) => `${chapter}:${verseStart + index}`)
+  );
 
   const tabCounts: Record<ResourceTab, number> = { citations: talks.length, curated: resources.length };
   const sortedResources = useMemo(() => [...resources], [resources]);
+  const maxChapter = verseCounts?.length ?? chapter;
+  const versesInBrowserChapter = verseCounts?.[browserChapter - 1] ?? 0;
+
+  const interactiveCoverage = useMemo(() => {
+    if (selectionMode === "chapters") {
+      if (selectedChapters.length === 0) return "";
+      const sorted = [...selectedChapters].sort((a, b) => a - b);
+      return sorted[0] === sorted[sorted.length - 1] ? String(sorted[0]) : `${sorted[0]}-${sorted[sorted.length - 1]}`;
+    }
+    if (selectedVerseKeys.length === 0) return "";
+    const sorted = [...selectedVerseKeys]
+      .map((key) => {
+        const [chapterPart, versePart] = key.split(":");
+        return { chapter: Number(chapterPart), verse: Number(versePart) };
+      })
+      .sort((a, b) => (a.chapter === b.chapter ? a.verse - b.verse : a.chapter - b.chapter));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    if (!first || !last) return "";
+    if (first.chapter === last.chapter && first.verse === last.verse) return `${first.chapter}:${first.verse}`;
+    return `${first.chapter}:${first.verse}-${last.chapter}:${last.verse}`;
+  }, [selectedChapters, selectedVerseKeys, selectionMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVerseCounts() {
+      try {
+        const res = await fetch(`/api/tools/quick-nav?volume=${encodeURIComponent(volume)}&book=${encodeURIComponent(book)}`, { cache: "force-cache" });
+        if (!res.ok) return;
+        const payload = (await res.json()) as { verseCounts?: number[] };
+        if (!cancelled && Array.isArray(payload.verseCounts) && payload.verseCounts.length > 0) {
+          setVerseCounts(payload.verseCounts);
+        }
+      } catch {
+        // Best effort helper only.
+      }
+    }
+    void loadVerseCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [volume, book]);
+
+  useEffect(() => {
+    if (!verseCounts?.length) return;
+    setBrowserChapter((prev) => Math.min(Math.max(prev, 1), verseCounts.length));
+    setSelectedChapters((prev) => prev.filter((value) => value >= 1 && value <= verseCounts.length));
+    setSelectedVerseKeys((prev) =>
+      prev.filter((value) => {
+        const [chapterPart, versePart] = value.split(":");
+        const chapterNumber = Number(chapterPart);
+        const verseNumber = Number(versePart);
+        return chapterNumber >= 1 && chapterNumber <= verseCounts.length && verseNumber >= 1 && verseNumber <= (verseCounts[chapterNumber - 1] ?? 0);
+      })
+    );
+  }, [verseCounts]);
+
+  function toggleChapterSelection(targetChapter: number) {
+    setSelectedChapters((prev) => (prev.includes(targetChapter) ? prev.filter((value) => value !== targetChapter) : [...prev, targetChapter]));
+  }
+
+  function toggleVerseSelection(targetChapter: number, targetVerse: number) {
+    const key = `${targetChapter}:${targetVerse}`;
+    setSelectedVerseKeys((prev) => (prev.includes(key) ? prev.filter((value) => value !== key) : [...prev, key]));
+  }
 
   async function handleCreate() {
     setFormError(null);
@@ -237,6 +310,95 @@ export default function ResourcesPanelContent({
           <p className="text-xs text-foreground/65">
             Use formats: <code>3</code>, <code>3-5</code>, <code>3:16</code>, <code>3:16-4:2</code>.
           </p>
+          <div className="space-y-2 rounded-md border border-black/10 dark:border-white/15 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-foreground/65">Interactive selector</div>
+              <div className="segmented-control" role="tablist" aria-label="Selection mode">
+                {([
+                  ["verses", "Verses"],
+                  ["chapters", "Chapters"],
+                ] as Array<[SelectionMode, string]>).map(([modeKey, label]) => (
+                  <button
+                    key={modeKey}
+                    type="button"
+                    className="segmented-control-button"
+                    data-active={selectionMode === modeKey ? "true" : "false"}
+                    onClick={() => setSelectionMode(modeKey)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border border-black/10 dark:border-white/15"
+                onClick={() => setBrowserChapter((value) => Math.max(1, value - 1))}
+              >
+                Prev
+              </button>
+              <div>Chapter {browserChapter}</div>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border border-black/10 dark:border-white/15"
+                onClick={() => setBrowserChapter((value) => Math.min(maxChapter, value + 1))}
+              >
+                Next
+              </button>
+            </div>
+
+            {selectionMode === "chapters" ? (
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                {Array.from({ length: maxChapter }, (_, index) => index + 1).map((chapterNumber) => {
+                  const active = selectedChapters.includes(chapterNumber);
+                  return (
+                    <button
+                      key={`chapter-${chapterNumber}`}
+                      type="button"
+                      onClick={() => toggleChapterSelection(chapterNumber)}
+                      className="px-2 py-1 text-xs rounded-md border border-black/10 dark:border-white/15"
+                      data-active={active ? "true" : "false"}
+                    >
+                      {chapterNumber}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                {Array.from({ length: versesInBrowserChapter }, (_, index) => index + 1).map((verseNumber) => {
+                  const key = `${browserChapter}:${verseNumber}`;
+                  const active = selectedVerseKeys.includes(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleVerseSelection(browserChapter, verseNumber)}
+                      className="px-2 py-1 text-xs rounded-md border border-black/10 dark:border-white/15"
+                      data-active={active ? "true" : "false"}
+                    >
+                      {verseNumber}
+                    </button>
+                  );
+                })}
+                {versesInBrowserChapter === 0 ? <span className="text-xs text-foreground/60">Loading verses…</span> : null}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-foreground/65">Selection preview: {interactiveCoverage || "None selected"}</span>
+              <button
+                type="button"
+                onClick={() => setCoverage(interactiveCoverage)}
+                disabled={!interactiveCoverage}
+                className="px-2 py-1 rounded-md border border-black/10 dark:border-white/15"
+              >
+                Use selection
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
