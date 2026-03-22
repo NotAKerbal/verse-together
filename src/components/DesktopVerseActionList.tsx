@@ -5,6 +5,7 @@ type Props = {
   visible: boolean;
   hasSelection: boolean;
   hasActiveInsight: boolean;
+  showExplore?: boolean;
   showTranslations?: boolean;
   showPinToggle?: boolean;
   pinned?: boolean;
@@ -15,7 +16,7 @@ type Props = {
   onLoadInsights: () => void;
   onAnnotation: () => void;
   onCitations: () => void;
-  onExplore: () => void;
+  onExplore?: () => void;
   onTranslations?: () => void;
   onTogglePin?: () => void;
   targetLabel?: string;
@@ -25,6 +26,7 @@ export default function DesktopVerseActionList({
   visible,
   hasSelection,
   hasActiveInsight,
+  showExplore = false,
   showTranslations = false,
   showPinToggle = false,
   pinned = false,
@@ -95,9 +97,11 @@ export default function DesktopVerseActionList({
         <button onMouseDown={preserveSelection} onClick={onCitations} disabled={!hasSelection} className={baseBtn}>
           Citations
         </button>
-        <button onMouseDown={preserveSelection} onClick={onExplore} disabled={!hasSelection} className={baseBtn}>
-          Explore
-        </button>
+        {showExplore && onExplore ? (
+          <button onMouseDown={preserveSelection} onClick={onExplore} disabled={!hasSelection} className={baseBtn}>
+            Explore
+          </button>
+        ) : null}
         <button onMouseDown={preserveSelection} onClick={onAnnotation} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
           Add annotation
         </button>

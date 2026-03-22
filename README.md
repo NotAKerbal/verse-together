@@ -20,6 +20,31 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Scripture dump artifact
+
+The repo keeps a single retained scripture source artifact at `public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db`. That database is the regeneration input for the checked-in app-native dataset under `public/scripture-data/`.
+
+Generate the app-native scripture manifest and compact per-volume payloads with:
+
+```bash
+npm run generate:scriptures
+```
+
+This writes:
+
+- `public/scripture-data/manifest.json`
+- `public/scripture-data/*.json`
+
+The local runtime and browser IndexedDB installer both read from those generated `public/scripture-data` files.
+
+If you need a one-off export from the SQLite source artifact, derive it from the same database:
+
+```bash
+sqlite3 public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db -header -csv "SELECT * FROM scriptures;" > public/lds-scriptures-2020.12.08/csv/lds-scriptures.csv
+```
+
+Use the same SQLite database as the source of truth for any other ad hoc export format.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -1,33 +1,6 @@
 import Link from "next/link";
 import SelectionHeader from "@/components/SelectionHeader";
-
-const commonVolumes = [
-  {
-    id: "bookofmormon",
-    label: "Book of Mormon",
-    shortLabel: "15 books",
-  },
-  {
-    id: "oldtestament",
-    label: "Old Testament",
-    shortLabel: "39 books",
-  },
-  {
-    id: "newtestament",
-    label: "New Testament",
-    shortLabel: "27 books",
-  },
-  {
-    id: "dnc",
-    label: "Doctrine & Covenants",
-    shortLabel: "138 sections",
-  },
-  {
-    id: "pearl",
-    label: "Pearl of Great Price",
-    shortLabel: "5 books",
-  },
-] as const;
+import { getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
 
 function BrowseIcon() {
   return (
@@ -73,6 +46,7 @@ export default async function BrowsePage({
   const query = await searchParams;
   const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
   const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
+  const commonVolumes = await getLocalLdsVolumes();
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-5 sm:gap-6">

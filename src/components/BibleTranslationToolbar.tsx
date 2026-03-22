@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import TranslationCatalogPicker from "@/components/TranslationCatalogPicker";
 import { BIBLE_TRANSLATION_OPTIONS, type BibleTranslationId } from "@/lib/bibleCanon";
 import {
@@ -14,7 +15,6 @@ type Props = {
   volume: string;
   book: string;
   chapter: string;
-  translation: BibleTranslationId;
   compare: BibleTranslationId[];
 };
 
@@ -30,46 +30,40 @@ const TRANSLATION_DESCRIPTIONS: Record<string, string> = {
   "oeb-cw": "A contemporary translation tuned for Commonwealth English style. Helpful for modern reading with UK/AU-friendly word choices.",
 };
 
-function buildQuery(translation: BibleTranslationId, compareIds: BibleTranslationId[]): string {
+function buildQuery(compareIds: BibleTranslationId[]): string {
   const params = new URLSearchParams();
-  params.set("translation", translation);
-  compareIds.forEach((id) => {
-    if (id !== translation) params.append("compare", id);
-  });
+  if (compareIds[0]) params.set("translation", compareIds[0]);
+  compareIds.slice(1).forEach((id) => params.append("compare", id));
   return params.toString();
-}
-
-function getSelectedIds(
-  translation: BibleTranslationId,
-  compare: BibleTranslationId[],
-  availableIds: BibleTranslationId[]
-): BibleTranslationId[] {
-  const set = new Set<BibleTranslationId>([translation, ...compare.filter((id) => id !== translation)]);
-  return availableIds.filter((id) => set.has(id));
 }
 
 function buildToggleQuery(
   targetId: BibleTranslationId,
-  translation: BibleTranslationId,
   compare: BibleTranslationId[],
-  availableIds: BibleTranslationId[]
+  availableIds: BibleTranslationId[],
+  searchParams: URLSearchParams
 ): string {
-  const selectedSet = new Set<BibleTranslationId>(getSelectedIds(translation, compare, availableIds));
+  const selectedSet = new Set<BibleTranslationId>(compare);
   if (selectedSet.has(targetId)) {
-    if (selectedSet.size > 1) selectedSet.delete(targetId);
+    selectedSet.delete(targetId);
   } else {
     selectedSet.add(targetId);
   }
   const orderedSelected = availableIds.filter((id) => selectedSet.has(id));
-  const nextTranslation = orderedSelected.includes(translation)
-    ? translation
-    : orderedSelected[0] ?? translation;
-  const nextCompare = orderedSelected.filter((id) => id !== nextTranslation);
-  return buildQuery(nextTranslation, nextCompare);
+  const params = new URLSearchParams(searchParams.toString());
+  params.delete("translation");
+  params.delete("compare");
+  const overlayQuery = buildQuery(orderedSelected);
+  if (overlayQuery) {
+    const overlayParams = new URLSearchParams(overlayQuery);
+    overlayParams.forEach((value, key) => params.append(key, value));
+  }
+  return params.toString();
 }
 
-export default function BibleTranslationToolbar({ volume, book, chapter, translation, compare }: Props) {
+export default function BibleTranslationToolbar({ volume, book, chapter, compare }: Props) {
   const [favorites, setFavorites] = useState<FavoriteTranslation[]>([]);
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     setFavorites(readFavoriteTranslations());
@@ -86,7 +80,7 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
         return true;
       })
       .map((item) => ({ id: item.id, label: item.label, source: "favorite" as const }));
-    const querySelected = [translation, ...compare];
+    const querySelected = compare;
     const selectedFromQuery = querySelected
       .filter((id) => {
         const key = id.toLowerCase();
@@ -96,10 +90,10 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
       })
       .map((id) => ({ id, label: id, source: "favorite" as const }));
     return [...builtIn, ...custom, ...selectedFromQuery];
-  }, [compare, favorites, translation]);
+  }, [compare, favorites]);
 
   const optionIds = useMemo(() => options.map((item) => item.id), [options]);
-  const selectedIds = new Set(getSelectedIds(translation, compare, optionIds));
+  const selectedIds = new Set(compare);
   const selectedCount = selectedIds.size;
 
   function addFavorite(next: FavoriteTranslation) {
@@ -113,9 +107,9 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
 
   return (
     <div className="space-y-3">
-      <div className="text-xs text-foreground/70">Bible source: bible-api.com + bible.helloao.org</div>
-      <div className="text-xs text-foreground/70">Select one or more translations to compare wording differences.</div>
-      <div className="text-xs text-foreground/60">{selectedCount} selected</div>
+      <div className="text-xs text-foreground/70">Default Bible text comes from the local LDS standard works dataset.</div>
+      <div className="text-xs text-foreground/70">Select optional translation overlays to compare wording differences.</div>
+      <div className="text-xs text-foreground/60">{selectedCount} overlay{selectedCount === 1 ? "" : "s"} selected</div>
       <TranslationCatalogPicker
         existingIds={optionIds}
         onAddFavorite={(item) => addFavorite(item)}
@@ -127,7 +121,10 @@ export default function BibleTranslationToolbar({ volume, book, chapter, transla
           return (
             <Link
               key={option.id}
-              href={`/browse/${volume}/${book}/${chapter}?${buildToggleQuery(option.id, translation, compare, optionIds)}`}
+              href={`/browse/${volume}/${book}/${chapter}${(() => {
+                const query = buildToggleQuery(option.id, compare, optionIds, new URLSearchParams(searchParams.toString()));
+                return query ? `?${query}` : "";
+              })()}`}
               className={`rounded-md border p-2 transition-colors ${
                 isSelected
                   ? "border-sky-600/40 bg-sky-500/10"

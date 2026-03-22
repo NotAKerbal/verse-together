@@ -107,9 +107,9 @@ export function getBibleBookBySlug(slug: string): BibleBook | undefined {
 }
 
 export function normalizeBibleTranslationId(value: string | null | undefined): BibleTranslationId {
-  if (!value) return "kjv";
+  if (!value) return "lds";
   const trimmed = value.trim();
-  if (!trimmed) return "kjv";
+  if (!trimmed) return "lds";
   const normalized = trimmed.toLowerCase();
   if (isBibleTranslationId(normalized)) return normalized;
   return trimmed;

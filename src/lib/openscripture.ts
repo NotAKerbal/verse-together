@@ -21,6 +21,7 @@ export type ChapterResponse = {
 
 type ChapterFetchOptions = {
   translation?: string;
+  baseUrl?: string;
 };
 
 const BASE_URL = "https://openscriptureapi.org/api/scriptures/v1/lds/en";
@@ -78,6 +79,51 @@ export type BookResponse = {
     summary?: string;
   }>;
 };
+
+function resolveInternalUrl(pathname: string, baseUrl?: string): string | null {
+  if (typeof window !== "undefined") return pathname;
+  if (!baseUrl) return null;
+  return new URL(pathname, baseUrl).toString();
+}
+
+async function fetchLocalLdsChapter(
+  volumeId: string,
+  bookId: string,
+  chapterNumber: number,
+  baseUrl?: string
+): Promise<ChapterResponse | null> {
+  if (typeof window !== "undefined") {
+    try {
+      const { readBrowserScriptureChapter } = await import("@/lib/browserScriptureStorage");
+      const local = await readBrowserScriptureChapter(volumeId, bookId, chapterNumber);
+      if (local) {
+        return {
+          reference: local.reference,
+          translation: isBibleVolume(volumeId) ? "lds" : undefined,
+          verses: local.verses,
+        };
+      }
+    } catch {
+      // Fall back to API fetch below.
+    }
+  }
+
+  const url = resolveInternalUrl(
+    `/api/scriptures/lds-chapter?volume=${encodeURIComponent(volumeId)}&book=${encodeURIComponent(bookId)}&chapter=${encodeURIComponent(String(chapterNumber))}`,
+    baseUrl
+  );
+  if (!url) return null;
+
+  try {
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) return null;
+    const raw = (await res.json()) as ChapterResponse;
+    if (!Array.isArray(raw?.verses) || raw.verses.length === 0) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
 
 export async function fetchBook(volumeId: string, bookId: string): Promise<BookResponse> {
   try {
@@ -208,15 +254,28 @@ async function fetchChapterUncached(
     throw new Error("Invalid chapter");
   }
   const preferredTranslation = normalizeBibleTranslationId(options?.translation);
-  const shouldUseBibleApiPrimary = isBibleVolume(volumeId) && options?.translation;
-  if (shouldUseBibleApiPrimary) {
+  const localLdsChapter = await fetchLocalLdsChapter(volumeId, bookId, chapter, options?.baseUrl);
+  const wantsBibleOverlay =
+    isBibleVolume(volumeId) &&
+    !!options?.translation &&
+    preferredTranslation.trim().toLowerCase() !== "lds";
+
+  if (localLdsChapter && !wantsBibleOverlay) {
+    return localLdsChapter;
+  }
+
+  if (wantsBibleOverlay) {
     if (isBibleTranslationId(preferredTranslation)) {
-      const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
-      return {
-        reference: bibleData.reference,
-        translation: bibleData.translationId,
-        verses: bibleData.verses,
-      };
+      try {
+        const bibleData = await fetchBibleApiChapter(bookId, chapter, preferredTranslation);
+        return {
+          reference: bibleData.reference,
+          translation: bibleData.translationId,
+          verses: bibleData.verses,
+        };
+      } catch {
+        if (localLdsChapter) return localLdsChapter;
+      }
     }
     try {
       const helloaoData = await fetchHelloaoChapter(bookId, chapter, preferredTranslation);
@@ -226,6 +285,7 @@ async function fetchChapterUncached(
         verses: helloaoData.verses,
       };
     } catch {
+      if (localLdsChapter) return localLdsChapter;
       const bibleData = await fetchBibleApiChapter(bookId, chapter, "kjv");
       return {
         reference: bibleData.reference,
@@ -241,6 +301,9 @@ async function fetchChapterUncached(
     const raw: unknown = await res.json();
     const chapterData = buildChapterResponse(raw, bookId, chapterNumber);
     if (chapterData.verses.length > 0) {
+      if (isBibleVolume(volumeId)) {
+        return { ...chapterData, translation: "lds" };
+      }
       return chapterData;
     }
   }
@@ -262,6 +325,7 @@ async function fetchChapterUncached(
         verses: helloaoData.verses,
       };
     } catch {
+      if (localLdsChapter) return localLdsChapter;
       const bibleData = await fetchBibleApiChapter(bookId, chapter, "kjv");
       return {
         reference: bibleData.reference,
@@ -303,22 +367,32 @@ async function fetchWithCache(
   if (!Number.isFinite(chapter) || chapter <= 0) {
     throw new Error("Invalid chapter");
   }
-  const translation = isBibleVolume(volumeId) ? normalizeBibleTranslationId(options?.translation) : undefined;
-  const cacheVolume = translation ? `${volumeId}::${translation}` : volumeId;
+  const requestedTranslation =
+    isBibleVolume(volumeId) && options?.translation
+      ? normalizeBibleTranslationId(options.translation)
+      : undefined;
+  const cacheVolume =
+    requestedTranslation && requestedTranslation.toLowerCase() !== "lds"
+      ? `${volumeId}::${requestedTranslation}`
+      : volumeId;
   try {
     const cached = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
       "cache:getChapterBundle",
       { volume: cacheVolume, book: bookId, chapter }
     );
     if (cached?.reference && Array.isArray(cached.verses) && cached.verses.length > 0) {
-      return { reference: cached.reference, verses: cached.verses, translation };
+      return { reference: cached.reference, verses: cached.verses, translation: requestedTranslation };
     }
   } catch {
     // Fallback to upstream fetch below.
   }
 
   const fresh = await fetchChapterUncached(volumeId, bookId, chapter, options);
-  void cacheVerseChapter(cacheVolume, bookId, chapter, fresh);
+  const actualCacheVolume =
+    requestedTranslation && fresh.translation?.toLowerCase() === requestedTranslation.toLowerCase()
+      ? cacheVolume
+      : volumeId;
+  void cacheVerseChapter(actualCacheVolume, bookId, chapter, fresh);
 
   if (prefetchNeighbors) {
     const neighborChapters = [chapter - 1, chapter + 1].filter((n) => n > 0);
@@ -331,7 +405,11 @@ async function fetchWithCache(
           );
           if (!hit) {
             const neighborData = await fetchChapterUncached(volumeId, bookId, neighbor, options);
-            await cacheVerseChapter(cacheVolume, bookId, neighbor, neighborData);
+            const neighborCacheVolume =
+              requestedTranslation && neighborData.translation?.toLowerCase() === requestedTranslation.toLowerCase()
+                ? cacheVolume
+                : volumeId;
+            await cacheVerseChapter(neighborCacheVolume, bookId, neighbor, neighborData);
           }
         } catch {
           // Prefetch is best-effort.

@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
+    "generate:scriptures": "node scripts/generateScriptureData.mjs",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy"
   },

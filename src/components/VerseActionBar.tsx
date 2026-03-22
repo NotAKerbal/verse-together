@@ -15,18 +15,17 @@ export type VerseActionAnchorRect = {
 type Props = {
   visible: boolean;
   anchorRect: VerseActionAnchorRect | null;
-  referenceLabel: string | null;
   hasSelection: boolean;
   hasActiveInsight: boolean;
+  showInsightAction?: boolean;
+  showExplore?: boolean;
   showTranslations?: boolean;
   actionsEnabled?: boolean;
-  onClear: () => void;
   onInsight: () => void;
   onNewInsight: () => void;
-  onLoadInsights: () => void;
   onAnnotation: () => void;
   onCitations: () => void;
-  onExplore: () => void;
+  onExplore?: () => void;
   onTranslations?: () => void;
   targetLabel?: string;
 };
@@ -120,15 +119,14 @@ function ActionIcon({ kind }: { kind: "insight" | "folder" | "note" | "book" | "
 export default function VerseActionBar({
   visible,
   anchorRect,
-  referenceLabel,
   hasSelection,
   hasActiveInsight,
+  showInsightAction = true,
+  showExplore = false,
   showTranslations = false,
   actionsEnabled = true,
-  onClear,
   onInsight,
   onNewInsight,
-  onLoadInsights,
   onAnnotation,
   onCitations,
   onExplore,
@@ -167,7 +165,7 @@ export default function VerseActionBar({
       left,
       placement: canFitAbove ? "top" : "bottom",
     });
-  }, [visible, hasSelection, anchorRect, referenceLabel, hasActiveInsight, showTranslations]);
+  }, [visible, hasSelection, anchorRect, hasActiveInsight, showTranslations]);
 
   if (!visible || !hasSelection || !anchorRect) return null;
 
@@ -191,32 +189,20 @@ export default function VerseActionBar({
       aria-label="Selection actions"
     >
       <div className="relative overflow-hidden rounded-[1.4rem] border border-black/10 bg-background/92 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:border-white/15">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1 px-2 py-1">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-foreground/45">
-              Selection
-            </div>
-            <div className="truncate text-sm font-medium text-foreground/80">
-              {referenceLabel ?? "Selected verses"}
-            </div>
-          </div>
-          {hasActiveInsight ? (
-            <button type="button" onMouseDown={preserveSelection} onClick={onInsight} disabled={!actionsEnabled} className={primaryActionClass}>
-              <ActionIcon kind="insight" />
-              <span>Add to {targetLabel}</span>
-            </button>
-          ) : (
-            <button type="button" onMouseDown={preserveSelection} onClick={onNewInsight} disabled={!actionsEnabled} className={primaryActionClass}>
-              <ActionIcon kind="insight" />
-              <span>New {targetLabel}</span>
-            </button>
-          )}
-          <button type="button" onMouseDown={preserveSelection} onClick={onLoadInsights} disabled={!actionsEnabled} className={baseActionClass}>
-            <ActionIcon kind="folder" />
-            <span>{targetLabel === "Lesson" ? "Open Lesson" : "Open Notes"}</span>
-          </button>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          {showInsightAction ? (
+            hasActiveInsight ? (
+              <button type="button" onMouseDown={preserveSelection} onClick={onInsight} disabled={!actionsEnabled} className={primaryActionClass}>
+                <ActionIcon kind="insight" />
+                <span>Add to {targetLabel}</span>
+              </button>
+            ) : (
+              <button type="button" onMouseDown={preserveSelection} onClick={onNewInsight} disabled={!actionsEnabled} className={primaryActionClass}>
+                <ActionIcon kind="insight" />
+                <span>New {targetLabel}</span>
+              </button>
+            )
+          ) : null}
           <button type="button" onMouseDown={preserveSelection} onClick={onAnnotation} disabled={!actionsEnabled} className={baseActionClass}>
             <ActionIcon kind="note" />
             <span>Annotate</span>
@@ -225,20 +211,18 @@ export default function VerseActionBar({
             <ActionIcon kind="book" />
             <span>Citations</span>
           </button>
-          <button type="button" onMouseDown={preserveSelection} onClick={onExplore} className={baseActionClass}>
-            <ActionIcon kind="spark" />
-            <span>Explore</span>
-          </button>
+          {showExplore && onExplore ? (
+            <button type="button" onMouseDown={preserveSelection} onClick={onExplore} className={baseActionClass}>
+              <ActionIcon kind="spark" />
+              <span>Explore</span>
+            </button>
+          ) : null}
           {showTranslations && onTranslations ? (
             <button type="button" onMouseDown={preserveSelection} onClick={onTranslations} className={baseActionClass}>
               <ActionIcon kind="translate" />
               <span>Translations</span>
             </button>
           ) : null}
-          <button type="button" onMouseDown={preserveSelection} onClick={onClear} className={baseActionClass}>
-            <ActionIcon kind="close" />
-            <span>Dismiss</span>
-          </button>
         </div>
         <div
           aria-hidden="true"

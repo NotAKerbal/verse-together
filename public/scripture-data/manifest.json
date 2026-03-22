@@ -1,0 +1,64 @@
+{
+  "version": "lds-scriptures-2020.12.08",
+  "generatedFrom": "public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db",
+  "volumes": [
+    {
+      "volume": "oldtestament",
+      "title": "Old Testament",
+      "longTitle": "The Old Testament",
+      "subtitle": null,
+      "shortTitle": "OT",
+      "bundlePath": "/scripture-data/oldtestament.json",
+      "bookCount": 39,
+      "chapterCount": 929,
+      "verseCount": 23145
+    },
+    {
+      "volume": "newtestament",
+      "title": "New Testament",
+      "longTitle": "The New Testament",
+      "subtitle": "Of our Lord and Saviour Jesus Christ",
+      "shortTitle": "NT",
+      "bundlePath": "/scripture-data/newtestament.json",
+      "bookCount": 27,
+      "chapterCount": 260,
+      "verseCount": 7957
+    },
+    {
+      "volume": "bookofmormon",
+      "title": "Book of Mormon",
+      "longTitle": "The Book of Mormon",
+      "subtitle": "Another Testament of Jesus Christ",
+      "shortTitle": "BoM",
+      "bundlePath": "/scripture-data/bookofmormon.json",
+      "bookCount": 15,
+      "chapterCount": 239,
+      "verseCount": 6604
+    },
+    {
+      "volume": "doctrineandcovenants",
+      "title": "Doctrine and Covenants",
+      "longTitle": "The Doctrine and Covenants",
+      "subtitle": null,
+      "shortTitle": "D&C",
+      "bundlePath": "/scripture-data/doctrineandcovenants.json",
+      "bookCount": 1,
+      "chapterCount": 138,
+      "verseCount": 3654
+    },
+    {
+      "volume": "pearl",
+      "title": "Pearl of Great Price",
+      "longTitle": "The Pearl of Great Price",
+      "subtitle": null,
+      "shortTitle": "PGP",
+      "bundlePath": "/scripture-data/pearl.json",
+      "bookCount": 5,
+      "chapterCount": 16,
+      "verseCount": 635
+    }
+  ],
+  "bookCount": 87,
+  "chapterCount": 1582,
+  "verseCount": 41995
+}

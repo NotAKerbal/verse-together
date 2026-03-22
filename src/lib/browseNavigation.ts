@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { readStorageValue, writeStorageValue } from "@/lib/clientStorage";
 
 const BROWSE_LAST_LOCATION_KEY = "browse:last-location";
 
@@ -16,8 +17,7 @@ export function useBrowseNavHref() {
   const [lastBrowseHref, setLastBrowseHref] = useState("/browse");
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedHref = window.sessionStorage.getItem(BROWSE_LAST_LOCATION_KEY);
+    const storedHref = readStorageValue("session", BROWSE_LAST_LOCATION_KEY);
     if (storedHref) {
       setLastBrowseHref(storedHref);
     }
@@ -29,7 +29,7 @@ export function useBrowseNavHref() {
     const currentHref = buildBrowseLocation(pathname, new URLSearchParams(searchParams.toString()));
     if (currentHref === "/browse") return;
 
-    window.sessionStorage.setItem(BROWSE_LAST_LOCATION_KEY, currentHref);
+    writeStorageValue("session", BROWSE_LAST_LOCATION_KEY, currentHref);
     setLastBrowseHref(currentHref);
   }, [pathname, searchParams]);
 

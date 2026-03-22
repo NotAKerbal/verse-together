@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import SelectionHeader from "@/components/SelectionHeader";
-import { getBibleBookBySlug, isBibleVolume } from "@/lib/bibleCanon";
 import { fetchBook } from "@/lib/openscripture";
+import { getLocalLdsBook } from "@/lib/ldsLocalData.server";
 import {
   getScriptureVolumeLabel,
   normalizeScriptureVolume,
@@ -34,18 +34,7 @@ export default async function BookLanding({
     redirect(`/browse/${volumeSlug}/${book}${lessonSuffix}`);
   }
 
-  const bibleBook = isBibleVolume(canonicalVolume) ? getBibleBookBySlug(book) : undefined;
-  const bookData = bibleBook
-    ? {
-        _id: bibleBook.id,
-        title: bibleBook.label,
-        chapterDelineation: "Chapter",
-        summary: undefined,
-        chapters: Array.from({ length: bibleBook.chapters }, (_, index) => ({
-          _id: `${bibleBook.id}-${index + 1}`,
-        })),
-      }
-    : await fetchBook(canonicalVolume, book);
+  const bookData = (await getLocalLdsBook(canonicalVolume, book)) ?? await fetchBook(canonicalVolume, book);
 
   const chapters = bookData.chapters ?? [];
   const delineation = bookData.chapterDelineation || "Chapter";

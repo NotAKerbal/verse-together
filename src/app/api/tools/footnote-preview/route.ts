@@ -20,6 +20,7 @@ function parseVerses(value: string | null): number[] {
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
   const volume = (url.searchParams.get("volume") || "").trim();
   const book = (url.searchParams.get("book") || "").trim();
   const chapter = parsePositiveInt(url.searchParams.get("chapter"));
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
   try {
     let chapterData;
     try {
-      chapterData = await fetchChapter(volume, book, chapter);
+      chapterData = await fetchChapter(volume, book, chapter, { baseUrl });
     } catch {
       // Fallback mirrors known-working chapter path for edge cases.
       chapterData = await fetchChapterByBook(book, chapter);

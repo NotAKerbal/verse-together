@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
+import { readStorageJson, writeStorageJson } from "@/lib/clientStorage";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 
 type VerseItem = { verse: number; text: string };
@@ -78,18 +79,11 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
       setChapterVerseCounts(inMemory);
       return;
     }
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { expiresAt?: number; verseCounts?: number[] };
-        if ((parsed.expiresAt ?? 0) > Date.now() && Array.isArray(parsed.verseCounts)) {
-          verseLengthMemoryCache.set(key, parsed.verseCounts);
-          setChapterVerseCounts(parsed.verseCounts);
-          return;
-        }
-      }
-    } catch {
-      // Ignore cache parse errors and fetch fresh metadata.
+    const cached = readStorageJson<{ expiresAt?: number; verseCounts?: number[] }>("local", key);
+    if ((cached?.expiresAt ?? 0) > Date.now() && Array.isArray(cached?.verseCounts)) {
+      verseLengthMemoryCache.set(key, cached.verseCounts);
+      setChapterVerseCounts(cached.verseCounts);
+      return;
     }
 
     let cancelled = false;
@@ -105,17 +99,10 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
         if (cancelled) return;
         verseLengthMemoryCache.set(key, payload.verseCounts);
         setChapterVerseCounts(payload.verseCounts);
-        try {
-          window.localStorage.setItem(
-            key,
-            JSON.stringify({
-              expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 14,
-              verseCounts: payload.verseCounts,
-            })
-          );
-        } catch {
-          // Ignore storage failures.
-        }
+        writeStorageJson("local", key, {
+          expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 14,
+          verseCounts: payload.verseCounts,
+        });
       } catch {
         // Best effort cache fill only.
       }

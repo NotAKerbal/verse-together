@@ -1,47 +1,11 @@
 import { redirect } from "next/navigation";
 import VolumeBookBrowser, { type VolumeBookBrowserItem } from "@/components/VolumeBookBrowser";
-import { getBibleBooksForVolume } from "@/lib/bibleCanon";
+import { getLocalLdsBooks } from "@/lib/ldsLocalData.server";
 import {
   getScriptureVolumeLabel,
   normalizeScriptureVolume,
   toScriptureVolumeUrlSlug,
 } from "@/lib/scriptureVolumes";
-
-const volumeToBooks: Record<string, Array<{ id: string; label: string }>> = {
-  bookofmormon: [
-    { id: "1nephi", label: "1 Nephi" },
-    { id: "2nephi", label: "2 Nephi" },
-    { id: "jacob", label: "Jacob" },
-    { id: "enos", label: "Enos" },
-    { id: "jarom", label: "Jarom" },
-    { id: "omni", label: "Omni" },
-    { id: "wordsofmormon", label: "Words of Mormon" },
-    { id: "mosiah", label: "Mosiah" },
-    { id: "alma", label: "Alma" },
-    { id: "helaman", label: "Helaman" },
-    { id: "3nephi", label: "3 Nephi" },
-    { id: "4nephi", label: "4 Nephi" },
-    { id: "mormon", label: "Mormon" },
-    { id: "ether", label: "Ether" },
-    { id: "moroni", label: "Moroni" },
-  ],
-  oldtestament: [
-    ...getBibleBooksForVolume("oldtestament").map((book) => ({ id: book.slug, label: book.label })),
-  ],
-  newtestament: [
-    ...getBibleBooksForVolume("newtestament").map((book) => ({ id: book.slug, label: book.label })),
-  ],
-  doctrineandcovenants: [
-    { id: "doctrineandcovenants", label: "Sections" },
-  ],
-  pearl: [
-    { id: "moses", label: "Moses" },
-    { id: "abraham", label: "Abraham" },
-    { id: "josephsmithmatthew", label: "Joseph Smith—Matthew" },
-    { id: "josephsmithhistory", label: "Joseph Smith—History" },
-    { id: "articlesoffaith", label: "Articles of Faith" },
-  ],
-};
 
 const OLD_TESTAMENT_GROUPS: Array<{ label: string; books: string[] }> = [
   { label: "Law", books: ["genesis", "exodus", "leviticus", "numbers", "deuteronomy"] },
@@ -109,16 +73,14 @@ const NEW_TESTAMENT_GROUPS: Array<{ label: string; books: string[] }> = [
   { label: "Apocalypse", books: ["revelation"] },
 ];
 
-function buildCategorizedBooks(volume: string): VolumeBookBrowserItem[] {
-  const books = volumeToBooks[volume] ?? [];
-  const bibleBooks = getBibleBooksForVolume(volume);
-  const chaptersBySlug = new Map(bibleBooks.map((book) => [book.slug, book.chapters]));
+async function buildCategorizedBooks(volume: string): Promise<VolumeBookBrowserItem[]> {
+  const books = await getLocalLdsBooks(volume);
   const groups =
     volume === "oldtestament"
       ? OLD_TESTAMENT_GROUPS
       : volume === "newtestament"
-      ? NEW_TESTAMENT_GROUPS
-      : [];
+        ? NEW_TESTAMENT_GROUPS
+        : [];
   const categoryBySlug = new Map<string, string>();
   groups.forEach((group) => {
     group.books.forEach((slug) => categoryBySlug.set(slug, group.label));
@@ -127,7 +89,7 @@ function buildCategorizedBooks(volume: string): VolumeBookBrowserItem[] {
   return books.map((book) => ({
     id: book.id,
     label: book.label,
-    chapters: chaptersBySlug.get(book.id),
+    chapters: book.chapters,
     category: categoryBySlug.get(book.id),
   }));
 }
@@ -148,7 +110,7 @@ export default async function VolumePage({
   if (canonicalVolume === "doctrineandcovenants") {
     redirect(`/browse/${volumeSlug}/doctrineandcovenants${lessonSuffix}`);
   }
-  const books = buildCategorizedBooks(canonicalVolume);
+  const books = await buildCategorizedBooks(canonicalVolume);
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
   const browseHref = lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse";
 

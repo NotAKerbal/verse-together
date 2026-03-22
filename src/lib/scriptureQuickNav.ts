@@ -109,7 +109,7 @@ const RESTORATION_BOOKS: QuickNavBook[] = [
     book: "doctrineandcovenants",
     label: "Doctrine and Covenants",
     chapters: 138,
-    abbreviations: ["D&C", "DC", "Doctrine and Covenants"],
+    abbreviations: ["D&C", "DC", "DNC", "Doctrine and Covenants"],
   },
   { volume: "pearl", book: "moses", label: "Moses", chapters: 8, abbreviations: ["Moses"] },
   { volume: "pearl", book: "abraham", label: "Abraham", chapters: 5, abbreviations: ["Abr", "Abraham"] },
@@ -180,14 +180,17 @@ function parseCompactNumberPairs(digits: string): Array<{ chapter: number; verse
   return Array.from(dedup.values());
 }
 
-function parseRemainder(remainder: string): Array<{ chapter: number; verse?: number }> {
+function parseRemainder(remainder: string, maxChapter: number): Array<{ chapter: number; verse?: number }> {
   if (!remainder) return [];
   const clean = remainder.trim();
   const explicit = clean.match(/^(\d{1,3})(?::(\d{1,3}))?$/);
   if (explicit) {
     const chapter = Number(explicit[1]);
     const verse = explicit[2] ? Number(explicit[2]) : undefined;
-    if (chapter > 0) return [{ chapter, verse }];
+    if (chapter > 0) {
+      if (verse !== undefined || clean.length !== 3 || chapter <= maxChapter) return [{ chapter, verse }];
+      return parseCompactNumberPairs(clean);
+    }
   }
   const digits = clean.replace(/[^0-9]/g, "");
   return parseCompactNumberPairs(digits);
@@ -236,7 +239,7 @@ export function getQuickNavSuggestions(query: string, limit = 12): QuickNavSugge
     for (const { book, tokens } of BOOK_TOKENS) {
       const tokenMatches = tokens.some((token) => token.startsWith(typedBookToken));
       if (!tokenMatches) continue;
-      const pairs = parseRemainder(numericTail);
+      const pairs = parseRemainder(numericTail, book.chapters);
       if (pairs.length === 0) continue;
       for (const pair of pairs) {
         if (pair.chapter < 1 || pair.chapter > book.chapters) continue;

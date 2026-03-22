@@ -7,11 +7,10 @@ import { useMutation, useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
-import VerseExplorer from "./VerseExplorer";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
-import VerseExplorerSidebarPanel from "./VerseExplorerSidebarPanel";
 import ScriptureQuickNav from "./ScriptureQuickNav";
 import LessonBrowserPanel from "./LessonBrowserPanel";
+import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
@@ -21,6 +20,7 @@ import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
+import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
@@ -59,6 +59,11 @@ function annotationHighlightClass(color: AnnotationHighlightColor) {
 function extractFirstWord(value: string): string {
   const match = value.match(/[A-Za-z][A-Za-z'\-]*/);
   return match?.[0]?.toLowerCase() ?? "";
+}
+
+function extractSingleSelectedWord(value: string): string {
+  const matches = value.match(/[A-Za-z][A-Za-z'\-]*/g) ?? [];
+  return matches.length === 1 ? matches[0].toLowerCase() : "";
 }
 
 function containsNode(container: HTMLElement, node: Node) {
@@ -147,6 +152,7 @@ function normalizeCompareText(value: string): string {
 
 function formatTranslationShortLabel(translationId: string | undefined): string {
   if (!translationId) return "UNKNOWN";
+  if (translationId.toLowerCase() === "lds") return "LDS";
   return translationId.toUpperCase();
 }
 
@@ -429,6 +435,10 @@ export default function ChapterReader({
   }, [user?.id, getToken]);
 
   useEffect(() => {
+    void ensureBrowserScriptureStorage();
+  }, []);
+
+  useEffect(() => {
     // Show one-time hint on first use
     try {
       if (!hasSeenTapToActionsHint()) {
@@ -443,9 +453,11 @@ export default function ChapterReader({
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
   const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting;
-  const hasSidebarPanelOpen = !!openFootnote || openCitations || openExplorer;
+  const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
+  const canExploreWord = hasSelection && !!singleSelectedWord;
+  const showInsightAction = hasSelection && !canExploreWord;
+  const hasSidebarPanelOpen = !!openFootnote || openCitations || (openExplorer && canExploreWord);
   const selectedBounds = selectionState?.selectedBounds ?? null;
-  const selectedFirstWord = selectionState?.selectedWord ?? "";
   const selectionPopoverAnchor = selectionState?.anchorRect ?? null;
   const hasActiveNote = lessonMode ? true : !!activeDraftId;
   const compareByTranslation = useMemo(() => {
@@ -471,6 +483,7 @@ export default function ChapterReader({
   ];
   const translationNameById = useMemo(() => {
     const next = new Map<string, string>();
+    next.set("lds", "LDS Standard Works");
     BIBLE_TRANSLATION_OPTIONS.forEach((option) => {
       next.set(option.id, option.label);
     });
@@ -962,25 +975,6 @@ export default function ChapterReader({
     openBuilder();
   }
 
-  async function onLoadNotesFromActions() {
-    if (!user) {
-      alert("Please sign in to build notes.");
-      return;
-    }
-    if (lessonMode && lessonId) {
-      if (typeof window !== "undefined" && window.innerWidth < 1024) {
-        router.push(`/lessons/${lessonId}`);
-      } else {
-        setLessonPanelOpen(true);
-      }
-      return;
-    }
-    if (activeDraftId) {
-      await switchDraft(activeDraftId);
-    }
-    openBuilder();
-  }
-
   function onOpenCitations() {
     if (!selectedBounds) return;
     setOpenExplorer(false);
@@ -988,7 +982,7 @@ export default function ChapterReader({
   }
 
   function onOpenExplore() {
-    if (!selectedBounds) return;
+    if (!canExploreWord) return;
     setOpenCitations(false);
     setOpenExplorer(true);
   }
@@ -1048,14 +1042,11 @@ export default function ChapterReader({
               verseEnd={selectedBounds.end}
             />
           ) : null}
-          {openExplorer && hasSelection ? (
-            <VerseExplorerSidebarPanel
-              open={true}
-              onClose={() => setOpenExplorer(false)}
-              verses={selectedVerses}
-              initialWord={selectedFirstWord}
-              selectionText={selectedText}
-              referenceLabel={selectionReferenceLabel}
+          {openExplorer && canExploreWord ? (
+            <WordStudyPanel
+              word={singleSelectedWord}
+              panelId="word-study-panel-desktop"
+              title="Explore Word"
             />
           ) : null}
           {openFootnote ? (
@@ -1259,6 +1250,22 @@ export default function ChapterReader({
         </div>
       </div>
 
+      {openExplorer && canExploreWord ? (
+        <div className="lg:hidden">
+          <div className="fixed inset-0 z-50">
+            <button aria-label="Close" onClick={() => setOpenExplorer(false)} className="absolute inset-0 bg-black/30" />
+            <div className="absolute bottom-0 left-3 right-3 max-h-[80vh] overflow-hidden rounded-t-2xl border-t border-black/10 bg-background p-3 shadow-2xl dark:border-white/15 sm:left-4 sm:right-4 sm:p-4">
+              <div className="mb-1 mx-auto h-1 w-10 rounded-full bg-foreground/20" />
+              <WordStudyPanel
+                word={singleSelectedWord}
+                panelId="word-study-panel-mobile"
+                title="Explore Word"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <ReaderSettings
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -1376,7 +1383,7 @@ export default function ChapterReader({
               <div className="text-sm flex items-start gap-3">
                 <div className="text-lg select-none" aria-hidden>Tip</div>
                 <div className="flex-1">
-                  Select passage text to see note, citation, and exploration actions.
+                  Select passage text to see note, citation, and word study actions.
                 </div>
                 <button
                   onClick={() => {
@@ -1419,37 +1426,20 @@ export default function ChapterReader({
         </div>
       ) : null}
 
-      {openExplorer && hasSelection ? (
-        <div className="lg:hidden">
-          <VerseExplorer
-            open={true}
-            onClose={() => setOpenExplorer(false)}
-            verses={selectedVerses}
-            initialWord={selectedFirstWord}
-            selectionText={selectedText}
-            referenceLabel={selectionReferenceLabel}
-          />
-        </div>
-      ) : null}
-      {/* dictionary and etymology now live inside VerseExplorer */}
-
       <VerseActionBar
         visible={showMobileActionBar}
         anchorRect={selectionPopoverAnchor}
-        referenceLabel={selectionReferenceLabel}
         hasSelection={hasSelection}
         hasActiveInsight={hasActiveNote}
+        showInsightAction={showInsightAction}
+        showExplore={canExploreWord}
         targetLabel={lessonMode ? "Lesson" : "Note"}
         actionsEnabled={!!user}
-        onClear={clearSelection}
         onInsight={() => {
           void onAddToNote();
         }}
         onNewInsight={() => {
           void onNewNoteFromActions();
-        }}
-        onLoadInsights={() => {
-          void onLoadNotesFromActions();
         }}
         onAnnotation={onOpenAnnotation}
         onCitations={onOpenCitations}
