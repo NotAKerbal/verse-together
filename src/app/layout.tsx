@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "../components/Navbar";
 import AppProviders from "../components/AppProviders";
@@ -21,6 +22,14 @@ export const metadata: Metadata = {
   description: "Share verses, bear testimony, and learn together.",
 };
 
+function HeaderFallback() {
+  return <div className="app-header h-[3.5rem] w-full sm:h-[4.5rem]" aria-hidden="true" />;
+}
+
+function MobileNavFallback() {
+  return <div className="h-[5.5rem] sm:hidden" aria-hidden="true" />;
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,9 +48,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AppProviders>
-          <Navbar />
+          <Suspense fallback={<HeaderFallback />}>
+            <Navbar />
+          </Suspense>
           <AppMain>{children}</AppMain>
-          <MobileBottomNav />
+          <Suspense fallback={<MobileNavFallback />}>
+            <MobileBottomNav />
+          </Suspense>
         </AppProviders>
       </body>
     </html>
