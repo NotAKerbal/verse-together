@@ -95,7 +95,7 @@ export default function DesktopVerseActionList({
           </button>
         )}
         <button onMouseDown={preserveSelection} onClick={onCitations} disabled={!hasSelection} className={baseBtn}>
-          Citations
+          Resources
         </button>
         {showExplore && onExplore ? (
           <button onMouseDown={preserveSelection} onClick={onExplore} disabled={!hasSelection} className={baseBtn}>
