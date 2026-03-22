@@ -42,7 +42,6 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
   const [error, setError] = useState<string | null>(null);
   const [talks, setTalks] = useState<CitationTalk[]>([]);
   const [resources, setResources] = useState<ScriptureResource[]>([]);
-  const [canManageResources, setCanManageResources] = useState(false);
 
   const verseSpec = useMemo(() => (verseEnd && verseEnd > verseStart ? `${verseStart}-${verseEnd}` : String(verseStart)), [verseStart, verseEnd]);
 
@@ -56,7 +55,6 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
       const data = (await res.json()) as { talks: CitationTalk[]; resources: ScriptureResource[]; canManageResources?: boolean };
       setTalks(Array.isArray(data?.talks) ? data.talks : []);
       setResources(Array.isArray(data?.resources) ? data.resources : []);
-      setCanManageResources(Boolean(data?.canManageResources));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load resources");
     } finally {
@@ -85,13 +83,6 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
           <ResourcesPanelContent
             talks={talks}
             resources={resources}
-            canManageResources={canManageResources}
-            volume={volume}
-            book={book}
-            chapter={chapter}
-            verseStart={verseStart}
-            verseEnd={verseEnd ?? verseStart}
-            onCreated={() => void load()}
           />
         ) : null}
       </div>
