@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ResourcesPanelContent from "./ResourcesPanelContent";
+import ResourcesManagerSidebar from "./ResourcesManagerSidebar";
 
 type Props = {
   open: boolean;
@@ -89,7 +90,10 @@ export default function CitationsSidebarPanel({ open, onClose, volume, book, cha
         <ResourcesPanelContent
           talks={talks}
           resources={resources}
-          canManageResources={canManageResources}
+        />
+      ) : null}
+      {!loading && !error && canManageResources ? (
+        <ResourcesManagerSidebar
           volume={volume}
           book={book}
           chapter={chapter}
