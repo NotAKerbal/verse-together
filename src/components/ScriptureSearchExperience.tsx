@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition, useDeferredValue } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, useDeferredValue } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   loadLocalScriptureStore,
@@ -116,12 +116,23 @@ function VerseResultCard({ result, query }: { result: LocalScriptureVerseResult;
             </h2>
           </div>
           <div className="rounded-full border px-2.5 py-1 text-xs text-foreground/58">
-            Verse {result.verseNumber}
+            {result.matchCount} hit{result.matchCount === 1 ? "" : "s"}
           </div>
         </div>
-        <p className="mt-3 text-sm leading-7 text-foreground/78">{highlightText(result.snippet, query)}</p>
+        <div className="mt-3 space-y-3">
+          {result.snippets.map((snippet) => (
+            <p key={`${result.id}:${snippet.verseNumber}`} className="text-sm leading-7 text-foreground/78">
+              <span className="mr-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground/48">
+                Verse {snippet.verseNumber}
+              </span>
+              {highlightText(snippet.snippet, query)}
+            </p>
+          ))}
+        </div>
         <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs text-foreground/52">
-          <span>{result.shortReference}</span>
+          <span>
+            Matched verses {result.verseLabel}
+          </span>
           <span className="font-medium text-foreground/68 transition-transform duration-200 group-hover:translate-x-0.5">
             Open chapter
           </span>
@@ -161,6 +172,7 @@ export default function ScriptureSearchExperience() {
   const [isOffline, setIsOffline] = useState(false);
   const [, startNavigationTransition] = useTransition();
   const [isSearching, startSearchTransition] = useTransition();
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -288,10 +300,16 @@ export default function ScriptureSearchExperience() {
             <SearchIcon />
           </div>
           <input
+            ref={inputRef}
             id="scripture-search-input"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                inputRef.current?.blur();
+              }
+            }}
             placeholder="Try faith, Alma 32, mercy, or Joseph Smith"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-foreground/45"
             autoComplete="off"
