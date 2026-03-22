@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ResourcesPanelContent from "./ResourcesPanelContent";
 
@@ -42,6 +43,7 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
   const [error, setError] = useState<string | null>(null);
   const [talks, setTalks] = useState<CitationTalk[]>([]);
   const [resources, setResources] = useState<ScriptureResource[]>([]);
+  const [canManageResources, setCanManageResources] = useState(false);
 
   const verseSpec = useMemo(() => (verseEnd && verseEnd > verseStart ? `${verseStart}-${verseEnd}` : String(verseStart)), [verseStart, verseEnd]);
 
@@ -55,6 +57,7 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
       const data = (await res.json()) as { talks: CitationTalk[]; resources: ScriptureResource[]; canManageResources?: boolean };
       setTalks(Array.isArray(data?.talks) ? data.talks : []);
       setResources(Array.isArray(data?.resources) ? data.resources : []);
+      setCanManageResources(Boolean(data?.canManageResources));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load resources");
     } finally {
@@ -84,6 +87,15 @@ export default function CitationsModal({ open, onClose, volume, book, chapter, v
             talks={talks}
             resources={resources}
           />
+        ) : null}
+        {!loading && !error && canManageResources ? (
+          <Link
+            href={`/resources/manage?volume=${encodeURIComponent(volume)}&book=${encodeURIComponent(book)}&chapter=${encodeURIComponent(String(chapter))}&verses=${encodeURIComponent(verseSpec)}`}
+            className="block w-full rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm text-center"
+            onClick={() => onClose()}
+          >
+            Open Resource Manager
+          </Link>
         ) : null}
       </div>
     </div>
