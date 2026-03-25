@@ -23,7 +23,7 @@ export default function DictionaryEntryCard({
   entry: DictionaryEntry;
   edition: "1828" | "1844" | "1913";
 }) {
-  const { user } = useAuth();
+  const { user, promptSignIn } = useAuth();
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
   const searchParams = useSearchParams();
   const lessonId = searchParams.get("lessonId");
@@ -33,7 +33,7 @@ export default function DictionaryEntryCard({
 
   async function onAddCardToInsight() {
     if (!user) {
-      alert("Please sign in to build notes.");
+      void promptSignIn();
       return;
     }
     if (lessonId) {

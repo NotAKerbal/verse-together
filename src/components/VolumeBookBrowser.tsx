@@ -57,7 +57,7 @@ export default function VolumeBookBrowser({
                 className="group flex h-full flex-col rounded-[1.35rem] border px-4 py-4 transition-all duration-200 surface-card"
                 data-tap
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     {book.category ? (
                       <div className="mb-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-foreground/42">
@@ -68,7 +68,7 @@ export default function VolumeBookBrowser({
                       {book.label}
                     </div>
                   </div>
-                  <div className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-foreground/34 transition-transform duration-200 group-hover:translate-x-0.5">
+                  <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-foreground/34 transition-transform duration-200 group-hover:translate-x-0.5">
                     <ChevronIcon />
                   </div>
                 </div>

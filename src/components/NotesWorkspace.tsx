@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import Link from "next/link";
+import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
@@ -815,9 +816,11 @@ export default function NotesWorkspace({
           <Link href="/browse" className="rounded-md border surface-button px-3 py-2 text-sm">
             Browse scriptures
           </Link>
-          <Link href="/auth" className="rounded-md bg-foreground text-background px-3 py-2 text-sm">
-            Sign in
-          </Link>
+          <SignInButton mode="modal">
+            <button className="rounded-md bg-foreground text-background px-3 py-2 text-sm">
+              Sign in
+            </button>
+          </SignInButton>
         </div>
       </div>
     );

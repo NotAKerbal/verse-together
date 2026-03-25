@@ -14,7 +14,7 @@ type EtymologyItem = {
 };
 
 export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
-  const { user } = useAuth();
+  const { user, promptSignIn } = useAuth();
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
   const searchParams = useSearchParams();
   const lessonId = searchParams.get("lessonId");
@@ -23,7 +23,7 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
 
   async function onAddCardToInsight() {
     if (!user) {
-      alert("Please sign in to build notes.");
+      void promptSignIn();
       return;
     }
     if (lessonId) {

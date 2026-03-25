@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBookOpen, faMoon, faSun } from "@fortawesome/free-solid-svg-icons";
 import { AppTheme, THEME_STORAGE_KEY, applyTheme, isAppTheme, resolveTheme, saveTheme } from "@/lib/theme";
 
 const THEME_CHANGE_EVENT = "vt-theme-change";
@@ -9,10 +11,10 @@ type Props = {
   compact?: boolean;
 };
 
-const options: Array<{ value: AppTheme; label: string }> = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "sepia", label: "Sepia" },
+const options = [
+  { value: "light" as const, label: "Light", icon: faSun },
+  { value: "sepia" as const, label: "Sepia", icon: faBookOpen },
+  { value: "dark" as const, label: "Dark", icon: faMoon },
 ];
 
 export default function ThemeSelect({ compact = false }: Props) {
@@ -62,9 +64,10 @@ export default function ThemeSelect({ compact = false }: Props) {
                 saveTheme(opt.value);
                 window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
               }}
-              className="segmented-control-button w-auto px-3 text-xs font-medium"
+              className="segmented-control-button h-9 w-9 p-0"
             >
-              <span>{opt.label}</span>
+              <FontAwesomeIcon icon={opt.icon} className="h-[18px] w-[18px]" />
+              <span className="sr-only">{opt.label}</span>
             </button>
           );
         })}

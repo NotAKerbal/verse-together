@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import Link from "next/link";
+import { SignInButton } from "@clerk/nextjs";
 import { api } from "../../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
 
@@ -52,9 +52,11 @@ export default function PlansPage() {
       <section className="mx-auto max-w-3xl py-10 space-y-3">
         <h1 className="text-2xl font-semibold">Weekly study plans</h1>
         <p className="text-sm text-foreground/70">Sign in to create a plan and track your study streak.</p>
-        <Link href="/sign-in" className="inline-flex rounded-md border surface-button px-3 py-2 text-sm">
-          Sign in
-        </Link>
+        <SignInButton mode="modal">
+          <button className="inline-flex rounded-md border surface-button px-3 py-2 text-sm">
+            Sign in
+          </button>
+        </SignInButton>
       </section>
     );
   }

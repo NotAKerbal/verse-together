@@ -59,9 +59,9 @@ export default async function BrowsePage({
               className="group flex h-full flex-col rounded-[1.45rem] border px-4 py-4 surface-card"
               data-tap
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3">
                 <div
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border text-foreground/74"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-foreground/74"
                   style={{
                     background: "color-mix(in oklab, var(--surface-card-strong) 88%, transparent)",
                   }}
@@ -69,13 +69,13 @@ export default async function BrowsePage({
                   <BrowseIcon />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="text-[1.15rem] font-semibold leading-6 tracking-[-0.025em] sm:text-[1.22rem]">
                         {volume.label}
                       </div>
                     </div>
-                    <div className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-foreground/42 transition-transform duration-200 group-hover:translate-x-0.5">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-foreground/42 transition-transform duration-200 group-hover:translate-x-0.5">
                       <ChevronIcon />
                     </div>
                   </div>

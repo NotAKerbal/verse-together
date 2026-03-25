@@ -2,19 +2,27 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Install [`portless`](https://github.com/vercel-labs/portless) first:
+
+```bash
+npm install -g portless
+```
+
+Then run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`portless` prints the local hostname it assigns for the app. Open that URL in your browser once the server is ready.
+
+If you need the plain Next.js localhost flow instead, use:
+
+```bash
+npm run dev:local
+```
+
+That fallback uses the default Next.js development server URL, typically `http://localhost:3000`.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

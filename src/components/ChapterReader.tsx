@@ -474,7 +474,7 @@ export default function ChapterReader({
   translationNotices?: string[];
   compareChapters?: CompareChapter[];
 }) {
-  const { user, getToken } = useAuth();
+  const { user, getToken, promptSignIn } = useAuth();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
   const searchParams = useSearchParams();
   const lessonId = searchParams.get("lessonId");
@@ -1350,7 +1350,7 @@ export default function ChapterReader({
 
   async function onAddToNote() {
     if (!user) {
-      alert("Please sign in to build notes or lessons.");
+      void promptSignIn();
       return;
     }
     if (!selectedBounds || !selectionReferenceLabel) return;
@@ -1391,7 +1391,7 @@ export default function ChapterReader({
 
   async function onNewNoteFromActions() {
     if (!user) {
-      alert("Please sign in to build notes.");
+      void promptSignIn();
       return;
     }
     if (lessonMode && lessonId) {
@@ -1834,7 +1834,18 @@ export default function ChapterReader({
               </div>
             ) : null}
             {!user ? (
-              <p className="text-sm text-foreground/70">Sign in to add annotations.</p>
+              <div className="space-y-2">
+                <p className="text-sm text-foreground/70">Sign in to add annotations.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void promptSignIn();
+                  }}
+                  className="rounded-md border surface-button px-3 py-2 text-sm"
+                >
+                  Sign in
+                </button>
+              </div>
             ) : (
               <>
                 <textarea

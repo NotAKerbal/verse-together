@@ -68,11 +68,10 @@
 
 body {
   background:
-    radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 10%, transparent) 1.15px, transparent 0),
     radial-gradient(920px 420px at 8% -18%, color-mix(in oklab, var(--accent-primary) 8%, transparent), transparent 70%),
     radial-gradient(780px 360px at 96% -12%, color-mix(in oklab, var(--accent-tertiary) 12%, transparent), transparent 72%),
     var(--background);
-  background-size: 22px 22px, auto, auto, auto;
+  background-size: auto, auto, auto;
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
   min-height: 100vh;

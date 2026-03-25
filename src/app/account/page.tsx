@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
+import { SignInButton, UserButton } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth";
 
 export default function AccountPage() {
@@ -9,9 +9,15 @@ export default function AccountPage() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-3xl">
-        <p className="text-foreground/80">Please sign in to view your account.</p>
-      </div>
+      <section className="mx-auto max-w-3xl space-y-3 py-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+        <p className="text-foreground/80">Sign in to view your account details and manage your session.</p>
+        <SignInButton mode="modal">
+          <button className="inline-flex rounded-md border surface-button px-3 py-2 text-sm">
+            Sign in
+          </button>
+        </SignInButton>
+      </section>
     );
   }
 

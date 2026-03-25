@@ -61,7 +61,7 @@ export default function Feed() {
 }
 
 function InsightCard({ row }: { row: PublishedInsight }) {
-  const { user } = useAuth();
+  const { user, promptSignIn } = useAuth();
   const { appendScriptureBlock, openBuilder } = useInsightBuilder();
   const byline = useMemo(() => {
     if (row.author_name) return row.author_name;
@@ -99,7 +99,7 @@ function InsightCard({ row }: { row: PublishedInsight }) {
                   onClick={async () => {
                     if (!block.scripture_ref) return;
                     if (!user) {
-                      alert("Please sign in to build insights.");
+                      void promptSignIn();
                       return;
                     }
                     await appendScriptureBlock({

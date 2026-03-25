@@ -12,7 +12,7 @@ type AppUser = {
 export function useAuth() {
   const { user, isLoaded } = useUser();
   const { getToken, isSignedIn } = useClerkAuth();
-  const { signOut } = useClerk();
+  const { openSignIn, signOut } = useClerk();
 
   const appUser: AppUser | null = user
     ? {
@@ -28,8 +28,8 @@ export function useAuth() {
     user: appUser,
     loading: !isLoaded,
     getToken,
+    promptSignIn: () => openSignIn(),
     signOut,
   };
 }
-
 
