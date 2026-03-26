@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import type { ReactNode, RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReaderPreferences } from "@/lib/preferences";
 
 type Props = {
@@ -10,10 +10,12 @@ type Props = {
   prefs: ReaderPreferences;
   onChange: (next: ReaderPreferences) => void;
   translationControls?: ReactNode;
+  anchorRef?: RefObject<HTMLElement | null>;
 };
 
-export default function ReaderSettings({ open, onClose, prefs, onChange, translationControls }: Props) {
+export default function ReaderSettings({ open, onClose, prefs, onChange, translationControls, anchorRef }: Props) {
   const [local, setLocal] = useState<ReaderPreferences>(prefs);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const MIN_SCALE = 0.85;
   const MAX_SCALE = 1.3;
   const pct = Math.max(0, Math.min(1, (local.fontScale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE))) * 100;
@@ -26,17 +28,41 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
     setLocal(prefs);
   }, [prefs]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (panelRef.current?.contains(target)) return;
+      if (anchorRef?.current?.contains(target)) return;
+      onClose();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [anchorRef, onClose, open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/30" />
-      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 w-[min(92vw,24rem)] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2rem)] overflow-hidden rounded-lg border border-black/10 dark:border-white/15 bg-background shadow-xl">
-        <header className="flex items-center justify-between border-b border-black/10 px-3 py-2 dark:border-white/15">
-          <h3 className="text-sm font-semibold">Reader settings</h3>
-          <button onClick={onClose} className="text-sm text-foreground/70 hover:text-foreground">x</button>
-        </header>
-        <div className="max-h-[calc(100vh-7rem)] overflow-y-auto p-3 text-sm space-y-4">
+    <div
+      ref={panelRef}
+      className="absolute right-0 top-full z-40 mt-3 w-[min(92vw,24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-black/10 bg-background shadow-xl dark:border-white/15"
+    >
+        <div className="max-h-[min(70vh,32rem)] overflow-y-auto p-3 text-sm space-y-4">
           <div className="flex items-center justify-between gap-3">
             <span className="text-foreground/80">Footnotes</span>
             <button
@@ -183,12 +209,6 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
             </section>
           ) : null}
         </div>
-        <footer className="border-t border-black/10 px-3 py-2 text-right dark:border-white/15">
-          <button onClick={onClose} className="rounded-md border border-black/10 px-3 py-1.5 text-sm dark:border-white/15">
-            Close
-          </button>
-        </footer>
-      </div>
     </div>
   );
 }

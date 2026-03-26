@@ -15,6 +15,9 @@ type Props = {
   currentBook?: string;
   verses?: VerseItem[];
   className?: string;
+  buttonClassName?: string;
+  panelClassName?: string;
+  align?: "left" | "right";
 };
 
 function isReferenceLike(value: string): boolean {
@@ -33,7 +36,15 @@ function makeCacheKey(volume: string, book: string): string {
   return `quick-nav-meta:${volume}:${book}`;
 }
 
-export default function ScriptureQuickNav({ currentVolume, currentBook, verses = [], className = "" }: Props) {
+export default function ScriptureQuickNav({
+  currentVolume,
+  currentBook,
+  verses = [],
+  className = "",
+  buttonClassName = "",
+  panelClassName = "",
+  align = "left",
+}: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [chapterVerseCounts, setChapterVerseCounts] = useState<number[] | null>(null);
@@ -168,13 +179,17 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
         aria-label="Quick scripture navigation"
         title="Quick scripture navigation"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-card backdrop-blur"
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border surface-card-soft text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 ${buttonClassName}`.trim()}
       >
-        <FontAwesomeIcon icon={faMagnifyingGlass} className="h-3.5 w-3.5" />
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="h-3.5 w-3.5 transition-colors duration-200 ease-out" />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-10 z-40 w-[min(28rem,88vw)] rounded-lg border surface-card p-2 shadow-xl backdrop-blur">
+        <div
+          className={`absolute top-10 z-40 mt-3 w-[min(28rem,88vw)] rounded-lg border border-black/10 bg-background p-2 shadow-xl dark:border-white/15 ${
+            align === "right" ? "right-0" : "left-0"
+          } ${panelClassName}`.trim()}
+        >
           <div className="space-y-2">
             <input
               ref={inputRef}

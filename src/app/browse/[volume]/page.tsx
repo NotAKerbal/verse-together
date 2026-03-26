@@ -91,6 +91,8 @@ async function buildCategorizedBooks(volume: string): Promise<VolumeBookBrowserI
     label: book.label,
     chapters: book.chapters,
     category: categoryBySlug.get(book.id),
+    subtitle: book.subtitle,
+    titleOfficial: book.titleOfficial,
   }));
 }
 

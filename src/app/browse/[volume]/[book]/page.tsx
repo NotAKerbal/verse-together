@@ -4,17 +4,9 @@ import SelectionHeader from "@/components/SelectionHeader";
 import { fetchBook } from "@/lib/openscripture";
 import { getLocalLdsBook } from "@/lib/ldsLocalData.server";
 import {
-  getScriptureVolumeLabel,
   normalizeScriptureVolume,
   toScriptureVolumeUrlSlug,
 } from "@/lib/scriptureVolumes";
-
-function summarize(text?: string, limit = 160): string {
-  if (!text) return "";
-  const collapsed = text.replace(/\s+/g, " ").trim();
-  if (collapsed.length <= limit) return collapsed;
-  return `${collapsed.slice(0, limit - 3).trimEnd()}...`;
-}
 
 export default async function BookLanding({
   params,
@@ -34,26 +26,18 @@ export default async function BookLanding({
 
   const chapters = bookData.chapters ?? [];
   const delineation = bookData.chapterDelineation || "Chapter";
-  const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
   const bookLabel = bookData.title || book.replace(/-/g, " ");
-  const duplicateVolumeBook = bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase();
   const compactNumberGrid = canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants";
-  const summaryPreview = summarize(bookData.summary, 180);
   const volumeHref = `/browse/${volumeSlug}`;
 
   return (
-    <section className="page-shell">
+    <section className="page-shell browse-shell">
       <SelectionHeader
         title={bookLabel}
-        eyebrow={duplicateVolumeBook ? undefined : volumeLabel}
-        meta={`${chapters.length} ${delineation.toLowerCase()}${chapters.length === 1 ? "" : "s"}`}
         backHref={volumeHref}
+        currentVolume={volumeSlug}
+        currentBook={book}
       />
-      {summaryPreview ? (
-        <div className="panel-card-soft rounded-[1.35rem] px-4 py-4 text-sm leading-7 text-[color:var(--foreground-muted)] sm:px-5">
-          {summaryPreview}
-        </div>
-      ) : null}
       <ChapterCards
         volume={volumeSlug}
         book={book}
@@ -83,7 +67,7 @@ function ChapterCards({
       {chapters.length === 0 ? (
         <p className="panel-card rounded-[1.25rem] p-4 text-sm text-[color:var(--foreground-muted)]">No chapter list available.</p>
       ) : (
-        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6">
+        <ul className="browse-chapter-grid" data-compact={compactNumberGrid ? "true" : "false"}>
           {chapters.map((chapter, index) => {
             const chapterNumber = index + 1;
             const referenceLabel = `${delineation} ${chapterNumber}`;
@@ -92,14 +76,14 @@ function ChapterCards({
               <li key={chapter._id}>
                 <Link
                   href={`/browse/${volume}/${book}/${chapterNumber}`}
-                  className="panel-card interactive-card group flex min-h-[5.5rem] flex-col items-center justify-center rounded-[1.1rem] px-3 py-3 text-center sm:min-h-[6rem]"
+                  className="panel-card interactive-card group flex min-h-[5.75rem] flex-col items-center justify-center rounded-[1.15rem] px-3 py-3 text-center sm:min-h-[6.1rem]"
                   aria-label={referenceLabel}
                   data-tap
                 >
                   <div className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
                     {delineation}
                   </div>
-                  <div className="mt-1 text-[1.35rem] font-semibold leading-none tracking-[-0.03em] text-foreground sm:text-[1.55rem]">
+                  <div className="mt-1 text-[1.55rem] font-semibold leading-none tracking-[-0.04em] text-foreground sm:text-[1.75rem]">
                     {chapterNumber}
                   </div>
                 </Link>

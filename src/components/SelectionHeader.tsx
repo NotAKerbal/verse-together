@@ -1,10 +1,11 @@
 import Link from "next/link";
+import ScriptureQuickNav from "./ScriptureQuickNav";
 
 type Props = {
   title: string;
-  meta?: string;
-  eyebrow?: string;
   backHref?: string;
+  currentVolume?: string;
+  currentBook?: string;
 };
 
 function BackIcon() {
@@ -26,38 +27,32 @@ function BackIcon() {
 
 export default function SelectionHeader({
   title,
-  meta,
-  eyebrow,
   backHref,
+  currentVolume,
+  currentBook,
 }: Props) {
   return (
-    <div className="page-hero mobile-menu-clearance">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          {eyebrow ? (
-            <div className="page-eyebrow mb-3">
-              {eyebrow}
-            </div>
+    <div className="browse-hero mobile-menu-clearance">
+      <div className="flex min-h-[2.75rem] items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="browse-header-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[color:var(--foreground-muted)]"
+              aria-label="Go back"
+              data-tap
+            >
+              <BackIcon />
+            </Link>
           ) : null}
-          <div className="flex items-center gap-3">
-            {backHref ? (
-              <Link
-                href={backHref}
-                className="panel-card-soft inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)]"
-                aria-label="Go back"
-                data-tap
-              >
-                <BackIcon />
-              </Link>
-            ) : null}
-            <h1 className="page-title min-w-0">{title}</h1>
-          </div>
+          <h1 className="browse-title min-w-0">{title}</h1>
         </div>
-        {meta ? (
-          <div className="page-meta shrink-0">
-            {meta}
-          </div>
-        ) : null}
+        <ScriptureQuickNav
+          currentVolume={currentVolume}
+          currentBook={currentBook}
+          align="right"
+          buttonClassName="browse-header-button h-9 w-9 rounded-xl"
+        />
       </div>
     </div>
   );

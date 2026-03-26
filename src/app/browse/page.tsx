@@ -45,39 +45,31 @@ export default async function BrowsePage({
   const commonVolumes = await getLocalLdsVolumes();
 
   return (
-    <section className="page-shell">
-      <SelectionHeader title="Volumes" meta={`${commonVolumes.length} collections`} eyebrow="Scripture Library" />
-      <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+    <section className="page-shell browse-shell">
+      <SelectionHeader
+        title="Volumes"
+      />
+      <ul className="browse-grid">
         {commonVolumes.map((volume) => (
           <li key={volume.id}>
             <Link
               href={`/browse/${volume.id}`}
-              className="panel-card interactive-card group flex h-full flex-col rounded-[1.45rem] px-4 py-4"
+              className="panel-card interactive-card group flex h-full items-center gap-4 rounded-[1.45rem] px-4 py-4"
               data-tap
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className="icon-chip inline-flex h-11 w-11 shrink-0 items-center justify-center text-[color:var(--foreground-muted)]"
-                >
-                  <BrowseIcon />
+              <div className="icon-chip inline-flex h-11 w-11 shrink-0 items-center justify-center text-[color:var(--foreground-muted)]">
+                <BrowseIcon />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[1.1rem] font-semibold tracking-[-0.025em] text-foreground">
+                  {volume.label}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[1.15rem] font-semibold leading-6 tracking-[-0.025em] sm:text-[1.22rem]">
-                        {volume.label}
-                      </div>
-                    </div>
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-soft)] transition-transform duration-200 group-hover:translate-x-0.5">
-                      <ChevronIcon />
-                    </div>
-                  </div>
+                <div className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+                  {volume.shortLabel}
                 </div>
               </div>
-
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--surface-border)] pt-3 text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--foreground-soft)]">
-                <span>{volume.shortLabel}</span>
-                <span>Open</span>
+              <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-soft)] transition-transform duration-200 group-hover:translate-x-0.5">
+                <ChevronIcon />
               </div>
             </Link>
           </li>

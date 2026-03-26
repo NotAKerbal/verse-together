@@ -1,5 +1,7 @@
 "use client";
 
+import { faGear } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -523,6 +525,7 @@ export default function ChapterReader({
   const [showTapHint, setShowTapHint] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
+  const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
   const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
 
@@ -1497,26 +1500,36 @@ export default function ChapterReader({
                     </div>
                   </div>
                 </div>
-                <button
-                  aria-label="Reader settings"
-                  title="Reader settings"
-                  onClick={() => setSettingsOpen(true)}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-button shrink-0"
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                <div ref={settingsAnchorRef} className="relative shrink-0">
+                  <button
+                    aria-label="Reader settings"
+                    title="Reader settings"
+                    aria-expanded={settingsOpen}
+                    aria-haspopup="dialog"
+                    onClick={() => setSettingsOpen((open) => !open)}
+                    className="group inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border surface-card-soft text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
                   >
-                    <circle cx="12" cy="12" r="3.2" />
-                    <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1.8 1.8 0 1 1-3.6 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1.8 1.8 0 0 1-2.5-2.5l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1.8 1.8 0 1 1 0-3.6h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1 1 0 0 0 1.1.2h0a1 1 0 0 0 .6-.9V4a1.8 1.8 0 1 1 3.6 0v.2a1 1 0 0 0 .6.9h0a1 1 0 0 0 1.1-.2l.1-.1a1.8 1.8 0 0 1 2.5 2.5l-.1.1a1 1 0 0 0-.2 1.1v0a1 1 0 0 0 .9.6H20a1.8 1.8 0 1 1 0 3.6h-.2a1 1 0 0 0-.9.6v0Z" />
-                  </svg>
-                </button>
+                    <FontAwesomeIcon
+                      icon={faGear}
+                      aria-hidden="true"
+                      className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
+                    />
+                  </button>
+                  <ReaderSettings
+                    open={settingsOpen}
+                    onClose={() => setSettingsOpen(false)}
+                    prefs={prefs}
+                    translationControls={translationControls}
+                    anchorRef={settingsAnchorRef}
+                    onChange={(next) => {
+                      setPrefs(next);
+                      void (async () => {
+                        const token = user ? await getToken({ template: "convex" }) : null;
+                        await savePreferences(user?.id ?? null, next, token);
+                      })();
+                    }}
+                  />
+                </div>
               </div>
               {hasCompareSelections ? (
                 <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
@@ -1754,20 +1767,6 @@ export default function ChapterReader({
           </div>
         </div>
       ) : null}
-
-      <ReaderSettings
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        prefs={prefs}
-        translationControls={translationControls}
-        onChange={(next) => {
-          setPrefs(next);
-          void (async () => {
-            const token = user ? await getToken({ template: "convex" }) : null;
-            await savePreferences(user?.id ?? null, next, token);
-          })();
-        }}
-      />
 
       {annotationEditorVerse ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
