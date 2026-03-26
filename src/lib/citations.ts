@@ -1,4 +1,5 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
+import { BIBLE_BOOKS } from "@/lib/bibleCanon";
 
 export type CitationTalk = {
   id?: string;
@@ -344,32 +345,6 @@ async function refreshChapterListing(bookId: number): Promise<void> {
   }
 }
 
-// Mapping of OpenScripture canonical book keys to BYU Citation book numeric ids.
-// This is a partial map. Extend as needed.
-const BOOK_TO_BYU_ID: Record<string, number> = {
-  // Book of Mormon
-  "1-nephi": 205,
-  "2-nephi": 206,
-  "jacob": 207,
-  "enos": 208,
-  "jarom": 209,
-  "omni": 210,
-  "words-of-mormon": 211,
-  "mosiah": 212,
-  "alma": 213,
-  "helaman": 214,
-  "3-nephi": 215,
-  "4-nephi": 216,
-  "mormon": 217,
-  "ether": 218,
-  "moroni": 219,
-  // New Testament (examples)
-  "matthew": 101,
-  "mark": 102,
-  "luke": 103,
-  "john": 104,
-};
-
 // Normalize various incoming book identifiers (e.g., "1nephi", "1 nephi", "1-nephi",
 // "Words of Mormon", "wordsofmormon") to the canonical hyphenated keys used by
 // BOOK_TO_BYU_ID.
@@ -388,10 +363,47 @@ function normalizeBookKey(book: string): string {
   return s;
 }
 
+function buildBookToByuId(): Record<string, number> {
+  const out: Record<string, number> = {
+    // Book of Mormon
+    "1-nephi": 205,
+    "2-nephi": 206,
+    "jacob": 207,
+    "enos": 208,
+    "jarom": 209,
+    "omni": 210,
+    "words-of-mormon": 211,
+    "mosiah": 212,
+    "alma": 213,
+    "helaman": 214,
+    "3-nephi": 215,
+    "4-nephi": 216,
+    "mormon": 217,
+    "ether": 218,
+    "moroni": 219,
+  };
+
+  let oldTestamentId = 1;
+  let newTestamentId = 101;
+  for (const book of BIBLE_BOOKS) {
+    const key = normalizeBookKey(book.slug);
+    if (book.testament === "old") {
+      out[key] = oldTestamentId;
+      oldTestamentId += 1;
+      continue;
+    }
+    out[key] = newTestamentId;
+    newTestamentId += 1;
+  }
+
+  return out;
+}
+
+const BOOK_TO_BYU_ID = buildBookToByuId();
+
 export function mapBookKeyToByuId(volume: string, book: string): number | null {
   const key = normalizeBookKey(book);
   if (BOOK_TO_BYU_ID[key]) return BOOK_TO_BYU_ID[key];
   return null;
 }
-
 

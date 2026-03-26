@@ -1482,6 +1482,8 @@ export default function ChapterReader({
               chapter={chapter}
               verseStart={selectedBounds.start}
               verseEnd={selectedBounds.end}
+              selectedVerses={selectedVerses.map((verse) => verse.verse)}
+              selectedText={selectedText}
             />
           ) : null}
           {openExplorer && canExploreWord ? (
@@ -1960,6 +1962,8 @@ export default function ChapterReader({
             chapter={chapter}
             verseStart={selectedBounds.start}
             verseEnd={selectedBounds.end}
+            selectedVerses={selectedVerses.map((verse) => verse.verse)}
+            selectedText={selectedText}
           />
         </div>
       ) : null}

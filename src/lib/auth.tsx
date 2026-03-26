@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuth as useClerkAuth, useClerk, useUser } from "@clerk/nextjs";
+import { getIsAdmin } from "@/lib/appData";
 
 type AppUser = {
   id: string;
@@ -33,3 +35,43 @@ export function useAuth() {
   };
 }
 
+export function useAdminStatus() {
+  const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      if (loading) return;
+      if (!user?.id) {
+        setIsAdmin(false);
+        setIsAdminLoading(false);
+        return;
+      }
+      setIsAdminLoading(true);
+      try {
+        const next = await getIsAdmin(user.id);
+        if (!cancelled) {
+          setIsAdmin(next);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsAdmin(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAdminLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user?.id]);
+
+  return { isAdmin, isAdminLoading };
+}

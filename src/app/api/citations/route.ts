@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { fetchVerseCitations, mapBookKeyToByuId } from "@/lib/citations";
+import type { CitationsResponse, CreateScriptureResourceRequest, ScriptureResource } from "@/lib/citationsApi";
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
-
-type ScriptureResource = {
-  id: string;
-  resourceType: "verse" | "verse_range" | "chapter" | "chapter_range";
-  title: string;
-  description: string | null;
-  url: string | null;
-  chapterStart: number;
-  chapterEnd: number;
-  verseStart: number | null;
-  verseEnd: number | null;
-};
+import { getLocalLdsBooks } from "@/lib/ldsLocalData.server";
 
 async function isAdmin(userId: string | null): Promise<boolean> {
   if (!userId) return false;
@@ -25,13 +15,13 @@ async function isAdmin(userId: string | null): Promise<boolean> {
 }
 
 export async function GET(req: NextRequest) {
-  const authState = await auth();
-  const canManageResources = await isAdmin(authState.userId);
   const { searchParams } = new URL(req.url);
   const volume = (searchParams.get("volume") || "").toLowerCase();
   const book = (searchParams.get("book") || "").toLowerCase();
   const chapterStr = searchParams.get("chapter") || "";
   const verses = searchParams.get("verses") || "";
+  const selectedVersesParam = searchParams.get("selectedVerses") || "";
+  const selectedText = searchParams.get("selectedText") || undefined;
 
   if (!book || !chapterStr || !verses) {
     return NextResponse.json({ error: "Missing book, chapter, or verses" }, { status: 400 });
@@ -43,17 +33,36 @@ export async function GET(req: NextRequest) {
   const [startRaw, endRaw] = verses.split("-");
   const verseStart = Number(startRaw);
   const verseEnd = Number(endRaw ?? startRaw);
+  const selectedVerses = selectedVersesParam
+    .split(",")
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
 
   const byuId = mapBookKeyToByuId(volume, book);
   if (!byuId) {
     return NextResponse.json({ error: "Unsupported book mapping" }, { status: 400 });
   }
 
+  const books = await getLocalLdsBooks(volume);
+  const bookOrder = books.findIndex((item) => item.id === book);
+  const selection = {
+    volume,
+    book,
+    chapter,
+    verseStart,
+    verseEnd,
+    verseSpec: verses,
+    selectedVerses:
+      selectedVerses.length > 0 ? selectedVerses : Array.from({ length: verseEnd - verseStart + 1 }, (_, index) => verseStart + index),
+    selectedText,
+  };
+
   let resources: ScriptureResource[] = [];
   try {
     resources = await convexQuery<ScriptureResource[]>("resources:listForSelection", {
       volume,
       book,
+      bookOrder: bookOrder >= 0 ? bookOrder : undefined,
       chapter,
       verseStart,
       verseEnd,
@@ -70,7 +79,8 @@ export async function GET(req: NextRequest) {
     });
     if (cached && Array.isArray(cached.talks) && cached.talks.length > 0) {
       if (cached.stale) void refreshCitation(byuId, chapter, verses);
-      return NextResponse.json({ bookId: byuId, chapter, verseSpec: verses, talks: cached.talks, resources, canManageResources });
+      const response: CitationsResponse = { bookId: byuId, chapter, verseSpec: verses, talks: cached.talks as any, resources, selection };
+      return NextResponse.json(response);
     }
   } catch {
     // continue to live fetch
@@ -90,7 +100,8 @@ export async function GET(req: NextRequest) {
   } catch {
     // Non-fatal cache write failure.
   }
-  return NextResponse.json({ ...data, resources, canManageResources });
+  const response: CitationsResponse = { ...data, resources, selection };
+  return NextResponse.json(response);
 }
 
 export async function POST(req: NextRequest) {
@@ -105,15 +116,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
   }
 
-  const body = (await req.json()) as {
-    volume: string;
-    book: string;
-    resourceType: "verse" | "verse_range" | "chapter" | "chapter_range";
-    title: string;
-    description?: string;
-    url?: string;
-    chapterStart: number;
-    chapterEnd: number;
+  const body = (await req.json()) as CreateScriptureResourceRequest & {
+    book?: string;
+    bookEnd?: string;
+    bookOrder?: number;
+    bookEndOrder?: number;
+    resourceType?: "verse" | "verse_range" | "chapter" | "chapter_range";
+    chapterStart?: number;
+    chapterEnd?: number;
     verseStart?: number;
     verseEnd?: number;
   };
@@ -122,19 +132,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
 
+  const coverages =
+    Array.isArray(body.coverages) && body.coverages.length > 0
+      ? body.coverages
+      : body.book &&
+          body.resourceType &&
+          typeof body.chapterStart === "number" &&
+          typeof body.chapterEnd === "number"
+        ? [
+            {
+              book: body.book,
+              bookEnd: body.bookEnd ?? body.book,
+              bookOrder: body.bookOrder,
+              bookEndOrder: body.bookEndOrder,
+              resourceType: body.resourceType,
+              chapterStart: body.chapterStart,
+              chapterEnd: body.chapterEnd,
+              verseStart: body.verseStart ?? null,
+              verseEnd: body.verseEnd ?? null,
+            },
+          ]
+        : [];
+
+  if (coverages.length === 0) {
+    return NextResponse.json({ error: "At least one coverage is required" }, { status: 400 });
+  }
+
   await convexMutation(
     "resources:create",
     {
       volume: body.volume,
-      book: body.book,
-      resourceType: body.resourceType,
+      coverages: coverages.map((coverage) => ({
+        ...coverage,
+        bookEnd: coverage.bookEnd ?? coverage.book,
+        verseStart: coverage.verseStart ?? undefined,
+        verseEnd: coverage.verseEnd ?? undefined,
+      })),
       title: body.title,
       description: body.description,
       url: body.url,
-      chapterStart: body.chapterStart,
-      chapterEnd: body.chapterEnd,
-      verseStart: body.verseStart,
-      verseEnd: body.verseEnd,
     },
     token
   );

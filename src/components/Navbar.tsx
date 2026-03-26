@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
 import ThemeSelect from "@/components/ThemeSelect";
-import { useAuth } from "@/lib/auth";
+import { useAdminStatus, useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
@@ -31,9 +31,13 @@ function MenuIcon() {
 
 export default function Navbar() {
   const { user, getToken } = useAuth();
+  const { isAdmin } = useAdminStatus();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const browseHref = useBrowseNavHref();
+  const navItems = isAdmin
+    ? [...primaryNavItems, { href: "/resources/manage", label: "Resources" }]
+    : primaryNavItems;
 
   useEffect(() => {
     async function syncCurrentUser() {
@@ -65,7 +69,7 @@ export default function Navbar() {
               <MenuIcon />
             </button>
             <nav className="hidden sm:flex items-center gap-2">
-              {primaryNavItems.map((item) => {
+              {navItems.map((item) => {
                 const active = isPathActive(pathname, item.href);
                 const href = item.href === "/browse" ? browseHref : item.href;
                 return (

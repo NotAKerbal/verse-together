@@ -190,6 +190,10 @@ export async function lookupUserByEmail(email: string): Promise<string | null> {
   return await convexQuery("users:lookupUserByEmail", { email });
 }
 
+export async function getIsAdmin(clerkId: string): Promise<boolean> {
+  return await convexQuery("users:isAdmin", { clerkId });
+}
+
 export async function getPublishedInsightsFeed(): Promise<PublishedInsight[]> {
   return await convexQuery("insights:getPublishedInsightsFeed", {});
 }

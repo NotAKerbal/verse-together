@@ -1,6 +1,18 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const scriptureResourceCoverage = v.object({
+  book: v.string(),
+  bookEnd: v.optional(v.string()),
+  bookOrder: v.optional(v.number()),
+  bookEndOrder: v.optional(v.number()),
+  resourceType: v.union(v.literal("verse"), v.literal("verse_range"), v.literal("chapter"), v.literal("chapter_range")),
+  chapterStart: v.number(),
+  chapterEnd: v.number(),
+  verseStart: v.optional(v.number()),
+  verseEnd: v.optional(v.number()),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -536,7 +548,11 @@ export default defineSchema({
   scriptureResources: defineTable({
     volume: v.string(),
     book: v.string(),
+    bookEnd: v.optional(v.string()),
+    bookOrder: v.optional(v.number()),
+    bookEndOrder: v.optional(v.number()),
     resourceType: v.union(v.literal("verse"), v.literal("verse_range"), v.literal("chapter"), v.literal("chapter_range")),
+    coverages: v.optional(v.array(scriptureResourceCoverage)),
     title: v.string(),
     description: v.optional(v.string()),
     url: v.optional(v.string()),
@@ -548,6 +564,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_volume", ["volume"])
     .index("by_volume_book", ["volume", "book"])
     .index("by_scope", ["volume", "book", "chapterStart", "chapterEnd"]),
 });

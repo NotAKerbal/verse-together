@@ -2,30 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
-type CitationTalk = {
-  id?: string;
-  title: string;
-  speaker?: string;
-  year?: string;
-  session?: string;
-  talkUrl?: string;
-  watchUrl?: string;
-  listenUrl?: string;
-  talkId?: string;
-};
-
-type ScriptureResource = {
-  id: string;
-  resourceType: "verse" | "verse_range" | "chapter" | "chapter_range";
-  title: string;
-  description: string | null;
-  url: string | null;
-  chapterStart: number;
-  chapterEnd: number;
-  verseStart: number | null;
-  verseEnd: number | null;
-};
+import type { CitationTalk } from "@/lib/citations";
+import type { ScriptureResource, ScriptureResourceScope } from "@/lib/citationsApi";
 
 type ResourceTab = "citations" | "curated";
 
@@ -41,6 +19,20 @@ export default function ResourcesPanelContent({
 
   const tabCounts: Record<ResourceTab, number> = { citations: talks.length, curated: resources.length };
   const sortedResources = useMemo(() => [...resources], [resources]);
+
+  function formatCoverage(coverage: ScriptureResourceScope) {
+    const startBook = coverage.book.replace(/-/g, " ");
+    const endBook = coverage.bookEnd.replace(/-/g, " ");
+    const bookLabel = startBook === endBook ? startBook : `${startBook} - ${endBook}`;
+    const chapterLabel =
+      coverage.chapterStart === coverage.chapterEnd
+        ? `Chapter ${coverage.chapterStart}`
+        : `Chapters ${coverage.chapterStart}-${coverage.chapterEnd}`;
+    const verseLabel = coverage.verseStart
+      ? ` • Verses ${coverage.verseStart}-${coverage.verseEnd ?? coverage.verseStart}`
+      : "";
+    return `${bookLabel} • ${chapterLabel}${verseLabel}`;
+  }
 
   return (
     <div className="space-y-3">
@@ -88,19 +80,33 @@ export default function ResourcesPanelContent({
         <ul className="space-y-2.5 max-h-[44vh] overflow-y-auto pr-1">
           {sortedResources.map((resource) => (
             <li key={resource.id} className="border border-black/10 dark:border-white/15 rounded-lg p-3 bg-black/5 dark:bg-white/5">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-semibold">{resource.title}</div>
-                <span className="text-[10px] uppercase tracking-wide rounded-full px-2 py-0.5 border border-black/10 dark:border-white/15">
-                  {resource.resourceType.replace("_", " ")}
-                </span>
-              </div>
+              <div className="text-sm font-semibold">{resource.title}</div>
               {resource.description ? <p className="text-sm text-foreground/75 mt-1">{resource.description}</p> : null}
-              <div className="text-xs text-foreground/65 mt-1">
-                {resource.chapterStart === resource.chapterEnd ? `Chapter ${resource.chapterStart}` : `Chapters ${resource.chapterStart}-${resource.chapterEnd}`}
-                {resource.verseStart ? ` • Verses ${resource.verseStart}-${resource.verseEnd ?? resource.verseStart}` : ""}
-              </div>
+              {resource.matchedScopes.length > 0 ? (
+                <div className="mt-1 space-y-1 text-xs text-foreground/65">
+                  {resource.matchedScopes.map((coverage, index) => (
+                    <div key={`${resource.id}-matched-${coverage.book}-${coverage.chapterStart}-${coverage.verseStart ?? "chapter"}-${index}`}>
+                      {formatCoverage(coverage)}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {resource.matchedScopes.length === 0 ? (
+                <div className="mt-1 space-y-1 text-xs text-foreground/65">
+                  {resource.coverages.map((coverage, index) => (
+                    <div key={`${resource.id}-${coverage.book}-${coverage.chapterStart}-${coverage.verseStart ?? "chapter"}-${index}`}>
+                      {formatCoverage(coverage)}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {resource.url ? (
-                <a className="inline-flex mt-2 text-sm underline" href={resource.url} target="_blank" rel="noopener noreferrer">
+                <a
+                  className="inline-flex mt-2 items-center justify-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm"
+                  href={resource.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   Open resource
                 </a>
               ) : null}

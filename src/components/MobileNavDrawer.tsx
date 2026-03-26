@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
-import { useAuth } from "@/lib/auth";
+import { useAdminStatus, useAuth } from "@/lib/auth";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
 import ThemeSelect from "@/components/ThemeSelect";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
@@ -92,6 +92,26 @@ function GuideIcon() {
   );
 }
 
+function ResourceIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5.5 6.5A2.5 2.5 0 0 1 8 4h8a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 16 20H8a2.5 2.5 0 0 1-2.5-2.5Z" />
+      <path d="M9 8.5h6" />
+      <path d="M9 12h6" />
+      <path d="M9 15.5h3.5" />
+    </svg>
+  );
+}
+
 function CloseIcon() {
   return (
     <svg
@@ -109,19 +129,24 @@ function CloseIcon() {
   );
 }
 
-const drawerIcons: Record<(typeof primaryNavItems)[number]["href"], typeof BookIcon> = {
+const drawerIcons: Record<string, typeof BookIcon> = {
   "/browse": BookIcon,
   "/feed": NotesIcon,
   "/plans": PlansIcon,
   "/help": GuideIcon,
+  "/resources/manage": ResourceIcon,
 };
 
 export default function MobileNavDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
+  const { isAdmin } = useAdminStatus();
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
   const [isClosing, setIsClosing] = useState(false);
   const [hasEntered, setHasEntered] = useState(false);
+  const navItems = isAdmin
+    ? [...primaryNavItems, { href: "/resources/manage", label: "Resources" }]
+    : primaryNavItems;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -190,7 +215,7 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
         </div>
 
         <nav className="mt-6 grid gap-2" aria-label="Mobile menu">
-          {primaryNavItems.map((item) => {
+          {navItems.map((item) => {
             const active = isPathActive(pathname, item.href);
             const Icon = drawerIcons[item.href];
             const href = item.href === "/browse" ? browseHref : item.href;

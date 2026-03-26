@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CitationTalk } from "@/lib/citations";
+import type { CitationsResponse, ScriptureResource } from "@/lib/citationsApi";
 import ResourcesPanelContent from "./ResourcesPanelContent";
-import ResourcesManagerSidebar from "./ResourcesManagerSidebar";
 
 type Props = {
   open: boolean;
@@ -12,55 +13,50 @@ type Props = {
   chapter: number;
   verseStart: number;
   verseEnd?: number;
+  selectedVerses?: number[];
+  selectedText?: string;
 };
 
-type CitationTalk = {
-  id?: string;
-  title: string;
-  speaker?: string;
-  year?: string;
-  session?: string;
-  talkUrl?: string;
-  watchUrl?: string;
-  listenUrl?: string;
-  talkId?: string;
-};
-
-type ScriptureResource = {
-  id: string;
-  resourceType: "verse" | "verse_range" | "chapter" | "chapter_range";
-  title: string;
-  description: string | null;
-  url: string | null;
-  chapterStart: number;
-  chapterEnd: number;
-  verseStart: number | null;
-  verseEnd: number | null;
-};
-
-export default function CitationsSidebarPanel({ open, onClose, volume, book, chapter, verseStart, verseEnd }: Props) {
+export default function CitationsSidebarPanel({
+  open,
+  onClose,
+  volume,
+  book,
+  chapter,
+  verseStart,
+  verseEnd,
+  selectedVerses,
+  selectedText,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [talks, setTalks] = useState<CitationTalk[]>([]);
   const [resources, setResources] = useState<ScriptureResource[]>([]);
-  const [canManageResources, setCanManageResources] = useState(false);
 
   const verseSpec = useMemo(
     () => (verseEnd && verseEnd > verseStart ? `${verseStart}-${verseEnd}` : String(verseStart)),
     [verseStart, verseEnd]
   );
+  const selectedVerseSpec = useMemo(() => (selectedVerses ?? []).join(","), [selectedVerses]);
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const url = `/api/citations?volume=${encodeURIComponent(volume)}&book=${encodeURIComponent(book)}&chapter=${encodeURIComponent(String(chapter))}&verses=${encodeURIComponent(verseSpec)}`;
+      const params = new URLSearchParams({
+        volume,
+        book,
+        chapter: String(chapter),
+        verses: verseSpec,
+      });
+      if (selectedVerseSpec) params.set("selectedVerses", selectedVerseSpec);
+      if (selectedText) params.set("selectedText", selectedText);
+      const url = `/api/citations?${params.toString()}`;
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`Request failed ${res.status}`);
-      const data = (await res.json()) as { talks: CitationTalk[]; resources: ScriptureResource[]; canManageResources?: boolean };
+      const data = (await res.json()) as CitationsResponse;
       setTalks(Array.isArray(data?.talks) ? data.talks : []);
       setResources(Array.isArray(data?.resources) ? data.resources : []);
-      setCanManageResources(Boolean(data?.canManageResources));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load resources");
     } finally {
@@ -71,7 +67,7 @@ export default function CitationsSidebarPanel({ open, onClose, volume, book, cha
   useEffect(() => {
     if (!open) return;
     void load();
-  }, [open, volume, book, chapter, verseSpec]);
+  }, [open, volume, book, chapter, verseSpec, selectedText, selectedVerseSpec]);
 
   if (!open) return null;
 
@@ -90,16 +86,6 @@ export default function CitationsSidebarPanel({ open, onClose, volume, book, cha
         <ResourcesPanelContent
           talks={talks}
           resources={resources}
-        />
-      ) : null}
-      {!loading && !error && canManageResources ? (
-        <ResourcesManagerSidebar
-          volume={volume}
-          book={book}
-          chapter={chapter}
-          verseStart={verseStart}
-          verseEnd={verseEnd ?? verseStart}
-          onCreated={() => void load()}
         />
       ) : null}
     </div>
