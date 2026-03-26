@@ -18,20 +18,16 @@ function summarize(text?: string, limit = 160): string {
 
 export default async function BookLanding({
   params,
-  searchParams,
 }: {
   params: Promise<{ volume: string; book: string }>;
-  searchParams: Promise<{ lessonId?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { volume, book } = await params;
-  const query = await searchParams;
-  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
-  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   const canonicalVolume = normalizeScriptureVolume(volume);
   const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
 
   if (volume !== volumeSlug) {
-    redirect(`/browse/${volumeSlug}/${book}${lessonSuffix}`);
+    redirect(`/browse/${volumeSlug}/${book}`);
   }
 
   const bookData = (await getLocalLdsBook(canonicalVolume, book)) ?? await fetchBook(canonicalVolume, book);
@@ -43,9 +39,7 @@ export default async function BookLanding({
   const duplicateVolumeBook = bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase();
   const compactNumberGrid = canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants";
   const summaryPreview = summarize(bookData.summary, 180);
-  const volumeHref = lessonId
-    ? `/browse/${volumeSlug}?lessonId=${encodeURIComponent(lessonId)}`
-    : `/browse/${volumeSlug}`;
+  const volumeHref = `/browse/${volumeSlug}`;
 
   return (
     <section className="space-y-6">
@@ -63,7 +57,6 @@ export default async function BookLanding({
       <ChapterCards
         volume={volumeSlug}
         book={book}
-        lessonId={lessonId ?? null}
         chapters={chapters}
         delineation={delineation}
         compactNumberGrid={compactNumberGrid}
@@ -75,20 +68,16 @@ export default async function BookLanding({
 function ChapterCards({
   volume,
   book,
-  lessonId,
   chapters,
   delineation,
   compactNumberGrid,
 }: {
   volume: string;
   book: string;
-  lessonId: string | null;
   chapters: Array<{ _id: string; summary?: string }>;
   delineation: string;
   compactNumberGrid: boolean;
 }) {
-  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
-
   return (
     <div>
       {chapters.length === 0 ? (
@@ -102,7 +91,7 @@ function ChapterCards({
             return (
               <li key={chapter._id}>
                 <Link
-                  href={`/browse/${volume}/${book}/${chapterNumber}${lessonSuffix}`}
+                  href={`/browse/${volume}/${book}/${chapterNumber}`}
                   className="group flex min-h-[5.5rem] flex-col items-center justify-center rounded-[1.1rem] border px-3 py-3 text-center transition-all duration-200 surface-card hover:bg-[var(--surface-button-hover)] sm:min-h-[6rem]"
                   aria-label={referenceLabel}
                   data-tap

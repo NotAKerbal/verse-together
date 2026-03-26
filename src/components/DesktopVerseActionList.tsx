@@ -80,7 +80,7 @@ export default function DesktopVerseActionList({
           <div />
         )}
         <button onMouseDown={preserveSelection} onClick={onLoadInsights} disabled={!actionsEnabled} className={topBtn}>
-          Open {targetLabel === "Lesson" ? "Lesson" : "Notes"}
+          Open Notes
         </button>
       </div>
       <div className="h-px bg-black/10 dark:bg-white/10" />

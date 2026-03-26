@@ -13,7 +13,6 @@ import type * as cache from "../cache.js";
 import type * as crons from "../crons.js";
 import type * as feedback from "../feedback.js";
 import type * as insights from "../insights.js";
-import type * as lessons from "../lessons.js";
 import type * as noteFolders from "../noteFolders.js";
 import type * as preferences from "../preferences.js";
 import type * as resources from "../resources.js";
@@ -34,7 +33,6 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   feedback: typeof feedback;
   insights: typeof insights;
-  lessons: typeof lessons;
   noteFolders: typeof noteFolders;
   preferences: typeof preferences;
   resources: typeof resources;

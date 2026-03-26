@@ -96,23 +96,18 @@ async function buildCategorizedBooks(volume: string): Promise<VolumeBookBrowserI
 
 export default async function VolumePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ volume: string }>;
-  searchParams: Promise<{ lessonId?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { volume } = await params;
-  const query = await searchParams;
-  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
-  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   const canonicalVolume = normalizeScriptureVolume(volume);
   const volumeSlug = toScriptureVolumeUrlSlug(canonicalVolume);
   if (canonicalVolume === "doctrineandcovenants") {
-    redirect(`/browse/${volumeSlug}/doctrineandcovenants${lessonSuffix}`);
+    redirect(`/browse/${volumeSlug}/doctrineandcovenants`);
   }
   const books = await buildCategorizedBooks(canonicalVolume);
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
-  const browseHref = lessonId ? `/browse?lessonId=${encodeURIComponent(lessonId)}` : "/browse";
 
   return (
     <section className="space-y-6">
@@ -123,8 +118,7 @@ export default async function VolumePage({
           books={books}
           volumeLabel={volumeLabel}
           volumeSlug={volumeSlug}
-          backHref={browseHref}
-          lessonSuffix={lessonSuffix}
+          backHref="/browse"
         />
       )}
     </section>

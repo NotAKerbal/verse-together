@@ -13,7 +13,6 @@ type Props = {
   volumeLabel: string;
   volumeSlug: string;
   backHref?: string;
-  lessonSuffix?: string;
 };
 
 function ChevronIcon() {
@@ -38,7 +37,6 @@ export default function VolumeBookBrowser({
   volumeLabel,
   volumeSlug,
   backHref,
-  lessonSuffix = "",
 }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 sm:gap-6">
@@ -53,7 +51,7 @@ export default function VolumeBookBrowser({
           {books.map((book) => (
             <li key={book.id}>
               <Link
-                href={`/browse/${volumeSlug}/${book.id}${lessonSuffix}`}
+                href={`/browse/${volumeSlug}/${book.id}`}
                 className="group flex h-full flex-col rounded-[1.35rem] border px-4 py-4 transition-all duration-200 surface-card"
                 data-tap
               >

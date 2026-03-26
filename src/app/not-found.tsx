@@ -113,7 +113,7 @@ export default function NotFound() {
           <div className="rounded-[1.3rem] border p-4 surface-card-soft">
             <p className="text-sm font-medium">If this came from a shared link</p>
             <p className="mt-1 text-sm leading-6 text-foreground/68">
-              The note, lesson, or passage may no longer exist at that address.
+              The note or passage may no longer exist at that address.
               Start from Browse or Search and navigate back to the closest match.
             </p>
           </div>

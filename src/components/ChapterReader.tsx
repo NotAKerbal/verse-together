@@ -2,14 +2,13 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import ScriptureQuickNav from "./ScriptureQuickNav";
-import LessonBrowserPanel from "./LessonBrowserPanel";
 import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
 import FootnoteModal from "./FootnoteModal";
@@ -476,12 +475,7 @@ export default function ChapterReader({
 }) {
   const { user, getToken, promptSignIn } = useAuth();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
-  const searchParams = useSearchParams();
-  const lessonId = searchParams.get("lessonId");
-  const lessonMode = !!lessonId;
-  const lessonsApi = (api as any).lessons;
   const annotationsApi = (api as any).annotations;
-  const addLessonCard = useMutation(lessonsApi.addCard);
   const saveAnnotation = useMutation(annotationsApi.upsertVerseAnnotation);
   const removeAnnotation = useMutation(annotationsApi.deleteVerseAnnotation);
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
@@ -527,7 +521,6 @@ export default function ChapterReader({
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = !!openFootnote || openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
-  const [lessonPanelOpen, setLessonPanelOpen] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const verseListRef = useRef<HTMLOListElement | null>(null);
@@ -784,7 +777,7 @@ export default function ChapterReader({
     if (!selectedVerses.length || !selectedText) return false;
     return normalizeSelectionText(selectedVerses.map((verse) => verse.text).join(" ")) === normalizeSelectionText(selectedText);
   }, [selectedText, selectedVerses]);
-  const hasActiveNote = lessonMode ? true : !!activeDraftId;
+  const hasActiveNote = !!activeDraftId;
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
     (compareChapters ?? []).forEach((chapterData) => {
@@ -1060,7 +1053,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", updateDesktopScriptureOffset);
       resizeObserver?.disconnect();
     };
-  }, [hasSidebarPanelOpen, lessonPanelOpen]);
+  }, [hasSidebarPanelOpen]);
 
   useEffect(() => {
     function markJumpVerse(verse: number) {
@@ -1354,28 +1347,6 @@ export default function ChapterReader({
       return;
     }
     if (!selectedBounds || !selectionReferenceLabel) return;
-    const reference = selectionReferenceLabel;
-    if (lessonMode && lessonId) {
-      await addLessonCard({
-        lessonId: lessonId as any,
-        type: "notes",
-        title: reference,
-        body: selectedText || null,
-        noteComponentType: "scripture",
-        notesVisibility: "shared_readonly",
-        scriptureRef: {
-          volume,
-          book,
-          chapter,
-          verseStart: selectedBounds.start,
-          verseEnd: selectedBounds.end,
-          reference,
-        },
-      });
-      clearSelection();
-      setLessonPanelOpen(true);
-      return;
-    }
     await appendScriptureBlock({
       volume,
       book,
@@ -1392,18 +1363,6 @@ export default function ChapterReader({
   async function onNewNoteFromActions() {
     if (!user) {
       void promptSignIn();
-      return;
-    }
-    if (lessonMode && lessonId) {
-      await addLessonCard({
-        lessonId: lessonId as any,
-        type: "notes",
-        title: "Lesson note",
-        body: "",
-        noteComponentType: "text",
-        notesVisibility: "teacher_only",
-      });
-      setLessonPanelOpen(true);
       return;
     }
     const createdId = await createDraft("New note");
@@ -1426,7 +1385,7 @@ export default function ChapterReader({
 
   return (
     <section
-      className={`space-y-4 pb-20 ${lessonMode && lessonPanelOpen ? "lg:pr-[380px] xl:pr-[440px] 2xl:pr-[500px]" : ""}`}
+      className="space-y-4 pb-20"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -1975,7 +1934,7 @@ export default function ChapterReader({
         hasActiveInsight={hasActiveNote}
         showInsightAction={showInsightAction}
         showExplore={canExploreWord}
-        targetLabel={lessonMode ? "Lesson" : "Note"}
+        targetLabel="Note"
         actionsEnabled={!!user}
         onInsight={() => {
           void onAddToNote();
@@ -1987,9 +1946,6 @@ export default function ChapterReader({
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}
       />
-      {lessonMode && lessonId ? (
-        <LessonBrowserPanel lessonId={lessonId} open={lessonPanelOpen} onClose={() => setLessonPanelOpen(false)} />
-      ) : null}
     </section>
   );
 }

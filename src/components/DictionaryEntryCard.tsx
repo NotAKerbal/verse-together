@@ -1,12 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
-import { useMutation } from "convex/react";
 import DictionaryEntryBody from "@/components/DictionaryEntryBody";
 import { useAuth } from "@/lib/auth";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
-import { api } from "../../convex/_generated/api";
 
 type DictionaryEntry = {
   id: string;
@@ -25,33 +22,11 @@ export default function DictionaryEntryCard({
 }) {
   const { user, promptSignIn } = useAuth();
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
-  const searchParams = useSearchParams();
-  const lessonId = searchParams.get("lessonId");
-  const lessonsApi = (api as any).lessons;
-  const addLessonCard = useMutation(lessonsApi.addCard);
   const dictionaryWord = useMemo(() => entry.word?.trim() || "Dictionary entry", [entry.word]);
 
   async function onAddCardToInsight() {
     if (!user) {
       void promptSignIn();
-      return;
-    }
-    if (lessonId) {
-      await addLessonCard({
-        lessonId: lessonId as any,
-        type: "notes",
-        title: dictionaryWord,
-        body: entry.entryText,
-        noteComponentType: "dictionary",
-        notesVisibility: "shared_readonly",
-        linkUrl: "",
-        dictionaryMeta: {
-          edition,
-          word: dictionaryWord,
-          heading: entry.heading ?? undefined,
-          pronounce: entry.pronounce ?? undefined,
-        },
-      });
       return;
     }
     await addDictionaryBlock({
@@ -77,7 +52,7 @@ export default function DictionaryEntryCard({
             void onAddCardToInsight();
           }}
           className="shrink-0 rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
-          title={lessonId ? "Add this dictionary card to the lesson" : "Add this dictionary card to a note"}
+          title="Add this dictionary card to a note"
         >
           Add card
         </button>

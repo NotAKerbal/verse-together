@@ -39,13 +39,9 @@ function ChevronIcon() {
 }
 
 export default async function BrowsePage({
-  searchParams,
 }: {
-  searchParams: Promise<{ lessonId?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const query = await searchParams;
-  const lessonId = Array.isArray(query.lessonId) ? query.lessonId[0] : query.lessonId;
-  const lessonSuffix = lessonId ? `?lessonId=${encodeURIComponent(lessonId)}` : "";
   const commonVolumes = await getLocalLdsVolumes();
 
   return (
@@ -55,7 +51,7 @@ export default async function BrowsePage({
         {commonVolumes.map((volume) => (
           <li key={volume.id}>
             <Link
-              href={`/browse/${volume.id}${lessonSuffix}`}
+              href={`/browse/${volume.id}`}
               className="group flex h-full flex-col rounded-[1.45rem] border px-4 py-4 surface-card"
               data-tap
             >
