@@ -10,7 +10,6 @@ import {
   faCompass,
   faFolderTree,
   faNoteSticky,
-  faRectangleList,
 } from "@fortawesome/free-solid-svg-icons";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
 import ThemeSelect from "@/components/ThemeSelect";
@@ -49,7 +48,6 @@ export default function Navbar() {
   const navIcons = {
     Browse: faCompass,
     Notes: faNoteSticky,
-    Plans: faRectangleList,
     Guide: faBookOpen,
     Resources: faFolderTree,
   } as const;

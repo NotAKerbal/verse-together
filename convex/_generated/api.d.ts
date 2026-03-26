@@ -17,7 +17,6 @@ import type * as noteFolders from "../noteFolders.js";
 import type * as preferences from "../preferences.js";
 import type * as resources from "../resources.js";
 import type * as social from "../social.js";
-import type * as studyPlans from "../studyPlans.js";
 import type * as users from "../users.js";
 import type * as utils from "../utils.js";
 
@@ -37,7 +36,6 @@ declare const fullApi: ApiFromModules<{
   preferences: typeof preferences;
   resources: typeof resources;
   social: typeof social;
-  studyPlans: typeof studyPlans;
   users: typeof users;
   utils: typeof utils;
 }>;

@@ -224,30 +224,6 @@ export default defineSchema({
     .index("by_chapter_verse", ["volume", "book", "chapter", "verse"])
     .index("by_user_verse", ["clerkId", "volume", "book", "chapter", "verse"]),
 
-  studyPlans: defineTable({
-    clerkId: v.string(),
-    title: v.string(),
-    description: v.optional(v.string()),
-    startDate: v.string(),
-    daysPerWeek: v.number(),
-    active: v.boolean(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_clerk", ["clerkId"])
-    .index("by_clerk_active", ["clerkId", "active"])
-    .index("by_clerk_updated", ["clerkId", "updatedAt"]),
-
-  studyPlanCheckins: defineTable({
-    clerkId: v.string(),
-    planId: v.id("studyPlans"),
-    dateKey: v.string(),
-    createdAt: v.number(),
-  })
-    .index("by_plan_date", ["planId", "dateKey"])
-    .index("by_clerk_date", ["clerkId", "dateKey"])
-    .index("by_plan", ["planId"]),
-
   friendships: defineTable({
     requesterClerkId: v.string(),
     addresseeClerkId: v.string(),
