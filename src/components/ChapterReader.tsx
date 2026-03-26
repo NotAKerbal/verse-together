@@ -1126,11 +1126,12 @@ export default function ChapterReader({
         parts.push(
           <span
             key={`fn-${v.verse}-${idx}-${start}-${displayEnd}`}
-            className={`rounded px-0.5 cursor-pointer ${
-              isActiveFootnote
-                ? "bg-amber-300/70 dark:bg-amber-400/35"
-                : "bg-sky-200/50 dark:bg-sky-400/25"
-            }`}
+            className="rounded px-0.5 cursor-pointer"
+            style={{
+              backgroundColor: isActiveFootnote
+                ? "var(--footnote-highlight-active)"
+                : "var(--footnote-highlight)",
+            }}
             onClick={(e) => {
               e.stopPropagation();
               setOpenCitations(false);

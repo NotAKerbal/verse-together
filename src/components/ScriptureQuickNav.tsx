@@ -1,5 +1,7 @@
 "use client";
 
+import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
@@ -168,7 +170,7 @@ export default function ScriptureQuickNav({ currentVolume, currentBook, verses =
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex items-center justify-center w-8 h-8 rounded-md border surface-card backdrop-blur"
       >
-        🔎
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="h-3.5 w-3.5" />
       </button>
 
       {open ? (

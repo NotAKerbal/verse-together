@@ -19,6 +19,8 @@ const options = [
 
 export default function ThemeSelect({ compact = false }: Props) {
   const [theme, setTheme] = useState<AppTheme>("light");
+  const buttonClassName = compact ? "segmented-control-button h-[2.1rem] w-[2.1rem] p-0" : "segmented-control-button h-9 w-9 p-0";
+  const iconClassName = compact ? "h-[0.95rem] w-[0.95rem]" : "h-[18px] w-[18px]";
 
   useEffect(() => {
     const next = resolveTheme();
@@ -64,9 +66,9 @@ export default function ThemeSelect({ compact = false }: Props) {
                 saveTheme(opt.value);
                 window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
               }}
-              className="segmented-control-button h-9 w-9 p-0"
+              className={buttonClassName}
             >
-              <FontAwesomeIcon icon={opt.icon} className="h-[18px] w-[18px]" />
+              <FontAwesomeIcon icon={opt.icon} className={iconClassName} />
               <span className="sr-only">{opt.label}</span>
             </button>
           );

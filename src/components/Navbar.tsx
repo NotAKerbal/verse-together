@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBookOpen,
+  faCompass,
+  faFolderTree,
+  faNoteSticky,
+  faRectangleList,
+} from "@fortawesome/free-solid-svg-icons";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
 import ThemeSelect from "@/components/ThemeSelect";
 import { useAdminStatus, useAuth } from "@/lib/auth";
@@ -38,6 +46,13 @@ export default function Navbar() {
   const navItems = isAdmin
     ? [...primaryNavItems, { href: "/resources/manage", label: "Resources" }]
     : primaryNavItems;
+  const navIcons = {
+    Browse: faCompass,
+    Notes: faNoteSticky,
+    Plans: faRectangleList,
+    Guide: faBookOpen,
+    Resources: faFolderTree,
+  } as const;
 
   useEffect(() => {
     async function syncCurrentUser() {
@@ -59,8 +74,8 @@ export default function Navbar() {
   return (
     <>
       <header className="app-header w-full">
-        <div className="mx-auto grid max-w-6xl grid-cols-[32px_1fr_32px] items-center gap-2 px-4 py-1.5 sm:flex sm:justify-between sm:gap-3 sm:py-3">
-          <div className="flex items-center gap-3 sm:gap-5">
+        <div className="mx-auto grid w-full grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2 px-4 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3 sm:justify-self-start">
             <button
               className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--foreground)] sm:hidden"
               aria-label="Open menu"
@@ -68,38 +83,39 @@ export default function Navbar() {
             >
               <MenuIcon />
             </button>
-            <nav className="hidden sm:flex items-center gap-2">
-              {navItems.map((item) => {
-                const active = isPathActive(pathname, item.href);
-                const href = item.href === "/browse" ? browseHref : item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={href}
-                    className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                      active
-                        ? "border-[color:var(--surface-button-active)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
-                        : "border-[color:var(--surface-border)] bg-[color:var(--surface-button)] hover:bg-[color:var(--surface-button-hover)]"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="flex justify-center sm:block">
             <Link
               href="/"
-              className="text-center text-[1.1rem] font-semibold tracking-[0.01em] leading-none sm:text-left sm:text-lg"
+              className="px-2 text-center text-[1.1rem] leading-none font-semibold tracking-[0.01em] sm:px-0 sm:text-lg"
             >
               Verse Together
             </Link>
+            <nav className="hidden min-w-0 sm:flex items-center overflow-x-auto no-scrollbar" aria-label="Primary">
+              <div className="segmented-control">
+                {navItems.map((item) => {
+                  const active = isPathActive(pathname, item.href);
+                  const href = item.href === "/browse" ? browseHref : item.href;
+                  const icon = navIcons[item.label as keyof typeof navIcons];
+                  return (
+                    <Link
+                      key={item.href}
+                      href={href}
+                      data-active={active ? "true" : "false"}
+                      className="segmented-control-button h-[2.1rem] w-[2.1rem] justify-center gap-2 px-0 text-sm font-medium xl:h-auto xl:w-auto xl:px-4"
+                      aria-current={active ? "page" : undefined}
+                      aria-label={item.label}
+                      title={item.label}
+                    >
+                      <FontAwesomeIcon icon={icon} className="h-[0.95rem] w-[0.95rem]" />
+                      <span className="hidden xl:inline">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2">
-            <ThemeSelect />
+          <div className="hidden min-w-0 sm:flex items-center justify-self-end gap-2">
+            <ThemeSelect compact />
             {user ? (
               <UserButton
                 appearance={{
