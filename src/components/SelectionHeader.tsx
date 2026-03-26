@@ -31,11 +31,11 @@ export default function SelectionHeader({
   backHref,
 }: Props) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-end justify-between gap-3">
+    <div className="page-hero mobile-menu-clearance">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           {eyebrow ? (
-            <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-foreground/45">
+            <div className="page-eyebrow mb-3">
               {eyebrow}
             </div>
           ) : null}
@@ -43,18 +43,18 @@ export default function SelectionHeader({
             {backHref ? (
               <Link
                 href={backHref}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-foreground/72 surface-card-soft"
+                className="panel-card-soft inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)]"
                 aria-label="Go back"
                 data-tap
               >
                 <BackIcon />
               </Link>
             ) : null}
-            <h1 className="min-w-0 text-[1.55rem] font-semibold tracking-[-0.02em] sm:text-[1.8rem]">{title}</h1>
+            <h1 className="page-title min-w-0">{title}</h1>
           </div>
         </div>
         {meta ? (
-          <div className="shrink-0 pb-1 text-xs font-medium uppercase tracking-[0.14em] text-foreground/45">
+          <div className="page-meta shrink-0">
             {meta}
           </div>
         ) : null}

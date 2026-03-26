@@ -107,9 +107,11 @@ export default function BibleTranslationToolbar({ volume, book, chapter, compare
 
   return (
     <div className="space-y-3">
-      <div className="text-xs text-foreground/70">Default Bible text comes from the local LDS standard works dataset.</div>
-      <div className="text-xs text-foreground/70">Select optional translation overlays to compare wording differences.</div>
-      <div className="text-xs text-foreground/60">{selectedCount} overlay{selectedCount === 1 ? "" : "s"} selected</div>
+      <div className="panel-card-soft rounded-[1.1rem] p-3">
+        <div className="text-xs text-[color:var(--foreground-muted)]">Default Bible text comes from the local LDS standard works dataset.</div>
+        <div className="mt-1 text-xs text-[color:var(--foreground-muted)]">Select optional translation overlays to compare wording differences.</div>
+        <div className="mt-2 text-xs text-[color:var(--foreground-soft)]">{selectedCount} overlay{selectedCount === 1 ? "" : "s"} selected</div>
+      </div>
       <TranslationCatalogPicker
         existingIds={optionIds}
         onAddFavorite={(item) => addFavorite(item)}
@@ -125,25 +127,32 @@ export default function BibleTranslationToolbar({ volume, book, chapter, compare
                 const query = buildToggleQuery(option.id, compare, optionIds, new URLSearchParams(searchParams.toString()));
                 return query ? `?${query}` : "";
               })()}`}
-              className={`rounded-md border p-2 transition-colors ${
+              className={`rounded-[1rem] border p-3 transition-colors ${
                 isSelected
-                  ? "border-sky-600/40 bg-sky-500/10"
-                  : "border-black/10 dark:border-white/15"
+                  ? "bg-sky-500/10"
+                  : "surface-card"
               }`}
+              style={
+                isSelected
+                  ? {
+                      borderColor: "color-mix(in oklab, rgb(14 165 233 / 0.45) 70%, var(--surface-border))",
+                    }
+                  : undefined
+              }
             >
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">{option.id.toUpperCase()}</div>
                 <div className="flex items-center gap-2">
                   {option.source === "favorite" ? (
-                    <span className="text-[10px] uppercase tracking-wide text-foreground/60">Favorite</span>
+                    <span className="pill-tag px-2 py-0.5 text-[10px]">Favorite</span>
                   ) : null}
                   {isSelected ? (
-                    <span className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300">Selected</span>
+                    <span className="pill-tag border-sky-600/30 bg-sky-500/12 px-2 py-0.5 text-[10px] text-sky-700 dark:text-sky-300">Selected</span>
                   ) : null}
                 </div>
               </div>
-              <div className="text-[11px] text-foreground/70">{option.label}.</div>
-              <div className="mt-1 text-[11px] leading-relaxed text-foreground/60">
+              <div className="text-[11px] text-[color:var(--foreground-muted)]">{option.label}.</div>
+              <div className="mt-1 text-[11px] leading-relaxed text-[color:var(--foreground-soft)]">
                 {description}
               </div>
             </Link>

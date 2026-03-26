@@ -98,11 +98,11 @@ export default function MobileBottomNav() {
   return (
     <nav
       className="fixed inset-x-0 z-40 flex justify-center px-3 sm:hidden"
-      style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      style={{ bottom: "max(0.85rem, env(safe-area-inset-bottom))" }}
       aria-label="Primary mobile navigation"
     >
       <div
-        className="pointer-events-auto grid w-full max-w-sm grid-cols-3 items-center gap-2 rounded-[1.8rem] p-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur-[20px]"
+        className="pointer-events-auto grid w-full max-w-sm grid-cols-3 items-center gap-2 rounded-[1.85rem] border border-[color:var(--surface-border)] p-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.22)] backdrop-blur-[20px]"
         style={{
           background:
             "linear-gradient(180deg, color-mix(in oklab, var(--mobile-nav-shell) 96%, white 4%), var(--mobile-nav-shell))",
@@ -114,14 +114,14 @@ export default function MobileBottomNav() {
           const active = item.active(pathname);
           const Icon = item.icon;
           const href = item.href === "/browse" ? browseHref : item.href;
-          return (
-            <Link
-              key={item.label}
-              href={href}
-              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.35rem] px-1.5 transition-all duration-200"
-              data-active={active ? "true" : "false"}
-              aria-current={active ? "page" : undefined}
-              data-tap
+            return (
+              <Link
+                key={item.label}
+                href={href}
+                className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.35rem] px-1.5 transition-all duration-200"
+                data-active={active ? "true" : "false"}
+                aria-current={active ? "page" : undefined}
+                data-tap
               style={
                 active
                   ? {

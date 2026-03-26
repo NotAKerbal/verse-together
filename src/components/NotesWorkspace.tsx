@@ -802,22 +802,22 @@ export default function NotesWorkspace({
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-5xl text-sm text-foreground/70">Loading notes...</div>;
+    return <div className="page-shell-wide text-sm text-[color:var(--foreground-muted)]">Loading notes...</div>;
   }
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-3xl rounded-xl border surface-card p-5 space-y-3">
+      <div className="panel-card page-shell mx-auto max-w-3xl rounded-[1.5rem] p-5 space-y-3">
         <h2 className="text-xl font-semibold">Sign in to use Notes</h2>
-        <p className="text-sm text-foreground/70">
+        <p className="text-sm text-[color:var(--foreground-muted)]">
           Your notes workspace includes folders, tags, exports, and quick actions back into the note editor.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/browse" className="rounded-md border surface-button px-3 py-2 text-sm">
+          <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">
             Browse scriptures
           </Link>
           <SignInButton mode="modal">
-            <button className="rounded-md bg-foreground text-background px-3 py-2 text-sm">
+            <button className="rounded-full bg-foreground px-4 py-2 text-sm text-background">
               Sign in
             </button>
           </SignInButton>
@@ -827,12 +827,22 @@ export default function NotesWorkspace({
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-5 pb-24">
+    <div className="page-shell-wide space-y-5 pb-24">
       {showTitleBelowSearch ? (
-        <div
-          className="flex justify-center"
-        >
-          <div className="grid grid-cols-2 gap-1 rounded-[1.2rem] p-1 surface-card-soft">
+        <div className="panel-card rounded-[1.5rem] px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="min-w-0">
+              <div className="page-eyebrow">Notes</div>
+              <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
+                <h1 className="text-[1.4rem] font-semibold tracking-[-0.03em] sm:text-[1.6rem]">Workspace</h1>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--foreground-soft)]">
+                  <span>{rows?.length ?? 0} notes</span>
+                  <span>{allFolders.length} folders</span>
+                  <span>{allTags.length} tags</span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1 rounded-[1.2rem] p-1 surface-card-soft">
             <button
               onClick={() => setNotesPage("library")}
               className="rounded-[0.95rem] px-4 py-2 text-sm"
@@ -863,6 +873,7 @@ export default function NotesWorkspace({
             >
               Editor
             </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -871,117 +882,125 @@ export default function NotesWorkspace({
         <section className="space-y-4">
           <div
             ref={filterBoxRef}
-            className={`rounded-[1.7rem] border p-4 surface-card space-y-3 ${
+            className={`panel-card rounded-[1.7rem] p-4 space-y-3 ${
               searchAsHeaderExtension ? "rounded-t-none border-t-0 -mt-4" : ""
             }`}
           >
-            <div className="relative min-w-[260px]">
-              <div className="flex min-h-[44px] w-full flex-wrap items-center gap-1 rounded-[1rem] border surface-card-soft bg-transparent px-2 py-1">
-                {activeFilters.map((filter) => (
-                  <button
-                    key={filter.id}
-                    onClick={() => removeFilter(filter.id)}
-                    className="inline-flex items-center gap-1 rounded-full border surface-button px-2 py-1 text-[11px]"
-                    title="Remove filter"
-                  >
-                    <span>{filter.label}</span>
-                    <span>x</span>
-                  </button>
-                ))}
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onFocus={() => setIsFilterMenuOpen(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      setIsFilterMenuOpen(false);
-                      return;
-                    }
-                    if (e.key === "Backspace" && search.length === 0 && activeFilters.length > 0) {
-                      const last = activeFilters[activeFilters.length - 1];
-                      removeFilter(last.id);
-                      return;
-                    }
-                    if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
-                      if (visibleFilterOptions.length > 0) {
-                        setHighlightedFilterIndex((prev) => (prev + 1) % visibleFilterOptions.length);
+            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+              <div className="relative min-w-[260px]">
+                <div className="soft-input flex min-h-[48px] w-full flex-wrap items-center gap-1 px-2 py-1">
+                  {activeFilters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => removeFilter(filter.id)}
+                      className="inline-flex items-center gap-1 rounded-full border surface-button px-2 py-1 text-[11px]"
+                      title="Remove filter"
+                    >
+                      <span>{filter.label}</span>
+                      <span>x</span>
+                    </button>
+                  ))}
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onFocus={() => setIsFilterMenuOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setIsFilterMenuOpen(false);
+                        return;
                       }
-                      return;
-                    }
-                    if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
-                      if (visibleFilterOptions.length > 0) {
-                        setHighlightedFilterIndex((prev) => (prev - 1 + visibleFilterOptions.length) % visibleFilterOptions.length);
+                      if (e.key === "Backspace" && search.length === 0 && activeFilters.length > 0) {
+                        const last = activeFilters[activeFilters.length - 1];
+                        removeFilter(last.id);
+                        return;
                       }
-                      return;
-                    }
-                    if (e.key === "Enter" && isFilterMenuOpen) {
-                      e.preventDefault();
-                      applyHighlightedFilter();
-                    }
-                  }}
-                  placeholder="Search notes, tags, or folders..."
-                  className="min-w-[160px] flex-1 bg-transparent px-2 py-1 text-sm outline-none"
-                />
-              </div>
-              {isFilterMenuOpen ? (
-                <div className="absolute left-0 top-[calc(100%+0.45rem)] z-20 w-full max-h-80 overflow-auto rounded-[1rem] border surface-card-strong p-2 shadow-lg">
-                  {visibleFilterOptions.length === 0 ? (
-                    <div className="px-2 py-1 text-xs text-foreground/60">No matching filters.</div>
-                  ) : (
-                    <div className="space-y-1">
-                      {visibleFilterOptions.map((option, idx) => (
-                        <button
-                          key={option.key}
-                          onMouseEnter={() => setHighlightedFilterIndex(idx)}
-                          onClick={() => {
-                            addFilter(option.filter);
-                            setSearch("");
-                            setHighlightedFilterIndex(0);
-                          }}
-                          className={`w-full rounded-[0.9rem] px-2.5 py-2 text-left text-xs ${
-                            idx === highlightedFilterIndex ? "bg-foreground text-background" : "border surface-button"
-                          }`}
-                        >
-                          {option.filter.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
+                        if (visibleFilterOptions.length > 0) {
+                          setHighlightedFilterIndex((prev) => (prev + 1) % visibleFilterOptions.length);
+                        }
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
+                        if (visibleFilterOptions.length > 0) {
+                          setHighlightedFilterIndex((prev) => (prev - 1 + visibleFilterOptions.length) % visibleFilterOptions.length);
+                        }
+                        return;
+                      }
+                      if (e.key === "Enter" && isFilterMenuOpen) {
+                        e.preventDefault();
+                        applyHighlightedFilter();
+                      }
+                    }}
+                    placeholder="Search notes, tags, or folders..."
+                    className="min-w-[160px] flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-[color:var(--foreground-soft)]"
+                  />
                 </div>
-              ) : null}
-            </div>
+                {isFilterMenuOpen ? (
+                  <div className="panel-card-strong absolute left-0 top-[calc(100%+0.45rem)] z-20 max-h-80 w-full overflow-auto rounded-[1rem] p-2 shadow-lg">
+                    {visibleFilterOptions.length === 0 ? (
+                      <div className="px-2 py-1 text-xs text-[color:var(--foreground-soft)]">No matching filters.</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {visibleFilterOptions.map((option, idx) => (
+                          <button
+                            key={option.key}
+                            onMouseEnter={() => setHighlightedFilterIndex(idx)}
+                            onClick={() => {
+                              addFilter(option.filter);
+                              setSearch("");
+                              setHighlightedFilterIndex(0);
+                            }}
+                            className={`w-full rounded-[0.9rem] px-2.5 py-2 text-left text-xs ${
+                              idx === highlightedFilterIndex ? "bg-foreground text-background" : "border surface-button"
+                            }`}
+                          >
+                            {option.filter.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => {
-                  void onCreateNewNote();
-                }}
-                className="rounded-full px-4 py-2 text-sm font-medium text-[color:var(--mobile-nav-active-text)]"
-                style={{ background: "var(--mobile-nav-active)", boxShadow: "0 8px 18px rgba(0,0,0,0.1)" }}
-              >
-                New note
-              </button>
-              <button onClick={onOpenNewFolderModal} className="rounded-full border surface-button px-4 py-2 text-sm">
-                New folder
-              </button>
-              <button
-                onClick={() => {
-                  void exportAllNotes();
-                }}
-                disabled={isBulkExporting || !rows || rows.length === 0}
-                className="rounded-full border surface-button px-4 py-2 text-sm disabled:opacity-60"
-              >
-                {isBulkExporting ? "Exporting..." : "Export all"}
-              </button>
-              {activeFilters.length > 0 ? (
-                <button onClick={() => setActiveFilters([])} className="rounded-full border surface-button px-3 py-1.5 text-sm">
-                  Clear filters
-                </button>
-              ) : null}
+              <div className="flex flex-col gap-3 lg:min-w-[18rem]">
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                  <button
+                    onClick={() => {
+                      void onCreateNewNote();
+                    }}
+                    className="rounded-full px-4 py-2 text-sm font-medium text-[color:var(--mobile-nav-active-text)]"
+                    style={{ background: "var(--mobile-nav-active)", boxShadow: "0 8px 18px rgba(0,0,0,0.1)" }}
+                  >
+                    New note
+                  </button>
+                  <button onClick={onOpenNewFolderModal} className="rounded-full border surface-button px-4 py-2 text-sm">
+                    New folder
+                  </button>
+                  <button
+                    onClick={() => {
+                      void exportAllNotes();
+                    }}
+                    disabled={isBulkExporting || !rows || rows.length === 0}
+                    className="rounded-full border surface-button px-4 py-2 text-sm disabled:opacity-60"
+                  >
+                    {isBulkExporting ? "Exporting..." : "Export all"}
+                  </button>
+                  {activeFilters.length > 0 ? (
+                    <button onClick={() => setActiveFilters([])} className="rounded-full border surface-button px-3 py-1.5 text-sm">
+                      Clear filters
+                    </button>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--foreground-soft)] lg:justify-end">
+                  <span>{filteredRows.length} shown</span>
+                  {activeFilters.length > 0 ? <span>{activeFilters.length} filters</span> : null}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1200,7 +1219,7 @@ function NoteRow({
       onClick={() => {
         void onEdit();
       }}
-      className={`rounded-[1.15rem] border p-3 transition-colors ${
+      className={`interactive-card rounded-[1.15rem] border p-3 transition-colors ${
         isActive ? "surface-card-strong" : "surface-card"
       } ${isDragging ? "opacity-50" : ""} ${note.status === "draft" ? "cursor-pointer" : ""}`}
       style={
@@ -1215,8 +1234,8 @@ function NoteRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-sm font-medium truncate">{note.title}</h3>
-          <p className="text-xs text-foreground/65">
-            {visibilityLabel(note.visibility)} - Updated {new Date(note.updated_at).toLocaleDateString()}
+          <p className="text-xs text-[color:var(--foreground-soft)]">
+            {visibilityLabel(note.visibility)} · Updated {new Date(note.updated_at).toLocaleDateString()}
           </p>
         </div>
         <div className="relative flex items-center gap-1.5">

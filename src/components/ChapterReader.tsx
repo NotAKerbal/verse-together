@@ -1479,19 +1479,19 @@ export default function ChapterReader({
             }
           >
           <header
-            className={`sticky top-0 z-10 ${
-              isAtTop ? "py-0.5" : "py-3"
+            className={`sticky top-2 z-20 transition-all ${
+              isAtTop ? "py-0" : "py-1"
             }`}
           >
-            <div className="relative flex flex-col gap-1">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex flex-1 items-center gap-2">
+            <div className="panel-card-strong mobile-menu-clearance relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 backdrop-blur sm:px-4">
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
+                <div className="min-w-0 flex flex-1 items-center gap-2 pl-0.5 sm:gap-3 sm:pl-1">
                   <ScriptureQuickNav
                     currentVolume={volume}
                     currentBook={book}
                     verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
                   />
-                  <div className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-lg border surface-card backdrop-blur px-2 sm:h-auto sm:flex-none sm:px-2.5 sm:py-1">
+                  <div className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-lg border surface-card-soft px-2 sm:h-auto sm:flex-none sm:px-2.5 sm:py-1">
                     <div className="min-w-0 w-full text-xs sm:text-sm">
                       <Breadcrumbs items={headerBreadcrumbs} />
                     </div>

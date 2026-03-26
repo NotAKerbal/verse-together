@@ -110,9 +110,9 @@ export default async function VolumePage({
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
 
   return (
-    <section className="space-y-6">
+    <section className="page-shell">
       {books.length === 0 ? (
-        <p className="text-foreground/80">No book list available for this volume yet.</p>
+        <p className="panel-card rounded-[1.35rem] p-4 text-[color:var(--foreground-muted)]">No book list available for this volume yet.</p>
       ) : (
         <VolumeBookBrowser
           books={books}

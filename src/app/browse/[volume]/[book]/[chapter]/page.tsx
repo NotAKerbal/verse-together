@@ -121,7 +121,7 @@ export default async function ChapterPage({ params, searchParams }: Params) {
   ];
 
   return (
-    <article className="space-y-6">
+    <article className="page-shell">
       <ChapterReader
         volume={volumeSlug}
         book={book}

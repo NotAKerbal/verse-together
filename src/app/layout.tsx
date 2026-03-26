@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 function HeaderFallback() {
-  return <div className="app-header h-[3.5rem] w-full sm:h-[4.5rem]" aria-hidden="true" />;
+  return <div className="app-header hidden h-[4.75rem] w-full sm:block" aria-hidden="true" />;
 }
 
 function MobileNavFallback() {
@@ -44,17 +44,17 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} app-shell antialiased`}>
         <AppProviders>
-          <Suspense fallback={<HeaderFallback />}>
-            <Navbar />
-          </Suspense>
-          <AppMain>{children}</AppMain>
-          <Suspense fallback={<MobileNavFallback />}>
-            <MobileBottomNav />
-          </Suspense>
+          <div className="relative min-h-screen pb-24 sm:pb-0">
+            <Suspense fallback={<HeaderFallback />}>
+              <Navbar />
+            </Suspense>
+            <AppMain>{children}</AppMain>
+            <Suspense fallback={<MobileNavFallback />}>
+              <MobileBottomNav />
+            </Suspense>
+          </div>
         </AppProviders>
       </body>
     </html>

@@ -179,14 +179,15 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--mobile-nav-icon)]">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
               Navigate
             </p>
             <h2 className="text-lg font-semibold tracking-[0.01em]">Verse Together</h2>
+            <p className="text-sm text-[color:var(--foreground-muted)]">Scripture study, notes, and sharing in one place.</p>
           </div>
           <button
             onClick={requestClose}
-            className="inline-flex h-9 w-9 items-center justify-center text-[color:var(--foreground)]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border surface-button text-[color:var(--foreground)]"
             aria-label="Close menu"
           >
             <CloseIcon />
@@ -248,7 +249,7 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Appearance</p>
-              <p className="text-xs text-[color:var(--mobile-nav-icon)]">Theme and account</p>
+              <p className="text-xs text-[color:var(--foreground-soft)]">Theme and account</p>
             </div>
             {user ? (
               <UserButton
@@ -267,7 +268,7 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
         <div className="mt-auto pt-4">
           {!user ? (
             <SignInButton mode="modal">
-              <button className="w-full rounded-[1.2rem] bg-[color:var(--surface-button-active)] px-4 py-3 text-sm font-medium text-[color:var(--surface-button-active-text)]">
+              <button className="w-full rounded-[1.2rem] border border-transparent bg-[color:var(--surface-button-active)] px-4 py-3 text-sm font-medium text-[color:var(--surface-button-active-text)] shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
                 Sign in
               </button>
             </SignInButton>

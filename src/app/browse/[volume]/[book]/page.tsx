@@ -42,7 +42,7 @@ export default async function BookLanding({
   const volumeHref = `/browse/${volumeSlug}`;
 
   return (
-    <section className="space-y-6">
+    <section className="page-shell">
       <SelectionHeader
         title={bookLabel}
         eyebrow={duplicateVolumeBook ? undefined : volumeLabel}
@@ -50,7 +50,7 @@ export default async function BookLanding({
         backHref={volumeHref}
       />
       {summaryPreview ? (
-        <div className="rounded-[1.35rem] border px-4 py-4 text-sm leading-7 text-foreground/66 surface-card-soft sm:px-5">
+        <div className="panel-card-soft rounded-[1.35rem] px-4 py-4 text-sm leading-7 text-[color:var(--foreground-muted)] sm:px-5">
           {summaryPreview}
         </div>
       ) : null}
@@ -81,7 +81,7 @@ function ChapterCards({
   return (
     <div>
       {chapters.length === 0 ? (
-        <p className="text-sm text-foreground/70">No chapter list available.</p>
+        <p className="panel-card rounded-[1.25rem] p-4 text-sm text-[color:var(--foreground-muted)]">No chapter list available.</p>
       ) : (
         <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6">
           {chapters.map((chapter, index) => {
@@ -92,11 +92,11 @@ function ChapterCards({
               <li key={chapter._id}>
                 <Link
                   href={`/browse/${volume}/${book}/${chapterNumber}`}
-                  className="group flex min-h-[5.5rem] flex-col items-center justify-center rounded-[1.1rem] border px-3 py-3 text-center transition-all duration-200 surface-card hover:bg-[var(--surface-button-hover)] sm:min-h-[6rem]"
+                  className="panel-card interactive-card group flex min-h-[5.5rem] flex-col items-center justify-center rounded-[1.1rem] px-3 py-3 text-center sm:min-h-[6rem]"
                   aria-label={referenceLabel}
                   data-tap
                 >
-                  <div className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-foreground/42">
+                  <div className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
                     {delineation}
                   </div>
                   <div className="mt-1 text-[1.35rem] font-semibold leading-none tracking-[-0.03em] text-foreground sm:text-[1.55rem]">

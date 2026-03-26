@@ -67,29 +67,29 @@ function ReferenceResultCard({ result }: { result: LocalScriptureReferenceResult
     <li>
       <Link
         href={result.href}
-        className="group block rounded-[1.35rem] border p-4 transition-colors surface-card hover:bg-[var(--surface-button-hover)] sm:p-5"
+        className="panel-card interactive-card group block rounded-[1.35rem] p-4 sm:p-5"
         data-tap
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-foreground/46">
+            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
               {result.volumeTitle}
             </div>
             <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{result.label}</h2>
           </div>
-          <div className="rounded-full border px-2.5 py-1 text-xs text-foreground/58">
+          <div className="pill-tag px-2.5 py-1 text-[11px]">
             {result.verseNumber ? "Direct verse" : "Direct chapter"}
           </div>
         </div>
-        <p className="mt-3 text-sm leading-7 text-foreground/78">
+        <p className="mt-3 text-sm leading-7 text-[color:var(--foreground-muted)]">
           Jump straight to {result.label} in the reader.
         </p>
-        <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs text-foreground/52">
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--surface-border)] pt-3 text-xs text-[color:var(--foreground-soft)]">
           <span>
             Chapter {result.chapterNumber}
             {result.verseNumber ? `, verse ${result.verseNumber}` : ""}
           </span>
-          <span className="font-medium text-foreground/68 transition-transform duration-200 group-hover:translate-x-0.5">
+          <span className="font-medium text-[color:var(--foreground-muted)] transition-transform duration-200 group-hover:translate-x-0.5">
             Open reference
           </span>
         </div>
@@ -103,37 +103,37 @@ function VerseResultCard({ result, query }: { result: LocalScriptureVerseResult;
     <li>
       <Link
         href={result.href}
-        className="group block rounded-[1.35rem] border p-4 transition-colors surface-card hover:bg-[var(--surface-button-hover)] sm:p-5"
+        className="panel-card interactive-card group block rounded-[1.35rem] p-4 sm:p-5"
         data-tap
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-foreground/46">
+            <div className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
               {result.volumeTitle}
             </div>
             <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">
               {highlightText(result.reference, query)}
             </h2>
           </div>
-          <div className="rounded-full border px-2.5 py-1 text-xs text-foreground/58">
+          <div className="pill-tag px-2.5 py-1 text-[11px]">
             {result.matchCount} hit{result.matchCount === 1 ? "" : "s"}
           </div>
         </div>
         <div className="mt-3 space-y-3">
           {result.snippets.map((snippet) => (
-            <p key={`${result.id}:${snippet.verseNumber}`} className="text-sm leading-7 text-foreground/78">
-              <span className="mr-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground/48">
+            <p key={`${result.id}:${snippet.verseNumber}`} className="text-sm leading-7 text-[color:var(--foreground-muted)]">
+              <span className="mr-2 text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--foreground-soft)]">
                 Verse {snippet.verseNumber}
               </span>
               {highlightText(snippet.snippet, query)}
             </p>
           ))}
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs text-foreground/52">
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--surface-border)] pt-3 text-xs text-[color:var(--foreground-soft)]">
           <span>
             Matched verses {result.verseLabel}
           </span>
-          <span className="font-medium text-foreground/68 transition-transform duration-200 group-hover:translate-x-0.5">
+          <span className="font-medium text-[color:var(--foreground-muted)] transition-transform duration-200 group-hover:translate-x-0.5">
             Open chapter
           </span>
         </div>
@@ -146,7 +146,7 @@ function LoadingSkeleton() {
   return (
     <div className="grid gap-3">
       {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className="rounded-[1.35rem] border p-4 surface-card">
+        <div key={index} className="panel-card rounded-[1.35rem] p-4">
           <div className="h-3 w-24 rounded bg-foreground/10" />
           <div className="mt-3 h-5 w-40 rounded bg-foreground/12" />
           <div className="mt-4 h-3 w-full rounded bg-foreground/8" />
@@ -280,7 +280,7 @@ export default function ScriptureSearchExperience() {
   const showSkeleton = storeStatus === "loading" || (resultState === "searching" && totalResults === 0);
 
   return (
-    <section className="mx-auto max-w-5xl space-y-6">
+    <section className="page-shell">
       {isOffline ? (
         <div className="flex flex-wrap items-center gap-2">
           {isOffline ? (
@@ -291,12 +291,19 @@ export default function ScriptureSearchExperience() {
         </div>
       ) : null}
 
-      <div className="surface-card-strong rounded-[1.75rem] border p-5 sm:p-6">
+      <div className="page-hero">
+        <div className="mb-5">
+          <div className="page-eyebrow">Search Scripture</div>
+          <h1 className="page-title mt-2">Find passages by reference or phrase.</h1>
+          <p className="page-subtitle mt-3">
+            Search the bundled local library for exact references and verse text, with offline support after the first load.
+          </p>
+        </div>
         <label
           htmlFor="scripture-search-input"
-          className="flex items-center gap-3 rounded-[1.2rem] border border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] px-4 py-3"
+          className="soft-input flex items-center gap-3 px-4 py-3"
         >
-          <div className="text-foreground/55">
+          <div className="text-[color:var(--foreground-muted)]">
             <SearchIcon />
           </div>
           <input
@@ -311,19 +318,19 @@ export default function ScriptureSearchExperience() {
               }
             }}
             placeholder="Try faith, Alma 32, mercy, or Joseph Smith"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-foreground/45"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[color:var(--foreground-soft)]"
             autoComplete="off"
             spellCheck={false}
           />
         </label>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          {errorMessage ?? helperText ? <p className="text-sm text-foreground/62">{errorMessage ?? helperText}</p> : null}
+          {errorMessage ?? helperText ? <p className="text-sm text-[color:var(--foreground-muted)]">{errorMessage ?? helperText}</p> : null}
         </div>
       </div>
 
       {storeStatus === "error" ? (
-        <div className="rounded-[1.5rem] border border-amber-500/35 bg-amber-500/8 p-5 text-sm leading-7 text-foreground/76">
+        <div className="panel-card rounded-[1.5rem] border-amber-500/35 bg-amber-500/8 p-5 text-sm leading-7 text-[color:var(--foreground-muted)]">
           {errorMessage}
         </div>
       ) : null}
@@ -335,8 +342,8 @@ export default function ScriptureSearchExperience() {
           {results.referenceResults.length > 0 ? (
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-foreground/52">Reference Matches</h2>
-                <div className="text-xs text-foreground/52">Jump straight to the passage</div>
+                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[color:var(--foreground-soft)]">Reference Matches</h2>
+                <div className="text-xs text-[color:var(--foreground-soft)]">Jump straight to the passage</div>
               </div>
               <ul className="grid gap-3 sm:grid-cols-2">
                 {results.referenceResults.map((result) => (
@@ -349,8 +356,8 @@ export default function ScriptureSearchExperience() {
           {results.verseResults.length > 0 ? (
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-foreground/52">Verse Text Matches</h2>
-                <div className="text-xs text-foreground/52">Local full-text results</div>
+                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[color:var(--foreground-soft)]">Verse Text Matches</h2>
+                <div className="text-xs text-[color:var(--foreground-soft)]">Local full-text results</div>
               </div>
               <ul className="grid gap-3 sm:gap-4">
                 {results.verseResults.map((result) => (
@@ -363,24 +370,24 @@ export default function ScriptureSearchExperience() {
       ) : null}
 
       {!showSkeleton && storeStatus === "ready" && totalResults === 0 && query.trim().length >= MIN_QUERY_LENGTH ? (
-        <div className="rounded-[1.5rem] border p-5 text-sm leading-7 text-foreground/72 surface-card">
+        <div className="panel-card rounded-[1.5rem] p-5 text-sm leading-7 text-[color:var(--foreground-muted)]">
           No references or verses matched <span className="font-medium text-foreground">{query.trim()}</span>. Try a shorter phrase, a book name, or a reference like <span className="font-medium text-foreground">Alma 32</span> or <span className="font-medium text-foreground">D&C 4:3</span>.
         </div>
       ) : null}
 
       {!showSkeleton && query.trim().length < MIN_QUERY_LENGTH ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-[1.25rem] border p-4 surface-card">
+          <div className="panel-card rounded-[1.25rem] p-4">
             <div className="text-sm font-medium">Reference Search</div>
-            <p className="mt-1 text-sm text-foreground/68">Find direct references like Alma 32, Genesis 1, or D&C 4:3.</p>
+            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">Find direct references like Alma 32, Genesis 1, or D&C 4:3.</p>
           </div>
-          <div className="rounded-[1.25rem] border p-4 surface-card">
+          <div className="panel-card rounded-[1.25rem] p-4">
             <div className="text-sm font-medium">Phrase Search</div>
-            <p className="mt-1 text-sm text-foreground/68">Search verse text locally without needing a network round trip.</p>
+            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">Search verse text locally without needing a network round trip.</p>
           </div>
-          <div className="rounded-[1.25rem] border p-4 surface-card">
+          <div className="panel-card rounded-[1.25rem] p-4">
             <div className="text-sm font-medium">Offline Resume</div>
-            <p className="mt-1 text-sm text-foreground/68">Once the bundled store has loaded on a device, the browser can reuse it when you are offline.</p>
+            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">Once the bundled store has loaded on a device, the browser can reuse it when you are offline.</p>
           </div>
         </div>
       ) : null}

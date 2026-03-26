@@ -45,6 +45,7 @@ export default function Navbar() {
   const navItems = isAdmin
     ? [...primaryNavItems, { href: "/resources/manage", label: "Resources" }]
     : primaryNavItems;
+  const browseRoute = pathname === "/browse" || pathname.startsWith("/browse/");
   const navIcons = {
     Browse: faCompass,
     Notes: faNoteSticky,
@@ -71,21 +72,19 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="app-header w-full">
-        <div className="mx-auto grid w-full grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2 px-4 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+      <header className={`app-header hidden w-full sm:block ${browseRoute ? "app-header-scroll" : ""}`}>
+        <div className="shell-container grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-4">
           <div className="flex min-w-0 items-center gap-3 sm:justify-self-start">
-            <button
-              className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--foreground)] sm:hidden"
-              aria-label="Open menu"
-              onClick={() => setDrawerOpen(true)}
-            >
-              <MenuIcon />
-            </button>
             <Link
               href="/"
-              className="px-2 text-center text-[1.1rem] leading-none font-semibold tracking-[0.01em] sm:px-0 sm:text-lg"
+              className="min-w-0 px-1 text-center sm:px-0"
             >
-              Verse Together
+              <span className="block truncate text-[1.08rem] leading-none font-semibold tracking-[-0.03em] sm:text-[1.2rem]">
+                Verse Together
+              </span>
+              <span className="hidden text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--foreground-soft)] sm:block">
+                Study, note, share
+              </span>
             </Link>
             <nav className="hidden min-w-0 sm:flex items-center overflow-x-auto no-scrollbar" aria-label="Primary">
               <div className="segmented-control">
@@ -125,16 +124,22 @@ export default function Navbar() {
               />
             ) : (
               <SignInButton mode="modal">
-                <button className="inline-flex items-center rounded-full bg-[color:var(--surface-button-active)] px-3 py-1.5 text-sm font-medium text-[color:var(--surface-button-active-text)] hover:opacity-90">
+                <button className="inline-flex min-h-9 items-center rounded-full border border-transparent bg-[color:var(--surface-button-active)] px-4 py-1.5 text-sm font-medium text-[color:var(--surface-button-active-text)] shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:opacity-90">
                   Sign in
                 </button>
               </SignInButton>
             )}
           </div>
-
-          <div className="h-8 w-8 sm:hidden" aria-hidden="true" />
         </div>
       </header>
+      <button
+        className="fixed z-40 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] text-[color:var(--foreground)] shadow-[0_12px_28px_rgba(0,0,0,0.16)] sm:hidden"
+        aria-label="Open menu"
+        onClick={() => setDrawerOpen(true)}
+        style={{ left: "var(--mobile-floating-button-left)", top: "max(1rem, calc(env(safe-area-inset-top) + 0.5rem))" }}
+      >
+        <MenuIcon />
+      </button>
       <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
   );

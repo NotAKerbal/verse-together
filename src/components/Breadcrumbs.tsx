@@ -175,8 +175,8 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
   }, [hasMobileAbbreviations]);
 
   return (
-    <nav aria-label="Breadcrumb" className="relative text-xs sm:text-sm text-foreground/70 min-w-0 max-w-full">
-      <div className="sm:hidden relative min-w-0">
+    <nav aria-label="Breadcrumb" className="relative min-w-0 max-w-full text-xs text-[color:var(--foreground-muted)] sm:text-sm">
+      <div className="relative min-w-0 sm:hidden">
         <ol
           className={`flex items-center gap-1 min-w-0 max-w-full overflow-x-auto whitespace-nowrap ${
             hasMobileAbbreviations ? "pr-7" : "pr-0"
@@ -199,7 +199,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
                 </span>
               )}
               {index < mobileItems.length - 1 ? (
-                <span className="text-foreground/40">/</span>
+                <span className="text-[color:var(--foreground-soft)]">/</span>
               ) : null}
             </li>
           ))}
@@ -207,7 +207,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
         {hasMobileAbbreviations ? (
           <button
             type="button"
-            className="absolute right-0 top-1/2 -translate-y-1/2 rounded px-1 py-0.5 text-foreground/70 hover:bg-black/5 dark:hover:bg-white/10"
+            className="absolute right-0 top-1/2 -translate-y-1/2 rounded px-1 py-0.5 text-[color:var(--foreground-muted)] hover:bg-black/5 dark:hover:bg-white/10"
             aria-expanded={mobileExpanded}
             aria-label={mobileExpanded ? "Collapse full breadcrumb" : "Expand full breadcrumb"}
             onClick={() => setMobileExpanded((prev) => !prev)}
@@ -216,7 +216,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
           </button>
         ) : null}
         {mobileExpanded && hasMobileAbbreviations ? (
-          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 w-[min(88vw,32rem)] rounded-md border surface-card p-2 shadow-lg backdrop-blur">
+          <div className="panel-card absolute left-1/2 top-full z-30 mt-1 w-[min(88vw,32rem)] -translate-x-1/2 rounded-[1rem] p-2 shadow-lg backdrop-blur">
             <ol className="flex flex-wrap items-center justify-center gap-2">
               {items.map((c, idx) => (
                 <li key={`mobile-full-${idx}`} className="flex items-center gap-2">
@@ -232,7 +232,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
                     <span className="text-foreground">{c.label}</span>
                   )}
                   {idx < items.length - 1 ? (
-                    <span className="text-foreground/40">/</span>
+                    <span className="text-[color:var(--foreground-soft)]">/</span>
                   ) : null}
                 </li>
               ))}
@@ -241,7 +241,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
         ) : null}
       </div>
 
-      <ol className="hidden sm:flex flex-wrap items-center gap-2">
+      <ol className="hidden flex-wrap items-center gap-2 sm:flex">
         {items.map((c, idx) => (
           <li key={idx} className="flex items-center gap-2">
             {c.href ? (
@@ -255,7 +255,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
               <span className="text-foreground">{c.label}</span>
             )}
             {idx < items.length - 1 ? (
-              <span className="text-foreground/40">/</span>
+              <span className="text-[color:var(--foreground-soft)]">/</span>
             ) : null}
           </li>
         ))}

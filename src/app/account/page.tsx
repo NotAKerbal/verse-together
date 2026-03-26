@@ -9,11 +9,14 @@ export default function AccountPage() {
 
   if (!user) {
     return (
-      <section className="mx-auto max-w-3xl space-y-3 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-        <p className="text-foreground/80">Sign in to view your account details and manage your session.</p>
+      <section className="page-shell py-6">
+        <div className="page-hero">
+          <div className="page-eyebrow">Account</div>
+          <h1 className="page-title mt-2">Account</h1>
+          <p className="page-subtitle mt-3 text-sm">Sign in to view your account details and manage your session.</p>
+        </div>
         <SignInButton mode="modal">
-          <button className="inline-flex rounded-md border surface-button px-3 py-2 text-sm">
+          <button className="surface-button inline-flex rounded-full border px-4 py-2 text-sm">
             Sign in
           </button>
         </SignInButton>
@@ -22,32 +25,33 @@ export default function AccountPage() {
   }
 
   return (
-    <section className="mx-auto max-w-3xl space-y-5 py-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-        <p className="text-sm text-foreground/70">
+    <section className="page-shell py-6">
+      <header className="page-hero space-y-1">
+        <div className="page-eyebrow">Account</div>
+        <h1 className="page-title mt-2">Account</h1>
+        <p className="page-subtitle mt-3 text-sm">
           Manage your profile and session from the Clerk user menu below.
         </p>
       </header>
 
-      <div className="rounded-lg border border-black/10 dark:border-white/15 p-4 flex items-center justify-between gap-3">
+      <div className="panel-card rounded-[1.35rem] p-4 flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium">Signed in as</div>
-          <div className="text-sm text-foreground/70">{user.email ?? user.fullName ?? "Account user"}</div>
+          <div className="text-sm text-[color:var(--foreground-muted)]">{user.email ?? user.fullName ?? "Account user"}</div>
         </div>
         <UserButton afterSignOutUrl="/" />
       </div>
 
-      <div className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-2">
+      <div className="panel-card rounded-[1.35rem] p-4 space-y-2">
         <h2 className="text-base font-semibold">Where to go next</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/feed" className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm">
+          <Link href="/feed" className="surface-button rounded-full border px-4 py-2 text-sm">
             Open Notes
           </Link>
-          <Link href="/browse" className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm">
+          <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">
             Browse Scriptures
           </Link>
-          <Link href="/help" className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm">
+          <Link href="/help" className="surface-button rounded-full border px-4 py-2 text-sm">
             Guide
           </Link>
         </div>

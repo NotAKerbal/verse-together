@@ -45,22 +45,19 @@ export default async function BrowsePage({
   const commonVolumes = await getLocalLdsVolumes();
 
   return (
-    <section className="mx-auto flex w-full max-w-5xl flex-col gap-5 sm:gap-6">
-      <SelectionHeader title="Volumes" meta={`${commonVolumes.length} collections`} />
+    <section className="page-shell">
+      <SelectionHeader title="Volumes" meta={`${commonVolumes.length} collections`} eyebrow="Scripture Library" />
       <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4">
         {commonVolumes.map((volume) => (
           <li key={volume.id}>
             <Link
               href={`/browse/${volume.id}`}
-              className="group flex h-full flex-col rounded-[1.45rem] border px-4 py-4 surface-card"
+              className="panel-card interactive-card group flex h-full flex-col rounded-[1.45rem] px-4 py-4"
               data-tap
             >
               <div className="flex items-center gap-3">
                 <div
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-foreground/74"
-                  style={{
-                    background: "color-mix(in oklab, var(--surface-card-strong) 88%, transparent)",
-                  }}
+                  className="icon-chip inline-flex h-11 w-11 shrink-0 items-center justify-center text-[color:var(--foreground-muted)]"
                 >
                   <BrowseIcon />
                 </div>
@@ -71,14 +68,14 @@ export default async function BrowsePage({
                         {volume.label}
                       </div>
                     </div>
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-foreground/42 transition-transform duration-200 group-hover:translate-x-0.5">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-soft)] transition-transform duration-200 group-hover:translate-x-0.5">
                       <ChevronIcon />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-xs font-medium uppercase tracking-[0.14em] text-foreground/46">
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--surface-border)] pt-3 text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--foreground-soft)]">
                 <span>{volume.shortLabel}</span>
                 <span>Open</span>
               </div>
