@@ -592,6 +592,15 @@ export default function ChapterReader({
   }, [nextHref, prevHref]);
 
   useEffect(() => {
+    if (nextHref) {
+      router.prefetch(nextHref);
+    }
+    if (prevHref) {
+      router.prefetch(prevHref);
+    }
+  }, [nextHref, prevHref, router]);
+
+  useEffect(() => {
     let alive = true;
     (async () => {
       const token = user ? await getToken({ template: "convex" }) : null;

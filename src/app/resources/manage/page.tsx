@@ -10,9 +10,8 @@ export default async function ResourceManagerPage() {
 
   if (!clerkId) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Resource Manager</h1>
-        <p className="text-sm text-foreground/70">
+      <main className="page-shell py-2 sm:py-4">
+        <p className="panel-card rounded-[1.35rem] p-4 text-sm text-foreground/70">
           Sign in with an admin account to manage curated resources.
         </p>
       </main>
@@ -22,14 +21,13 @@ export default async function ResourceManagerPage() {
   const isAdmin = await getIsAdmin(clerkId);
   if (!isAdmin) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Resource Manager</h1>
-        <p className="text-sm text-foreground/70">
+      <main className="page-shell py-2 sm:py-4">
+        <p className="panel-card rounded-[1.35rem] p-4 text-sm text-foreground/70">
           This page is only available to admins.
         </p>
         <Link
           href="/browse"
-          className="inline-flex w-fit rounded-md border border-black/10 px-3 py-2 text-sm dark:border-white/15"
+          className="surface-button inline-flex w-fit rounded-full border px-4 py-2 text-sm"
         >
           Back to browse
         </Link>
@@ -44,22 +42,7 @@ export default async function ResourceManagerPage() {
   const booksByVolume = Object.fromEntries(booksByVolumeEntries);
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/50">Admin</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Resource Manager</h1>
-          <p className="text-sm text-foreground/70">
-            Browse to a book, select chapter coverage or open a chapter to select verses, then attach that selection to a curated resource.
-          </p>
-        </div>
-        <Link
-          href="/browse"
-          className="inline-flex w-fit rounded-md border border-black/10 px-3 py-2 text-sm dark:border-white/15"
-        >
-          Back to browse
-        </Link>
-      </div>
+    <main className="page-shell-wide py-2 sm:py-3">
       <ResourceManagerWorkspace volumes={volumes} booksByVolume={booksByVolume} />
     </main>
   );

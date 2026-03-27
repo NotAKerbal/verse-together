@@ -50,11 +50,8 @@ function SelectionPill({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
-        active
-          ? "border-black/70 bg-black text-white dark:border-white/70 dark:bg-white dark:text-black"
-          : "border-black/10 bg-background/70 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
-      }`}
+      data-active={active ? "true" : "false"}
+      className="surface-button rounded-full border px-3 py-2 text-sm font-medium"
     >
       {children}
     </button>
@@ -85,6 +82,14 @@ function formatChapterPoint(point: ChapterPoint | null, books: LocalBrowseBook[]
   return `${book.label} ${point.chapter}`;
 }
 
+function summarizeCoverage(coverage: CoverageSelection | null, selectionMode: SelectionMode, books: LocalBrowseBook[]) {
+  if (!coverage) return "Choose a selection to preview coverage details.";
+  if (selectionMode === "chapters") {
+    return `Start ${formatChapterPoint({ bookId: coverage.book, chapter: coverage.chapterStart }, books)} • End ${formatChapterPoint({ bookId: coverage.bookEnd, chapter: coverage.chapterEnd }, books)}`;
+  }
+  return `${coverage.label} • verses ${formatVerseRange(coverage.verseStart ?? null, coverage.verseEnd ?? null)}`;
+}
+
 export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Props) {
   const [selectedVolume, setSelectedVolume] = useState(volumes[0]?.id ?? "");
   const books = useMemo(() => booksByVolume[selectedVolume] ?? [], [booksByVolume, selectedVolume]);
@@ -99,6 +104,7 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [bookQuery, setBookQuery] = useState("");
   const [pendingSelections, setPendingSelections] = useState<CoverageSelection[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>({ error: null, success: null });
@@ -106,6 +112,7 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
   useEffect(() => {
     const nextBookId = books[0]?.id ?? "";
     setFocusedBookId(nextBookId);
+    setBookQuery("");
     setActiveChapter(1);
     setChapterStart(nextBookId ? { bookId: nextBookId, chapter: 1 } : null);
     setChapterEnd(null);
@@ -114,6 +121,12 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
     setPendingSelections([]);
     setSaveState({ error: null, success: null });
   }, [books]);
+
+  const visibleBooks = useMemo(() => {
+    const query = bookQuery.trim().toLowerCase();
+    if (!query) return books;
+    return books.filter((book) => book.label.toLowerCase().includes(query));
+  }, [bookQuery, books]);
 
   const focusedBook = useMemo(
     () => books.find((book) => book.id === focusedBookId) ?? books[0] ?? null,
@@ -326,268 +339,316 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.35fr_0.9fr]">
-      <section className="rounded-[1.6rem] border px-4 py-4 surface-card sm:px-5">
-        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.2fr]">
-          <div className="space-y-3">
+    <div className="grid gap-4 xl:h-[calc(100vh-var(--header-height)-3rem)] xl:grid-cols-[20rem_minmax(0,1fr)_25rem] xl:overflow-hidden">
+      <aside className="panel-card rounded-[1.6rem] p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <div className="space-y-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+          <div className="space-y-2">
+            <p className="page-eyebrow">Step 1</p>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Volumes</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {volumes.map((volume) => (
+              <h2 className="text-lg font-semibold tracking-tight">Choose scope</h2>
+              <p className="text-sm text-[color:var(--foreground-muted)]">
+                Switch volume, search the canon, and decide whether you are attaching chapter or verse coverage.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Volume</p>
+            <div className="flex flex-wrap gap-2">
+              {volumes.map((volume) => (
+                <SelectionPill
+                  key={volume.id}
+                  active={selectedVolume === volume.id}
+                  onClick={() => setSelectedVolume(volume.id)}
+                >
+                  {volume.label}
+                </SelectionPill>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Mode</p>
+            <div className="grid grid-cols-2 gap-2 rounded-[1.2rem] border surface-card-soft p-1">
+              <button
+                type="button"
+                onClick={() => setSelectionMode("chapters")}
+                data-active={selectionMode === "chapters" ? "true" : "false"}
+                className="surface-button rounded-[0.95rem] border px-3 py-2 text-sm font-medium"
+              >
+                Chapters
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectionMode("verses")}
+                data-active={selectionMode === "verses" ? "true" : "false"}
+                className="surface-button rounded-[0.95rem] border px-3 py-2 text-sm font-medium"
+              >
+                Verses
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Books</p>
+              <span className="text-xs text-foreground/55">
+                {visibleBooks.length}/{books.length}
+              </span>
+            </div>
+            <input
+              value={bookQuery}
+              onChange={(event) => setBookQuery(event.target.value)}
+              placeholder="Filter books..."
+              className="soft-input w-full px-3 py-2 text-sm outline-none"
+            />
+            <div className="space-y-1">
+              {visibleBooks.length === 0 ? (
+                <div className="rounded-[1rem] border border-dashed surface-card-soft px-3 py-4 text-sm text-foreground/60">
+                  No books match this filter.
+                </div>
+              ) : (
+                visibleBooks.map((book) => {
+                  const isFocused = focusedBook?.id === book.id;
+                  const hasBoundary =
+                    selectionMode === "chapters" &&
+                    (chapterStart?.bookId === book.id || chapterEnd?.bookId === book.id);
+                  return (
+                    <button
+                      key={book.id}
+                      type="button"
+                      onClick={() => setFocusedBookId(book.id)}
+                      className={`flex w-full items-center justify-between gap-3 rounded-[1.1rem] border px-3 py-2.5 text-left transition-colors ${
+                        isFocused
+                          ? "border-[color:var(--surface-button-active)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
+                          : "surface-card-soft hover:bg-[color:var(--surface-button-hover)]"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{book.label}</span>
+                        <span className="block text-xs opacity-70">
+                          {book.chapters} {book.chapterDelineation.toLowerCase()}
+                          {book.chapters === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[11px] uppercase tracking-[0.14em] opacity-60">
+                        {hasBoundary ? "Marked" : isFocused ? "Open" : "View"}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section className="space-y-4 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <div className="panel-card-strong rounded-[1.7rem] p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <p className="page-eyebrow">Step 2</p>
+              <div>
+                <h2 className="text-[1.65rem] font-semibold tracking-[-0.03em]">
+                  {focusedBook?.label ?? "Choose a book"}
+                </h2>
+                <p className="text-sm text-[color:var(--foreground-muted)]">
+                  {focusedBook
+                    ? `${getScriptureVolumeLabel(selectedVolume)} • ${focusedBook.chapters} ${focusedBook.chapterDelineation.toLowerCase()}${focusedBook.chapters === 1 ? "" : "s"}`
+                    : "Select a book to start defining coverage."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <div className="page-meta">{selectionMode === "chapters" ? "Chapter coverage" : "Verse coverage"}</div>
+              <div className="page-meta">{pendingSelections.length} pending</div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="browse-summary-card">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Current selection</p>
+              <p className="mt-2 text-lg font-semibold">{coverage?.label ?? "No selection yet"}</p>
+              <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+                {summarizeCoverage(coverage, selectionMode, books)}
+              </p>
+            </div>
+
+            <div className="panel-card-soft rounded-[1.35rem] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Selection rules</p>
+              <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
+                {selectionMode === "chapters"
+                  ? "Pick one chapter for the start, then pick another chapter in this or another book for the end."
+                  : "Pick a chapter, then click one verse to start and another verse to finish the range."}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!focusedBook) return;
+                  if (selectionMode === "chapters") {
+                    setChapterStart({ bookId: focusedBook.id, chapter: 1 });
+                    setChapterEnd(null);
+                    return;
+                  }
+                  setVerseStart(1);
+                  setVerseEnd(null);
+                }}
+                className="surface-button mt-3 rounded-full border px-3 py-2 text-sm"
+              >
+                Reset selection
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+          {selectionMode === "chapters" ? (
+            <div className="panel-card rounded-[1.7rem] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Chapter range</h3>
+                <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+                  Work across books without leaving this page. Start and end points stay visible while you browse.
+                </p>
+              </div>
+              <div className="rounded-full border surface-card-soft px-4 py-2 text-xs text-foreground/65">
+                Start: {formatChapterPoint(chapterStart, books) || "None"} • End: {formatChapterPoint(chapterEnd, books) || "Pending"}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+              {chapterNumbers.map((chapterNumber) => (
+                <SelectionPill
+                  key={`${focusedBook?.id}-${chapterNumber}`}
+                  active={focusedBook ? isChapterSelected(focusedBook.id, chapterNumber) : false}
+                  onClick={() => handleChapterClick(chapterNumber)}
+                >
+                  {chapterNumber}
+                </SelectionPill>
+              ))}
+            </div>
+            </div>
+          ) : (
+            <div className="panel-card rounded-[1.7rem] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Verse range</h3>
+                <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+                  Move chapter by chapter, then mark the exact verse span to attach to the resource.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border surface-card-soft px-2 py-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveChapter((current) => Math.max(1, current - 1))}
+                  className="surface-button rounded-full border px-3 py-1.5 text-xs"
+                >
+                  Prev
+                </button>
+                <span className="min-w-[7rem] text-center text-sm font-semibold">
+                  {focusedBook?.chapterDelineation} {activeChapter}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveChapter((current) => Math.min(focusedBook?.chapters ?? current, current + 1))}
+                  className="surface-button rounded-full border px-3 py-1.5 text-xs"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[1.3rem] border surface-card-soft p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Open chapter</p>
+                <p className="text-xs text-foreground/60">Verses {formatVerseRange(verseStart, verseEnd) || "None"}</p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {chapterNumbers.map((chapterNumber) => (
                   <SelectionPill
-                    key={volume.id}
-                    active={selectedVolume === volume.id}
-                    onClick={() => setSelectedVolume(volume.id)}
+                    key={chapterNumber}
+                    active={activeChapter === chapterNumber}
+                    onClick={() => setActiveChapter(chapterNumber)}
                   >
-                    {volume.label}
+                    {chapterNumber}
                   </SelectionPill>
                 ))}
               </div>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Books</p>
-              <div className="mt-2 max-h-[30rem] space-y-2 overflow-y-auto pr-1">
-                {books.map((book) => (
-                  <button
-                    key={book.id}
-                    type="button"
-                    onClick={() => setFocusedBookId(book.id)}
-                    className={`flex w-full items-start justify-between rounded-2xl border px-3 py-3 text-left transition-colors ${
-                      focusedBook?.id === book.id
-                        ? "border-black/70 bg-black text-white dark:border-white/70 dark:bg-white dark:text-black"
-                        : "border-black/10 bg-background/70 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
-                    }`}
-                  >
-                    <span>
-                      <span className="block text-sm font-semibold">{book.label}</span>
-                      <span className="block text-xs opacity-70">
-                        {book.chapters} {book.chapterDelineation.toLowerCase()}
-                        {book.chapters === 1 ? "" : "s"}
-                      </span>
-                    </span>
-                    {selectionMode === "chapters" ? (
-                      <span className="text-xs opacity-60">
-                        {chapterStart?.bookId === book.id || chapterEnd?.bookId === book.id
-                          ? "Selected"
-                          : "Open"}
-                      </span>
-                    ) : (
-                      <span className="text-xs opacity-60">Open</span>
-                    )}
-                  </button>
-                ))}
-              </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+              {verseNumbers.map((verseNumber) => (
+                <SelectionPill
+                  key={verseNumber}
+                  active={isVerseSelected(verseNumber)}
+                  onClick={() => handleVerseClick(verseNumber)}
+                >
+                  {verseNumber}
+                </SelectionPill>
+              ))}
             </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-[1.4rem] border border-black/10 bg-background/50 p-4 dark:border-white/15">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Selection</p>
-                  <h2 className="mt-1 text-xl font-semibold">{focusedBook?.label ?? "Choose a book"}</h2>
-                  <p className="text-sm text-foreground/65">
-                    {focusedBook
-                      ? `${getScriptureVolumeLabel(selectedVolume)} • ${focusedBook.chapters} ${focusedBook.chapterDelineation.toLowerCase()}${focusedBook.chapters === 1 ? "" : "s"}`
-                      : "Select a scripture book to begin."}
-                  </p>
-                </div>
-                <div className="flex rounded-full border border-black/10 bg-background/80 p-1 text-sm dark:border-white/15">
-                  <button
-                    type="button"
-                    onClick={() => setSelectionMode("chapters")}
-                    className={`rounded-full px-3 py-1.5 ${selectionMode === "chapters" ? "bg-black text-white dark:bg-white dark:text-black" : ""}`}
-                  >
-                    Chapters
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectionMode("verses")}
-                    className={`rounded-full px-3 py-1.5 ${selectionMode === "verses" ? "bg-black text-white dark:bg-white dark:text-black" : ""}`}
-                  >
-                    Verses
-                  </button>
-                </div>
-              </div>
             </div>
-
-            {selectionMode === "chapters" ? (
-              <div className="rounded-[1.4rem] border border-black/10 bg-background/50 p-4 dark:border-white/15">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">Chapter range</p>
-                    <p className="text-xs text-foreground/65">
-                      Click a chapter to set the start, then click any chapter in this or another book to set the end.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!focusedBook) return;
-                      setChapterStart({ bookId: focusedBook.id, chapter: 1 });
-                      setChapterEnd(null);
-                    }}
-                    className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs dark:border-white/15"
-                  >
-                    Reset
-                  </button>
-                </div>
-
-                <div className="mt-3 rounded-xl border border-black/10 bg-background/60 px-3 py-2 text-xs text-foreground/65 dark:border-white/15">
-                  Start: {formatChapterPoint(chapterStart, books) || "None"} • End: {formatChapterPoint(chapterEnd, books) || "Pending"}
-                </div>
-
-                <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-                  {chapterNumbers.map((chapterNumber) => (
-                    <SelectionPill
-                      key={`${focusedBook?.id}-${chapterNumber}`}
-                      active={focusedBook ? isChapterSelected(focusedBook.id, chapterNumber) : false}
-                      onClick={() => handleChapterClick(chapterNumber)}
-                    >
-                      {chapterNumber}
-                    </SelectionPill>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-[1.4rem] border border-black/10 bg-background/50 p-4 dark:border-white/15">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">Verse range</p>
-                    <p className="text-xs text-foreground/65">
-                      Choose a chapter, click one verse to start, then another verse to finish the range.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveChapter((current) => Math.max(1, current - 1))}
-                      className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs dark:border-white/15"
-                    >
-                      Prev
-                    </button>
-                    <div className="text-sm font-medium">
-                      {focusedBook?.chapterDelineation} {activeChapter}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveChapter((current) => Math.min(focusedBook?.chapters ?? current, current + 1))}
-                      className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs dark:border-white/15"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {chapterNumbers.map((chapterNumber) => (
-                    <SelectionPill
-                      key={chapterNumber}
-                      active={activeChapter === chapterNumber}
-                      onClick={() => setActiveChapter(chapterNumber)}
-                    >
-                      {chapterNumber}
-                    </SelectionPill>
-                  ))}
-                </div>
-
-                <div className="mt-3 rounded-xl border border-black/10 bg-background/60 px-3 py-2 text-xs text-foreground/65 dark:border-white/15">
-                  Verses: {formatVerseRange(verseStart, verseEnd)}
-                </div>
-
-                <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-                  {verseNumbers.map((verseNumber) => (
-                    <SelectionPill
-                      key={verseNumber}
-                      active={isVerseSelected(verseNumber)}
-                      onClick={() => handleVerseClick(verseNumber)}
-                    >
-                      {verseNumber}
-                    </SelectionPill>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </section>
 
-      <aside className="rounded-[1.6rem] border px-4 py-4 surface-card sm:px-5">
-        <div className="space-y-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Attach Resource</p>
-            <h2 className="mt-1 text-xl font-semibold">Resource details</h2>
-            <p className="text-sm text-foreground/65">
-              Add one or more selections to the pending resource, then save once.
-            </p>
-          </div>
-
-          <div className="rounded-[1.2rem] border border-black/10 bg-background/50 p-4 dark:border-white/15">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground/50">Current selection</p>
-                <p className="mt-2 text-base font-semibold">{coverage?.label ?? "No selection"}</p>
-                <p className="mt-1 text-sm text-foreground/65">
-                  {selectionMode === "chapters"
-                    ? `Start ${formatChapterPoint(chapterStart, books) || "None"} • End ${formatChapterPoint(chapterEnd, books) || "Pending"}`
-                    : `${focusedBook?.label ?? ""} ${activeChapter}:${formatVerseRange(verseStart, verseEnd)}`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleAddSelection}
-                disabled={!coverage}
-                className="rounded-xl border border-black/10 px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/15"
-              >
-                Add selection
-              </button>
+      <aside className="panel-card rounded-[1.6rem] p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <div className="space-y-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+          <div className="space-y-2">
+            <p className="page-eyebrow">Step 3</p>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Attach resource</h2>
+              <p className="text-sm text-[color:var(--foreground-muted)]">
+                Add one or more coverage targets, then save the shared resource details once.
+              </p>
             </div>
           </div>
 
-          <div className="rounded-[1.2rem] border border-black/10 bg-background/50 p-4 dark:border-white/15">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground/50">Pending coverage</p>
-            {pendingSelections.length === 0 ? (
-              <p className="mt-2 text-sm text-foreground/65">No selections added yet.</p>
-            ) : (
-              <>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {pendingSelections.map((selection) => (
-                    <span
-                      key={selection.key}
-                      className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background/70 px-3 py-1.5 text-xs dark:border-white/15"
-                    >
-                      <span>{selection.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSelection(selection.key)}
-                        className="rounded-full border border-black/10 px-1.5 py-0.5 text-[11px] dark:border-white/15"
-                        aria-label={`Remove ${selection.label}`}
-                      >
-                        Remove
-                      </button>
-                    </span>
-                  ))}
-                </div>
+          <div className="browse-summary-card">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Ready to add</p>
+            <p className="mt-2 text-base font-semibold">{coverage?.label ?? "No selection"}</p>
+            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+              {summarizeCoverage(coverage, selectionMode, books)}
+            </p>
+            <button
+              type="button"
+              onClick={handleAddSelection}
+              disabled={!coverage}
+              className="mt-4 w-full rounded-[1rem] bg-[color:var(--browse-ink)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+            >
+              Add selection
+            </button>
+          </div>
 
-                <ul className="mt-3 space-y-2">
-                  {pendingSelections.map((selection) => (
-                    <li
-                      key={`${selection.key}-row`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-background/60 px-3 py-2 text-sm dark:border-white/15"
+          <div className="panel-card-soft rounded-[1.35rem] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Pending coverage</p>
+              <span className="text-xs text-foreground/55">{pendingSelections.length}</span>
+            </div>
+            {pendingSelections.length === 0 ? (
+              <p className="mt-3 text-sm text-[color:var(--foreground-muted)]">No selections added yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {pendingSelections.map((selection, index) => (
+                  <li
+                    key={selection.key}
+                    className="flex items-start justify-between gap-3 rounded-[1rem] border bg-[color:var(--surface-card)] px-3 py-2.5"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{selection.label}</p>
+                      <p className="mt-1 text-xs text-foreground/60">Selection {index + 1}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSelection(selection.key)}
+                      className="surface-button rounded-full border px-2.5 py-1 text-[11px]"
                     >
-                      <span>{selection.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSelection(selection.key)}
-                        className="text-xs underline underline-offset-2"
-                      >
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
@@ -596,20 +657,20 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Resource title"
-              className="w-full rounded-xl border border-black/10 bg-background/70 px-3 py-2.5 text-sm dark:border-white/15"
+              className="soft-input w-full px-3 py-3 text-sm outline-none"
             />
             <input
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="URL (optional)"
-              className="w-full rounded-xl border border-black/10 bg-background/70 px-3 py-2.5 text-sm dark:border-white/15"
+              className="soft-input w-full px-3 py-3 text-sm outline-none"
             />
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Description (optional)"
-              rows={5}
-              className="w-full rounded-xl border border-black/10 bg-background/70 px-3 py-2.5 text-sm dark:border-white/15"
+              rows={6}
+              className="soft-input w-full px-3 py-3 text-sm outline-none"
             />
           </div>
 
@@ -620,7 +681,7 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
             type="button"
             onClick={handleSave}
             disabled={submitting || pendingSelections.length === 0}
-            className="w-full rounded-xl bg-black px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+            className="w-full rounded-[1rem] bg-black px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
           >
             {submitting ? "Saving..." : `Attach resource${pendingSelections.length > 0 ? ` (${pendingSelections.length})` : ""}`}
           </button>

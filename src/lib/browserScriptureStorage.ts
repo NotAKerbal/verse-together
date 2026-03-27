@@ -280,6 +280,11 @@ async function getManifest() {
   return manifestPromise;
 }
 
+export async function preloadBrowserScriptureManifest() {
+  ensureBrowserEnvironment();
+  await getManifest();
+}
+
 async function getVolumeBundle(volume: string) {
   const manifest = await getManifest();
   const volumeInfo = manifest.volumes.find((item) => item.volume === volume);
@@ -298,6 +303,11 @@ async function getVolumeBundle(volume: string) {
   });
   bundlePromiseByVolume.set(volume, nextPromise);
   return nextPromise;
+}
+
+export async function preloadBrowserScriptureVolume(volume: string) {
+  ensureBrowserEnvironment();
+  await getVolumeBundle(volume);
 }
 
 async function readMetaRecord(db: IDBDatabase) {

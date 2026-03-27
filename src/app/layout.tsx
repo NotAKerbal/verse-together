@@ -5,6 +5,7 @@ import "./globals.css";
 import Navbar from "../components/Navbar";
 import AppProviders from "../components/AppProviders";
 import AppMain from "../components/AppMain";
+import AppPreloader from "../components/AppPreloader";
 import MobileBottomNav from "../components/MobileBottomNav";
 
 const geistSans = Geist({
@@ -47,6 +48,9 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} app-shell antialiased`}>
         <AppProviders>
           <div className="relative min-h-screen pb-24 sm:pb-0">
+            <Suspense fallback={null}>
+              <AppPreloader />
+            </Suspense>
             <Suspense fallback={<HeaderFallback />}>
               <Navbar />
             </Suspense>
