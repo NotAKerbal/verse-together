@@ -37,6 +37,14 @@ type CoverageSelection = {
   key: string;
 };
 
+const VOLUME_ABBREVIATIONS: Record<string, string> = {
+  bookofmormon: "BofM",
+  oldtestament: "OT",
+  newtestament: "NT",
+  doctrineandcovenants: "D&C",
+  pearl: "PGP",
+};
+
 function SelectionPill({
   active,
   children,
@@ -88,6 +96,10 @@ function summarizeCoverage(coverage: CoverageSelection | null, selectionMode: Se
     return `Start ${formatChapterPoint({ bookId: coverage.book, chapter: coverage.chapterStart }, books)} • End ${formatChapterPoint({ bookId: coverage.bookEnd, chapter: coverage.chapterEnd }, books)}`;
   }
   return `${coverage.label} • verses ${formatVerseRange(coverage.verseStart ?? null, coverage.verseEnd ?? null)}`;
+}
+
+function getVolumeAbbreviation(volumeId: string, fallback: string) {
+  return VOLUME_ABBREVIATIONS[volumeId] ?? fallback;
 }
 
 export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Props) {
@@ -339,21 +351,19 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
   }
 
   return (
-    <div className="grid gap-4 xl:h-[calc(100vh-var(--header-height)-3rem)] xl:grid-cols-[20rem_minmax(0,1fr)_25rem] xl:overflow-hidden">
-      <aside className="panel-card rounded-[1.6rem] p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
-        <div className="space-y-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
-          <div className="space-y-2">
-            <p className="page-eyebrow">Step 1</p>
+    <div className="grid gap-4 xl:h-full xl:grid-cols-[20rem_minmax(0,1fr)_25rem] xl:overflow-hidden">
+      <aside className="panel-card rounded-[1.6rem] p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden xl:p-0">
+        <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+          <div className="space-y-4 xl:p-5">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">Choose scope</h2>
-              <p className="text-sm text-[color:var(--foreground-muted)]">
-                Switch volume, search the canon, and decide whether you are attaching chapter or verse coverage.
-              </p>
+              <p className="page-eyebrow">Step 1</p>
+              <h2 className="text-base font-semibold tracking-tight">Scope</h2>
             </div>
+            <div className="page-meta">{books.length} books</div>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Volume</p>
+          <div className="space-y-1.5">
             <div className="flex flex-wrap gap-2">
               {volumes.map((volume) => (
                 <SelectionPill
@@ -361,14 +371,13 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
                   active={selectedVolume === volume.id}
                   onClick={() => setSelectedVolume(volume.id)}
                 >
-                  {volume.label}
+                  {getVolumeAbbreviation(volume.id, volume.label)}
                 </SelectionPill>
               ))}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Mode</p>
+          <div className="space-y-1.5">
             <div className="grid grid-cols-2 gap-2 rounded-[1.2rem] border surface-card-soft p-1">
               <button
                 type="button"
@@ -389,7 +398,7 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Books</p>
               <span className="text-xs text-foreground/55">
@@ -440,19 +449,23 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
               )}
             </div>
           </div>
+          </div>
         </div>
       </aside>
 
       <section className="space-y-4 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
-        <div className="panel-card-strong rounded-[1.7rem] p-5 sm:p-6">
+        <div className="panel-card-strong rounded-[1.7rem] p-4 sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2">
-              <p className="page-eyebrow">Step 2</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <p className="page-eyebrow">Step 2</p>
+                <div className="page-meta">{selectionMode === "chapters" ? "Chapters" : "Verses"}</div>
+              </div>
               <div>
-                <h2 className="text-[1.65rem] font-semibold tracking-[-0.03em]">
+                <h2 className="text-[1.45rem] font-semibold tracking-[-0.03em]">
                   {focusedBook?.label ?? "Choose a book"}
                 </h2>
-                <p className="text-sm text-[color:var(--foreground-muted)]">
+                <p className="text-xs text-[color:var(--foreground-muted)]">
                   {focusedBook
                     ? `${getScriptureVolumeLabel(selectedVolume)} • ${focusedBook.chapters} ${focusedBook.chapterDelineation.toLowerCase()}${focusedBook.chapters === 1 ? "" : "s"}`
                     : "Select a book to start defining coverage."}
@@ -461,27 +474,21 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <div className="page-meta">{selectionMode === "chapters" ? "Chapter coverage" : "Verse coverage"}</div>
               <div className="page-meta">{pendingSelections.length} pending</div>
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
             <div className="browse-summary-card">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Current selection</p>
-              <p className="mt-2 text-lg font-semibold">{coverage?.label ?? "No selection yet"}</p>
-              <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Selection</p>
+              <p className="mt-1.5 text-base font-semibold">{coverage?.label ?? "No selection yet"}</p>
+              <p className="mt-1 text-xs text-[color:var(--foreground-muted)]">
                 {summarizeCoverage(coverage, selectionMode, books)}
               </p>
             </div>
 
             <div className="panel-card-soft rounded-[1.35rem] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Selection rules</p>
-              <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
-                {selectionMode === "chapters"
-                  ? "Pick one chapter for the start, then pick another chapter in this or another book for the end."
-                  : "Pick a chapter, then click one verse to start and another verse to finish the range."}
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Reset</p>
               <button
                 type="button"
                 onClick={() => {
@@ -494,7 +501,7 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
                   setVerseStart(1);
                   setVerseEnd(null);
                 }}
-                className="surface-button mt-3 rounded-full border px-3 py-2 text-sm"
+                className="surface-button mt-2 w-full rounded-full border px-3 py-2 text-sm"
               >
                 Reset selection
               </button>
@@ -502,189 +509,183 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
           </div>
         </div>
 
-        <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
-          {selectionMode === "chapters" ? (
-            <div className="panel-card rounded-[1.7rem] p-5 sm:p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">Chapter range</h3>
-                <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
-                  Work across books without leaving this page. Start and end points stay visible while you browse.
-                </p>
-              </div>
-              <div className="rounded-full border surface-card-soft px-4 py-2 text-xs text-foreground/65">
-                Start: {formatChapterPoint(chapterStart, books) || "None"} • End: {formatChapterPoint(chapterEnd, books) || "Pending"}
-              </div>
-            </div>
+        <div className="panel-card rounded-[1.7rem] xl:min-h-0 xl:flex-1 xl:overflow-hidden">
+          <div className="xl:h-full xl:overflow-y-auto">
+            <div className="p-5 sm:p-6">
+              {selectionMode === "chapters" ? (
+                <div>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <h3 className="text-lg font-semibold">Chapter range</h3>
+                    <div className="rounded-full border surface-card-soft px-4 py-2 text-xs text-foreground/65">
+                      {formatChapterPoint(chapterStart, books) || "None"} • {formatChapterPoint(chapterEnd, books) || "Pending"}
+                    </div>
+                  </div>
 
-            <div className="mt-5 grid gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
-              {chapterNumbers.map((chapterNumber) => (
-                <SelectionPill
-                  key={`${focusedBook?.id}-${chapterNumber}`}
-                  active={focusedBook ? isChapterSelected(focusedBook.id, chapterNumber) : false}
-                  onClick={() => handleChapterClick(chapterNumber)}
-                >
-                  {chapterNumber}
-                </SelectionPill>
-              ))}
-            </div>
-            </div>
-          ) : (
-            <div className="panel-card rounded-[1.7rem] p-5 sm:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">Verse range</h3>
-                <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
-                  Move chapter by chapter, then mark the exact verse span to attach to the resource.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 rounded-full border surface-card-soft px-2 py-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveChapter((current) => Math.max(1, current - 1))}
-                  className="surface-button rounded-full border px-3 py-1.5 text-xs"
-                >
-                  Prev
-                </button>
-                <span className="min-w-[7rem] text-center text-sm font-semibold">
-                  {focusedBook?.chapterDelineation} {activeChapter}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setActiveChapter((current) => Math.min(focusedBook?.chapters ?? current, current + 1))}
-                  className="surface-button rounded-full border px-3 py-1.5 text-xs"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+                    {chapterNumbers.map((chapterNumber) => (
+                      <SelectionPill
+                        key={`${focusedBook?.id}-${chapterNumber}`}
+                        active={focusedBook ? isChapterSelected(focusedBook.id, chapterNumber) : false}
+                        onClick={() => handleChapterClick(chapterNumber)}
+                      >
+                        {chapterNumber}
+                      </SelectionPill>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <h3 className="text-lg font-semibold">Verse range</h3>
+                    <div className="flex items-center gap-2 rounded-full border surface-card-soft px-2 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveChapter((current) => Math.max(1, current - 1))}
+                        className="surface-button rounded-full border px-3 py-1.5 text-xs"
+                      >
+                        Prev
+                      </button>
+                      <span className="min-w-[7rem] text-center text-sm font-semibold">
+                        {focusedBook?.chapterDelineation} {activeChapter}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveChapter((current) => Math.min(focusedBook?.chapters ?? current, current + 1))}
+                        className="surface-button rounded-full border px-3 py-1.5 text-xs"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
 
-            <div className="mt-5 rounded-[1.3rem] border surface-card-soft p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Open chapter</p>
-                <p className="text-xs text-foreground/60">Verses {formatVerseRange(verseStart, verseEnd) || "None"}</p>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {chapterNumbers.map((chapterNumber) => (
-                  <SelectionPill
-                    key={chapterNumber}
-                    active={activeChapter === chapterNumber}
-                    onClick={() => setActiveChapter(chapterNumber)}
-                  >
-                    {chapterNumber}
-                  </SelectionPill>
-                ))}
-              </div>
-            </div>
+                  <div className="mt-4 rounded-[1.3rem] border surface-card-soft p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Chapter</p>
+                      <p className="text-xs text-foreground/60">{formatVerseRange(verseStart, verseEnd) || "No verses"}</p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {chapterNumbers.map((chapterNumber) => (
+                        <SelectionPill
+                          key={chapterNumber}
+                          active={activeChapter === chapterNumber}
+                          onClick={() => setActiveChapter(chapterNumber)}
+                        >
+                          {chapterNumber}
+                        </SelectionPill>
+                      ))}
+                    </div>
+                  </div>
 
-            <div className="mt-5 grid gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
-              {verseNumbers.map((verseNumber) => (
-                <SelectionPill
-                  key={verseNumber}
-                  active={isVerseSelected(verseNumber)}
-                  onClick={() => handleVerseClick(verseNumber)}
-                >
-                  {verseNumber}
-                </SelectionPill>
-              ))}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+                    {verseNumbers.map((verseNumber) => (
+                      <SelectionPill
+                        key={verseNumber}
+                        active={isVerseSelected(verseNumber)}
+                        onClick={() => handleVerseClick(verseNumber)}
+                      >
+                        {verseNumber}
+                      </SelectionPill>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            </div>
-          )}
+          </div>
         </div>
       </section>
 
-      <aside className="panel-card rounded-[1.6rem] p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden">
-        <div className="space-y-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
-          <div className="space-y-2">
-            <p className="page-eyebrow">Step 3</p>
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">Attach resource</h2>
-              <p className="text-sm text-[color:var(--foreground-muted)]">
-                Add one or more coverage targets, then save the shared resource details once.
-              </p>
+      <aside className="panel-card rounded-[1.6rem] p-4 sm:p-5 xl:flex xl:min-h-0 xl:flex-col xl:overflow-hidden xl:p-0">
+        <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+          <div className="space-y-4 xl:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="page-eyebrow">Step 3</p>
+                <h2 className="text-base font-semibold tracking-tight">Attach</h2>
+              </div>
+              <div className="page-meta">{pendingSelections.length} queued</div>
             </div>
-          </div>
 
-          <div className="browse-summary-card">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Ready to add</p>
-            <p className="mt-2 text-base font-semibold">{coverage?.label ?? "No selection"}</p>
-            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">
-              {summarizeCoverage(coverage, selectionMode, books)}
-            </p>
+            <div className="browse-summary-card">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Ready</p>
+              <p className="mt-1.5 text-base font-semibold">{coverage?.label ?? "No selection"}</p>
+              <p className="mt-1 text-xs text-[color:var(--foreground-muted)]">
+                {summarizeCoverage(coverage, selectionMode, books)}
+              </p>
+              <button
+                type="button"
+                onClick={handleAddSelection}
+                disabled={!coverage}
+                className="mt-4 w-full rounded-[1rem] bg-[color:var(--browse-ink)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+              >
+                Add selection
+              </button>
+            </div>
+
+            <div className="panel-card-soft rounded-[1.35rem] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Pending</p>
+                <span className="text-xs text-foreground/55">{pendingSelections.length}</span>
+              </div>
+              {pendingSelections.length === 0 ? (
+                <p className="mt-3 text-sm text-[color:var(--foreground-muted)]">No selections yet.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {pendingSelections.map((selection, index) => (
+                    <li
+                      key={selection.key}
+                      className="flex items-start justify-between gap-3 rounded-[1rem] border bg-[color:var(--surface-card)] px-3 py-2.5"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{selection.label}</p>
+                        <p className="mt-1 text-xs text-foreground/60">#{index + 1}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSelection(selection.key)}
+                        className="surface-button rounded-full border px-2.5 py-1 text-[11px]"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Title"
+                className="soft-input w-full px-3 py-3 text-sm outline-none"
+              />
+              <input
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="URL"
+                className="soft-input w-full px-3 py-3 text-sm outline-none"
+              />
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Description"
+                rows={5}
+                className="soft-input w-full px-3 py-3 text-sm outline-none"
+              />
+            </div>
+
+            {saveState.error ? <p className="text-sm text-red-600">{saveState.error}</p> : null}
+            {saveState.success ? <p className="text-sm text-green-700 dark:text-green-400">{saveState.success}</p> : null}
+
             <button
               type="button"
-              onClick={handleAddSelection}
-              disabled={!coverage}
-              className="mt-4 w-full rounded-[1rem] bg-[color:var(--browse-ink)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+              onClick={handleSave}
+              disabled={submitting || pendingSelections.length === 0}
+              className="w-full rounded-[1rem] bg-black px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
             >
-              Add selection
+              {submitting ? "Saving..." : `Attach resource${pendingSelections.length > 0 ? ` (${pendingSelections.length})` : ""}`}
             </button>
           </div>
-
-          <div className="panel-card-soft rounded-[1.35rem] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">Pending coverage</p>
-              <span className="text-xs text-foreground/55">{pendingSelections.length}</span>
-            </div>
-            {pendingSelections.length === 0 ? (
-              <p className="mt-3 text-sm text-[color:var(--foreground-muted)]">No selections added yet.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {pendingSelections.map((selection, index) => (
-                  <li
-                    key={selection.key}
-                    className="flex items-start justify-between gap-3 rounded-[1rem] border bg-[color:var(--surface-card)] px-3 py-2.5"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{selection.label}</p>
-                      <p className="mt-1 text-xs text-foreground/60">Selection {index + 1}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSelection(selection.key)}
-                      className="surface-button rounded-full border px-2.5 py-1 text-[11px]"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Resource title"
-              className="soft-input w-full px-3 py-3 text-sm outline-none"
-            />
-            <input
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="URL (optional)"
-              className="soft-input w-full px-3 py-3 text-sm outline-none"
-            />
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Description (optional)"
-              rows={6}
-              className="soft-input w-full px-3 py-3 text-sm outline-none"
-            />
-          </div>
-
-          {saveState.error ? <p className="text-sm text-red-600">{saveState.error}</p> : null}
-          {saveState.success ? <p className="text-sm text-green-700 dark:text-green-400">{saveState.success}</p> : null}
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={submitting || pendingSelections.length === 0}
-            className="w-full rounded-[1rem] bg-black px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
-          >
-            {submitting ? "Saving..." : `Attach resource${pendingSelections.length > 0 ? ` (${pendingSelections.length})` : ""}`}
-          </button>
         </div>
       </aside>
     </div>

@@ -42,7 +42,7 @@ export default async function ResourceManagerPage() {
   const booksByVolume = Object.fromEntries(booksByVolumeEntries);
 
   return (
-    <main className="page-shell-wide py-2 sm:py-3">
+    <main className="page-shell-wide h-full overflow-hidden py-2 sm:py-0">
       <ResourceManagerWorkspace volumes={volumes} booksByVolume={booksByVolume} />
     </main>
   );
