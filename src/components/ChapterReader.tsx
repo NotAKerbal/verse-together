@@ -13,7 +13,6 @@ import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import ScriptureQuickNav from "./ScriptureQuickNav";
 import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
-import FootnoteModal from "./FootnoteModal";
 import type { Footnote } from "@/lib/openscripture";
 import { fetchChapter } from "@/lib/openscripture";
 import ReaderSettings from "./ReaderSettings";
@@ -500,7 +499,6 @@ export default function ChapterReader({
   const customSelectionActiveRef = useRef(false);
   const customWordRangeRef = useRef<WordRange | null>(null);
   const activeHandleRef = useRef<HandleKind | null>(null);
-  const [openFootnote, setOpenFootnote] = useState<null | { footnote: string; verseText: string; highlightText?: string; verse: number; index: number }>(null);
   const [dragDx, setDragDx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [animTargetX, setAnimTargetX] = useState<number | null>(null);
@@ -521,7 +519,7 @@ export default function ChapterReader({
   const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
-  const overlayOpen = !!openFootnote || openCitations || openExplorer;
+  const overlayOpen = openCitations || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
@@ -782,7 +780,7 @@ export default function ChapterReader({
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
   const showInsightAction = hasSelection && !canExploreWord;
-  const hasSidebarPanelOpen = !!openFootnote || openCitations || (openExplorer && canExploreWord);
+  const hasSidebarPanelOpen = openCitations || (openExplorer && canExploreWord);
   const selectedBounds = selectionState?.selectedBounds ?? null;
   const selectionPopoverAnchor = selectionState?.anchorRect ?? null;
   const selectionCoversWholeVerses = useMemo(() => {
@@ -1111,67 +1109,7 @@ export default function ChapterReader({
   // first/last verse values not currently used
 
   function renderVerseText(v: Verse) {
-    if (!prefs.showFootnotes) return v.text;
-    const fns = v.footnotes ?? [];
-    if (!fns || fns.length === 0) return v.text;
-    const parts: Array<ReactNode> = [];
-    const sorted = fns
-      .slice()
-      .filter((f) => typeof f.start === "number" && typeof f.end === "number")
-      .sort((a, b) => (a.start! - b.start!));
-    let cursor = 0;
-    sorted.forEach((fn, idx) => {
-      const start = Math.max(0, Math.min(v.text.length, fn.start ?? 0));
-      const originalEnd = Math.max(start, Math.min(v.text.length - 1, (fn.end ?? start)));
-      if (start > cursor) {
-        parts.push(v.text.slice(cursor, start));
-      }
-      let displayEnd = originalEnd;
-      let trailing = "";
-      while (displayEnd >= start && /\s/.test(v.text.charAt(displayEnd))) {
-        trailing = v.text.charAt(displayEnd) + trailing;
-        displayEnd -= 1;
-      }
-      if (displayEnd >= start) {
-        const highlighted = v.text.slice(start, displayEnd + 1);
-        const isActiveFootnote = openFootnote?.verse === v.verse && openFootnote?.index === idx;
-        parts.push(
-          <span
-            key={`fn-${v.verse}-${idx}-${start}-${displayEnd}`}
-            className="rounded px-0.5 cursor-pointer"
-            style={{
-              backgroundColor: isActiveFootnote
-                ? "var(--footnote-highlight-active)"
-                : "var(--footnote-highlight)",
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpenCitations(false);
-              setOpenExplorer(false);
-              setOpenFootnote({
-                footnote: fn.footnote,
-                verseText: v.text,
-                highlightText: highlighted,
-                verse: v.verse,
-                index: idx,
-              });
-            }}
-            role="button"
-            aria-label="Show footnote"
-          >
-            {highlighted}
-          </span>
-        );
-      }
-      if (trailing) {
-        parts.push(trailing);
-      }
-      cursor = originalEnd + 1;
-    });
-    if (cursor < v.text.length) {
-      parts.push(v.text.slice(cursor));
-    }
-    return <>{parts}</>;
+    return v.text;
   }
 
   function onTouchStart(e: React.TouchEvent) {
@@ -1463,16 +1401,6 @@ export default function ChapterReader({
               word={singleSelectedWord}
               panelId="word-study-panel-desktop"
               title="Explore Word"
-            />
-          ) : null}
-          {openFootnote ? (
-            <FootnoteModal
-              open={true}
-              variant="panel"
-              onClose={() => setOpenFootnote(null)}
-              footnote={openFootnote.footnote}
-              verseText={openFootnote.verseText}
-              highlightText={openFootnote.highlightText}
             />
           ) : null}
         </aside>
@@ -1905,18 +1833,6 @@ export default function ChapterReader({
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {openFootnote ? (
-        <div className="lg:hidden">
-          <FootnoteModal
-            open={true}
-            onClose={() => setOpenFootnote(null)}
-            footnote={openFootnote.footnote}
-            verseText={openFootnote.verseText}
-            highlightText={openFootnote.highlightText}
-          />
         </div>
       ) : null}
 

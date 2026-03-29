@@ -63,32 +63,6 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
       className="absolute right-0 top-full z-40 mt-3 w-[min(92vw,24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-black/10 bg-background shadow-xl dark:border-white/15"
     >
         <div className="max-h-[min(70vh,32rem)] overflow-y-auto p-3 text-sm space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-foreground/80">Footnotes</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={local.showFootnotes}
-              onClick={() => {
-                const next = { ...local, showFootnotes: !local.showFootnotes };
-                setLocal(next);
-                onChange(next);
-              }}
-              onTouchStart={stopTouchPropagation}
-              onTouchMove={stopTouchPropagation}
-              onTouchEnd={stopTouchPropagation}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                local.showFootnotes ? "bg-foreground" : "bg-black/20 dark:bg-white/20"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform ${
-                  local.showFootnotes ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-
           <div className="space-y-1">
             <div className="text-xs font-medium tracking-wide text-foreground/80">
               {`Text size - ${Math.round(local.fontScale * 100)}%`}

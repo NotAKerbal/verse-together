@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CitationTalk } from "@/lib/citations";
 import type { CitationsResponse, ScriptureResource } from "@/lib/citationsApi";
 import ResourcesPanelContent from "./ResourcesPanelContent";
 
@@ -30,7 +29,6 @@ export default function CitationsSidebarPanel({
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [talks, setTalks] = useState<CitationTalk[]>([]);
   const [resources, setResources] = useState<ScriptureResource[]>([]);
 
   const verseSpec = useMemo(
@@ -55,7 +53,6 @@ export default function CitationsSidebarPanel({
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`Request failed ${res.status}`);
       const data = (await res.json()) as CitationsResponse;
-      setTalks(Array.isArray(data?.talks) ? data.talks : []);
       setResources(Array.isArray(data?.resources) ? data.resources : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load resources");
@@ -82,12 +79,7 @@ export default function CitationsSidebarPanel({
       <p className="text-sm text-foreground/70">{book.replace(/-/g, " ")} {chapter}:{verseSpec}</p>
       {loading ? <p className="text-sm text-foreground/70">Loading…</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {!loading && !error ? (
-        <ResourcesPanelContent
-          talks={talks}
-          resources={resources}
-        />
-      ) : null}
+      {!loading && !error ? <ResourcesPanelContent resources={resources} /> : null}
     </div>
   );
 }
