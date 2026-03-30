@@ -48,6 +48,38 @@ export default defineSchema({
     .index("by_clerk_id", ["clerkId"])
     .index("by_clerk_episode", ["clerkId", "episodeId"]),
 
+  spotifyShowCache: defineTable({
+    showId: v.string(),
+    name: v.string(),
+    publisher: v.string(),
+    description: v.optional(v.string()),
+    externalUrl: v.string(),
+    imageUrl: v.optional(v.string()),
+    totalEpisodes: v.number(),
+    nextOffset: v.optional(v.number()),
+    fetchedAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_show_id", ["showId"]),
+
+  spotifyEpisodeCache: defineTable({
+    showId: v.string(),
+    episodeId: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    releaseDate: v.string(),
+    releaseDatePrecision: v.union(v.literal("year"), v.literal("month"), v.literal("day")),
+    releaseDateSortKey: v.string(),
+    durationMs: v.number(),
+    externalUrl: v.string(),
+    imageUrl: v.optional(v.string()),
+    isPlayable: v.boolean(),
+    isExternallyHosted: v.boolean(),
+    fetchedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_show_episode", ["showId", "episodeId"])
+    .index("by_show_release", ["showId", "releaseDateSortKey", "episodeId"]),
+
   scriptureShares: defineTable({
     clerkId: v.string(),
     volume: v.string(),

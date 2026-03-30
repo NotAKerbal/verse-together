@@ -32,6 +32,12 @@ export type SpotifyEpisode = {
   isPlayable: boolean;
 };
 
+export type SpotifyEpisodePage = {
+  episodes: SpotifyEpisode[];
+  nextOffset: number | null;
+  total: number;
+};
+
 type SpotifyTokenCache = {
   accessToken: string;
   expiresAt: number;
@@ -198,75 +204,67 @@ export async function fetchSpotifyShow(showId: string, market = "US"): Promise<S
   };
 }
 
-export async function fetchSpotifyShowEpisodes(
+export async function fetchSpotifyShowEpisodesPage(
   showId: string,
-  market = "US"
-): Promise<SpotifyEpisode[]> {
+  {
+    market = "US",
+    offset = 0,
+    limit = 12,
+  }: {
+    market?: string;
+    offset?: number;
+    limit?: number;
+  } = {}
+): Promise<SpotifyEpisodePage> {
   const accessToken = await getSpotifyAccessToken();
-  const episodes: SpotifyEpisode[] = [];
-  const limit = 50;
-  let offset = 0;
-  let total = Infinity;
+  const payload = await fetchSpotifyJson<{
+    items?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      html_description?: string;
+      release_date?: string;
+      release_date_precision?: "year" | "month" | "day";
+      duration_ms?: number;
+      images?: Array<{ url?: string; height?: number | null; width?: number | null }>;
+      external_urls?: { spotify?: string };
+      is_externally_hosted?: boolean;
+      is_playable?: boolean;
+    }>;
+    total?: number;
+    limit?: number;
+  }>(
+    `${SPOTIFY_API_BASE}/shows/${encodeURIComponent(showId)}/episodes?market=${encodeURIComponent(market)}&limit=${limit}&offset=${offset}`,
+    accessToken,
+    `Spotify show episodes ${showId}`
+  );
 
-  while (offset < total) {
-    const payload = await fetchSpotifyJson<{
-      items?: Array<{
-        id: string;
-        name: string;
-        description?: string;
-        html_description?: string;
-        release_date?: string;
-        release_date_precision?: "year" | "month" | "day";
-        duration_ms?: number;
-        images?: Array<{ url?: string; height?: number | null; width?: number | null }>;
-        external_urls?: { spotify?: string };
-        is_externally_hosted?: boolean;
-        is_playable?: boolean;
-      }>;
-      total?: number;
-      limit?: number;
-    }>(
-      `${SPOTIFY_API_BASE}/shows/${encodeURIComponent(showId)}/episodes?market=${encodeURIComponent(market)}&limit=${limit}&offset=${offset}`,
-      accessToken,
-      `Spotify show episodes ${showId}`
-    );
-
-    const pageItems = Array.isArray(payload.items) ? payload.items : [];
-    episodes.push(
-      ...pageItems.map((episode) => {
-        const releaseDatePrecision = episode.release_date_precision ?? "day";
-        return {
-          id: episode.id,
-          name: episode.name,
-          description: stripHtmlTags(episode.description || episode.html_description || ""),
-          htmlDescription: episode.html_description?.trim() || "",
-          releaseDate: episode.release_date?.trim() || "",
-          releaseDatePrecision,
-          releaseDateSortKey: getReleaseDateSortKey(episode.release_date || "", releaseDatePrecision),
-          durationMs: Number.isFinite(episode.duration_ms) ? episode.duration_ms ?? 0 : 0,
-          images: Array.isArray(episode.images)
-            ? episode.images
-                .filter((image) => typeof image?.url === "string" && image.url.length > 0)
-                .map((image) => ({
-                  url: image.url as string,
-                  height: image.height ?? null,
-                  width: image.width ?? null,
-                }))
-            : [],
-          externalUrl: episode.external_urls?.spotify?.trim() || `https://open.spotify.com/episode/${episode.id}`,
-          isExternallyHosted: Boolean(episode.is_externally_hosted),
-          isPlayable: Boolean(episode.is_playable ?? true),
-        };
-      })
-    );
-
-    total = Number.isFinite(payload.total) ? payload.total ?? episodes.length : episodes.length;
-    offset += pageItems.length || payload.limit || limit;
-
-    if (pageItems.length === 0) {
-      break;
-    }
-  }
+  const pageItems = Array.isArray(payload.items) ? payload.items : [];
+  const episodes = pageItems.map((episode) => {
+    const releaseDatePrecision = episode.release_date_precision ?? "day";
+    return {
+      id: episode.id,
+      name: episode.name,
+      description: stripHtmlTags(episode.description || episode.html_description || ""),
+      htmlDescription: episode.html_description?.trim() || "",
+      releaseDate: episode.release_date?.trim() || "",
+      releaseDatePrecision,
+      releaseDateSortKey: getReleaseDateSortKey(episode.release_date || "", releaseDatePrecision),
+      durationMs: Number.isFinite(episode.duration_ms) ? episode.duration_ms ?? 0 : 0,
+      images: Array.isArray(episode.images)
+        ? episode.images
+            .filter((image) => typeof image?.url === "string" && image.url.length > 0)
+            .map((image) => ({
+              url: image.url as string,
+              height: image.height ?? null,
+              width: image.width ?? null,
+            }))
+        : [],
+      externalUrl: episode.external_urls?.spotify?.trim() || `https://open.spotify.com/episode/${episode.id}`,
+      isExternallyHosted: Boolean(episode.is_externally_hosted),
+      isPlayable: Boolean(episode.is_playable ?? true),
+    };
+  });
 
   episodes.sort((left, right) => {
     const byDate = right.releaseDateSortKey.localeCompare(left.releaseDateSortKey);
@@ -276,5 +274,12 @@ export async function fetchSpotifyShowEpisodes(
     return right.id.localeCompare(left.id);
   });
 
-  return episodes;
+  const total = Number.isFinite(payload.total) ? payload.total ?? episodes.length : episodes.length;
+  const nextOffset = offset + pageItems.length < total ? offset + pageItems.length : null;
+
+  return {
+    episodes,
+    nextOffset,
+    total,
+  };
 }

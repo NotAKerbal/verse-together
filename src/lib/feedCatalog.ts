@@ -1,9 +1,10 @@
 import {
   fetchSpotifyShow,
-  fetchSpotifyShowEpisodes,
+  fetchSpotifyShowEpisodesPage,
   isSpotifyConfigured,
   type SpotifyEpisode,
 } from "@/lib/spotify";
+import { convexMutation, convexQuery } from "@/lib/convexHttp";
 
 export type CuratedFeedSectionConfig = {
   id: string;
@@ -41,7 +42,47 @@ export type CuratedFeedSection = {
   sourceCount: number;
   episodes: CuratedFeedEpisode[];
   errors: string[];
+  nextOffsets: Record<string, number | null>;
+  hasMore: boolean;
 };
+
+export type CuratedFeedSectionSummary = {
+  id: string;
+  title: string;
+  description: string;
+  sourceCount: number;
+};
+
+type CachedShowPage = {
+  showId: string;
+  show: {
+    showId: string;
+    name: string;
+    publisher: string;
+    description: string | null;
+    externalUrl: string;
+    imageUrl: string | null;
+    totalEpisodes: number;
+    nextOffset: number | null;
+    fetchedAt: number;
+  } | null;
+  cachedCount: number;
+  episodes: Array<{
+    episodeId: string;
+    title: string;
+    description: string;
+    releaseDate: string;
+    releaseDatePrecision: "year" | "month" | "day";
+    releaseDateSortKey: string;
+    durationMs: number;
+    externalUrl: string;
+    imageUrl: string | null;
+    isPlayable: boolean;
+    isExternallyHosted: boolean;
+  }>;
+};
+
+const SECTION_PAGE_SIZE = 12;
 
 export const curatedFeedSections: CuratedFeedSectionConfig[] = [
   {
@@ -92,7 +133,16 @@ export const curatedFeedSections: CuratedFeedSectionConfig[] = [
   },
 ];
 
-function episodeSortKey(episode: SpotifyEpisode) {
+export function getCuratedFeedSectionSummaries(): CuratedFeedSectionSummary[] {
+  return curatedFeedSections.map((section) => ({
+    id: section.id,
+    title: section.title,
+    description: section.description,
+    sourceCount: section.items.length,
+  }));
+}
+
+function episodeSortKey(episode: { releaseDateSortKey: string; releaseDate: string }) {
   return episode.releaseDateSortKey || episode.releaseDate;
 }
 
@@ -121,70 +171,173 @@ function mapEpisode(
   };
 }
 
-export async function getCuratedFeedSections(): Promise<{
+function mapCachedEpisode(
+  episode: CachedShowPage["episodes"][number],
+  show: NonNullable<CachedShowPage["show"]>,
+  showUrl: string,
+  note: string | null
+): CuratedFeedEpisode {
+  return {
+    id: episode.episodeId,
+    spotifyShowId: show.showId,
+    spotifyShowName: show.name,
+    spotifyShowPublisher: show.publisher,
+    spotifyShowUrl: showUrl,
+    spotifyShowNote: note,
+    title: episode.title,
+    description: episode.description,
+    releaseDate: episode.releaseDate,
+    releaseDatePrecision: episode.releaseDatePrecision,
+    durationMs: episode.durationMs,
+    externalUrl: episode.externalUrl,
+    embedUrl: `https://open.spotify.com/embed/episode/${episode.episodeId}?utm_source=generator&theme=0`,
+    imageUrl: episode.imageUrl || show.imageUrl || null,
+    isPlayable: episode.isPlayable && !episode.isExternallyHosted,
+  };
+}
+
+export async function getCuratedFeedSectionPage(
+  sectionId: string,
+  offsets?: Record<string, number | null>
+): Promise<{
   configured: boolean;
-  sections: CuratedFeedSection[];
+  section: CuratedFeedSection;
 }> {
   const configured = isSpotifyConfigured();
+  const section = curatedFeedSections.find((entry) => entry.id === sectionId);
+  if (!section) {
+    throw new Error(`Unknown feed section: ${sectionId}`);
+  }
 
   if (!configured) {
     return {
       configured,
-      sections: curatedFeedSections.map((section) => ({
+      section: {
         id: section.id,
         title: section.title,
         description: section.description,
         sourceCount: section.items.length,
         episodes: [],
         errors: [],
-      })),
+        nextOffsets: Object.fromEntries(section.items.map((item) => [item.spotifyShowId, 0])),
+        hasMore: false,
+      },
     };
   }
 
-  const fetchedSections: CuratedFeedSection[] = [];
+  const requests = section.items.map((item) => ({
+    showId: item.spotifyShowId,
+    offset: offsets?.[item.spotifyShowId] ?? 0,
+    limit: SECTION_PAGE_SIZE,
+  }));
 
-  for (const section of curatedFeedSections) {
-    const settledItems: Array<{
-      episodes: Array<{ episode: CuratedFeedEpisode; sortKey: string }>;
-      error: string | null;
-    }> = [];
+  let cachedPages = await convexQuery<CachedShowPage[]>("feedCache:getShowPages", { requests });
 
-    for (const item of section.items) {
-      try {
-        const show = await fetchSpotifyShow(item.spotifyShowId);
-        const episodes = await fetchSpotifyShowEpisodes(item.spotifyShowId);
-        settledItems.push({
-          episodes: episodes.map((episode) => ({
-            episode: mapEpisode(episode, show, item.spotifyUrl, item.note ?? null),
-            sortKey: episodeSortKey(episode),
+  const settledItems: Array<{
+    episodes: Array<{ episode: CuratedFeedEpisode; sortKey: string }>;
+    error: string | null;
+    spotifyShowId: string;
+    nextOffset: number | null;
+  }> = [];
+
+  for (const [index, item] of section.items.entries()) {
+    const cachedPage = cachedPages[index];
+    const request = requests[index];
+    try {
+      let pageData = cachedPage;
+
+      const hasRequestedSlice =
+        pageData?.show &&
+        (
+          pageData.cachedCount >= request.offset + request.limit ||
+          (pageData.show.nextOffset === null && pageData.cachedCount > request.offset)
+        );
+
+      if (!hasRequestedSlice) {
+        const [show, page] = await Promise.all([
+          fetchSpotifyShow(item.spotifyShowId),
+          fetchSpotifyShowEpisodesPage(item.spotifyShowId, {
+            offset: request.offset,
+            limit: SECTION_PAGE_SIZE,
+          }),
+        ]);
+        const fetchedAt = Date.now();
+        await convexMutation("feedCache:upsertShowPage", {
+          show: {
+            showId: show.id,
+            name: show.name,
+            publisher: show.publisher,
+            description: show.description || undefined,
+            externalUrl: show.externalUrl,
+            imageUrl: show.images[0]?.url || undefined,
+            totalEpisodes: show.totalEpisodes,
+          },
+          nextOffset: page.nextOffset,
+          fetchedAt,
+          episodes: page.episodes.map((episode) => ({
+            episodeId: episode.id,
+            title: episode.name,
+            description: episode.description || undefined,
+            releaseDate: episode.releaseDate,
+            releaseDatePrecision: episode.releaseDatePrecision,
+            releaseDateSortKey: episode.releaseDateSortKey,
+            durationMs: episode.durationMs,
+            externalUrl: episode.externalUrl,
+            imageUrl: episode.images[0]?.url || undefined,
+            isPlayable: episode.isPlayable,
+            isExternallyHosted: episode.isExternallyHosted,
           })),
-          error: null,
         });
-      } catch (error) {
-        settledItems.push({
-          episodes: [],
-          error: error instanceof Error ? error.message : "Failed to load show",
+
+        const refreshed = await convexQuery<CachedShowPage[]>("feedCache:getShowPages", {
+          requests: [request],
         });
+        pageData = refreshed[0];
       }
+
+      if (!pageData?.show) {
+        throw new Error(`Feed cache for ${item.spotifyShowId} is empty`);
+      }
+
+      settledItems.push({
+        spotifyShowId: item.spotifyShowId,
+        nextOffset: pageData.show.nextOffset,
+        episodes: pageData.episodes.map((episode) => ({
+          episode: mapCachedEpisode(episode, pageData.show!, item.spotifyUrl, item.note ?? null),
+          sortKey: episodeSortKey(episode),
+        })),
+        error: null,
+      });
+    } catch (error) {
+      settledItems.push({
+        spotifyShowId: item.spotifyShowId,
+        nextOffset: null,
+        episodes: [],
+        error: error instanceof Error ? error.message : "Failed to load show",
+      });
     }
+  }
 
-    const episodes = settledItems
-      .flatMap((entry) => entry.episodes)
-      .sort((a, b) => b.sortKey.localeCompare(a.sortKey) || b.episode.id.localeCompare(a.episode.id))
-      .map(({ episode }) => episode);
+  const episodes = settledItems
+    .flatMap((entry) => entry.episodes)
+    .sort((a, b) => b.sortKey.localeCompare(a.sortKey) || b.episode.id.localeCompare(a.episode.id))
+    .map(({ episode }) => episode);
 
-    fetchedSections.push({
+  const nextOffsets = Object.fromEntries(
+    settledItems.map((entry) => [entry.spotifyShowId, entry.nextOffset])
+  );
+
+  return {
+    configured,
+    section: {
       id: section.id,
       title: section.title,
       description: section.description,
       sourceCount: section.items.length,
       episodes,
       errors: settledItems.flatMap((entry) => (entry.error ? [entry.error] : [])),
-    });
-  }
-
-  return {
-    configured,
-    sections: fetchedSections,
+      nextOffsets,
+      hasMore: settledItems.some((entry) => entry.nextOffset !== null),
+    },
   };
 }
