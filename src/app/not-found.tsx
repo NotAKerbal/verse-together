@@ -90,12 +90,12 @@ export default function NotFound() {
                 </span>
               </Link>
               <Link
-                href="/feed"
+                href="/notes"
                 className="block rounded-[1.2rem] border px-4 py-3 surface-button"
               >
-                <span className="block text-sm font-medium">Notes feed</span>
+                <span className="block text-sm font-medium">Notes</span>
                 <span className="block text-sm text-foreground/65">
-                  Open recent notes and shared reflections.
+                  Open your note library and saved reflections.
                 </span>
               </Link>
               <Link

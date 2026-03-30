@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const LAST_BROWSE_LOCATION_KEY = "browse:last-location";
-const CORE_ROUTES = ["/browse", "/search", "/feed", "/help"];
+const CORE_ROUTES = ["/browse", "/search", "/notes", "/feed", "/help"];
 
 function scheduleIdleTask(callback: () => void) {
   if (typeof window === "undefined") return () => {};

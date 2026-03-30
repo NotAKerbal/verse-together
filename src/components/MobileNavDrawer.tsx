@@ -53,6 +53,26 @@ function NotesIcon() {
   );
 }
 
+function FeedIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 18.5a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1Z" />
+      <path d="M5 12.5a6.5 6.5 0 0 1 6.5 6.5" />
+      <path d="M5 7a12 12 0 0 1 12 12" />
+      <path d="M5 2.5A16.5 16.5 0 0 1 21.5 19" />
+    </svg>
+  );
+}
+
 function GuideIcon() {
   return (
     <svg
@@ -111,7 +131,8 @@ function CloseIcon() {
 
 const drawerIcons: Record<string, typeof BookIcon> = {
   "/browse": BookIcon,
-  "/feed": NotesIcon,
+  "/notes": NotesIcon,
+  "/feed": FeedIcon,
   "/help": GuideIcon,
   "/resources/manage": ResourceIcon,
 };

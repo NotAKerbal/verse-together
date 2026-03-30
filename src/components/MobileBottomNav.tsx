@@ -84,10 +84,10 @@ const navItems: NavItem[] = [
     active: (pathname) => isPathActive(pathname, "/search"),
   },
   {
-    href: "/feed",
+    href: "/notes",
     label: "Notes",
     icon: NotesIcon,
-    active: (pathname) => isPathActive(pathname, "/feed"),
+    active: (pathname) => isPathActive(pathname, "/notes"),
   },
 ];
 

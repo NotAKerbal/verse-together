@@ -7,7 +7,7 @@ import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 export default function AppMain({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const { activeDraftId } = useInsightBuilder();
-  const hasDesktopInsightPanel = Boolean(activeDraftId) && pathname !== "/feed" && !pathname.startsWith("/feed/");
+  const hasDesktopInsightPanel = Boolean(activeDraftId) && pathname !== "/notes" && !pathname.startsWith("/notes/");
   const resourceManagerRoute = pathname === "/resources/manage";
 
   return (

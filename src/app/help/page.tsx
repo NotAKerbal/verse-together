@@ -41,7 +41,7 @@ export default function HelpPage() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Link href="/feed" className="surface-button rounded-full border px-4 py-2 text-sm">
+        <Link href="/notes" className="surface-button rounded-full border px-4 py-2 text-sm">
           Open Notes
         </Link>
         <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">

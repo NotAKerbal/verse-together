@@ -52,7 +52,7 @@ export default function PublishInsightPage() {
           .filter(Boolean),
         visibility,
       });
-      router.push("/feed");
+      router.push("/notes");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to publish note";
       setError(msg);

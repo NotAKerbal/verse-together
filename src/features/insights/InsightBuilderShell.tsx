@@ -390,7 +390,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
 export default function InsightBuilderShell() {
   const pathname = usePathname();
   const { canUseInsights, isMobileOpen, closeBuilder, activeDraftId } = useInsightBuilder();
-  const hideShell = pathname === "/feed" || pathname.startsWith("/feed/");
+  const hideShell = pathname === "/notes" || pathname.startsWith("/notes/");
 
   if (!canUseInsights || hideShell) return null;
 

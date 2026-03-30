@@ -91,6 +91,16 @@ export type ReaderPreferences = {
   comparisonView: "inline" | "sideBySide";
 };
 
+export type WatchedFeedEpisode = {
+  episode_id: string;
+  feed_id: string | null;
+  source: string | null;
+  title: string | null;
+  published_at: string | null;
+  watched_at: string;
+  updated_at: string;
+};
+
 export async function upsertCurrentUser(
   token: string | null,
   payload: { email?: string | null; displayName?: string | null; avatarUrl?: string | null }
@@ -122,6 +132,69 @@ export async function getIsAdmin(clerkId: string): Promise<boolean> {
 
 export async function getPublishedInsightsFeed(): Promise<PublishedInsight[]> {
   return await convexQuery("insights:getPublishedInsightsFeed", {});
+}
+
+export async function listWatchedFeedEpisodes(token: string): Promise<WatchedFeedEpisode[]> {
+  const rows = await convexQuery<
+    Array<{
+      episodeId: string;
+      feedId: string | null;
+      source: string | null;
+      title: string | null;
+      publishedAt: number | null;
+      watchedAt: number;
+      updatedAt: number;
+    }>
+  >("feedEpisodes:listWatchedEpisodes", {}, token);
+
+  return rows.map((row) => ({
+    episode_id: row.episodeId,
+    feed_id: row.feedId,
+    source: row.source,
+    title: row.title,
+    published_at: row.publishedAt ? new Date(row.publishedAt).toISOString() : null,
+    watched_at: new Date(row.watchedAt).toISOString(),
+    updated_at: new Date(row.updatedAt).toISOString(),
+  }));
+}
+
+export async function getWatchedFeedEpisodeIds(token: string, episodeIds?: string[]): Promise<string[]> {
+  return await convexQuery("feedEpisodes:getWatchedEpisodeIds", {
+    episodeIds: episodeIds && episodeIds.length > 0 ? episodeIds : undefined,
+  }, token);
+}
+
+export async function markFeedEpisodeWatched(
+  token: string,
+  payload: {
+    episodeId: string;
+    feedId?: string | null;
+    source?: string | null;
+    title?: string | null;
+    publishedAt?: string | number | Date | null;
+  }
+): Promise<{ ok: true }> {
+  const publishedAt =
+    payload.publishedAt == null
+      ? undefined
+      : typeof payload.publishedAt === "number"
+        ? payload.publishedAt
+        : new Date(payload.publishedAt).getTime();
+
+  return await convexMutation("feedEpisodes:markEpisodeWatched", {
+    episodeId: payload.episodeId,
+    feedId: payload.feedId ?? undefined,
+    source: payload.source ?? undefined,
+    title: payload.title ?? undefined,
+    publishedAt: Number.isFinite(publishedAt) ? publishedAt : undefined,
+  }, token);
+}
+
+export async function markFeedEpisodeUnwatched(
+  token: string,
+  episodeId: string
+): Promise<{ ok: true }> {
+  return await convexMutation("feedEpisodes:markEpisodeUnwatched", { episodeId }, token);
 }
 
 export async function createShare(

@@ -35,6 +35,19 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_clerk_id", ["clerkId"]),
 
+  feedEpisodeWatches: defineTable({
+    clerkId: v.string(),
+    episodeId: v.string(),
+    feedId: v.optional(v.string()),
+    source: v.optional(v.string()),
+    title: v.optional(v.string()),
+    publishedAt: v.optional(v.number()),
+    watchedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_clerk_episode", ["clerkId", "episodeId"]),
+
   scriptureShares: defineTable({
     clerkId: v.string(),
     volume: v.string(),

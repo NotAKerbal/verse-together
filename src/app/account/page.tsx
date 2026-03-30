@@ -45,7 +45,7 @@ export default function AccountPage() {
       <div className="panel-card rounded-[1.35rem] p-4 space-y-2">
         <h2 className="text-base font-semibold">Where to go next</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/feed" className="surface-button rounded-full border px-4 py-2 text-sm">
+          <Link href="/notes" className="surface-button rounded-full border px-4 py-2 text-sm">
             Open Notes
           </Link>
           <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">
