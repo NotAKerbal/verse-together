@@ -1,5 +1,4 @@
 export const CHAPTER_INSIGHT_PROMPT_VERSION = 4;
-export const CHAPTER_INSIGHT_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const CHAPTER_INSIGHT_SOURCE_DOMAINS = [
   "churchofjesuschrist.org",

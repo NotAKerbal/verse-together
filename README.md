@@ -98,6 +98,8 @@ This creates ignored artifacts under `.batch-output/chapter-insights-v4/`:
 
 The batch request uses the same `gpt-5.6-luna` prompt, structured output schema, web-search source allowlist, and adaptive output budget as on-demand generation. There is no hard cap on the number of insights; the model is told to return as many well-grounded directions as the chapter warrants.
 
+Cached chapter insights do not expire on a timer. They remain valid while the local scripture text and chapter-insight prompt version match, so a completed corpus is not regenerated simply because time has passed.
+
 Submitting is deliberately a separate, explicit action because it creates billable OpenAI work. Test the canary before sending the full file:
 
 ```bash

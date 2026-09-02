@@ -2,7 +2,6 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import {
-  CHAPTER_INSIGHT_CACHE_MAX_AGE_MS,
   CHAPTER_INSIGHT_PROMPT_VERSION,
   extractChapterInsightResponse,
   parseChapterStudyPaths,
@@ -92,7 +91,6 @@ export async function POST(request: NextRequest) {
       cached &&
       cached.scriptureHash === scriptureHash &&
       cached.promptVersion === CHAPTER_INSIGHT_PROMPT_VERSION &&
-      Date.now() - cached.generatedAt < CHAPTER_INSIGHT_CACHE_MAX_AGE_MS &&
       hasValidSignature(apiKey, cached)
     ) {
       return NextResponse.json({
