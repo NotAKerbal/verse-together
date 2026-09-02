@@ -19,7 +19,13 @@ import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
+import {
+  groupChapterStudyPathsByVerse,
+  type ChapterInsightResult,
+  type ChapterStudyPath,
+} from "@/lib/chapterInsights";
 import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { api } from "../../convex/_generated/api";
 
@@ -515,6 +521,8 @@ export default function ChapterReader({
   const [annotationText, setAnnotationText] = useState("");
   const [annotationHighlightColor, setAnnotationHighlightColor] = useState<AnnotationHighlightColor>("none");
   const [annotationSaving, setAnnotationSaving] = useState(false);
+  const [chapterStudyPaths, setChapterStudyPaths] = useState<ChapterStudyPath[]>([]);
+  const [openInsightVerse, setOpenInsightVerse] = useState<number | null>(null);
   const [customMobileSelectionEnabled, setCustomMobileSelectionEnabled] = useState(false);
   const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
@@ -526,6 +534,14 @@ export default function ChapterReader({
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
   const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
+  const studyPathsByVerse = useMemo(
+    () => groupChapterStudyPathsByVerse(chapterStudyPaths),
+    [chapterStudyPaths]
+  );
+  const openStudyPaths = useMemo(
+    () => (openInsightVerse === null ? [] : studyPathsByVerse.get(openInsightVerse) ?? []),
+    [openInsightVerse, studyPathsByVerse]
+  );
 
   function parseBrowseHref(
     href: string | undefined
@@ -614,6 +630,35 @@ export default function ChapterReader({
   useEffect(() => {
     void ensureBrowserScriptureStorage();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setChapterStudyPaths([]);
+    setOpenInsightVerse(null);
+
+    void fetch("/api/insights/chapter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ volume, book, chapter }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as ChapterInsightResult;
+      })
+      .then((result) => {
+        if (result && Array.isArray(result.paths)) {
+          setChapterStudyPaths(result.paths);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          console.warn("Chapter insights could not be loaded", error);
+        }
+      });
+
+    return () => controller.abort();
+  }, [volume, book, chapter, user?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1506,6 +1551,7 @@ export default function ChapterReader({
             onPointerDown={(event) => {
               const target = event.target as HTMLElement | null;
               if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
+              if (target.closest("button, a, input, textarea, select, [role='button']")) return;
               setIsPointerSelecting(true);
             }}
             className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
@@ -1514,6 +1560,8 @@ export default function ChapterReader({
             {verses.map((v) => {
               const isJumpHighlighted = jumpHighlightVerse === v.verse;
               const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
+              const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
+              const isInsightOpen = openStudyPaths.some((path) => path.verse_numbers.includes(v.verse));
               const verseComparisons = Array.from(compareByTranslation.entries())
                 .map(([translationId, byVerse]) => {
                   const text = byVerse.get(v.verse);
@@ -1536,36 +1584,36 @@ export default function ChapterReader({
                 <li
                   key={v.verse}
                   id={`v-${v.verse}`}
-                  data-verse={v.verse}
-                  data-verse-selectable="true"
                   className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
                     isJumpHighlighted
                       ? "bg-sky-200/45 dark:bg-sky-400/20 ring-1 ring-sky-600/35 transition-colors duration-300"
                       : ""
                   }`}
                 >
-                  <div
-                    className={`w-full text-left ${
-                      customMobileSelectionEnabled
-                        ? "select-none"
-                        : "select-text selection:bg-amber-200/70 selection:text-foreground dark:selection:bg-amber-300/35"
-                    }`}
-                    data-verse-selectable="true"
-                    style={
-                      customMobileSelectionEnabled
-                        ? ({
-                            userSelect: "none",
-                            WebkitUserSelect: "none",
-                            WebkitTouchCallout: "none",
-                          } as CSSProperties)
-                        : undefined
-                    }
-                  >
-                    <span className="mr-2 select-none text-foreground/60 text-xs sm:text-sm align-top">{v.verse}</span>
-                    {verseComparisons.length === 0 ? (
-                      <span>{renderVerseText(v)}</span>
-                    ) : prefs.comparisonView === "sideBySide" ? (
-                      <span className="mt-1 block space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div
+                      className={`min-w-0 flex-1 text-left ${
+                        customMobileSelectionEnabled
+                          ? "select-none"
+                          : "select-text selection:bg-amber-200/70 selection:text-foreground dark:selection:bg-amber-300/35"
+                      }`}
+                      data-verse={v.verse}
+                      data-verse-selectable="true"
+                      style={
+                        customMobileSelectionEnabled
+                          ? ({
+                              userSelect: "none",
+                              WebkitUserSelect: "none",
+                              WebkitTouchCallout: "none",
+                            } as CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <span className="mr-2 select-none align-top text-xs text-foreground/60 sm:text-sm">{v.verse}</span>
+                      {verseComparisons.length === 0 ? (
+                        <span>{renderVerseText(v)}</span>
+                      ) : prefs.comparisonView === "sideBySide" ? (
+                        <span className="mt-1 block space-y-2">
                         {verseComparisons.map((comparison) => (
                           <span
                             key={`${v.verse}-${comparison.key}`}
@@ -1587,9 +1635,9 @@ export default function ChapterReader({
                             </span>
                           </span>
                         ))}
-                      </span>
-                    ) : (
-                      <span className="text-sm leading-6">
+                        </span>
+                      ) : (
+                        <span className="text-sm leading-6">
                         {verseComparisons.map((comparison, index) => (
                           <span key={`${v.verse}-${comparison.key}`} className="inline">
                             {index > 0 ? <span className="mx-2 text-foreground/35">|</span> : null}
@@ -1601,8 +1649,22 @@ export default function ChapterReader({
                             )}
                           </span>
                         ))}
-                      </span>
-                    )}
+                        </span>
+                      )}
+                    </div>
+                    {verseStudyPaths.length > 0 ? (
+                      <VerseStudyPathMarker
+                        verse={v.verse}
+                        open={isInsightOpen}
+                        onToggle={() => {
+                          if (isInsightOpen) {
+                            setOpenInsightVerse(null);
+                            return;
+                          }
+                          setOpenInsightVerse(v.verse);
+                        }}
+                      />
+                    ) : null}
                   </div>
                   {myVerseAnnotation ? (
                     <div
@@ -1621,6 +1683,10 @@ export default function ChapterReader({
           </div>
         </div>
       </div>
+
+      {openStudyPaths.length > 0 ? (
+        <VerseStudyPaths paths={openStudyPaths} onClose={() => setOpenInsightVerse(null)} />
+      ) : null}
 
       {customMobileSelectionEnabled && customSelectionRects.length > 0 && !selectionCoversWholeVerses ? (
         <div className="pointer-events-none fixed inset-0 z-30">

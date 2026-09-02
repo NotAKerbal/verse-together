@@ -11,6 +11,12 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
+    "test:ai-insights": "node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
+    "batch:insights:prepare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/prepareChapterInsightsBatch.mjs --skip-ref bookofmormon:1nephi:1 --canary-ref bookofmormon:1nephi:2",
+    "batch:insights:submit": "node --env-file-if-exists=.env.local scripts/submitChapterInsightsBatch.mjs",
+    "batch:insights:process": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/processChapterInsightsBatch.mjs",
+    "batch:insights:prepare-retry": "node scripts/prepareChapterInsightsRetry.mjs",
+    "experiment:insights:source-mix": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/evaluateChapterInsightPrompt.mjs",
     "generate:scriptures": "node scripts/generateScriptureData.mjs",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy"

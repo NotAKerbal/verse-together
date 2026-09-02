@@ -12,6 +12,7 @@ import {
   TextBlockEditor,
   normalizeDictionaryEntryText,
 } from "./InsightBlockEditors";
+import AiInsightAssistant from "./AiInsightAssistant";
 
 function blockLabel(type: InsightDraftBlock["type"]) {
   if (type === "scripture") return "Scripture";
@@ -432,6 +433,7 @@ export default function InsightEditorPanel({
                     </button>
                   </div>
                 </div>
+                <AiInsightAssistant draft={activeDraft} onAddTextBlock={addTextBlock} />
                 <ul
                   className="space-y-2"
                   onDragOver={(event) => {

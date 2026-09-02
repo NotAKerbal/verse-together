@@ -436,6 +436,52 @@ export default defineSchema({
     lastAccessedAt: v.number(),
   }).index("by_ref", ["bookByuId", "chapter", "verseSpec"]),
 
+  chapterInsightCache: defineTable({
+    volume: v.string(),
+    book: v.string(),
+    chapter: v.number(),
+    reference: v.string(),
+    scriptureHash: v.string(),
+    promptVersion: v.number(),
+    paths: v.array(
+      v.object({
+        kind: v.union(
+          v.literal("cross_reference"),
+          v.literal("doctrinal_context"),
+          v.literal("historical_context"),
+          v.literal("word_or_phrase"),
+          v.literal("textual_pattern"),
+          v.literal("open_question")
+        ),
+        verse_numbers: v.array(v.number()),
+        title: v.string(),
+        direction: v.string(),
+        why: v.string(),
+        look_for: v.array(v.string()),
+        sources: v.array(
+          v.object({
+            title: v.string(),
+            url: v.string(),
+            format: v.optional(v.union(v.literal("article"), v.literal("video"))),
+          })
+        ),
+        scripture_links: v.optional(v.array(
+          v.object({
+            reference: v.string(),
+            volume: v.string(),
+            book: v.string(),
+            chapter: v.number(),
+            verse_start: v.number(),
+            verse_end: v.number(),
+          })
+        )),
+      })
+    ),
+    generatedAt: v.number(),
+    signature: v.string(),
+    updatedAt: v.number(),
+  }).index("by_ref", ["volume", "book", "chapter"]),
+
 
   scriptureResources: defineTable({
     volume: v.string(),

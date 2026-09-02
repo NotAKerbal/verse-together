@@ -10,6 +10,7 @@
 
 import type * as annotations from "../annotations.js";
 import type * as cache from "../cache.js";
+import type * as chapterInsights from "../chapterInsights.js";
 import type * as crons from "../crons.js";
 import type * as feedCache from "../feedCache.js";
 import type * as feedEpisodes from "../feedEpisodes.js";
@@ -31,6 +32,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   annotations: typeof annotations;
   cache: typeof cache;
+  chapterInsights: typeof chapterInsights;
   crons: typeof crons;
   feedCache: typeof feedCache;
   feedEpisodes: typeof feedEpisodes;

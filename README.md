@@ -78,5 +78,30 @@ The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/rou
 ### Optional environment variables
 
 - `MERRIAM_WEBSTER_API_KEY` (or `MW_DICTIONARY_API_KEY`)
+- `OPENAI_API_KEY` enables the signed-in Notes assistant and automatic chapter study paths. Chapter research runs server-side with `gpt-5.6-luna`, searches only the configured LDS and Mormon studies sources, and caches grounded results in Convex. The key is never sent to the browser.
 
 If no Merriam-Webster key is configured, only Free Dictionary API entries will be returned.
+
+## Chapter insight batch
+
+Prepare the OpenAI Batch API request for every standard-works chapter except the already cached 1 Nephi 1 result:
+
+```bash
+npm run batch:insights:prepare
+```
+
+This creates ignored artifacts under `.batch-output/chapter-insights-v4/`:
+
+- `canary.jsonl` contains only 1 Nephi 2 and should be submitted first.
+- `requests.jsonl` contains the remaining 1,581 chapters.
+- `manifest.json` records chapter counts, model and prompt versions, file size, and a SHA-256 checksum.
+
+The batch request uses the same `gpt-5.6-luna` prompt, structured output schema, web-search source allowlist, and adaptive output budget as on-demand generation. There is no hard cap on the number of insights; the model is told to return as many well-grounded directions as the chapter warrants.
+
+Submitting is deliberately a separate, explicit action because it creates billable OpenAI work. Test the canary before sending the full file:
+
+```bash
+npm run batch:insights:submit -- .batch-output/chapter-insights-v4/canary.jsonl --confirm-submit
+```
+
+After validating the canary output, replace `canary.jsonl` with `requests.jsonl` to submit the full set. The submit command writes a local `.submitted.json` receipt beside the request file and never prints the API key.
