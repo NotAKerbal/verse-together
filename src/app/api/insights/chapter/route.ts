@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -41,23 +41,10 @@ function cacheSignature(
   return createHmac("sha256", apiKey).update(stableJsonStringify(payload)).digest("hex");
 }
 
-function hasValidSignature(apiKey: string, cached: CachedChapterInsight): boolean {
-  if (!/^[a-f0-9]{64}$/i.test(cached.signature)) return false;
-  const expected = cacheSignature(apiKey, {
-    reference: cached.reference,
-    scriptureHash: cached.scriptureHash,
-    promptVersion: cached.promptVersion,
-    paths: cached.paths,
-    generatedAt: cached.generatedAt,
-  });
-  return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(cached.signature, "hex"));
-}
-
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    return NextResponse.json({ error: "AI insights are not configured yet." }, { status: 503 });
-  }
+  // Study paths were generated once in a batch and cached in Convex. Reads never need an
+  // API key; the key only enables on-demand generation for a chapter that has no cache entry.
+  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
 
   let payload: ChapterRequest;
   try {
@@ -90,8 +77,7 @@ export async function POST(request: NextRequest) {
     if (
       cached &&
       cached.scriptureHash === scriptureHash &&
-      cached.promptVersion === CHAPTER_INSIGHT_PROMPT_VERSION &&
-      hasValidSignature(apiKey, cached)
+      cached.promptVersion === CHAPTER_INSIGHT_PROMPT_VERSION
     ) {
       return NextResponse.json({
         reference: cached.reference,
@@ -102,6 +88,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.warn("Chapter insight cache read failed", error);
+  }
+
+  if (!apiKey) {
+    return NextResponse.json({ error: "AI insights are not configured yet." }, { status: 503 });
   }
 
   const authState = await auth();
