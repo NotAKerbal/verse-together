@@ -30,10 +30,10 @@ export default function ContinueReadingCard() {
   const delineation = getChapterDelineation(position.volume).toLowerCase();
 
   return (
-    <div className="w-fit max-w-full -rotate-1 px-2 pt-1">
+    <div className="h-full max-w-full -rotate-1 px-2 pt-1">
       <Link
         href={getChapterHref(position)}
-        className="sticky-note interactive-card group flex max-w-full items-center gap-4 px-5 py-4 text-[color:var(--foreground)]"
+        className="sticky-note interactive-card group flex h-full max-w-full items-center gap-4 px-5 py-4 text-[color:var(--foreground)]"
         aria-label={`Continue reading ${label}`}
         data-tap
       >

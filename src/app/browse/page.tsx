@@ -1,5 +1,7 @@
 import Link from "next/link";
 import SelectionHeader from "@/components/SelectionHeader";
+import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
+import ActivePlanCard from "@/features/plans/ActivePlanCard";
 import ContinueReadingCard from "@/features/plans/ContinueReadingCard";
 import { getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
 
@@ -37,7 +39,12 @@ export default async function BrowsePage({
   return (
     <section className="page-shell browse-shell">
       <SelectionHeader title="Library" />
-      <ContinueReadingCard />
+      {/* auto-fit: cards that render nothing leave no gap, and the rest share the row. */}
+      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
+        <ContinueReadingCard />
+        <ActivePlanCard />
+        <ComeFollowMeCard />
+      </div>
       <ul className="browse-grid">
         {commonVolumes.map((volume) => (
           <li key={volume.id} className={volume.id === "pearl" ? "sm:col-span-2 lg:col-span-1" : ""}>
