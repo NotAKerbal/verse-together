@@ -1,58 +1,60 @@
-# Verse Together Feature Ideas
+# Verse Together Roadmap
 
-This document captures potential product features to guide roadmap planning.
+Updated 2026-09-26 alongside the Marker redesign. This is the planning list: what exists, what is hidden, and what still needs to be built, roughly in the order it makes sense to build it.
 
-## High-Impact Near-Term Ideas
+## What exists today
 
-1. Cloud-synced folders for notes
-- Move folder metadata from local `localStorage` to Convex so folders are consistent across devices and accounts.
-- Current gap: note organization in `src/components/NotesWorkspace.tsx` is local-only.
+- Reader for all five standard works with verse selection, per-verse annotations and highlight colors, footnotes, and reader settings (typeface, size, comparison view).
+- Bible translation compare: KJV built in, more translations from the catalog picker, inline word diff or side by side.
+- Notes (insights): block editor with scripture, text, quote, and dictionary blocks (Webster 1828, 1844, 1913, etymology), folders, tags, drafts vs. published, private / friends / link / public visibility, markdown export, share links.
+- AI study paths per chapter (the lightbulb bubbles). All 1,582 chapters were generated once in a batch and are cached in Convex; reading them needs no API key. `OPENAI_API_KEY` is only for regenerating a chapter or the signed-in notes assistant.
+- Word study: dictionary and etymology lookups from a selection.
+- Citations and talks: General Conference talks that cite a verse, talk reader.
+- Search across scriptures, notes, and talks.
+- Curated podcast feed (Spotify) and social shares with reactions and comments.
 
-2. Full-text note search
-- Add search across note content (`insightDraftBlocks.text`), not just title/tag/folder filters.
-- Goal: make older insights easy to retrieve quickly.
+## Hidden for now (code kept, removed from navigation)
 
+- Feed (curated podcasts + social shares) at `/feed`.
+- Guide at `/help`.
+- Resources manager at `/resources/manage`.
 
-3. Insight version history
-- Track draft snapshots or diffs and allow restore.
-- Goal: improve trust, reduce fear of editing/deleting content, support iterative study.
+Bring each back only once it has a real reason to exist in the nav.
 
-4. Verse-linked personal annotation layer
-- Let users attach personal/public annotations directly to verse numbers in the chapter reader.
-- Keep this separate from social share/comment flows.
+## To build, in order
 
-## Mid-Term Expansion Ideas
+### 1. Study plans and reading progress
+- Plans as a first-class object: a sequence of chapters or passages, optionally dated (Come Follow Me week, 30-day Book of Mormon, custom).
+- Per-chapter read state so the Books and Chapters grids can show green / yellow tiles and a progress bar per book, as in the mockups.
+- "Continue reading" card on the Library page from the last reading position.
+- Streaks come out of this for free once check-ins exist. Keep the streak chip quiet until plans ship.
+- Earlier attempts left `studyPlans`, `scheduledStudyPlans`, `studyPlanCheckins`, and `readingPositions` tables in the dev deployment and `lessonPlans` tables in production; audit those before designing the schema.
 
-5. Weekly study plans + streak tracking
-- Offer structured study plans (for example, 5-day topical plans) with completion tracking.
-- Optional reminders can improve consistency.
+### 2. Cloud-synced folders for notes
+- Folder membership and folder hierarchy currently live in `localStorage`; move them to Convex so notes look the same on every device.
 
-6. Better social feed ranking + following
-- Improve ranking with friends/following priority, mute controls, and personalization.
-- Current feed behavior in `convex/social.ts` is mostly reaction count + recency.
+### 3. Full-text note search
+- Search inside block text, not only title, tags, and folder.
 
-7. Shared study groups (persistent, not only friendships)
-- Introduce group entities with group-only note collections, insights, and discussion.
-- This supports recurring classes or family/group study.
+### 4. Insight version history
+- Snapshot drafts on save; allow restore. Removes the fear of editing published work.
 
-## Advanced / Differentiating Ideas
+### 5. Verse-linked insights in the reader
+- Show a small marker on verses that already appear in one of your insights, and open that insight from the marker. The lightbulb pattern is established now; reuse it with a different tint.
 
-8. Citation and source graph for insights
-- Visualize relationships between verses, talks, notes, and reused ideas.
-- Build on existing citation-related APIs and features.
+### 6. Mobile quick capture
+- One-tap actions from a selection: save verse to current insight, add dictionary block, share with comment.
 
-9. Mobile capture quick actions
-- Add one-tap actions from reader selection: save verse to note, add dictionary block, share with comment.
-- Goal: reduce friction for rapid capture during reading.
+### 7. Social, once the above is solid
+- Friends presence ("Jonah is in Alma 32") and shared verses in the reader side panel.
+- Feed ranking with following, mute controls, and an insights-only filter.
+- Study groups: persistent groups with shared insight collections and discussion.
 
-## Suggested Prioritization
+### 8. Citation and source graph
+- Visualize links between verses, talks, notes, and study paths. Builds on the citation cache and the scripture links inside study paths.
 
-1. Cloud-synced folders for notes
-2. Full-text note search
-3. Insight version history
-4. Verse-linked annotations
-5. Weekly study plans + streaks
-6. Feed ranking + following
-7. Shared study groups
-8. Citation/source graph
-9. Mobile quick-capture actions
+## Housekeeping
+
+- ESLint fails at config load (circular structure in the legacy `eslintrc` bridge). Fix the flat config so `npm run lint` runs.
+- Turbopack dev leaks PostCSS workers with Tailwind v4 on Next 16.1; dev scripts use webpack until that is fixed upstream.
+- Clerk keys in `.env.local` are the test instance; production uses `clerk.versetogether.org`. Signed-in data (insights, annotations) is therefore per environment.
