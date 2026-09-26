@@ -302,8 +302,22 @@ export default defineSchema({
         label: v.string(),
       })
     ),
+    // Ordered scope the steps were expanded from, so the builder can round-trip an edit.
+    selections: v.optional(
+      v.array(
+        v.object({
+          kind: v.union(v.literal("volume"), v.literal("book"), v.literal("range")),
+          volume: v.string(),
+          book: v.optional(v.string()),
+          from: v.optional(v.number()),
+          to: v.optional(v.number()),
+        })
+      )
+    ),
     startDate: v.optional(v.string()),
     chaptersPerDay: v.optional(v.number()),
+    // Seven booleans, Monday first. Missing means every day.
+    readingDays: v.optional(v.array(v.boolean())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

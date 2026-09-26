@@ -1,12 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireClerkId } from "./utils";
 
 const MAX_STEPS = 2000;
 const MAX_TITLE = 120;
 const MAX_LABEL = 80;
+const MAX_SELECTIONS = 200;
 
 const planStepValidator = v.object({
   volume: v.string(),
@@ -15,9 +16,18 @@ const planStepValidator = v.object({
   label: v.string(),
 });
 
+const planSelectionValidator = v.object({
+  kind: v.union(v.literal("volume"), v.literal("book"), v.literal("range")),
+  volume: v.string(),
+  book: v.optional(v.string()),
+  from: v.optional(v.number()),
+  to: v.optional(v.number()),
+});
+
 const planTemplateValidator = v.union(v.literal("bom-30"), v.literal("book-daily"), v.literal("custom"));
 
 type PlanStep = { volume: string; book: string; chapter: number; label: string };
+type PlanSelection = { kind: "volume" | "book" | "range"; volume: string; book?: string; from?: number; to?: number };
 
 function chapterKey(step: { volume: string; book: string; chapter: number }): string {
   return `${step.volume}:${step.book}:${step.chapter}`;
@@ -64,6 +74,60 @@ function normalizeSteps(steps: PlanStep[]): PlanStep[] {
   return out;
 }
 
+function normalizeSelections(selections: PlanSelection[] | undefined): PlanSelection[] | undefined {
+  if (!selections) return undefined;
+  if (selections.length > MAX_SELECTIONS) throw new Error(`A plan can hold at most ${MAX_SELECTIONS} selections`);
+  return selections.map((selection): PlanSelection => {
+    const volume = selection.volume.trim();
+    if (!volume) throw new Error("Every selection needs a volume");
+    if (selection.kind === "volume") return { kind: "volume", volume };
+    const book = (selection.book ?? "").trim();
+    if (!book) throw new Error("Book selections need a book");
+    if (selection.kind === "book") return { kind: "book", volume, book };
+    const from = selection.from ?? 1;
+    const to = selection.to ?? from;
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from) {
+      throw new Error("Chapter ranges must run from a lower chapter to a higher one");
+    }
+    return { kind: "range", volume, book, from, to };
+  });
+}
+
+function normalizeReadingDays(days: boolean[] | undefined): boolean[] | undefined {
+  if (!days) return undefined;
+  if (days.length !== 7) throw new Error("Reading days must list all seven weekdays");
+  if (!days.some(Boolean)) throw new Error("Pick at least one reading day");
+  if (days.every(Boolean)) return undefined;
+  return days;
+}
+
+/** Validates and trims the fields shared by create and update. */
+function normalizePlanInput(input: {
+  title: string;
+  steps: PlanStep[];
+  selections?: PlanSelection[];
+  startDate?: string;
+  chaptersPerDay?: number;
+  readingDays?: boolean[];
+}) {
+  const title = input.title.trim().slice(0, MAX_TITLE);
+  if (!title) throw new Error("Give the plan a title");
+  const steps = normalizeSteps(input.steps);
+  const selections = normalizeSelections(input.selections);
+  const startDate = normalizeDateKey(input.startDate);
+  const chaptersPerDay =
+    input.chaptersPerDay !== undefined ? Math.max(1, Math.min(steps.length, Math.round(input.chaptersPerDay))) : undefined;
+  const readingDays = normalizeReadingDays(input.readingDays);
+  return { title, steps, selections, startDate, chaptersPerDay, readingDays };
+}
+
+async function loadOwnedPlan(ctx: MutationCtx, planId: Id<"readingPlans">): Promise<Doc<"readingPlans">> {
+  const clerkId = await requireClerkId(ctx);
+  const plan = await ctx.db.get(planId);
+  if (!plan || plan.clerkId !== clerkId) throw new Error("Plan not found");
+  return plan;
+}
+
 function summarizePlan(plan: Doc<"readingPlans">, readMap: Map<string, number>) {
   let readCount = 0;
   for (const step of plan.steps) {
@@ -77,7 +141,10 @@ function summarizePlan(plan: Doc<"readingPlans">, readMap: Map<string, number>) 
     readCount,
     startDate: plan.startDate ?? null,
     chaptersPerDay: plan.chaptersPerDay ?? null,
+    readingDays: plan.readingDays ?? null,
+    selections: plan.selections ?? null,
     createdAt: plan.createdAt,
+    updatedAt: plan.updatedAt,
   };
 }
 
@@ -123,25 +190,19 @@ export const createPlan = mutation({
     title: v.string(),
     template: planTemplateValidator,
     steps: v.array(planStepValidator),
+    selections: v.optional(v.array(planSelectionValidator)),
     startDate: v.optional(v.string()),
     chaptersPerDay: v.optional(v.number()),
+    readingDays: v.optional(v.array(v.boolean())),
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
-    const title = args.title.trim().slice(0, MAX_TITLE);
-    if (!title) throw new Error("Give the plan a title");
-    const steps = normalizeSteps(args.steps);
-    const startDate = normalizeDateKey(args.startDate);
-    const chaptersPerDay =
-      args.chaptersPerDay !== undefined ? Math.max(1, Math.min(steps.length, Math.round(args.chaptersPerDay))) : undefined;
+    const normalized = normalizePlanInput(args);
     const now = Date.now();
     const id: Id<"readingPlans"> = await ctx.db.insert("readingPlans", {
       clerkId,
-      title,
       template: args.template,
-      steps,
-      startDate,
-      chaptersPerDay,
+      ...normalized,
       createdAt: now,
       updatedAt: now,
     });
@@ -149,13 +210,40 @@ export const createPlan = mutation({
   },
 });
 
+/**
+ * Replaces the plan's scope, steps, pace, and title. Read state lives in
+ * `chapterReads`, so chapters already read stay read; only the schedule is rebuilt.
+ */
+export const updatePlan = mutation({
+  args: {
+    planId: v.id("readingPlans"),
+    title: v.string(),
+    steps: v.array(planStepValidator),
+    selections: v.optional(v.array(planSelectionValidator)),
+    startDate: v.optional(v.string()),
+    chaptersPerDay: v.optional(v.number()),
+    readingDays: v.optional(v.array(v.boolean())),
+  },
+  handler: async (ctx, args) => {
+    const plan = await loadOwnedPlan(ctx, args.planId);
+    const normalized = normalizePlanInput(args);
+    await ctx.db.replace(plan._id, {
+      clerkId: plan.clerkId,
+      // Once a plan has been through the builder it is fully described by its selections.
+      template: "custom",
+      ...normalized,
+      createdAt: plan.createdAt,
+      updatedAt: Date.now(),
+    });
+    return { id: plan._id };
+  },
+});
+
 export const deletePlan = mutation({
   args: { planId: v.id("readingPlans") },
   handler: async (ctx, args) => {
-    const clerkId = await requireClerkId(ctx);
-    const plan = await ctx.db.get(args.planId);
-    if (!plan || plan.clerkId !== clerkId) throw new Error("Plan not found");
-    await ctx.db.delete(args.planId);
+    const plan = await loadOwnedPlan(ctx, args.planId);
+    await ctx.db.delete(plan._id);
     return { ok: true };
   },
 });
