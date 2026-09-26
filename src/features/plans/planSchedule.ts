@@ -246,3 +246,86 @@ export function describePlanPace(plan: {
   if (!pace.firstDate || !pace.endDate) return `${chapters} · ${cadence}`;
   return `${chapters} · ${cadence} · ${formatDateKey(pace.firstDate)} to ${formatDateKey(pace.endDate)}`;
 }
+
+/* ---------- today's reading ---------- */
+
+export type PlanDayGroup<Step> = {
+  day: number;
+  date: string | null;
+  steps: Step[];
+  isToday: boolean;
+};
+
+export type PlanSchedule<Step> = {
+  /** "Day 3 of 30", "Up next", "Rest day", "Not started yet" or "Schedule finished". */
+  todayTitle: string;
+  todayNote: string | null;
+  todaySteps: Step[];
+  /** One group per reading day, or null for plans without a cadence. */
+  groups: PlanDayGroup<Step>[] | null;
+};
+
+/** What to read today, and the whole plan grouped by day, from the plan's cadence and calendar. */
+export function buildPlanSchedule<Step extends { readAt: number | null }>(
+  plan: {
+    steps: Step[];
+    stepCount: number;
+    chaptersPerDay: number | null;
+    startDate: string | null;
+    readingDays?: readonly boolean[] | null;
+  },
+  now: Date = new Date()
+): PlanSchedule<Step> {
+  const cadence = plan.chaptersPerDay;
+  const unread = plan.steps.filter((step) => !step.readAt);
+  const allReadNote = unread.length === 0 ? "Every chapter is read." : null;
+
+  if (!cadence) {
+    return {
+      todayTitle: "Up next",
+      todayNote: allReadNote,
+      todaySteps: unread.slice(0, 1),
+      groups: null,
+    };
+  }
+
+  const readingDays = normalizeReadingDays(plan.readingDays);
+  const dayCount = getPlanDayCount(plan.stepCount, cadence);
+  const stepsForDay = (day: number) => plan.steps.slice(day * cadence, (day + 1) * cadence);
+  const dayIndex = plan.startDate ? getPlanDayIndex(plan.startDate, readingDays, now) : null;
+  let activeDay: number | null = null;
+  let todayTitle = "Up next";
+  let todayNote: string | null = allReadNote;
+  let todaySteps = unread.slice(0, cadence);
+
+  if (plan.startDate && dayIndex !== null) {
+    if (dayIndex < 0) {
+      const firstDate = getPlanDayDate(plan.startDate, 0, readingDays) ?? plan.startDate;
+      todayTitle = "Not started yet";
+      todayNote = `Day 1 is ${formatDateKey(firstDate)}.`;
+      todaySteps = stepsForDay(0);
+    } else if (dayIndex >= dayCount) {
+      todayTitle = "Schedule finished";
+      todayNote = unread.length ? `${pluralize(unread.length, "chapter")} still unread.` : allReadNote;
+    } else if (!isReadingDay(now, readingDays)) {
+      const nextDate = getPlanDayDate(plan.startDate, dayIndex, readingDays);
+      todayTitle = "Rest day";
+      todayNote = `Day ${dayIndex + 1} is ${nextDate ? formatDateKey(nextDate) : "next"}.`;
+      todaySteps = stepsForDay(dayIndex);
+    } else {
+      activeDay = dayIndex;
+      todayTitle = `Day ${dayIndex + 1} of ${dayCount}`;
+      todayNote = null;
+      todaySteps = stepsForDay(dayIndex);
+    }
+  }
+
+  const groups: PlanDayGroup<Step>[] = Array.from({ length: dayCount }, (_, day) => ({
+    day,
+    date: plan.startDate ? getPlanDayDate(plan.startDate, day, readingDays) : null,
+    steps: stepsForDay(day),
+    isToday: activeDay === day,
+  }));
+
+  return { todayTitle, todayNote, todaySteps, groups };
+}
