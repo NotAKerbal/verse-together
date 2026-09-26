@@ -23,15 +23,15 @@ Bring each back only once it has a real reason to exist in the nav.
 
 ## To build, in order
 
-### 1. Study plans and reading progress
+### 1. Study plans and reading progress (first pass merged on branch marker-redesign)
 - Plans as a first-class object: a sequence of chapters or passages, optionally dated (Come Follow Me week, 30-day Book of Mormon, custom).
 - Per-chapter read state so the Books and Chapters grids can show green / yellow tiles and a progress bar per book, as in the mockups.
 - "Continue reading" card on the Library page from the last reading position.
 - Streaks come out of this for free once check-ins exist. Keep the streak chip quiet until plans ship.
 - Earlier attempts left `studyPlans`, `scheduledStudyPlans`, `studyPlanCheckins`, and `readingPositions` tables in the dev deployment and `lessonPlans` tables in production; audit those before designing the schema.
 
-### 2. Cloud-synced folders for notes
-- Folder membership and folder hierarchy currently live in `localStorage`; move them to Convex so notes look the same on every device.
+### 2. Cloud-synced folders for notes (done on marker-redesign)
+- Folders and hierarchy live in Convex; existing localStorage folders are imported once on first signed-in load.
 
 ### 3. Full-text note search
 - Search inside block text, not only title, tags, and folder.
@@ -39,7 +39,7 @@ Bring each back only once it has a real reason to exist in the nav.
 ### 4. Insight version history
 - Snapshot drafts on save; allow restore. Removes the fear of editing published work.
 
-### 5. Verse-linked insights in the reader
+### 5. Verse-linked insights in the reader (done on marker-redesign)
 - Show a small marker on verses that already appear in one of your insights, and open that insight from the marker. The lightbulb pattern is established now; reuse it with a different tint.
 
 ### 6. Mobile quick capture
