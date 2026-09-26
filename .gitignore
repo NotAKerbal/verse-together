@@ -45,3 +45,6 @@ data/dictionary/
 
 # Generated OpenAI batch request and result files
 /.batch-output/
+
+# Claude Code worktrees
+.claude/
