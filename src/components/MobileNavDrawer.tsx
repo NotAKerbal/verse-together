@@ -43,6 +43,18 @@ function LightbulbIcon() {
   );
 }
 
+function ListCheckIcon() {
+  return (
+    <svg aria-hidden="true" {...iconProps}>
+      <path d="m3.5 6.5 1.5 1.5 3-3" />
+      <path d="M11 7h9" />
+      <path d="m3.5 12.5 1.5 1.5 3-3" />
+      <path d="M11 13h9" />
+      <path d="M4 19h4" />
+      <path d="M11 19h9" />
+    </svg>
+  );
+}
 
 function CloseIcon() {
   return (
@@ -56,11 +68,13 @@ function CloseIcon() {
 const drawerIcons: Record<string, typeof BookIcon> = {
   "/browse": BookIcon,
   "/notes": LightbulbIcon,
+  "/plans": ListCheckIcon,
 };
 
 const drawerTints: Record<string, string> = {
   "/browse": "var(--accent-primary)",
   "/notes": "var(--accent-note)",
+  "/plans": "var(--accent-mint)",
 };
 
 export default function MobileNavDrawer({ open, onClose }: Props) {
