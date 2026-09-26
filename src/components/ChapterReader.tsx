@@ -21,6 +21,7 @@ import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToAc
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
+import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import {
   groupChapterStudyPathsByVerse,
@@ -542,6 +543,14 @@ export default function ChapterReader({
   const openStudyPaths = useMemo(
     () => (openInsightVerse === null ? [] : studyPathsByVerse.get(openInsightVerse) ?? []),
     [openInsightVerse, studyPathsByVerse]
+  );
+  const myInsightRefs = useQuery(
+    api.insights.listMyScriptureRefsForChapter,
+    user ? { volume, book, chapter } : "skip"
+  ) as VerseInsightRef[] | undefined;
+  const insightRefsByVerse = useMemo(
+    () => groupVerseInsightRefsByVerse(myInsightRefs ?? []),
+    [myInsightRefs]
   );
 
   function parseBrowseHref(
@@ -1562,6 +1571,7 @@ export default function ChapterReader({
               const isJumpHighlighted = jumpHighlightVerse === v.verse;
               const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
               const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
+              const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
               const isInsightOpen = openStudyPaths.some((path) => path.verse_numbers.includes(v.verse));
               const verseComparisons = Array.from(compareByTranslation.entries())
                 .map(([translationId, byVerse]) => {
@@ -1663,6 +1673,16 @@ export default function ChapterReader({
                             return;
                           }
                           setOpenInsightVerse(v.verse);
+                        }}
+                      />
+                    ) : null}
+                    {verseInsightRefs.length > 0 ? (
+                      <VerseInsightMarker
+                        verse={v.verse}
+                        insights={verseInsightRefs}
+                        onOpen={async (draftId) => {
+                          if (draftId !== activeDraftId) await switchDraft(draftId);
+                          openBuilder();
                         }}
                       />
                     ) : null}
