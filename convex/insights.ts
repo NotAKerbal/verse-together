@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireClerkId } from "./utils";
+import { normalizeScriptureVolume } from "../src/lib/scriptureVolumes";
 
 const insightBlockType = v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"), v.literal("dictionary"));
 const insightVisibility = v.union(
@@ -41,6 +42,12 @@ function normalizeTags(tags: string[] | undefined): string[] {
     out.push(normalized);
   }
   return out.slice(0, 20);
+}
+
+// Loose book key so "1-nephi", "1nephi" and "1 Nephi" all compare equal regardless of
+// which producer (reader URL, feed, search) wrote the scripture block.
+function looseBookKey(book: string): string {
+  return (book || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 async function maybeClerkId(ctx: any): Promise<string | null> {
@@ -152,6 +159,52 @@ export const getDraft = query({
         updated_at: toIso(b.updatedAt),
       })),
     };
+  },
+});
+
+export const listMyScriptureRefsForChapter = query({
+  args: { volume: v.string(), book: v.string(), chapter: v.number() },
+  handler: async (ctx, args) => {
+    // Signed-out viewers simply get no markers (no auth error while the token is still loading).
+    const clerkId = await maybeClerkId(ctx);
+    if (!clerkId) return [];
+    const targetVolume = normalizeScriptureVolume(args.volume);
+    const targetBook = looseBookKey(args.book);
+    const drafts = await ctx.db
+      .query("insightDrafts")
+      .withIndex("by_clerk_last_active", (q: any) => q.eq("clerkId", clerkId))
+      .order("desc")
+      .collect();
+    const out: Array<{
+      draftId: string;
+      draftTitle: string;
+      verseStart: number;
+      verseEnd: number;
+      status: "draft" | "published";
+    }> = [];
+    for (const draft of drafts) {
+      if (draft.status !== "draft" && draft.status !== "published") continue;
+      // scriptureRef is a nested optional object, so it cannot be indexed; scan this draft's blocks.
+      const blocks = await ctx.db
+        .query("insightDraftBlocks")
+        .withIndex("by_draft", (q: any) => q.eq("draftId", draft._id))
+        .filter((q: any) => q.eq(q.field("type"), "scripture"))
+        .collect();
+      for (const block of blocks) {
+        const ref = block.scriptureRef;
+        if (!ref || ref.chapter !== args.chapter) continue;
+        if (normalizeScriptureVolume(ref.volume) !== targetVolume) continue;
+        if (looseBookKey(ref.book) !== targetBook) continue;
+        out.push({
+          draftId: draft._id,
+          draftTitle: draft.title,
+          verseStart: Math.min(ref.verseStart, ref.verseEnd),
+          verseEnd: Math.max(ref.verseStart, ref.verseEnd),
+          status: draft.status,
+        });
+      }
+    }
+    return out;
   },
 });
 
