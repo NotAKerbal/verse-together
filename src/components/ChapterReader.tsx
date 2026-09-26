@@ -81,12 +81,12 @@ const MOBILE_SELECTION_EDGE_SCROLL_ZONE = 56;
 const MOBILE_SELECTION_EDGE_SCROLL_STEP = 18;
 
 function annotationHighlightClass(color: AnnotationHighlightColor) {
-  if (color === "yellow") return "border-amber-500/40 bg-amber-500/7";
-  if (color === "blue") return "border-sky-500/40 bg-sky-500/7";
+  if (color === "yellow") return "border-[color:var(--surface-border)] bg-[color:var(--accent-note)]";
+  if (color === "blue") return "border-[color:var(--surface-border)] bg-[color:var(--accent-sky-soft)]";
   if (color === "green") return "border-emerald-500/40 bg-emerald-500/7";
   if (color === "pink") return "border-pink-500/40 bg-pink-500/7";
   if (color === "purple") return "border-violet-500/40 bg-violet-500/7";
-  return "border-black/15 dark:border-white/20 bg-black/[0.015] dark:bg-white/[0.025]";
+  return "border-[color:var(--surface-border)] bg-black/[0.015] dark:bg-white/[0.025]";
 }
 
 function extractFirstWord(value: string): string {
@@ -297,9 +297,9 @@ const ANNOTATION_HIGHLIGHT_OPTIONS: Array<{
   label: string;
   swatchClass: string;
 }> = [
-  { value: "none", label: "None", swatchClass: "bg-transparent border border-black/20 dark:border-white/25" },
-  { value: "yellow", label: "Yellow", swatchClass: "bg-amber-400/80 border border-amber-500/80" },
-  { value: "blue", label: "Blue", swatchClass: "bg-sky-400/80 border border-sky-500/80" },
+  { value: "none", label: "None", swatchClass: "bg-transparent border border-[color:var(--surface-border)]" },
+  { value: "yellow", label: "Yellow", swatchClass: "bg-[color:var(--accent-primary)] border-2 border-[color:var(--surface-border)]" },
+  { value: "blue", label: "Blue", swatchClass: "bg-[color:var(--accent-sky)] border-2 border-[color:var(--surface-border)]" },
   { value: "green", label: "Green", swatchClass: "bg-emerald-400/80 border border-emerald-500/80" },
   { value: "pink", label: "Pink", swatchClass: "bg-pink-400/80 border border-pink-500/80" },
   { value: "purple", label: "Purple", swatchClass: "bg-violet-400/80 border border-violet-500/80" },
@@ -1397,7 +1397,7 @@ export default function ChapterReader({
           {/* Right swipe shows previous title */}
           {translateX > 0 && prevPreview ? (
             <div className="absolute inset-0 flex items-start justify-start">
-              <div className="m-3 sm:m-4 rounded-md border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-3 py-2 shadow"
+              <div className="m-3 sm:m-4 rounded-md border border-[color:var(--surface-border)] bg-background/80 px-3 py-2 shadow"
                    style={{ opacity: overlayOpacity }}>
                 <div className="text-base sm:text-xl font-semibold">{prevPreview.reference}</div>
               </div>
@@ -1406,7 +1406,7 @@ export default function ChapterReader({
           {/* Left swipe shows next title */}
           {translateX < 0 && nextPreview ? (
             <div className="absolute inset-0 flex items-start justify-end">
-              <div className="m-3 sm:m-4 rounded-md border border-black/10 dark:border-white/15 bg-background/80 backdrop-blur px-3 py-2 shadow text-right"
+              <div className="m-3 sm:m-4 rounded-md border border-[color:var(--surface-border)] bg-background/80 px-3 py-2 shadow text-right"
                    style={{ opacity: overlayOpacity }}>
                 <div className="text-base sm:text-xl font-semibold">{nextPreview.reference}</div>
               </div>
@@ -1468,7 +1468,7 @@ export default function ChapterReader({
               isAtTop ? "py-0" : "py-1"
             }`}
           >
-            <div className="panel-card-strong mobile-menu-clearance relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 backdrop-blur sm:px-4">
+            <div className="panel-card-strong mobile-menu-clearance relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 sm:px-4">
               <div className="flex items-center justify-between gap-2 sm:gap-3">
                 <div className="min-w-0 flex flex-1 items-center gap-2 pl-0.5 sm:gap-3 sm:pl-1">
                   <ScriptureQuickNav
@@ -1586,7 +1586,7 @@ export default function ChapterReader({
                   id={`v-${v.verse}`}
                   className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
                     isJumpHighlighted
-                      ? "bg-sky-200/45 dark:bg-sky-400/20 ring-1 ring-sky-600/35 transition-colors duration-300"
+                      ? "bg-[color:var(--accent-sky-soft)] ring-2 ring-[color:var(--surface-border)] transition-colors duration-300"
                       : ""
                   }`}
                 >
@@ -1595,7 +1595,7 @@ export default function ChapterReader({
                       className={`min-w-0 flex-1 text-left ${
                         customMobileSelectionEnabled
                           ? "select-none"
-                          : "select-text selection:bg-amber-200/70 selection:text-foreground dark:selection:bg-amber-300/35"
+                          : "select-text selection:bg-[color:var(--accent-primary)] selection:text-foreground"
                       }`}
                       data-verse={v.verse}
                       data-verse-selectable="true"
@@ -1609,7 +1609,7 @@ export default function ChapterReader({
                           : undefined
                       }
                     >
-                      <span className="mr-2 select-none align-top text-xs text-foreground/60 sm:text-sm">{v.verse}</span>
+                      <span className="verse-badge">{v.verse}</span>
                       {verseComparisons.length === 0 ? (
                         <span>{renderVerseText(v)}</span>
                       ) : prefs.comparisonView === "sideBySide" ? (
@@ -1617,7 +1617,7 @@ export default function ChapterReader({
                         {verseComparisons.map((comparison) => (
                           <span
                             key={`${v.verse}-${comparison.key}`}
-                            className="block rounded-md border border-black/10 dark:border-white/15 p-2"
+                            className="block rounded-md border border-[color:var(--surface-border)] p-2"
                           >
                             <span className="grid gap-2 md:grid-cols-2">
                               <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
@@ -1693,7 +1693,7 @@ export default function ChapterReader({
           {customSelectionRects.map((rect, index) => (
             <div
               key={`custom-selection-rect-${index}`}
-              className="absolute rounded-sm bg-amber-300/45 dark:bg-amber-400/25"
+              className="absolute rounded-sm bg-[color:var(--footnote-highlight)]"
               style={{
                 top: rect.top,
                 left: rect.left,
@@ -1723,8 +1723,8 @@ export default function ChapterReader({
       event.preventDefault();
     }}
             >
-              <span className="pointer-events-none absolute left-1/2 top-0 h-5 w-[2px] -translate-x-1/2 rounded-full bg-amber-600/90 dark:bg-amber-300/90" />
-              <span className="pointer-events-none absolute left-1/2 top-4 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-white/80 bg-amber-500 shadow-[0_2px_8px_rgba(0,0,0,0.18)] dark:border-black/20 dark:bg-amber-300" />
+              <span className="pointer-events-none absolute left-1/2 top-0 h-5 w-[2px] -translate-x-1/2 rounded-full bg-[color:var(--surface-border)]" />
+              <span className="pointer-events-none absolute left-1/2 top-4 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] dark:border-[color:var(--surface-border)] dark:bg-amber-300" />
             </button>
           ) : null}
           {endHandleRect ? (
@@ -1748,8 +1748,8 @@ export default function ChapterReader({
       event.preventDefault();
     }}
             >
-              <span className="pointer-events-none absolute left-1/2 top-0 h-5 w-[2px] -translate-x-1/2 rounded-full bg-amber-600/90 dark:bg-amber-300/90" />
-              <span className="pointer-events-none absolute left-1/2 top-4 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-white/80 bg-amber-500 shadow-[0_2px_8px_rgba(0,0,0,0.18)] dark:border-black/20 dark:bg-amber-300" />
+              <span className="pointer-events-none absolute left-1/2 top-0 h-5 w-[2px] -translate-x-1/2 rounded-full bg-[color:var(--surface-border)]" />
+              <span className="pointer-events-none absolute left-1/2 top-4 h-3.5 w-3.5 -translate-x-1/2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] dark:border-[color:var(--surface-border)] dark:bg-amber-300" />
             </button>
           ) : null}
         </div>
@@ -1759,7 +1759,7 @@ export default function ChapterReader({
         <div className="lg:hidden">
           <div className="fixed inset-0 z-50">
             <button aria-label="Close" onClick={() => setOpenExplorer(false)} className="absolute inset-0 bg-black/30" />
-            <div className="absolute bottom-0 left-3 right-3 max-h-[80vh] overflow-hidden rounded-t-2xl border-t border-black/10 bg-background p-3 shadow-2xl dark:border-white/15 sm:left-4 sm:right-4 sm:p-4">
+            <div className="absolute bottom-0 left-3 right-3 max-h-[80vh] overflow-hidden rounded-t-2xl border-t border-[color:var(--surface-border)] bg-background p-3 shadow-2xl border-[color:var(--surface-border)] sm:left-4 sm:right-4 sm:p-4">
               <div className="mb-1 mx-auto h-1 w-10 rounded-full bg-foreground/20" />
               <WordStudyPanel
                 word={singleSelectedWord}
@@ -1877,7 +1877,7 @@ export default function ChapterReader({
         >
           <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
             <div
-              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-black/10 dark:border-white/15 bg-background/90 backdrop-blur px-3 py-2 shadow"
+              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-[color:var(--surface-border)] bg-background/90 px-3 py-2 shadow"
               style={{ maxWidth: "28rem" }}
               role="dialog"
               aria-live="polite"
@@ -1892,7 +1892,7 @@ export default function ChapterReader({
                     try { setSeenTapToActionsHint(); } catch {}
                     setShowTapHint(false);
                   }}
-                  className="ml-2 text-sm px-2 py-1 rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="ml-2 text-sm px-2 py-1 rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
                 >
                   Got it
                 </button>

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import InsightEditorPanel from "./InsightEditorPanel";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLightbulb } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder } from "./InsightBuilderProvider";
 
 const OPEN_DRAFTS_STORAGE_PREFIX = "vt_reader_open_drafts_v1";
@@ -239,7 +241,7 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
     <div className="flex h-full flex-col">
       <div className="space-y-2 p-3 pb-0">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Notes</h2>
+          <h2 className="flex items-center gap-2 text-sm font-bold"><span className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] text-[#17161a]"><FontAwesomeIcon icon={faLightbulb} className="h-3 w-3" /></span>Notes</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsLoadSavedOpen((prev) => !prev)}
@@ -403,7 +405,7 @@ export default function InsightBuilderShell() {
           </div>
           <button
             onClick={closeBuilder}
-            className="fixed right-[calc(env(safe-area-inset-right)+0.5rem)] bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-[60] rounded-full border surface-button px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+            className="fixed right-[calc(env(safe-area-inset-right)+0.5rem)] bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-[60] rounded-full border surface-button px-4 py-2 text-xs font-medium shadow-lg"
           >
             Close
           </button>
@@ -411,7 +413,7 @@ export default function InsightBuilderShell() {
       ) : null}
 
       {activeDraftId ? (
-        <aside className="fixed right-0 top-16 bottom-0 z-40 hidden w-[360px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] backdrop-blur lg:block xl:w-[420px] 2xl:w-[480px]">
+        <aside className="fixed right-0 top-16 bottom-0 z-40 hidden w-[360px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] lg:block xl:w-[420px] 2xl:w-[480px]">
           <BuilderContent />
         </aside>
       ) : null}

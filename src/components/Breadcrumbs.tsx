@@ -216,7 +216,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
           </button>
         ) : null}
         {mobileExpanded && hasMobileAbbreviations ? (
-          <div className="panel-card absolute left-1/2 top-full z-30 mt-1 w-[min(88vw,32rem)] -translate-x-1/2 rounded-[1rem] p-2 shadow-lg backdrop-blur">
+          <div className="panel-card absolute left-1/2 top-full z-30 mt-1 w-[min(88vw,32rem)] -translate-x-1/2 rounded-[1rem] p-2 shadow-lg">
             <ol className="flex flex-wrap items-center justify-center gap-2">
               {items.map((c, idx) => (
                 <li key={`mobile-full-${idx}`} className="flex items-center gap-2">

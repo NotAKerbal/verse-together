@@ -74,7 +74,7 @@ export default function SharedDraftPage() {
             {draft.tags.map((tag) => (
               <span
                 key={`${draft.id}-${tag}`}
-                className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] text-foreground/70"
+                className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5 text-[11px] text-foreground/70"
               >
                 #{tag}
               </span>
@@ -88,7 +88,7 @@ export default function SharedDraftPage() {
           .slice()
           .sort((a, b) => a.order - b.order)
           .map((block) => (
-            <li key={block.id} className="rounded-md border border-black/10 dark:border-white/15 p-3">
+            <li key={block.id} className="rounded-md border border-[color:var(--surface-border)] p-3">
               {block.type === "scripture" ? (
                 <div className="space-y-1">
                   <div className="text-xs font-medium text-foreground/70 uppercase tracking-wide">
@@ -102,7 +102,7 @@ export default function SharedDraftPage() {
               {block.type === "text" ? <p className="text-sm whitespace-pre-wrap">{block.text}</p> : null}
               {block.type === "quote" ? (
                 <div className="space-y-1">
-                  <blockquote className="text-sm whitespace-pre-wrap border-l-2 border-black/20 dark:border-white/25 pl-3">
+                  <blockquote className="text-sm whitespace-pre-wrap border-l-2 border-[color:var(--surface-border)] pl-3">
                     {renderTextWithHighlights(block.text, block.highlight_word_indices ?? [])}
                   </blockquote>
                   {block.link_url ? (
@@ -129,14 +129,14 @@ export default function SharedDraftPage() {
                         {block.dictionary_meta?.pronounce ? ` - ${block.dictionary_meta.pronounce}` : ""}
                       </div>
                     </div>
-                    <span className="shrink-0 rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[10px] text-foreground/70">
+                    <span className="shrink-0 rounded-full border border-[color:var(--surface-border)] px-2 py-0.5 text-[10px] text-foreground/70">
                       {block.dictionary_meta?.edition === "ETY" ? "Etymology" : "Dictionary"}
                     </span>
                   </div>
                   {block.dictionary_meta?.heading ? (
                     <div className="text-[11px] uppercase tracking-wide text-foreground/60">{block.dictionary_meta.heading}</div>
                   ) : null}
-                  <div className="rounded-md border border-black/10 dark:border-white/15 p-2">
+                  <div className="rounded-md border border-[color:var(--surface-border)] p-2">
                     <DictionaryEntryBody entryText={block.text ?? ""} />
                   </div>
                 </div>

@@ -6,8 +6,8 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "portless run next dev --turbopack",
-    "dev:local": "next dev --turbopack",
+    "dev": "portless run next dev --webpack",
+    "dev:local": "next dev --webpack",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",

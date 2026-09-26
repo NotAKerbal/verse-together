@@ -65,13 +65,13 @@ export default function FootnoteModal({
         <div className="space-y-2">
           <div className="text-foreground/60 text-xs">Scripture references</div>
           {jumpItems.map((item) => (
-            <div key={item.key} className="border border-black/10 dark:border-white/15 rounded-md p-2 flex items-center justify-between gap-2">
+            <div key={item.key} className="border border-[color:var(--surface-border)] rounded-md p-2 flex items-center justify-between gap-2">
               <span className="text-sm">{item.label}</span>
               {item.href ? (
                 <a
                   href={item.href}
                   onClick={() => onClose()}
-                  className="text-xs px-2 py-0.5 rounded border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="text-xs px-2 py-0.5 rounded border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
                 >
                   Jump
                 </a>
@@ -91,7 +91,7 @@ export default function FootnoteModal({
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2 py-1 text-xs rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="px-2 py-1 text-xs rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
                   title={getToolLabel(link.kind)}
                 >
                   {link.label}
@@ -99,7 +99,7 @@ export default function FootnoteModal({
               ) : (
                 <span
                   key={`${link.kind}-${link.query ?? "q"}-${idx}`}
-                  className="px-2 py-1 text-xs rounded-md border border-black/10 dark:border-white/15 text-foreground/70"
+                  className="px-2 py-1 text-xs rounded-md border border-[color:var(--surface-border)] text-foreground/70"
                   title={getToolLabel(link.kind)}
                 >
                   {link.label}
@@ -114,10 +114,10 @@ export default function FootnoteModal({
 
   if (variant === "panel") {
     return (
-      <div className="rounded-lg border surface-card backdrop-blur p-3 space-y-3">
+      <div className="rounded-lg border surface-card p-3 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold">Footnote</h3>
-          <button onClick={() => onClose()} className="px-2.5 py-1 text-sm rounded-md border border-black/10 dark:border-white/15">
+          <button onClick={() => onClose()} className="px-2.5 py-1 text-sm rounded-md border border-[color:var(--surface-border)]">
             Close
           </button>
         </div>
@@ -133,13 +133,13 @@ export default function FootnoteModal({
         onClick={() => onClose()}
         className="absolute inset-0 bg-black/30"
       />
-      <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-black/10 dark:border-white/15 p-4 space-y-3 max-h-[80vh] overflow-y-auto">
+      <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-[color:var(--surface-border)] p-4 space-y-3 max-h-[80vh] overflow-y-auto">
         <div className="h-1 w-10 bg-foreground/20 rounded-full mx-auto mb-1" />
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-base font-semibold">Footnote</h3>
           <button
             onClick={() => onClose()}
-            className="px-3 py-1.5 text-xs rounded-md border border-black/10 dark:border-white/15"
+            className="px-3 py-1.5 text-xs rounded-md border border-[color:var(--surface-border)]"
           >
             Close
           </button>

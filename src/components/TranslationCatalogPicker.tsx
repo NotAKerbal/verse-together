@@ -73,19 +73,19 @@ export default function TranslationCatalogPicker({ existingIds, onAddFavorite }:
       <button
         type="button"
         onClick={handleOpen}
-        className="inline-flex items-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+        className="inline-flex items-center rounded-md border border-[color:var(--surface-border)] px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/10"
       >
         {open ? "Hide additional translations" : "Search additional translations"}
       </button>
 
       {open ? (
-        <div className="rounded-md border border-black/10 dark:border-white/15 p-2 space-y-2">
+        <div className="rounded-md border border-[color:var(--surface-border)] p-2 space-y-2">
           <input
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by name, id, or language"
-            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-background px-2 py-1.5 text-xs"
+            className="w-full rounded-md border border-[color:var(--surface-border)] bg-background px-2 py-1.5 text-xs"
           />
           {loading ? <div className="text-xs text-foreground/60">Loading translation catalog...</div> : null}
           {error ? <div className="text-xs text-red-600 dark:text-red-300">{error}</div> : null}
@@ -100,7 +100,7 @@ export default function TranslationCatalogPicker({ existingIds, onAddFavorite }:
                   return (
                     <div
                       key={item.id}
-                      className="flex items-start justify-between gap-3 rounded-md border border-black/10 dark:border-white/15 p-2"
+                      className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--surface-border)] p-2"
                     >
                       <div className="min-w-0">
                         <div className="text-xs font-medium">{item.id}</div>
@@ -119,7 +119,7 @@ export default function TranslationCatalogPicker({ existingIds, onAddFavorite }:
                             language: item.languageEnglishName || item.language,
                           })
                         }
-                        className="shrink-0 rounded-md border border-black/10 dark:border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide disabled:opacity-50"
+                        className="shrink-0 rounded-md border border-[color:var(--surface-border)] px-2 py-1 text-[10px] uppercase tracking-wide disabled:opacity-50"
                       >
                         {alreadyAdded ? "Added" : "Add"}
                       </button>

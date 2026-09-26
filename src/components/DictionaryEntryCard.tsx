@@ -40,7 +40,7 @@ export default function DictionaryEntryCard({
   }
 
   return (
-    <article className="rounded-md border border-black/10 dark:border-white/15 bg-background/70 p-3 space-y-2">
+    <article className="rounded-md border border-[color:var(--surface-border)] bg-background/70 p-3 space-y-2">
       <header className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h5 className="text-sm font-semibold">{entry.word}</h5>
@@ -51,7 +51,7 @@ export default function DictionaryEntryCard({
           onClick={() => {
             void onAddCardToInsight();
           }}
-          className="shrink-0 rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+          className="shrink-0 rounded-md border border-[color:var(--surface-border)] px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
           title="Add this dictionary card to a note"
         >
           Add card

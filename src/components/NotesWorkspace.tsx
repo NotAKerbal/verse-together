@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLightbulb } from "@fortawesome/free-solid-svg-icons";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -834,7 +836,7 @@ export default function NotesWorkspace({
             <div className="min-w-0">
               <div className="page-eyebrow">Notes</div>
               <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
-                <h1 className="text-[1.4rem] font-semibold tracking-[-0.03em] sm:text-[1.6rem]">Workspace</h1>
+                <h1 className="flex items-center gap-2 text-[1.5rem] font-extrabold tracking-[-0.03em] sm:text-[1.8rem]"><span className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] text-[#17161a]"><FontAwesomeIcon icon={faLightbulb} className="h-4 w-4" /></span>Workspace</h1>
                 <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--foreground-soft)]">
                   <span>{rows?.length ?? 0} notes</span>
                   <span>{allFolders.length} folders</span>
@@ -842,16 +844,15 @@ export default function NotesWorkspace({
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-1 rounded-[1.2rem] p-1 surface-card-soft">
+            <div className="grid grid-cols-2 gap-1 rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-1">
             <button
               onClick={() => setNotesPage("library")}
-              className="rounded-[0.95rem] px-4 py-2 text-sm"
+              className="rounded-full px-4 py-2 text-sm font-bold"
               style={
                 notesPage === "library"
                   ? {
                       background: "var(--mobile-nav-active)",
                       color: "var(--mobile-nav-active-text)",
-                      boxShadow: "0 8px 18px rgba(0,0,0,0.1)",
                     }
                   : undefined
               }
@@ -860,13 +861,12 @@ export default function NotesWorkspace({
             </button>
             <button
               onClick={() => setNotesPage("editor")}
-              className="rounded-[0.95rem] px-4 py-2 text-sm"
+              className="rounded-full px-4 py-2 text-sm font-bold"
               style={
                 notesPage === "editor"
                   ? {
                       background: "var(--mobile-nav-active)",
                       color: "var(--mobile-nav-active-text)",
-                      boxShadow: "0 8px 18px rgba(0,0,0,0.1)",
                     }
                   : undefined
               }
@@ -974,7 +974,7 @@ export default function NotesWorkspace({
                       void onCreateNewNote();
                     }}
                     className="rounded-full px-4 py-2 text-sm font-medium text-[color:var(--mobile-nav-active-text)]"
-                    style={{ background: "var(--mobile-nav-active)", boxShadow: "0 8px 18px rgba(0,0,0,0.1)" }}
+                    style={{ background: "var(--mobile-nav-active)", color: "var(--mobile-nav-active-text)" }}
                   >
                     New note
                   </button>
@@ -1162,7 +1162,7 @@ export default function NotesWorkspace({
       ) : null}
 
       {showTipsTooltip ? (
-        <div className="fixed bottom-20 right-4 z-40 w-[280px] rounded-lg border surface-card-strong p-3 shadow-lg backdrop-blur">
+        <div className="fixed bottom-20 right-4 z-40 w-[280px] rounded-lg border surface-card-strong p-3 shadow-lg">
           <p className="text-xs text-foreground/80">
             Need help with nested folders, drag-and-drop, exports, or sharing?
           </p>
@@ -1225,15 +1225,15 @@ function NoteRow({
       style={
         isActive
           ? {
-              borderColor: "color-mix(in oklab, var(--mobile-nav-active) 70%, var(--surface-border))",
-              background: "color-mix(in oklab, var(--mobile-nav-active) 32%, var(--surface-card-strong))",
+              borderColor: "var(--surface-border)",
+              background: "var(--accent-note)",
             }
           : undefined
       }
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-medium truncate">{note.title}</h3>
+          <h3 className="flex items-center gap-2 truncate text-sm font-bold"><span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] text-[#17161a]"><FontAwesomeIcon icon={faLightbulb} className="h-3 w-3" /></span><span className="truncate">{note.title}</span></h3>
           <p className="text-xs text-[color:var(--foreground-soft)]">
             {visibilityLabel(note.visibility)} · Updated {new Date(note.updated_at).toLocaleDateString()}
           </p>

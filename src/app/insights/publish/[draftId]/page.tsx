@@ -74,7 +74,7 @@ export default function PublishInsightPage() {
         </p>
       </header>
 
-      <div className="rounded-lg border border-black/10 dark:border-white/15 p-4 space-y-3">
+      <div className="rounded-lg border border-[color:var(--surface-border)] p-4 space-y-3">
         <div className="text-xs text-foreground/70">Blocks in this draft: {blockCount}</div>
         <label className="block space-y-1">
           <span className="text-sm font-medium">Title</span>
@@ -82,7 +82,7 @@ export default function PublishInsightPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder={draft.title}
-            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="w-full rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2 text-sm"
           />
         </label>
         <label className="block space-y-1">
@@ -91,7 +91,7 @@ export default function PublishInsightPage() {
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             rows={3}
-            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="w-full rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2 text-sm"
             placeholder="Add a brief summary for this note..."
           />
         </label>
@@ -101,7 +101,7 @@ export default function PublishInsightPage() {
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder={(draft.tags ?? []).map((tag) => `#${tag}`).join(", ")}
-            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="w-full rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2 text-sm"
           />
         </label>
         <label className="block space-y-1">
@@ -109,7 +109,7 @@ export default function PublishInsightPage() {
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value as InsightVisibility)}
-            className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="w-full rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2 text-sm"
           >
             <option value="private">Private (default)</option>
             <option value="friends">Visible to friends</option>
@@ -121,7 +121,7 @@ export default function PublishInsightPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.back()}
-            className="rounded-md border border-black/10 dark:border-white/15 px-3 py-2 text-sm"
+            className="rounded-md border border-[color:var(--surface-border)] px-3 py-2 text-sm"
             disabled={loading}
           >
             Back

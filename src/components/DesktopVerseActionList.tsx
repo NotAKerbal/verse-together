@@ -54,7 +54,7 @@ export default function DesktopVerseActionList({
     "w-full text-left rounded-md border surface-button px-3 py-2 text-sm";
 
   return (
-    <div className="rounded-lg border surface-card backdrop-blur p-2 space-y-2">
+    <div className="rounded-lg border surface-card p-2 space-y-2">
       <div className="px-1 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/65">Actions</h3>
         {showPinToggle ? (

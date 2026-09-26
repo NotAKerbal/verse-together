@@ -29,7 +29,7 @@ export default function NotFound() {
             aria-hidden="true"
             style={{
               background:
-                "radial-gradient(circle at top left, color-mix(in oklab, var(--accent-primary) 22%, transparent), transparent 46%), radial-gradient(circle at bottom right, color-mix(in oklab, var(--accent-tertiary) 18%, transparent), transparent 48%), linear-gradient(180deg, color-mix(in oklab, var(--surface-card-strong) 92%, white 8%), var(--surface-card))",
+                "var(--accent-note)",
             }}
           />
           <div className="relative flex h-full flex-col justify-between gap-8">

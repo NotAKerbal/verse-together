@@ -57,7 +57,7 @@ export default function FeedbackForm() {
   }
 
   return (
-    <div className="rounded-lg border border-black/10 dark:border-white/15 p-5">
+    <div className="rounded-lg border border-[color:var(--surface-border)] p-5">
       <h2 className="text-xl font-semibold">Have feedback or ideas?</h2>
       <p className="mt-1 text-sm text-foreground/80">
         Share suggestions, feature requests, or improvements. I read every submission.
@@ -68,7 +68,7 @@ export default function FeedbackForm() {
           <textarea
             value={form.message}
             onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-            className="mt-1 w-full min-h-[96px] rounded-md border border-black/10 dark:border-white/15 bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            className="mt-1 w-full min-h-[96px] rounded-md border border-[color:var(--surface-border)] bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
             placeholder="What would make Verse Together better?"
             maxLength={2000}
             required
@@ -81,7 +81,7 @@ export default function FeedbackForm() {
             type="text"
             value={form.contact}
             onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))}
-            className="mt-1 w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            className="mt-1 w-full rounded-md border border-[color:var(--surface-border)] bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
             placeholder="Email, X/Twitter, or leave blank"
           />
         </div>

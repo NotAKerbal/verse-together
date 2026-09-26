@@ -109,7 +109,7 @@ export default function WordStudyPanel({ word, panelId, title = "Word Study" }: 
   if (!normalizedWord) return null;
 
   return (
-    <div id={panelId} data-word-study-panel="true" className="rounded-lg border border-black/10 bg-background/60 p-3 backdrop-blur dark:border-white/15">
+    <div id={panelId} data-word-study-panel="true" className="rounded-lg border border-[color:var(--surface-border)] bg-background/60 p-3 border-[color:var(--surface-border)]">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">{title}</h3>
@@ -141,7 +141,7 @@ export default function WordStudyPanel({ word, panelId, title = "Word Study" }: 
         </div>
       </div>
 
-      <div className="mt-3 rounded-md border border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/5">
+      <div className="mt-3 rounded-md border border-[color:var(--surface-border)] bg-black/5 border-[color:var(--surface-border)] dark:bg-white/5">
         {tab === "ety" && hasEtymologyEntries ? (
           <div className="max-h-[40vh] overflow-y-auto p-3 space-y-3">
             {etymologyItems.map((item) => (

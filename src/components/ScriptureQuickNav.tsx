@@ -186,7 +186,7 @@ export default function ScriptureQuickNav({
 
       {open ? (
         <div
-          className={`absolute top-10 z-40 mt-3 w-[min(28rem,88vw)] rounded-lg border border-black/10 bg-background p-2 shadow-xl dark:border-white/15 ${
+          className={`absolute top-10 z-40 mt-3 w-[min(28rem,88vw)] rounded-lg border border-[color:var(--surface-border)] bg-background p-2 shadow-xl border-[color:var(--surface-border)] ${
             align === "right" ? "right-0" : "left-0"
           } ${panelClassName}`.trim()}
         >
@@ -196,7 +196,7 @@ export default function ScriptureQuickNav({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search chapter or jump (ex: j151, 1 ne 3:7)"
-              className="w-full rounded-md border border-black/10 dark:border-white/15 bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/30"
+              className="w-full rounded-md border border-[color:var(--surface-border)] bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/30"
             />
             {query.trim() ? (
               <div className="space-y-2 max-h-[22rem] overflow-y-auto pr-1">
@@ -208,7 +208,7 @@ export default function ScriptureQuickNav({
                         key={item.key}
                         type="button"
                         onClick={() => navigateTo(item.href, item.volume)}
-                        className="w-full rounded-md border border-transparent px-2.5 py-2 text-left text-sm hover:border-black/10 hover:bg-black/5 dark:hover:border-white/15 dark:hover:bg-white/10"
+                        className="w-full rounded-md border border-transparent px-2.5 py-2 text-left text-sm hover:border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:border-[color:var(--surface-border)] dark:hover:bg-white/10"
                       >
                         {item.label}
                       </button>
@@ -224,7 +224,7 @@ export default function ScriptureQuickNav({
                         key={`chapter-${item.verse}`}
                         type="button"
                         onClick={() => jumpToVerse(item.verse)}
-                        className="w-full rounded-md border border-transparent px-2.5 py-2 text-left text-sm hover:border-black/10 hover:bg-black/5 dark:hover:border-white/15 dark:hover:bg-white/10"
+                        className="w-full rounded-md border border-transparent px-2.5 py-2 text-left text-sm hover:border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:border-[color:var(--surface-border)] dark:hover:bg-white/10"
                       >
                         <span className="text-foreground/60">{item.verse}</span>
                         <span className="mx-2 text-foreground/35">-</span>
@@ -235,13 +235,13 @@ export default function ScriptureQuickNav({
                 ) : null}
 
                 {filteredSuggestions.length === 0 && chapterMatches.length === 0 ? (
-                  <div className="rounded-md border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-2.5 py-2 text-sm text-foreground/70">
+                  <div className="rounded-md border border-[color:var(--surface-border)] bg-black/5 dark:bg-white/5 px-2.5 py-2 text-sm text-foreground/70">
                     No matches found.
                   </div>
                 ) : null}
               </div>
             ) : (
-              <div className="rounded-md border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-2.5 py-2 text-xs text-foreground/70">
+              <div className="rounded-md border border-[color:var(--surface-border)] bg-black/5 dark:bg-white/5 px-2.5 py-2 text-xs text-foreground/70">
                 Type an abbreviation or compact ref. Example: <span className="font-medium">j151</span>, <span className="font-medium">john15:1</span>, <span className="font-medium">1 ne 3</span>.
                 {currentVolume ? ` Current volume: ${currentVolume}.` : ""}
                 <div className="mt-1 text-foreground/60">

@@ -22,10 +22,10 @@ function ChevronIcon() {
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      className="h-5 w-5"
+      className="h-4 w-4"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2.6"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -58,28 +58,28 @@ export default function VolumeBookBrowser({
             <li key={book.id}>
               <Link
                 href={`/browse/${volumeSlug}/${book.id}`}
-                className="panel-card interactive-card group flex h-full items-center gap-4 rounded-[1.4rem] px-4 py-4"
+                className="panel-card interactive-card group flex h-full items-center gap-4 px-4 py-4"
                 data-tap
               >
-                <div className="icon-chip inline-flex h-11 w-11 shrink-0 items-center justify-center text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--foreground-soft)]">
+                <div className="icon-chip h-11 w-11 shrink-0 text-[0.78rem] font-extrabold tracking-[0.02em]">
                   {(index + 1).toString().padStart(2, "0")}
                 </div>
                 <div className="min-w-0 flex-1">
                   {book.category ? (
-                    <div className="mb-1 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
+                    <div className="mb-1 text-[0.64rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-soft)]">
                       {book.category}
                     </div>
                   ) : null}
-                  <div className="text-[1.1rem] font-semibold tracking-[-0.025em] text-foreground">
+                  <div className="font-display text-[1.2rem] font-bold leading-tight tracking-[-0.025em] text-foreground">
                     {book.label}
                   </div>
                   {book.chapters ? (
-                    <div className="mt-1 text-sm text-[color:var(--foreground-muted)]">
+                    <div className="mt-0.5 text-[0.8rem] font-semibold text-[color:var(--foreground-muted)]">
                       {book.chapters} {book.chapters === 1 ? "chapter" : "chapters"}
                     </div>
                   ) : null}
                 </div>
-                <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-soft)] transition-transform duration-200 group-hover:translate-x-0.5">
+                <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] text-[color:var(--foreground)] transition-transform duration-150 group-hover:translate-x-0.5">
                   <ChevronIcon />
                 </div>
               </Link>

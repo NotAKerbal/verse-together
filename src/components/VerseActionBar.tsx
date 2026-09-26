@@ -170,7 +170,7 @@ export default function VerseActionBar({
   if (!visible || !hasSelection || !anchorRect) return null;
 
   const baseActionClass =
-    "inline-flex h-9 items-center gap-2 rounded-full border border-black/10 dark:border-white/15 bg-background/92 px-3 text-sm text-foreground shadow-sm transition hover:bg-black/[0.04] dark:hover:bg-white/[0.08] disabled:opacity-45 disabled:hover:bg-background/92";
+    "inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-background/92 px-3 text-sm text-foreground shadow-sm transition hover:bg-black/[0.04] dark:hover:bg-white/[0.08] disabled:opacity-45 disabled:hover:bg-background/92";
   const primaryActionClass =
     "inline-flex h-10 items-center gap-2 rounded-full bg-foreground px-3.5 text-sm font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-45";
 
@@ -188,7 +188,7 @@ export default function VerseActionBar({
       role="dialog"
       aria-label="Selection actions"
     >
-      <div className="relative overflow-hidden rounded-[1.4rem] border border-black/10 bg-background/92 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:border-white/15">
+      <div className="relative overflow-hidden rounded-[1.25rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-2 shadow-[var(--surface-shadow)] border-[color:var(--surface-border)]">
         <div className="flex flex-wrap gap-2">
           {showInsightAction ? (
             hasActiveInsight ? (
@@ -226,7 +226,7 @@ export default function VerseActionBar({
         </div>
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-black/10 bg-background/92 dark:border-white/15 ${
+          className={`pointer-events-none absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] border-[color:var(--surface-border)] ${
             floatingStyle?.placement === "top"
               ? "bottom-[-0.35rem] border-b border-r"
               : "top-[-0.35rem] border-l border-t"

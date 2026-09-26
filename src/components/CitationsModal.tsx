@@ -67,11 +67,11 @@ export default function CitationsModal({
   return (
     <div className="fixed inset-0 z-50">
       <button aria-label="Close" onClick={() => !loading && onClose()} className="absolute inset-0 bg-black/30" />
-      <div className="absolute left-3 right-3 sm:left-4 sm:right-4 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-black/10 dark:border-white/15 p-4 space-y-3 max-h-[85vh] overflow-auto">
+      <div className="absolute left-3 right-3 sm:left-4 sm:right-4 bottom-0 rounded-t-2xl bg-background shadow-2xl border-t border-[color:var(--surface-border)] p-4 space-y-3 max-h-[85vh] overflow-auto">
         <div className="h-1 w-10 bg-foreground/20 rounded-full mx-auto mb-1" />
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold">Resources for {book.replace(/-/g, " ")} {chapter}:{verseSpec}</h3>
-          <button onClick={() => onClose()} className="px-3 py-1 text-sm rounded-md border border-black/10 dark:border-white/15">Close</button>
+          <button onClick={() => onClose()} className="px-3 py-1 text-sm rounded-md border border-[color:var(--surface-border)]">Close</button>
         </div>
         {loading ? <p className="text-sm text-foreground/70">Loading…</p> : null}
         {error ? <p className="text-sm text-red-600">{error}</p> : null}

@@ -409,17 +409,17 @@ export function DictionaryBlockEditor({
     <div className="space-y-2">
       {dictionaryMeta ? (
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/70">
-          <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">
+          <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">
             {isEtymology ? "Etymology" : "Dictionary"}
           </span>
-          <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">
+          <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">
             {sourceLabel}
           </span>
           {showHeadingLabel ? (
-            <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">{headingLabel}</span>
+            <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">{headingLabel}</span>
           ) : null}
           {dictionaryMeta.pronounce ? (
-            <span className="rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5">{dictionaryMeta.pronounce}</span>
+            <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">{dictionaryMeta.pronounce}</span>
           ) : null}
         </div>
       ) : null}

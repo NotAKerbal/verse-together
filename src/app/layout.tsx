@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, DM_Sans, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "../components/Navbar";
@@ -8,9 +8,16 @@ import AppMain from "../components/AppMain";
 import AppPreloader from "../components/AppPreloader";
 import MobileBottomNav from "../components/MobileBottomNav";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
+  axes: ["opsz"],
+});
+
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+  weight: ["500", "700", "800"],
 });
 
 const geistMono = Geist_Mono({
@@ -45,7 +52,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} app-shell antialiased`}>
+      <body className={`${dmSans.variable} ${bricolage.variable} ${geistMono.variable} app-shell antialiased`}>
         <AppProviders>
           <div className="relative min-h-screen pb-24 sm:pb-0">
             <Suspense fallback={null}>

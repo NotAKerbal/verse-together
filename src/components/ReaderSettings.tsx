@@ -60,7 +60,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
   return (
     <div
       ref={panelRef}
-      className="absolute right-0 top-full z-40 mt-3 w-[min(92vw,24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-black/10 bg-background shadow-xl dark:border-white/15"
+      className="absolute right-0 top-full z-40 mt-3 w-[min(92vw,24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-[color:var(--surface-border)] bg-background shadow-xl border-[color:var(--surface-border)]"
     >
         <div className="max-h-[min(70vh,32rem)] overflow-y-auto p-3 text-sm space-y-4">
           <div className="space-y-1">
@@ -97,7 +97,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
           <fieldset className="space-y-2">
             <legend className="text-foreground/80">Typeface</legend>
             <div
-              className="inline-flex w-full overflow-hidden rounded-md border border-black/10 dark:border-white/15"
+              className="inline-flex w-full overflow-hidden rounded-md border border-[color:var(--surface-border)]"
               onTouchStart={stopTouchPropagation}
               onTouchMove={stopTouchPropagation}
               onTouchEnd={stopTouchPropagation}
@@ -124,7 +124,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
                   setLocal(next);
                   onChange(next);
                 }}
-                className={`flex-1 border-l border-black/10 px-3 py-1.5 text-sm dark:border-white/15 ${
+                className={`flex-1 border-l border-[color:var(--surface-border)] px-3 py-1.5 text-sm border-[color:var(--surface-border)] ${
                   local.fontFamily === "sans"
                     ? "bg-foreground text-background"
                     : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
@@ -138,7 +138,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
           <fieldset className="space-y-2">
             <legend className="text-foreground/80">Comparison view</legend>
             <div
-              className="inline-flex w-full overflow-hidden rounded-md border border-black/10 dark:border-white/15"
+              className="inline-flex w-full overflow-hidden rounded-md border border-[color:var(--surface-border)]"
               onTouchStart={stopTouchPropagation}
               onTouchMove={stopTouchPropagation}
               onTouchEnd={stopTouchPropagation}
@@ -165,7 +165,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
                   setLocal(next);
                   onChange(next);
                 }}
-                className={`flex-1 border-l border-black/10 px-3 py-1.5 text-sm dark:border-white/15 ${
+                className={`flex-1 border-l border-[color:var(--surface-border)] px-3 py-1.5 text-sm border-[color:var(--surface-border)] ${
                   local.comparisonView === "sideBySide"
                     ? "bg-foreground text-background"
                     : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
@@ -177,7 +177,7 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
           </fieldset>
 
           {translationControls ? (
-            <section className="space-y-2 border-t border-black/10 pt-3 dark:border-white/15">
+            <section className="space-y-2 border-t border-[color:var(--surface-border)] pt-3 border-[color:var(--surface-border)]">
               <div className="text-foreground/80">Translations</div>
               <div className="space-y-3">{translationControls}</div>
             </section>

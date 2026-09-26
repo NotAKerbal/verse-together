@@ -28,7 +28,7 @@ export default function ResourcesPanelContent({
     <div className="space-y-3">
       <ul className="space-y-2.5 max-h-[44vh] overflow-y-auto pr-1">
         {sortedResources.map((resource) => (
-          <li key={resource.id} className="border border-black/10 dark:border-white/15 rounded-lg p-3 bg-black/5 dark:bg-white/5">
+          <li key={resource.id} className="border border-[color:var(--surface-border)] rounded-lg p-3 bg-black/5 dark:bg-white/5">
             <div className="text-sm font-semibold">{resource.title}</div>
             {resource.description ? <p className="text-sm text-foreground/75 mt-1">{resource.description}</p> : null}
             {resource.matchedScopes.length > 0 ? (
@@ -51,7 +51,7 @@ export default function ResourcesPanelContent({
             ) : null}
             {resource.url ? (
               <a
-                className="inline-flex mt-2 items-center justify-center rounded-md border border-black/10 dark:border-white/15 px-3 py-1.5 text-sm"
+                className="inline-flex mt-2 items-center justify-center rounded-md border border-[color:var(--surface-border)] px-3 py-1.5 text-sm"
                 href={resource.url}
                 target="_blank"
                 rel="noopener noreferrer"

@@ -29,11 +29,11 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
   }
 
   return (
-    <article className="rounded-md border border-black/10 dark:border-white/15 bg-background/70 p-3 space-y-2">
+    <article className="rounded-md border border-[color:var(--surface-border)] bg-background/70 p-3 space-y-2">
       <header className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <h5 className="text-sm font-semibold">{item.word}</h5>
-          <span className="inline-flex rounded-full border border-black/10 dark:border-white/15 px-2 py-0.5 text-[11px] text-foreground/70">
+          <span className="inline-flex rounded-full border border-[color:var(--surface-border)] px-2 py-0.5 text-[11px] text-foreground/70">
             {item.source}
           </span>
         </div>
@@ -42,7 +42,7 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
           onClick={() => {
             void onAddCardToInsight();
           }}
-          className="shrink-0 rounded-md border border-black/10 dark:border-white/15 px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+          className="shrink-0 rounded-md border border-[color:var(--surface-border)] px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
           title="Add this etymology card to a note"
         >
           Add card

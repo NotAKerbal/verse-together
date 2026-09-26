@@ -81,7 +81,7 @@ export default function ShareComposer({
             max={maxVerse}
             value={start}
             onChange={(e) => setStart(Number(e.target.value))}
-            className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2"
+            className="rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2"
           />
         </label>
         <label className="flex flex-col text-sm w-24">
@@ -92,7 +92,7 @@ export default function ShareComposer({
             max={maxVerse}
             value={end}
             onChange={(e) => setEnd(Number(e.target.value))}
-            className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2"
+            className="rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2"
           />
         </label>
         <div className="flex-1 min-w-[240px]">
@@ -102,7 +102,7 @@ export default function ShareComposer({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-black/10 dark:border-white/15 bg-transparent px-3 py-2"
+              className="w-full rounded-md border border-[color:var(--surface-border)] bg-transparent px-3 py-2"
             />
           </label>
         </div>
@@ -115,7 +115,7 @@ export default function ShareComposer({
         </button>
       </div>
       {selectedContent ? (
-        <pre className="whitespace-pre-wrap text-sm text-foreground/80 border border-black/10 dark:border-white/15 rounded-md p-3">{selectedContent}</pre>
+        <pre className="whitespace-pre-wrap text-sm text-foreground/80 border border-[color:var(--surface-border)] rounded-md p-3">{selectedContent}</pre>
       ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {ok ? <p className="text-sm text-green-700">{ok}</p> : null}

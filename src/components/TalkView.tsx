@@ -67,7 +67,7 @@ export default function TalkView({ talk }: Props) {
         <section className="mt-6">
           <button
             onClick={() => setNotesOpen((v) => !v)}
-            className="px-3 py-1 text-sm rounded-md border border-black/10 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/10"
+            className="px-3 py-1 text-sm rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
             aria-expanded={notesOpen}
             aria-controls="talk-notes"
           >
@@ -76,7 +76,7 @@ export default function TalkView({ talk }: Props) {
           {notesOpen ? (
             <ul id="talk-notes" className="mt-3 flex flex-col gap-3">
               {noteItems.map((item, i) => (
-                <li key={i} className="border border-black/10 dark:border-white/15 rounded-lg p-4 bg-black/5 dark:bg-white/5">
+                <li key={i} className="border border-[color:var(--surface-border)] rounded-lg p-4 bg-black/5 dark:bg-white/5">
                   <div className="text-xs text-foreground/60 mb-1">Note {i + 1}</div>
                   <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: item }} />
                 </li>

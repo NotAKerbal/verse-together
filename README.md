@@ -24,6 +24,8 @@ npm run dev:local
 
 That fallback uses the default Next.js development server URL, typically `http://localhost:3000`.
 
+Both dev scripts run the webpack dev server on purpose. With Next 16.1 and Tailwind v4, `next dev --turbopack` spawns a new PostCSS worker process for every CSS compile and never reaps them; on 2026-09-25 that reached 780 workers and roughly 30 GB of RAM. Production builds (`npm run build`) still use Turbopack and are fine.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

@@ -129,7 +129,7 @@ function InsightCard({ row }: { row: PublishedInsight }) {
             {block.type === "quote" ? (
               <div>
                 <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[color:var(--foreground-soft)]">Quote</div>
-                <blockquote className="border-l-2 border-black/20 pl-3 text-sm whitespace-pre-wrap dark:border-white/25">
+                <blockquote className="border-l-2 border-[color:var(--surface-border)] pl-3 text-sm whitespace-pre-wrap border-[color:var(--surface-border)]">
                   {renderTextWithHighlights(block.text, block.highlight_word_indices ?? [])}
                 </blockquote>
                 {block.link_url ? (

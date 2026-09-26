@@ -440,7 +440,7 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
       {seeTerm ? (
         <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4" onClick={() => setSeeTerm(null)}>
           <div
-            className="w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-xl border border-black/10 dark:border-white/15 bg-background p-4 sm:p-5"
+            className="w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-xl border border-[color:var(--surface-border)] bg-background p-4 sm:p-5"
             onClick={(event) => {
               event.stopPropagation();
               const handled = tryHandleSeeAnchor(event.target);
@@ -452,7 +452,7 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
               <button
                 type="button"
                 onClick={() => setSeeTerm(null)}
-                className="px-2.5 py-1 text-sm rounded-md border border-black/10 dark:border-white/15"
+                className="px-2.5 py-1 text-sm rounded-md border border-[color:var(--surface-border)]"
               >
                 Close
               </button>
@@ -475,7 +475,7 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
                         {providerLabels[group.edition] || "Dictionary Source"}
                       </h5>
                       {group.rows.map((entry) => (
-                        <article key={entry.id} className="rounded-md border border-black/10 dark:border-white/15 bg-background/70 p-3 space-y-2">
+                        <article key={entry.id} className="rounded-md border border-[color:var(--surface-border)] bg-background/70 p-3 space-y-2">
                           <header className="flex items-baseline justify-between gap-2">
                             <h6 className="text-sm font-semibold">{entry.word}</h6>
                             {entry.pronounce ? <span className="text-xs text-foreground/60">{entry.pronounce}</span> : null}

@@ -349,7 +349,7 @@ export default function InsightEditorPanel({
 
   const shellClassName =
     variant === "embedded"
-      ? "rounded-[1.8rem] border surface-card-strong p-4 shadow-[0_24px_70px_rgba(0,0,0,0.12)] sm:p-5"
+      ? "rounded-[1.8rem] border surface-card-strong p-4 shadow-[var(--surface-shadow)] sm:p-5"
       : "h-full flex flex-col";
 
   return (
@@ -359,7 +359,7 @@ export default function InsightEditorPanel({
         variant === "embedded"
           ? {
               background:
-                "linear-gradient(180deg, color-mix(in oklab, var(--mobile-nav-shell) 58%, var(--surface-card-strong)), var(--surface-card-strong))",
+                "var(--surface-card-strong)",
             }
           : undefined
       }
@@ -377,7 +377,7 @@ export default function InsightEditorPanel({
                 className="rounded-full px-4 py-2 text-sm font-medium text-[color:var(--mobile-nav-active-text)]"
                 style={{
                   background: "var(--mobile-nav-active)",
-                  boxShadow: "0 10px 24px rgba(0,0,0,0.12)",
+                  boxShadow: "var(--surface-shadow-soft)",
                 }}
               >
                 {busy ? "Creating..." : "New note"}

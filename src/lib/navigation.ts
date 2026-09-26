@@ -1,8 +1,6 @@
 export const primaryNavItems = [
   { href: "/browse", label: "Browse" },
   { href: "/notes", label: "Notes" },
-  { href: "/feed", label: "Feed" },
-  { href: "/help", label: "Guide" },
 ] as const;
 
 export function isPathActive(pathname: string, href: string) {

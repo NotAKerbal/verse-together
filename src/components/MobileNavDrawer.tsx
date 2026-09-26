@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
-import { useAdminStatus, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
 import ThemeSelect from "@/components/ThemeSelect";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
@@ -14,115 +14,39 @@ type Props = {
   onClose: () => void;
 };
 
+const iconProps = {
+  viewBox: "0 0 24 24",
+  className: "h-5 w-5",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2.2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
 function BookIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5.5 4.75A2.75 2.75 0 0 1 8.25 2h9.25v16.25H8.25A2.75 2.75 0 0 0 5.5 21V4.75Z" />
-      <path d="M5.5 19.25A2.75 2.75 0 0 1 8.25 16.5H17.5V21H8.25A2.75 2.75 0 0 1 5.5 18.25v1Z" />
-      <path d="M9 6.5h5.5" />
+    <svg aria-hidden="true" {...iconProps}>
+      <path d="M4 5h7v14H4z" />
+      <path d="M13 5h7v14h-7z" />
     </svg>
   );
 }
 
-function NotesIcon() {
+function LightbulbIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5Z" />
-      <path d="M8.5 9h7" />
-      <path d="M8.5 12h7" />
-      <path d="M8.5 15h4.5" />
+    <svg aria-hidden="true" {...iconProps}>
+      <path d="M9 18h6" />
+      <path d="M10 21h4" />
+      <path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3Z" />
     </svg>
   );
 }
 
-function FeedIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 18.5a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1Z" />
-      <path d="M5 12.5a6.5 6.5 0 0 1 6.5 6.5" />
-      <path d="M5 7a12 12 0 0 1 12 12" />
-      <path d="M5 2.5A16.5 16.5 0 0 1 21.5 19" />
-    </svg>
-  );
-}
-
-function GuideIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="8" />
-      <path d="M9.75 9.25a2.25 2.25 0 1 1 3.25 2.02c-.9.47-1.5 1.07-1.5 2.23" />
-      <path d="M12 16.75h.01" />
-    </svg>
-  );
-}
-
-function ResourceIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5.5 6.5A2.5 2.5 0 0 1 8 4h8a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 16 20H8a2.5 2.5 0 0 1-2.5-2.5Z" />
-      <path d="M9 8.5h6" />
-      <path d="M9 12h6" />
-      <path d="M9 15.5h3.5" />
-    </svg>
-  );
-}
 
 function CloseIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-    >
+    <svg aria-hidden="true" {...iconProps}>
       <path d="m6 6 12 12" />
       <path d="M18 6 6 18" />
     </svg>
@@ -131,22 +55,21 @@ function CloseIcon() {
 
 const drawerIcons: Record<string, typeof BookIcon> = {
   "/browse": BookIcon,
-  "/notes": NotesIcon,
-  "/feed": FeedIcon,
-  "/help": GuideIcon,
-  "/resources/manage": ResourceIcon,
+  "/notes": LightbulbIcon,
+};
+
+const drawerTints: Record<string, string> = {
+  "/browse": "var(--accent-primary)",
+  "/notes": "var(--accent-note)",
 };
 
 export default function MobileNavDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
-  const { isAdmin } = useAdminStatus();
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
   const [isClosing, setIsClosing] = useState(false);
   const [hasEntered, setHasEntered] = useState(false);
-  const navItems = isAdmin
-    ? [...primaryNavItems, { href: "/resources/manage", label: "Resources" }]
-    : primaryNavItems;
+  const navItems = primaryNavItems;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -187,35 +110,33 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
       <button
         aria-label="Close menu"
         onClick={requestClose}
-        className={`absolute inset-0 bg-black/30 transition-opacity duration-200 will-change-[opacity] ${open && !isClosing && hasEntered ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-200 will-change-[opacity] ${open && !isClosing && hasEntered ? "opacity-100" : "opacity-0"}`}
       />
       <div
-        className={`absolute inset-y-0 left-0 flex w-[22.5rem] max-w-[92vw] flex-col border-r border-[color:var(--surface-border)] p-4 shadow-2xl backdrop-blur-xl transition-transform duration-200 ease-out will-change-[transform] ${open && !isClosing && hasEntered ? "translate-x-0" : "-translate-x-full"}`}
+        className={`absolute inset-y-0 left-0 flex w-[22.5rem] max-w-[92vw] flex-col border-r-2 border-[color:var(--surface-border)] p-4 transition-transform duration-200 ease-out will-change-[transform] ${open && !isClosing && hasEntered ? "translate-x-0" : "-translate-x-full"}`}
         style={{
-          background:
-            "linear-gradient(180deg, color-mix(in oklab, var(--mobile-nav-shell) 96%, white 4%), var(--surface-card-strong))",
-          boxShadow:
-            "0 20px 50px rgba(0,0,0,0.28), inset -1px 0 0 color-mix(in oklab, var(--mobile-nav-ring) 100%, transparent)",
+          backgroundColor: "var(--background)",
+          backgroundImage: "radial-gradient(var(--paper-dot) 1px, transparent 1px)",
+          backgroundSize: "22px 22px",
         }}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
-              Navigate
+            <p className="brand-wordmark text-[1.4rem]">
+              Verse<span>Together</span>
             </p>
-            <h2 className="text-lg font-semibold tracking-[0.01em]">Verse Together</h2>
-            <p className="text-sm text-[color:var(--foreground-muted)]">Scripture study, notes, and sharing in one place.</p>
+            <p className="text-sm text-[color:var(--foreground-muted)]">Read, take notes, share what you find.</p>
           </div>
           <button
             onClick={requestClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border surface-button text-[color:var(--foreground)]"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 surface-button text-[color:var(--foreground)]"
             aria-label="Close menu"
           >
             <CloseIcon />
           </button>
         </div>
 
-        <nav className="mt-6 grid gap-2" aria-label="Mobile menu">
+        <nav className="mt-6 grid gap-2.5" aria-label="Mobile menu">
           {navItems.map((item) => {
             const active = isPathActive(pathname, item.href);
             const Icon = drawerIcons[item.href];
@@ -225,51 +146,41 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
                 key={item.href}
                 href={href}
                 onClick={requestClose}
-                className="flex min-h-16 items-center gap-3 rounded-[1.35rem] border px-4 py-3 transition-all duration-200"
+                className="flex min-h-14 items-center gap-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] px-3 py-2.5 transition-colors duration-150"
                 aria-current={active ? "page" : undefined}
                 data-tap
                 style={
                   active
                     ? {
-                        borderColor: "color-mix(in oklab, var(--mobile-nav-active) 78%, var(--surface-border))",
-                        background: "var(--mobile-nav-active)",
-                        color: "var(--mobile-nav-active-text)",
-                        boxShadow:
-                          "0 10px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.16)",
+                        background: "var(--surface-button-active)",
+                        color: "var(--surface-button-active-text)",
+                        boxShadow: "var(--surface-shadow-soft)",
                       }
                     : {
-                        borderColor: "var(--surface-border)",
-                        background: "var(--surface-button)",
+                        background: "var(--surface-card)",
                         color: "var(--foreground)",
                       }
                 }
               >
                 <span
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)]"
                   style={{
-                    background: active
-                      ? "color-mix(in oklab, var(--mobile-nav-active-text) 10%, transparent)"
-                      : "color-mix(in oklab, var(--mobile-nav-shell) 88%, transparent)",
-                    color: active ? "var(--mobile-nav-active-text)" : "var(--mobile-nav-icon)",
+                    background: active ? "var(--surface-card)" : drawerTints[item.href] ?? "var(--surface-card)",
+                    color: "#17161a",
                   }}
                 >
                   <Icon />
                 </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-medium">{item.label}</span>
-                  <span className="block text-xs text-[color:var(--mobile-nav-icon)]">
-                    {active ? "Current section" : "Open section"}
-                  </span>
-                </span>
+                <span className="text-[0.95rem] font-bold">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-6 rounded-[1.5rem] border border-[color:var(--surface-border)] p-3 surface-card-soft">
+        <div className="mt-6 rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium">Appearance</p>
+              <p className="text-sm font-bold">Appearance</p>
               <p className="text-xs text-[color:var(--foreground-soft)]">Theme and account</p>
             </div>
             {user ? (
@@ -289,7 +200,7 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
         <div className="mt-auto pt-4">
           {!user ? (
             <SignInButton mode="modal">
-              <button className="w-full rounded-[1.2rem] border border-transparent bg-[color:var(--surface-button-active)] px-4 py-3 text-sm font-medium text-[color:var(--surface-button-active-text)] shadow-[0_10px_24px_rgba(0,0,0,0.12)]">
+              <button className="w-full rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 py-3 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]">
                 Sign in
               </button>
             </SignInButton>

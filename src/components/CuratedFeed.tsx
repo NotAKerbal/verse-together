@@ -10,6 +10,8 @@ import type {
   CuratedFeedSectionSummary,
 } from "@/lib/feedCatalog";
 
+const HIDE_WATCHED_STORAGE_KEY = "curated_feed_hide_watched_v1";
+
 type Props = {
   configured: boolean;
   sectionSummaries: CuratedFeedSectionSummary[];
@@ -72,9 +74,19 @@ function toSectionState(summary: CuratedFeedSectionSummary, section?: CuratedFee
   };
 }
 
+function readHideWatchedPreference() {
+  try {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(HIDE_WATCHED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function CuratedFeed({ configured, sectionSummaries, initialSection }: Props) {
   const { user, loading, promptSignIn } = useAuth();
   const [activeSectionId, setActiveSectionId] = useState(sectionSummaries[0]?.id ?? "");
+  const [hideWatched, setHideWatched] = useState(readHideWatchedPreference);
   const [pendingWatchedById, setPendingWatchedById] = useState<Record<string, boolean>>({});
   const [loadingSectionIds, setLoadingSectionIds] = useState<Record<string, boolean>>({});
   const [sectionStates, setSectionStates] = useState<Record<string, SectionState>>(() =>
@@ -109,6 +121,20 @@ export default function CuratedFeed({ configured, sectionSummaries, initialSecti
 
   const activeSection = sectionStates[activeSectionId] ?? null;
   const watchedSet = new Set(watchedEpisodeIds ?? []);
+  const visibleEpisodes = useMemo(() => {
+    if (!activeSection) return [];
+    if (!hideWatched) return activeSection.episodes;
+    return activeSection.episodes.filter((episode) => !watchedSet.has(episode.id));
+  }, [activeSection, hideWatched, watchedSet]);
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      window.localStorage.setItem(HIDE_WATCHED_STORAGE_KEY, hideWatched ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [hideWatched]);
 
   async function loadSection(sectionId: string, append: boolean) {
     const section = sectionStates[sectionId];
@@ -261,10 +287,10 @@ export default function CuratedFeed({ configured, sectionSummaries, initialSecti
       <header className="page-hero overflow-hidden">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 w-[38%] opacity-80"
+          className="pointer-events-none absolute inset-y-0 right-0 hidden w-[30%] border-l-2 border-[color:var(--surface-border)] sm:block"
           style={{
             background:
-              "radial-gradient(circle at 70% 30%, color-mix(in oklab, var(--accent-primary) 34%, transparent), transparent 42%), radial-gradient(circle at 40% 70%, color-mix(in oklab, var(--accent-tertiary) 24%, transparent), transparent 48%)",
+              "var(--accent-note)",
           }}
         />
         <div className="relative max-w-3xl space-y-3">
@@ -319,9 +345,20 @@ export default function CuratedFeed({ configured, sectionSummaries, initialSecti
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="page-meta">{activeSection.sourceCount} sources</span>
+              <span className="page-meta">{visibleEpisodes.length} shown</span>
               <span className="page-meta">{activeSection.episodes.length} loaded</span>
             </div>
           </div>
+
+          <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] px-4 py-2 text-sm text-[color:var(--foreground-muted)]">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-[color:var(--surface-border)]"
+              checked={hideWatched}
+              onChange={(event) => setHideWatched(event.target.checked)}
+            />
+            Hide watched
+          </label>
 
           {activeSection.errors.length > 0 ? (
             <div className="rounded-[1.25rem] border border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] px-4 py-3 text-sm text-[color:var(--foreground-muted)]">
@@ -337,10 +374,14 @@ export default function CuratedFeed({ configured, sectionSummaries, initialSecti
             <div className="rounded-[1.45rem] border border-dashed border-[color:var(--surface-border)] px-5 py-10 text-center text-sm text-[color:var(--foreground-muted)]">
               No episodes are available in this tab yet.
             </div>
+          ) : visibleEpisodes.length === 0 ? (
+            <div className="rounded-[1.45rem] border border-dashed border-[color:var(--surface-border)] px-5 py-10 text-center text-sm text-[color:var(--foreground-muted)]">
+              All loaded episodes are hidden because they are marked watched.
+            </div>
           ) : (
             <>
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                {activeSection.episodes.map((episode, index) => {
+                {visibleEpisodes.map((episode, index) => {
                   const isWatched = watchedSet.has(episode.id);
                   const isPendingWatched = pendingWatchedById[episode.id] === true;
                   const durationLabel = formatDuration(episode.durationMs);
@@ -352,12 +393,12 @@ export default function CuratedFeed({ configured, sectionSummaries, initialSecti
                     >
                       <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-x-0 top-0 h-20 opacity-70"
+                        className="pointer-events-none absolute inset-x-0 top-0 h-16 border-b-2 border-[color:var(--surface-border)]"
                         style={{
                           background:
                             index % 2 === 0
-                              ? "linear-gradient(180deg, color-mix(in oklab, var(--accent-primary) 12%, transparent), transparent)"
-                              : "linear-gradient(180deg, color-mix(in oklab, var(--accent-tertiary) 12%, transparent), transparent)",
+                              ? "var(--accent-note)"
+                              : "var(--accent-sky-soft)",
                         }}
                       />
                       <a

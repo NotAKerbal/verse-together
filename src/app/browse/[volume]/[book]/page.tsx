@@ -38,6 +38,11 @@ export default async function BookLanding({
         currentVolume={volumeSlug}
         currentBook={book}
       />
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <p className="text-[0.72rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-soft)]">
+          {chapters.length} {delineation.toLowerCase()}{chapters.length === 1 ? "" : "s"}
+        </p>
+      </div>
       <ChapterCards
         volume={volumeSlug}
         book={book}
@@ -65,7 +70,7 @@ function ChapterCards({
   return (
     <div>
       {chapters.length === 0 ? (
-        <p className="panel-card rounded-[1.25rem] p-4 text-sm text-[color:var(--foreground-muted)]">No chapter list available.</p>
+        <p className="panel-card p-4 text-sm text-[color:var(--foreground-muted)]">No chapter list available.</p>
       ) : (
         <ul className="browse-chapter-grid" data-compact={compactNumberGrid ? "true" : "false"}>
           {chapters.map((chapter, index) => {
@@ -76,16 +81,12 @@ function ChapterCards({
               <li key={chapter._id}>
                 <Link
                   href={`/browse/${volume}/${book}/${chapterNumber}`}
-                  className="panel-card interactive-card group flex min-h-[5.75rem] flex-col items-center justify-center rounded-[1.15rem] px-3 py-3 text-center sm:min-h-[6.1rem]"
+                  className="interactive-card group flex min-h-[3.4rem] items-center justify-center rounded-[0.85rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-2 py-2 text-center font-display text-[1.15rem] font-bold tracking-[-0.02em] text-foreground shadow-[var(--surface-shadow-soft)]"
                   aria-label={referenceLabel}
+                  title={referenceLabel}
                   data-tap
                 >
-                  <div className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground-soft)]">
-                    {delineation}
-                  </div>
-                  <div className="mt-1 text-[1.55rem] font-semibold leading-none tracking-[-0.04em] text-foreground sm:text-[1.75rem]">
-                    {chapterNumber}
-                  </div>
+                  {chapterNumber}
                 </Link>
               </li>
             );
