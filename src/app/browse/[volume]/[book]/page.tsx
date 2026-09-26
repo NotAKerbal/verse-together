@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import SelectionHeader from "@/components/SelectionHeader";
+import ChapterGrid from "@/features/plans/ChapterGrid";
 import { fetchBook } from "@/lib/openscripture";
 import { getLocalLdsBook } from "@/lib/ldsLocalData.server";
 import {
@@ -43,56 +43,13 @@ export default async function BookLanding({
           {chapters.length} {delineation.toLowerCase()}{chapters.length === 1 ? "" : "s"}
         </p>
       </div>
-      <ChapterCards
+      <ChapterGrid
         volume={volumeSlug}
         book={book}
-        chapters={chapters}
+        chapterCount={chapters.length}
         delineation={delineation}
-        compactNumberGrid={compactNumberGrid}
+        compact={compactNumberGrid}
       />
     </section>
-  );
-}
-
-function ChapterCards({
-  volume,
-  book,
-  chapters,
-  delineation,
-  compactNumberGrid,
-}: {
-  volume: string;
-  book: string;
-  chapters: Array<{ _id: string; summary?: string }>;
-  delineation: string;
-  compactNumberGrid: boolean;
-}) {
-  return (
-    <div>
-      {chapters.length === 0 ? (
-        <p className="panel-card p-4 text-sm text-[color:var(--foreground-muted)]">No chapter list available.</p>
-      ) : (
-        <ul className="browse-chapter-grid" data-compact={compactNumberGrid ? "true" : "false"}>
-          {chapters.map((chapter, index) => {
-            const chapterNumber = index + 1;
-            const referenceLabel = `${delineation} ${chapterNumber}`;
-
-            return (
-              <li key={chapter._id}>
-                <Link
-                  href={`/browse/${volume}/${book}/${chapterNumber}`}
-                  className="interactive-card group flex min-h-[3.4rem] items-center justify-center rounded-[0.85rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-2 py-2 text-center font-display text-[1.15rem] font-bold tracking-[-0.02em] text-foreground shadow-[var(--surface-shadow-soft)]"
-                  aria-label={referenceLabel}
-                  title={referenceLabel}
-                  data-tap
-                >
-                  {chapterNumber}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
   );
 }

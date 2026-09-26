@@ -18,6 +18,8 @@ import type * as feedback from "../feedback.js";
 import type * as insights from "../insights.js";
 import type * as noteFolders from "../noteFolders.js";
 import type * as preferences from "../preferences.js";
+import type * as readingPlans from "../readingPlans.js";
+import type * as readingProgress from "../readingProgress.js";
 import type * as resources from "../resources.js";
 import type * as social from "../social.js";
 import type * as users from "../users.js";
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   insights: typeof insights;
   noteFolders: typeof noteFolders;
   preferences: typeof preferences;
+  readingPlans: typeof readingPlans;
+  readingProgress: typeof readingProgress;
   resources: typeof resources;
   social: typeof social;
   users: typeof users;

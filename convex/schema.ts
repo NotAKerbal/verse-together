@@ -269,6 +269,47 @@ export default defineSchema({
     .index("by_chapter_verse", ["volume", "book", "chapter", "verse"])
     .index("by_user_verse", ["clerkId", "volume", "book", "chapter", "verse"]),
 
+  chapterReads: defineTable({
+    clerkId: v.string(),
+    volume: v.string(),
+    book: v.string(),
+    chapter: v.number(),
+    readAt: v.number(),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_user_volume", ["clerkId", "volume"])
+    .index("by_user_book", ["clerkId", "volume", "book"])
+    .index("by_user_chapter", ["clerkId", "volume", "book", "chapter"]),
+
+  lastReadingPositions: defineTable({
+    clerkId: v.string(),
+    volume: v.string(),
+    book: v.string(),
+    chapter: v.number(),
+    verse: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_clerk_id", ["clerkId"]),
+
+  readingPlans: defineTable({
+    clerkId: v.string(),
+    title: v.string(),
+    template: v.union(v.literal("bom-30"), v.literal("book-daily"), v.literal("custom")),
+    steps: v.array(
+      v.object({
+        volume: v.string(),
+        book: v.string(),
+        chapter: v.number(),
+        label: v.string(),
+      })
+    ),
+    startDate: v.optional(v.string()),
+    chaptersPerDay: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_clerk_created", ["clerkId", "createdAt"]),
+
   friendships: defineTable({
     requesterClerkId: v.string(),
     addresseeClerkId: v.string(),

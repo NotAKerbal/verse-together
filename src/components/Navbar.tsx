@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCompass,
   faLightbulb,
+  faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
 import ThemeSelect from "@/components/ThemeSelect";
@@ -44,6 +45,7 @@ export default function Navbar() {
   const navIcons = {
     Browse: faCompass,
     Notes: faLightbulb,
+    Plans: faListCheck,
   } as const;
 
   useEffect(() => {
