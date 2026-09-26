@@ -20,6 +20,7 @@ import type { ReaderPreferences } from "@/lib/preferences";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
+import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import {
   groupChapterStudyPathsByVerse,
@@ -1680,6 +1681,7 @@ export default function ChapterReader({
               );
             })}
           </ol>
+          <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
           </div>
         </div>
       </div>

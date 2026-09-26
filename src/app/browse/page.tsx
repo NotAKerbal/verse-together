@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SelectionHeader from "@/components/SelectionHeader";
+import ContinueReadingCard from "@/features/plans/ContinueReadingCard";
 import { getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
 
 const VOLUME_TINTS: Record<string, string> = {
@@ -36,6 +37,7 @@ export default async function BrowsePage({
   return (
     <section className="page-shell browse-shell">
       <SelectionHeader title="Library" />
+      <ContinueReadingCard />
       <ul className="browse-grid">
         {commonVolumes.map((volume) => (
           <li key={volume.id} className={volume.id === "pearl" ? "sm:col-span-2 lg:col-span-1" : ""}>

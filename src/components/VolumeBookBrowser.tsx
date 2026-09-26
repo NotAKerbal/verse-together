@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SelectionHeader from "@/components/SelectionHeader";
+import BookProgressBar from "@/features/plans/BookProgressBar";
 
 export type VolumeBookBrowserItem = {
   id: string;
@@ -77,6 +78,9 @@ export default function VolumeBookBrowser({
                     <div className="mt-0.5 text-[0.8rem] font-semibold text-[color:var(--foreground-muted)]">
                       {book.chapters} {book.chapters === 1 ? "chapter" : "chapters"}
                     </div>
+                  ) : null}
+                  {book.chapters ? (
+                    <BookProgressBar volume={volumeSlug} book={book.id} chapterCount={book.chapters} />
                   ) : null}
                 </div>
                 <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] text-[color:var(--foreground)] transition-transform duration-150 group-hover:translate-x-0.5">
