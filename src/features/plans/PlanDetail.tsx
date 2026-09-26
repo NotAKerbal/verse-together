@@ -8,12 +8,15 @@ import { useAuth } from "@/lib/auth";
 import ProgressBar from "./ProgressBar";
 import PlansSignedOut from "./PlansSignedOut";
 import {
-  PLAN_TEMPLATE_LABELS,
-  addDaysToKey,
   describePlanPace,
+  describeReadingDays,
   formatDateKey,
   getPlanDayCount,
+  getPlanDayDate,
   getPlanDayIndex,
+  isReadingDay,
+  normalizeReadingDays,
+  pluralize,
 } from "./planSchedule";
 import { getChapterHref } from "./scriptureCatalog";
 import {
@@ -52,8 +55,10 @@ function buildSchedule(plan: PlanDetailData): Schedule {
     };
   }
 
+  const readingDays = normalizeReadingDays(plan.readingDays);
   const dayCount = getPlanDayCount(plan.stepCount, cadence);
-  const dayIndex = plan.startDate ? getPlanDayIndex(plan.startDate) : null;
+  const stepsForDay = (day: number) => plan.steps.slice(day * cadence, (day + 1) * cadence);
+  const dayIndex = plan.startDate ? getPlanDayIndex(plan.startDate, readingDays) : null;
   let activeDay: number | null = null;
   let todayTitle = "Up next";
   let todayNote: string | null = allReadNote;
@@ -61,24 +66,30 @@ function buildSchedule(plan: PlanDetailData): Schedule {
 
   if (plan.startDate && dayIndex !== null) {
     if (dayIndex < 0) {
+      const firstDate = getPlanDayDate(plan.startDate, 0, readingDays) ?? plan.startDate;
       todayTitle = "Not started yet";
-      todayNote = `Day 1 is ${formatDateKey(plan.startDate)}.`;
-      todaySteps = plan.steps.slice(0, cadence);
+      todayNote = `Day 1 is ${formatDateKey(firstDate)}.`;
+      todaySteps = stepsForDay(0);
     } else if (dayIndex >= dayCount) {
       todayTitle = "Schedule finished";
-      todayNote = unread.length ? `${unread.length} ${unread.length === 1 ? "chapter" : "chapters"} still unread.` : allReadNote;
+      todayNote = unread.length ? `${pluralize(unread.length, "chapter")} still unread.` : allReadNote;
+    } else if (!isReadingDay(new Date(), readingDays)) {
+      const nextDate = getPlanDayDate(plan.startDate, dayIndex, readingDays);
+      todayTitle = "Rest day";
+      todayNote = `Day ${dayIndex + 1} is ${nextDate ? formatDateKey(nextDate) : "next"}.`;
+      todaySteps = stepsForDay(dayIndex);
     } else {
       activeDay = dayIndex;
       todayTitle = `Day ${dayIndex + 1} of ${dayCount}`;
       todayNote = null;
-      todaySteps = plan.steps.slice(dayIndex * cadence, (dayIndex + 1) * cadence);
+      todaySteps = stepsForDay(dayIndex);
     }
   }
 
   const groups: DayGroup[] = Array.from({ length: dayCount }, (_, day) => ({
     day,
-    date: plan.startDate ? addDaysToKey(plan.startDate, day) : null,
-    steps: plan.steps.slice(day * cadence, (day + 1) * cadence),
+    date: plan.startDate ? getPlanDayDate(plan.startDate, day, readingDays) : null,
+    steps: stepsForDay(day),
     isToday: activeDay === day,
   }));
 
@@ -202,11 +213,16 @@ export default function PlanDetail({ planId }: { planId: string }) {
     content = (
       <>
         <header className="page-hero space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="pill-tag px-2 py-0.5">{PLAN_TEMPLATE_LABELS[plan.template]}</span>
-            <span className="pill-tag px-2 py-0.5" style={{ background: percent === 100 ? "var(--accent-mint)" : "var(--accent-primary)", color: "#17161a" }}>
-              {percent}% read
-            </span>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="pill-tag px-2 py-0.5">{describeReadingDays(normalizeReadingDays(plan.readingDays))}</span>
+              <span className="pill-tag px-2 py-0.5" style={{ background: percent === 100 ? "var(--accent-mint)" : "var(--accent-primary)", color: "#17161a" }}>
+                {percent}% read
+              </span>
+            </div>
+            <Link href={`/plans/${plan.id}/edit`} className="surface-button inline-flex min-h-9 items-center rounded-full border-2 px-4 text-sm" data-tap>
+              Edit plan
+            </Link>
           </div>
           <h1 className="page-title">{plan.title}</h1>
           <p className="page-subtitle text-sm">{describePlanPace(plan)}</p>
@@ -258,7 +274,10 @@ export default function PlanDetail({ planId }: { planId: string }) {
           )}
         </section>
 
-        <div className="flex justify-end px-1">
+        <div className="flex flex-wrap justify-end gap-2 px-1">
+          <Link href={`/plans/${plan.id}/edit`} className="surface-button inline-flex min-h-9 items-center rounded-full border-2 px-4 text-sm" data-tap>
+            Edit plan
+          </Link>
           <button
             type="button"
             onClick={() => void handleDelete()}
