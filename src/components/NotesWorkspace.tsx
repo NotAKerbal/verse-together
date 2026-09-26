@@ -9,16 +9,22 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
 import { getInsightDraft, type InsightDraftSummary } from "@/lib/appData";
+import {
+  clearLegacyLocalFolderData,
+  deriveNoteFolderMaps,
+  optimisticAssignDraftFolder,
+  optimisticDeleteFolder,
+  optimisticMoveFolder,
+  optimisticRenameFolder,
+  readLegacyLocalFolderData,
+  type FolderParentMap,
+} from "@/lib/noteFolders";
+import type { Id } from "../../convex/_generated/dataModel";
 import InsightEditorPanel from "@/features/insights/InsightEditorPanel";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
-const LEGACY_FOLDER_NAMES_KEY = "vt_note_folder_names_v1";
-const LEGACY_NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
-const LEGACY_FOLDER_PARENT_MAP_KEY = "vt_folder_parent_map_v1";
-const FOLDER_MIGRATION_DONE_KEY = "vt_note_folder_cloud_migration_done_v1";
 const NOTES_TIP_DISMISSED_KEY = "vt_notes_tip_dismissed_v1";
 
-type FolderParentMap = Record<string, string>;
 type SearchFilter = {
   id: string;
   kind: "tag" | "uncategorized" | "hasFolder" | "folder" | "draft" | "public";
@@ -31,57 +37,6 @@ type FilterOption = {
   filter: SearchFilter;
   keywords: string;
 };
-
-type CloudFolderWorkspace = {
-  folders: Array<{ id: string; name: string; parent_folder_id: string | null }>;
-  assignments: Array<{ draft_id: string; folder_id: string }>;
-};
-
-function loadLegacyFolderNames(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(LEGACY_FOLDER_NAMES_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) => String(item).trim())
-      .filter(Boolean)
-      .slice(0, 100);
-  } catch {
-    return [];
-  }
-}
-
-function loadLegacyNoteFolderMap(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(LEGACY_NOTE_FOLDER_MAP_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-    if (!parsed || typeof parsed !== "object") return {};
-    return parsed as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
-
-function loadLegacyFolderParentMap(): FolderParentMap {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(LEGACY_FOLDER_PARENT_MAP_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-    if (!parsed || typeof parsed !== "object") return {};
-    const out: FolderParentMap = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      const child = String(key).trim();
-      const parent = String(value ?? "").trim();
-      if (!child || !parent || child === parent) continue;
-      out[child] = parent;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
 
 function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
   if (visibility === "friends") return "Friends";
@@ -172,17 +127,16 @@ export default function NotesWorkspace({
 }) {
   const { user, getToken, loading } = useAuth();
   const rows = useQuery(api.insights.listMyDrafts, user ? {} : "skip") as InsightDraftSummary[] | undefined;
-  const noteFoldersApi = (api as any).noteFolders;
-  const folderWorkspace = useQuery(
-    noteFoldersApi.getWorkspace,
-    user ? {} : "skip"
-  ) as CloudFolderWorkspace | undefined;
+  const folderWorkspace = useQuery(api.noteFolders.getWorkspace, user ? {} : "skip");
   const saveDraftSettingsMutation = useMutation(api.insights.saveDraftSettings);
-  const createFolderMutation = useMutation(noteFoldersApi.createFolder);
-  const renameFolderMutation = useMutation(noteFoldersApi.renameFolder);
-  const moveFolderMutation = useMutation(noteFoldersApi.moveFolder);
-  const deleteFolderMutation = useMutation(noteFoldersApi.deleteFolder);
-  const assignFolderMutation = useMutation(noteFoldersApi.assignDraftFolder);
+  const createFolderMutation = useMutation(api.noteFolders.createFolder);
+  const renameFolderMutation = useMutation(api.noteFolders.renameFolder).withOptimisticUpdate(optimisticRenameFolder);
+  const moveFolderMutation = useMutation(api.noteFolders.moveFolder).withOptimisticUpdate(optimisticMoveFolder);
+  const deleteFolderMutation = useMutation(api.noteFolders.deleteFolder).withOptimisticUpdate(optimisticDeleteFolder);
+  const assignFolderMutation = useMutation(api.noteFolders.assignDraftFolder).withOptimisticUpdate(
+    optimisticAssignDraftFolder
+  );
+  const importLocalFoldersMutation = useMutation(api.noteFolders.importLocalFolders);
   const { switchDraft, createDraft, activeDraftId } = useInsightBuilder();
 
   const [search, setSearch] = useState("");
@@ -190,9 +144,6 @@ export default function NotesWorkspace({
   const [activeFilters, setActiveFilters] = useState<SearchFilter[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [highlightedFilterIndex, setHighlightedFilterIndex] = useState(0);
-  const [folderNames, setFolderNames] = useState<string[]>([]);
-  const [noteFolderMap, setNoteFolderMap] = useState<Record<string, string>>({});
-  const [folderParentMap, setFolderParentMap] = useState<FolderParentMap>({});
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -206,6 +157,7 @@ export default function NotesWorkspace({
   const [showTipsTooltip, setShowTipsTooltip] = useState(false);
   const [tagSavingById, setTagSavingById] = useState<Record<string, boolean>>({});
   const noteDropHandledRef = useRef(false);
+  const legacyImportAttemptedRef = useRef(false);
   const filterBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -216,82 +168,39 @@ export default function NotesWorkspace({
     }
   }, []);
 
-  useEffect(() => {
-    if (!folderWorkspace) return;
-    const folderNamesFromCloud = folderWorkspace.folders.map((folder) => folder.name).sort((a, b) => a.localeCompare(b));
-    const nameById = new Map(folderWorkspace.folders.map((folder) => [folder.id, folder.name]));
-    const nextParentMap: FolderParentMap = {};
-    folderWorkspace.folders.forEach((folder) => {
-      const parentName = folder.parent_folder_id ? nameById.get(folder.parent_folder_id) : null;
-      if (parentName && parentName !== folder.name) nextParentMap[folder.name] = parentName;
-    });
-    const nextNoteFolderMap: Record<string, string> = {};
-    folderWorkspace.assignments.forEach((row) => {
-      const folderName = nameById.get(row.folder_id);
-      if (folderName) nextNoteFolderMap[row.draft_id] = folderName;
-    });
-    setFolderNames(folderNamesFromCloud);
-    setFolderParentMap(nextParentMap);
-    setNoteFolderMap(nextNoteFolderMap);
-  }, [folderWorkspace]);
+  // Convex is the source of truth; derive the name-keyed maps the tree renders from.
+  const { folderNames, folderParentMap, noteFolderMap, folderIdByName } = useMemo(
+    () => deriveNoteFolderMaps(folderWorkspace),
+    [folderWorkspace]
+  );
 
+  // One-time import of the folder maps that used to live in localStorage.
   useEffect(() => {
-    if (!user || !folderWorkspace) return;
-    let cancelled = false;
-    (async () => {
-      if (typeof window === "undefined") return;
-      if (window.localStorage.getItem(FOLDER_MIGRATION_DONE_KEY) === "1") return;
-      const legacyNames = loadLegacyFolderNames();
-      const legacyParentMap = loadLegacyFolderParentMap();
-      const legacyNoteFolderMap = loadLegacyNoteFolderMap();
-      const hasLegacyData =
-        legacyNames.length > 0 ||
-        Object.keys(legacyParentMap).length > 0 ||
-        Object.keys(legacyNoteFolderMap).length > 0;
-      if (!hasLegacyData) {
-        window.localStorage.setItem(FOLDER_MIGRATION_DONE_KEY, "1");
-        return;
-      }
-      if (folderWorkspace.folders.length > 0 || folderWorkspace.assignments.length > 0) {
-        window.localStorage.setItem(FOLDER_MIGRATION_DONE_KEY, "1");
-        return;
-      }
-
-      const createdIds = new Map<string, string>();
-      const pending = new Set<string>(legacyNames);
-      let guard = legacyNames.length * 2 + 1;
-      while (pending.size > 0 && guard > 0) {
-        guard -= 1;
-        let progressed = false;
-        for (const name of Array.from(pending)) {
-          const parent = legacyParentMap[name];
-          if (parent && !createdIds.has(parent)) continue;
-          const result = await createFolderMutation({
-            name,
-            parentFolderId: parent ? (createdIds.get(parent) as any) : undefined,
-          });
-          if (!cancelled) {
-            createdIds.set(name, String(result.id));
-            pending.delete(name);
-            progressed = true;
-          }
-        }
-        if (!progressed) break;
-      }
-      for (const [draftId, folderName] of Object.entries(legacyNoteFolderMap)) {
-        const folderId = createdIds.get(folderName);
-        if (!folderId) continue;
-        await assignFolderMutation({
-          draftId: draftId as any,
-          folderId: folderId as any,
-        });
-      }
-      if (!cancelled) window.localStorage.setItem(FOLDER_MIGRATION_DONE_KEY, "1");
-    })().catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [user, folderWorkspace, createFolderMutation, assignFolderMutation]);
+    if (!user || !folderWorkspace || legacyImportAttemptedRef.current) return;
+    const legacy = readLegacyLocalFolderData();
+    if (!legacy.hasData) return;
+    legacyImportAttemptedRef.current = true;
+    if (folderWorkspace.folders.length > 0 || folderWorkspace.assignments.length > 0) {
+      clearLegacyLocalFolderData();
+      console.info("[notes] Folders already live in the cloud; dropped stale local folder data.");
+      return;
+    }
+    importLocalFoldersMutation({
+      folderNames: legacy.folderNames,
+      parentMap: legacy.parentMap,
+      noteFolderMap: legacy.noteFolderMap,
+    })
+      .then((result) => {
+        clearLegacyLocalFolderData();
+        console.info(
+          `[notes] Imported local folders to the cloud: ${result.createdFolders} folders, ${result.linkedParents} nested, ${result.assignedNotes} notes filed.`
+        );
+      })
+      .catch((error: unknown) => {
+        legacyImportAttemptedRef.current = false;
+        console.warn("[notes] Could not import local folders yet; will retry.", error);
+      });
+  }, [user, folderWorkspace, importLocalFoldersMutation]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent | TouchEvent) {
@@ -334,12 +243,6 @@ export default function NotesWorkspace({
     });
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [folderNames, noteFolderMap, folderParentMap]);
-
-  const folderIdByName = useMemo(() => {
-    const out = new Map<string, string>();
-    (folderWorkspace?.folders ?? []).forEach((folder) => out.set(folder.name, folder.id));
-    return out;
-  }, [folderWorkspace]);
 
   const filteredRows = useMemo(() => {
     if (!rows) return [];
@@ -494,7 +397,7 @@ export default function NotesWorkspace({
     if (parent && !parentId) return false;
     await createFolderMutation({
       name: trimmed,
-      parentFolderId: parentId as any,
+      parentFolderId: parentId,
     });
     setExpandedFolders((prev) => ({ ...prev, [trimmed]: true }));
     return true;
@@ -504,8 +407,8 @@ export default function NotesWorkspace({
     const folderId = folder ? folderIdByName.get(folder) : undefined;
     if (folder && !folderId) return;
     await assignFolderMutation({
-      draftId: noteId as any,
-      folderId: folderId as any,
+      draftId: noteId as Id<"insightDrafts">,
+      folderId,
     });
   }
 
@@ -518,8 +421,8 @@ export default function NotesWorkspace({
     const parentId = targetParent ? folderIdByName.get(targetParent) : undefined;
     if (targetParent && !parentId) return;
     await moveFolderMutation({
-      folderId: folderId as any,
-      parentFolderId: parentId as any,
+      folderId,
+      parentFolderId: parentId,
     });
   }
 
@@ -528,7 +431,7 @@ export default function NotesWorkspace({
     if (!name) return;
     const folderId = folderIdByName.get(name);
     if (!folderId) return;
-    await deleteFolderMutation({ folderId: folderId as any });
+    await deleteFolderMutation({ folderId });
     setExpandedFolders((prev) => {
       const out = { ...prev };
       delete out[name];
@@ -545,7 +448,7 @@ export default function NotesWorkspace({
     if (allFolders.includes(toName)) return false;
     const folderId = folderIdByName.get(fromName);
     if (!folderId) return false;
-    await renameFolderMutation({ folderId: folderId as any, name: toName });
+    await renameFolderMutation({ folderId, name: toName });
 
     setExpandedFolders((prev) => {
       const out = { ...prev };

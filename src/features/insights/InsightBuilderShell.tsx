@@ -2,17 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
+import { buildFolderPath, deriveNoteFolderMaps, type FolderParentMap } from "@/lib/noteFolders";
 import InsightEditorPanel from "./InsightEditorPanel";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLightbulb } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder } from "./InsightBuilderProvider";
 
 const OPEN_DRAFTS_STORAGE_PREFIX = "vt_reader_open_drafts_v1";
-const NOTE_FOLDER_MAP_KEY = "vt_note_folder_map_v1";
-const FOLDER_PARENT_MAP_KEY = "vt_folder_parent_map_v1";
 
-type FolderParentMap = Record<string, string>;
 type DraftListItem = { id: string; title: string };
 
 function readStoredDraftIds(storageKey: string | null): string[] {
@@ -26,59 +26,6 @@ function readStoredDraftIds(storageKey: string | null): string[] {
   } catch {
     return [];
   }
-}
-
-function readStoredNoteFolderMap(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(NOTE_FOLDER_MAP_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-    if (!parsed || typeof parsed !== "object") return {};
-    const out: Record<string, string> = {};
-    for (const [draftId, folder] of Object.entries(parsed as Record<string, unknown>)) {
-      const id = String(draftId).trim();
-      const value = String(folder ?? "").trim();
-      if (!id) continue;
-      out[id] = value;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function readStoredFolderParentMap(): FolderParentMap {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(FOLDER_PARENT_MAP_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
-    if (!parsed || typeof parsed !== "object") return {};
-    const out: FolderParentMap = {};
-    for (const [childRaw, parentRaw] of Object.entries(parsed as Record<string, unknown>)) {
-      const child = String(childRaw).trim();
-      const parent = String(parentRaw ?? "").trim();
-      if (!child || !parent || child === parent) continue;
-      out[child] = parent;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function buildFolderPath(folder: string, parentMap: FolderParentMap): string {
-  const trimmed = folder.trim();
-  if (!trimmed) return "";
-  const chain: string[] = [];
-  const seen = new Set<string>();
-  let current: string | undefined = trimmed;
-  while (current) {
-    if (seen.has(current)) break;
-    seen.add(current);
-    chain.push(current);
-    current = parentMap[current];
-  }
-  return chain.reverse().join(" / ");
 }
 
 function groupDraftsByFolder<TDraft extends DraftListItem>(
@@ -119,8 +66,8 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
   const { drafts, activeDraftId, isLoading, createDraft, switchDraft, clearActiveDraft } = useInsightBuilder();
   const [openDraftIds, setOpenDraftIds] = useState<string[]>([]);
   const [isLoadSavedOpen, setIsLoadSavedOpen] = useState(false);
-  const [noteFolderMap, setNoteFolderMap] = useState<Record<string, string>>({});
-  const [folderParentMap, setFolderParentMap] = useState<FolderParentMap>({});
+  const folderWorkspace = useQuery(api.noteFolders.getWorkspace, user ? {} : "skip");
+  const { noteFolderMap, folderParentMap } = useMemo(() => deriveNoteFolderMaps(folderWorkspace), [folderWorkspace]);
   const [busy, setBusy] = useState(false);
   const [hasRestoredOpenDrafts, setHasRestoredOpenDrafts] = useState(false);
   const openDraftStorageKey = useMemo(
@@ -128,21 +75,6 @@ function BuilderContent({ isMobile = false }: { isMobile?: boolean }) {
     [user?.id]
   );
   const draftNotes = useMemo(() => drafts.filter((draft) => draft.status === "draft"), [drafts]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const syncFolders = () => {
-      setNoteFolderMap(readStoredNoteFolderMap());
-      setFolderParentMap(readStoredFolderParentMap());
-    };
-    syncFolders();
-    window.addEventListener("storage", syncFolders);
-    window.addEventListener("focus", syncFolders);
-    return () => {
-      window.removeEventListener("storage", syncFolders);
-      window.removeEventListener("focus", syncFolders);
-    };
-  }, []);
 
   useEffect(() => {
     setHasRestoredOpenDrafts(false);

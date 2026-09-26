@@ -296,6 +296,11 @@ export const deleteDraft = mutation({
       .withIndex("by_draft", (q: any) => q.eq("draftId", args.draftId))
       .collect();
     await Promise.all(blocks.map((b) => ctx.db.delete(b._id)));
+    const folderAssignment = await ctx.db
+      .query("noteFolderAssignments")
+      .withIndex("by_clerk_draft", (q: any) => q.eq("clerkId", clerkId).eq("draftId", args.draftId))
+      .unique();
+    if (folderAssignment) await ctx.db.delete(folderAssignment._id);
     await ctx.db.delete(args.draftId);
     return { ok: true };
   },
