@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import type { ChapterRef } from "./scriptureCatalog";
 import type { PlanStepInput, PlanTemplate } from "./planSchedule";
+import type { PlanSelection } from "./planScope";
 
 export type BookProgress = NonNullable<FunctionReturnType<typeof api.readingProgress.getMyProgressForBook>>;
 export type VolumeProgress = NonNullable<FunctionReturnType<typeof api.readingProgress.getMyProgressForVolume>>;
@@ -45,9 +46,9 @@ export function useMyPlans() {
   return useQuery(api.readingPlans.listMyPlans, user ? {} : "skip");
 }
 
-export function usePlan(planId: string) {
+export function usePlan(planId: string | null) {
   const { user } = useAuth();
-  return useQuery(api.readingPlans.getPlan, user ? { planId } : "skip");
+  return useQuery(api.readingPlans.getPlan, user && planId ? { planId } : "skip");
 }
 
 export function useReadingProgressActions() {
@@ -66,23 +67,28 @@ export function useReadingProgressActions() {
   );
 }
 
-export type CreatePlanInput = {
+export type PlanWriteInput = {
   title: string;
-  template: PlanTemplate;
   steps: PlanStepInput[];
+  selections: PlanSelection[];
   startDate?: string;
   chaptersPerDay?: number;
+  readingDays?: boolean[];
 };
+
+export type CreatePlanInput = PlanWriteInput & { template: PlanTemplate };
 
 export function usePlanActions() {
   const create = useMutation(api.readingPlans.createPlan);
+  const update = useMutation(api.readingPlans.updatePlan);
   const remove = useMutation(api.readingPlans.deletePlan);
 
   return useMemo(
     () => ({
       createPlan: (input: CreatePlanInput) => create(input),
+      updatePlan: (planId: Id<"readingPlans">, input: PlanWriteInput) => update({ planId, ...input }),
       deletePlan: (planId: Id<"readingPlans">) => remove({ planId }),
     }),
-    [create, remove]
+    [create, update, remove]
   );
 }
