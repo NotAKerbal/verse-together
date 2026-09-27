@@ -89,6 +89,7 @@ export type ReaderPreferences = {
   fontScale: number;
   fontFamily: "serif" | "sans";
   comparisonView: "inline" | "sideBySide";
+  textWidth?: "comfortable" | "wide" | "full";
 };
 
 export type WatchedFeedEpisode = {

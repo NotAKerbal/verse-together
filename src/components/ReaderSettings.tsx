@@ -2,7 +2,7 @@
 
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { ReaderPreferences } from "@/lib/preferences";
+import type { ReaderPreferences, ReaderTextWidth } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
 
 type Props = {
@@ -13,6 +13,12 @@ type Props = {
   translationControls?: ReactNode;
   anchorRef?: RefObject<HTMLElement | null>;
 };
+
+const TEXT_WIDTH_OPTIONS: ReadonlyArray<{ value: ReaderTextWidth; label: string }> = [
+  { value: "comfortable", label: "Comfortable" },
+  { value: "wide", label: "Wide" },
+  { value: "full", label: "Full" },
+];
 
 export default function ReaderSettings({ open, onClose, prefs, onChange, translationControls, anchorRef }: Props) {
   const [local, setLocal] = useState<ReaderPreferences>(prefs);
@@ -151,6 +157,36 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
               >
                 Sans
               </button>
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-foreground/80">Text width</legend>
+            <div
+              className="inline-flex w-full overflow-hidden rounded-md border border-[color:var(--surface-border)]"
+              onTouchStart={stopTouchPropagation}
+              onTouchMove={stopTouchPropagation}
+              onTouchEnd={stopTouchPropagation}
+            >
+              {TEXT_WIDTH_OPTIONS.map((option, index) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={local.textWidth === option.value}
+                  onClick={() => {
+                    const next = { ...local, textWidth: option.value };
+                    setLocal(next);
+                    onChange(next);
+                  }}
+                  className={`flex-1 px-3 py-1.5 text-sm ${index > 0 ? "border-l border-[color:var(--surface-border)]" : ""} ${
+                    local.textWidth === option.value
+                      ? "bg-foreground text-background"
+                      : "bg-transparent text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </fieldset>
 

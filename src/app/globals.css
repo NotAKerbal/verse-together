@@ -585,6 +585,72 @@ mark {
   color: var(--surface-button-active-text);
 }
 
+/*
+  The reader column sits on plain paper: a backdrop the color of the page,
+  feathered at every edge so the dotted grid fades away around the text.
+  It bleeds only as far as the main gutter so it never widens the page.
+*/
+.reader-column {
+  --reader-backdrop-bleed: 1rem;
+  isolation: isolate;
+}
+
+.reader-column::before {
+  content: "";
+  position: absolute;
+  inset: -1.5rem calc(-1 * var(--reader-backdrop-bleed));
+  z-index: -1;
+  background: var(--background);
+  pointer-events: none;
+  mask-image:
+    linear-gradient(to right, transparent, #000 10%, #000 90%, transparent),
+    linear-gradient(to bottom, transparent, #000 6%, #000 94%, transparent);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 10%, #000 90%, transparent),
+    linear-gradient(to bottom, transparent, #000 6%, #000 94%, transparent);
+  -webkit-mask-composite: source-in;
+}
+
+@media (min-width: 640px) {
+  .reader-column {
+    --reader-backdrop-bleed: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .reader-column {
+    --reader-backdrop-bleed: 2rem;
+  }
+}
+
+/*
+  Text width (Reader settings): comfortable keeps the shell width, wide opens
+  the shell up, full lets the verses run edge to edge.
+*/
+.reader-column[data-text-width="wide"] {
+  max-width: 88rem;
+}
+
+.reader-column[data-text-width="full"] {
+  max-width: none;
+  padding-inline: 1.5rem;
+}
+
+.page-shell:has(.reader-column[data-text-width="wide"]) {
+  width: min(100%, var(--shell-max-width-wide));
+}
+
+.page-shell:has(.reader-column[data-text-width="full"]) {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .reader-column[data-text-width="full"] {
+    padding-inline: 0;
+  }
+}
+
 .tap-feedback {
   transition: transform 100ms ease, box-shadow 100ms ease;
   transform: translate(0, 0);
@@ -662,6 +728,11 @@ mark {
   width: 100%;
 }
 
+/* Pure paper: the dotted grid is gone altogether. */
+:root[data-simple="true"] body {
+  background-image: none;
+}
+
 /* The reader collapses to a single centered book-page column. */
 :root[data-simple="true"] .reader-layout {
   display: block;
@@ -669,6 +740,14 @@ mark {
 
 :root[data-simple="true"] .reader-column {
   max-width: 42rem;
+}
+
+:root[data-simple="true"] .reader-column[data-text-width="wide"] {
+  max-width: 64rem;
+}
+
+:root[data-simple="true"] .reader-column[data-text-width="full"] {
+  max-width: none;
 }
 
 :root[data-simple="true"] .verse-badge {
@@ -800,5 +879,171 @@ mark {
 @media (min-width: 1024px) {
   :root[data-simple="true"] .app-main {
     padding-right: 2rem;
+  }
+}
+
+/*
+  Share mode: <html data-share="true"> while a /share passage page is mounted
+  (see src/components/ShareChrome.tsx). Every piece of app chrome steps aside;
+  the passage page itself is a full-viewport sheet of plain paper.
+*/
+:root[data-share="true"] body {
+  background-image: none;
+}
+
+:root[data-share="true"] .app-header,
+:root[data-share="true"] .simple-hide,
+:root[data-share="true"] .simple-only {
+  display: none !important;
+}
+
+:root[data-share="true"] .app-body {
+  padding-bottom: 0;
+}
+
+:root[data-share="true"] .app-main {
+  padding: 0;
+}
+
+.share-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.share-page-inner {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  width: min(100%, 52rem);
+  margin-inline: auto;
+  padding: max(2rem, env(safe-area-inset-top)) clamp(1rem, 4vw, 2.5rem) max(2rem, env(safe-area-inset-bottom));
+}
+
+.share-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.share-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--foreground-soft);
+}
+
+.share-reference {
+  margin: 0;
+  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.share-card {
+  width: 100%;
+  border: 2px solid var(--surface-border);
+  border-radius: 1.25rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow);
+  padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1.1rem, 4.5vw, 2.75rem);
+}
+
+.share-passage {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: clamp(1.25rem, 2.4vw, 1.8rem);
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.share-passage li + li {
+  margin-top: 0.9em;
+}
+
+.share-verse-number {
+  margin-right: 0.35rem;
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.58em;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: super;
+  color: var(--foreground-soft);
+  user-select: none;
+}
+
+.share-gap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1.1em;
+  color: var(--foreground-soft);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+  user-select: none;
+}
+
+.share-gap::before,
+.share-gap::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: var(--surface-border);
+  opacity: 0.35;
+}
+
+.share-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  width: 100%;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--foreground-muted);
+}
+
+.share-footer a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.share-footer a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.share-footer .brand-wordmark {
+  font-size: 1.1rem;
+  color: var(--foreground);
+}
+
+@media (max-width: 480px) {
+  .share-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 }

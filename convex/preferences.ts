@@ -15,6 +15,7 @@ export const getReaderPreferences = query({
       fontScale: row.fontScale,
       fontFamily: row.fontFamily,
       comparisonView: row.comparisonView === "sideBySide" ? "sideBySide" : "inline",
+      textWidth: row.textWidth ?? "comfortable",
     };
   },
 });
@@ -25,6 +26,7 @@ export const saveReaderPreferences = mutation({
     fontScale: v.number(),
     fontFamily: v.union(v.literal("serif"), v.literal("sans")),
     comparisonView: v.union(v.literal("inline"), v.literal("sideBySide")),
+    textWidth: v.optional(v.union(v.literal("comfortable"), v.literal("wide"), v.literal("full"))),
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
@@ -35,6 +37,7 @@ export const saveReaderPreferences = mutation({
       fontScale: clampFontScale(args.fontScale),
       fontFamily: args.fontFamily,
       comparisonView: args.comparisonView,
+      textWidth: args.textWidth ?? "comfortable",
       updatedAt: now,
     };
     if (existing) {

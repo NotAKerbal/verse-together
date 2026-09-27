@@ -2,6 +2,8 @@
 
 import type { MouseEvent } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faLink } from "@fortawesome/free-solid-svg-icons";
 
 export type VerseActionAnchorRect = {
   top: number;
@@ -27,8 +29,19 @@ type Props = {
   onCitations: () => void;
   onExplore?: () => void;
   onTranslations?: () => void;
+  onShareLink?: () => void;
+  shareLinkNotice?: ShareLinkNotice;
   targetLabel?: string;
 };
+
+export type ShareLinkNotice = "copied" | "shared" | "failed" | null;
+
+export function shareLinkNoticeLabel(notice: ShareLinkNotice, idle = "Copy link"): string {
+  if (notice === "copied") return "Link copied";
+  if (notice === "shared") return "Shared";
+  if (notice === "failed") return "Couldn't copy";
+  return idle;
+}
 
 type FloatingStyle = {
   top: number;
@@ -131,6 +144,8 @@ export default function VerseActionBar({
   onCitations,
   onExplore,
   onTranslations,
+  onShareLink,
+  shareLinkNotice = null,
   targetLabel = "Note",
 }: Props) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -165,7 +180,7 @@ export default function VerseActionBar({
       left,
       placement: canFitAbove ? "top" : "bottom",
     });
-  }, [visible, hasSelection, anchorRect, hasActiveInsight, showTranslations]);
+  }, [visible, hasSelection, anchorRect, hasActiveInsight, showTranslations, shareLinkNotice]);
 
   if (!visible || !hasSelection || !anchorRect) return null;
 
@@ -221,6 +236,19 @@ export default function VerseActionBar({
             <button type="button" onMouseDown={preserveSelection} onClick={onTranslations} className={baseActionClass}>
               <ActionIcon kind="translate" />
               <span>Translations</span>
+            </button>
+          ) : null}
+          {onShareLink ? (
+            <button
+              type="button"
+              onMouseDown={preserveSelection}
+              onClick={onShareLink}
+              className={baseActionClass}
+              aria-label="Copy a link to the selected verses"
+              data-notice={shareLinkNotice ?? undefined}
+            >
+              <FontAwesomeIcon icon={shareLinkNotice === "copied" || shareLinkNotice === "shared" ? faCheck : faLink} aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+              <span aria-live="polite">{shareLinkNoticeLabel(shareLinkNotice)}</span>
             </button>
           ) : null}
         </div>
