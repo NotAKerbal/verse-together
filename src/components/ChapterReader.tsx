@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
-import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
+import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import ScriptureQuickNav from "./ScriptureQuickNav";
@@ -31,6 +31,8 @@ import {
   type ChapterStudyPath,
 } from "@/lib/chapterInsights";
 import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
+import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
+import { getBookLabel } from "@/features/plans/scriptureCatalog";
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
@@ -101,6 +103,16 @@ function extractFirstWord(value: string): string {
 function extractSingleSelectedWord(value: string): string {
   const matches = value.match(/[A-Za-z][A-Za-z'\-]*/g) ?? [];
   return matches.length === 1 ? matches[0].toLowerCase() : "";
+}
+
+async function copyShareLink(url: string): Promise<ShareLinkNotice> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return "failed";
+    await navigator.clipboard.writeText(url);
+    return "copied";
+  } catch {
+    return "failed";
+  }
 }
 
 function normalizeSelectionText(value: string): string {
@@ -896,6 +908,53 @@ export default function ChapterReader({
     if (!selectedBounds) return null;
     return `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
   }, [book, chapter, selectedBounds]);
+  const [shareLinkNotice, setShareLinkNotice] = useState<ShareLinkNotice>(null);
+  const shareLinkNoticeTimer = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (shareLinkNoticeTimer.current) window.clearTimeout(shareLinkNoticeTimer.current);
+    };
+  }, []);
+  useEffect(() => {
+    if (!hasSelection) setShareLinkNotice(null);
+  }, [hasSelection]);
+
+  // Share link: a URL that shows only the selected verses. Native share sheet
+  // on phones, clipboard everywhere else, with a brief inline confirmation.
+  async function onShareLink() {
+    const verseNumbers = selectedVerses.map((verse) => verse.verse);
+    if (verseNumbers.length === 0 || typeof window === "undefined") return;
+    const url = `${window.location.origin}${buildShareUrl({ volume, book, chapter, verses: verseNumbers })}`;
+    const title = formatPassageReference(getBookLabel(volume, book), chapter, verseNumbers);
+    let notice: ShareLinkNotice = "failed";
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    const canNativeShare =
+      !!nav && typeof nav.share === "function" && (typeof nav.canShare !== "function" || nav.canShare({ title, url }));
+    // Phones and tablets get the native share sheet; a mouse gets the clipboard, as the label promises.
+    const touchPrimary = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    if (canNativeShare && touchPrimary) {
+      try {
+        await nav.share({ title, url });
+        notice = "shared";
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        notice = await copyShareLink(url);
+      }
+    } else {
+      notice = await copyShareLink(url);
+      if (notice === "failed" && canNativeShare) {
+        try {
+          await nav.share({ title, url });
+          notice = "shared";
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+        }
+      }
+    }
+    setShareLinkNotice(notice);
+    if (shareLinkNoticeTimer.current) window.clearTimeout(shareLinkNoticeTimer.current);
+    shareLinkNoticeTimer.current = window.setTimeout(() => setShareLinkNotice(null), 2200);
+  }
   const annotationsByVerse = useMemo(
     () => chapterAnnotationData?.by_verse ?? {},
     [chapterAnnotationData]
@@ -1471,6 +1530,7 @@ export default function ChapterReader({
           <div
             ref={scriptureColumnRef}
             className="reader-column relative w-full max-w-6xl mx-auto"
+            data-text-width={prefs.textWidth}
             style={
               hasSidebarPanelOpen && desktopScriptureOffset > 0
                 ? { left: `-${desktopScriptureOffset}px` }
@@ -1981,6 +2041,10 @@ export default function ChapterReader({
         onAnnotation={onOpenAnnotation}
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}
+        onShareLink={() => {
+          void onShareLink();
+        }}
+        shareLinkNotice={shareLinkNotice}
       />
       )}
     </section>

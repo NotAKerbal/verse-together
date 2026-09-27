@@ -32,6 +32,7 @@ export default defineSchema({
     fontScale: v.number(),
     fontFamily: v.union(v.literal("serif"), v.literal("sans")),
     comparisonView: v.optional(v.union(v.literal("inline"), v.literal("sideBySide"))),
+    textWidth: v.optional(v.union(v.literal("comfortable"), v.literal("wide"), v.literal("full"))),
     updatedAt: v.number(),
   }).index("by_clerk_id", ["clerkId"]),
 

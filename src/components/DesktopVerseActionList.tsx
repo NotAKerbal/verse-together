@@ -1,5 +1,6 @@
 "use client";
 import type { MouseEvent } from "react";
+import { shareLinkNoticeLabel, type ShareLinkNotice } from "./VerseActionBar";
 
 type Props = {
   visible: boolean;
@@ -19,6 +20,8 @@ type Props = {
   onExplore?: () => void;
   onTranslations?: () => void;
   onTogglePin?: () => void;
+  onShareLink?: () => void;
+  shareLinkNotice?: ShareLinkNotice;
   targetLabel?: string;
 };
 
@@ -40,6 +43,8 @@ export default function DesktopVerseActionList({
   onExplore,
   onTranslations,
   onTogglePin,
+  onShareLink,
+  shareLinkNotice = null,
   targetLabel = "Note",
 }: Props) {
   if (!visible) return null;
@@ -105,6 +110,17 @@ export default function DesktopVerseActionList({
         <button onMouseDown={preserveSelection} onClick={onAnnotation} disabled={!actionsEnabled || !hasSelection} className={baseBtn}>
           Add annotation
         </button>
+        {onShareLink ? (
+          <button
+            onMouseDown={preserveSelection}
+            onClick={onShareLink}
+            disabled={!hasSelection}
+            className={baseBtn}
+            aria-label="Copy a link to the selected verses"
+          >
+            <span aria-live="polite">{shareLinkNoticeLabel(shareLinkNotice)}</span>
+          </button>
+        ) : null}
         <button onMouseDown={preserveSelection} onClick={onClear} disabled={!hasSelection} className={baseBtn}>
           Clear Selection
         </button>

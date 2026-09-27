@@ -7,7 +7,16 @@ export type ReaderPreferences = {
   fontScale: number; // 0.85 - 1.3
   fontFamily: "serif" | "sans";
   comparisonView: "inline" | "sideBySide";
+  textWidth: ReaderTextWidth;
 };
+
+export type ReaderTextWidth = "comfortable" | "wide" | "full";
+
+const TEXT_WIDTHS: readonly ReaderTextWidth[] = ["comfortable", "wide", "full"];
+
+export function normalizeTextWidth(value: unknown): ReaderTextWidth {
+  return TEXT_WIDTHS.includes(value as ReaderTextWidth) ? (value as ReaderTextWidth) : "comfortable";
+}
 
 const STORAGE_KEY = "reader_prefs_v1";
 const ONBOARDING_KEY = "reader_onboarding_v1";
@@ -18,6 +27,7 @@ export function getDefaultPreferences(): ReaderPreferences {
     fontScale: 1,
     fontFamily: "serif",
     comparisonView: "inline",
+    textWidth: "comfortable",
   };
 }
 
@@ -52,7 +62,8 @@ export function normalizePreferences(input: Partial<ReaderPreferences> | null | 
     input?.comparisonView === "inline" || input?.comparisonView === "sideBySide"
       ? input.comparisonView
       : base.comparisonView;
-  return { showFootnotes, fontScale, fontFamily, comparisonView };
+  const textWidth = normalizeTextWidth(input?.textWidth);
+  return { showFootnotes, fontScale, fontFamily, comparisonView, textWidth };
 }
 
 export async function loadPreferences(
@@ -69,6 +80,7 @@ export async function loadPreferences(
           fontScale: typeof data.fontScale === "number" ? data.fontScale : 1,
           fontFamily: data.fontFamily === "sans" ? "sans" : "serif",
           comparisonView: data.comparisonView === "sideBySide" ? "sideBySide" : "inline",
+          textWidth: normalizeTextWidth(data.textWidth),
         });
         writeLocalPreferences(prefs);
         return prefs;
@@ -95,6 +107,7 @@ export async function savePreferences(
       fontScale: prefs.fontScale,
       fontFamily: prefs.fontFamily,
       comparisonView: prefs.comparisonView,
+      textWidth: prefs.textWidth,
     });
   } catch {
     // ignore
