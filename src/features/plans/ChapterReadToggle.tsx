@@ -49,7 +49,7 @@ export default function ChapterReadToggle({ volume, book, chapter }: Props) {
 
   return (
     <div
-      className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] px-4 py-3 font-sans shadow-[var(--surface-shadow-soft)]"
+      className="simple-hide mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] px-4 py-3 font-sans shadow-[var(--surface-shadow-soft)]"
       style={{ background: isRead ? "var(--accent-mint)" : "var(--surface-card)", fontSize: "1rem" }}
     >
       <div className="min-w-0">

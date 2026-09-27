@@ -3,6 +3,7 @@
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { ReaderPreferences } from "@/lib/preferences";
+import { useSimpleMode } from "@/lib/simpleMode";
 
 type Props = {
   open: boolean;
@@ -15,6 +16,7 @@ type Props = {
 
 export default function ReaderSettings({ open, onClose, prefs, onChange, translationControls, anchorRef }: Props) {
   const [local, setLocal] = useState<ReaderPreferences>(prefs);
+  const [simpleMode, setSimpleMode] = useSimpleMode();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const MIN_SCALE = 0.85;
   const MAX_SCALE = 1.3;
@@ -63,6 +65,23 @@ export default function ReaderSettings({ open, onClose, prefs, onChange, transla
       className="absolute right-0 top-full z-40 mt-3 w-[min(92vw,24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-[color:var(--surface-border)] bg-background shadow-xl border-[color:var(--surface-border)]"
     >
         <div className="max-h-[min(70vh,32rem)] overflow-y-auto p-3 text-sm space-y-4">
+          <div className="flex items-center justify-between gap-3 border-b border-[color:var(--surface-border)] pb-3">
+            <div className="min-w-0">
+              <div id="simple-mode-label" className="text-xs font-medium tracking-wide text-foreground/80">Simple mode</div>
+              <div className="text-[11px] text-foreground/60">Hide study tools and navigation. Just the text.</div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={simpleMode}
+              aria-labelledby="simple-mode-label"
+              className="marker-switch"
+              onClick={() => setSimpleMode(!simpleMode)}
+            >
+              <span className="marker-switch-knob" aria-hidden="true" />
+            </button>
+          </div>
+
           <div className="space-y-1">
             <div className="text-xs font-medium tracking-wide text-foreground/80">
               {`Text size - ${Math.round(local.fontScale * 100)}%`}

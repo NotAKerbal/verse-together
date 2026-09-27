@@ -72,7 +72,7 @@ export default function Navbar() {
           <Link href="/" className="brand-wordmark min-w-0 text-[1.35rem] sm:text-[1.5rem]">
             Verse<span>Together</span>
           </Link>
-          <nav className="hidden min-w-0 sm:flex items-center justify-center overflow-x-auto no-scrollbar" aria-label="Primary">
+          <nav className="simple-hide hidden min-w-0 sm:flex items-center justify-center overflow-x-auto no-scrollbar" aria-label="Primary">
             <div className="segmented-control">
               {navItems.map((item) => {
                 const active = isPathActive(pathname, item.href);
@@ -96,7 +96,7 @@ export default function Navbar() {
             </div>
           </nav>
 
-          <div className="hidden min-w-0 sm:flex items-center justify-self-end gap-3">
+          <div className="simple-hide hidden min-w-0 sm:flex items-center justify-self-end gap-3">
             <ThemeSelect compact />
             {user ? (
               <span className="inline-flex rounded-full border-2 border-[color:var(--surface-border)] p-0.5">
@@ -120,7 +120,7 @@ export default function Navbar() {
         </div>
       </header>
       <button
-        className="fixed z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] text-[color:var(--foreground)] shadow-[var(--surface-shadow-soft)] sm:hidden"
+        className="simple-hide fixed z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] text-[color:var(--foreground)] shadow-[var(--surface-shadow-soft)] sm:hidden"
         aria-label="Open menu"
         onClick={() => setDrawerOpen(true)}
         style={{ left: "var(--mobile-floating-button-left)", top: "max(1rem, calc(env(safe-area-inset-top) + 0.5rem))" }}

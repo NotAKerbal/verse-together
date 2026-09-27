@@ -345,7 +345,7 @@ export default function InsightBuilderShell() {
       ) : null}
 
       {activeDraftId ? (
-        <aside className="fixed right-0 top-16 bottom-0 z-40 hidden w-[360px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] lg:block xl:w-[420px] 2xl:w-[480px]">
+        <aside className="simple-hide fixed right-0 top-16 bottom-0 z-40 hidden w-[360px] border-l border-[var(--surface-border)] bg-[var(--surface-card-strong)] lg:block xl:w-[420px] 2xl:w-[480px]">
           <BuilderContent />
         </aside>
       ) : null}

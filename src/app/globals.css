@@ -634,3 +634,171 @@ mark {
     width: 100%;
   }
 }
+
+/*
+  Simple mode: <html data-simple="true"> (see src/lib/simpleMode.ts).
+  Hides study tools and chrome so only the scripture text remains.
+*/
+
+:root[data-simple="true"] .simple-hide {
+  display: none !important;
+}
+
+:root:not([data-simple="true"]) .simple-only {
+  display: none !important;
+}
+
+:root[data-simple="true"] .app-body {
+  padding-bottom: 0;
+}
+
+:root[data-simple="true"] .app-main:not([data-fixed="true"]) {
+  padding-top: 2.5rem;
+  padding-bottom: 5.5rem;
+}
+
+:root[data-simple="true"] .mobile-menu-clearance {
+  margin-left: 0;
+  width: 100%;
+}
+
+/* The reader collapses to a single centered book-page column. */
+:root[data-simple="true"] .reader-layout {
+  display: block;
+}
+
+:root[data-simple="true"] .reader-column {
+  max-width: 42rem;
+}
+
+:root[data-simple="true"] .verse-badge {
+  width: auto;
+  height: auto;
+  margin-right: 0.35rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--foreground-soft);
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: super;
+}
+
+:root[data-simple="true"] .verse-badge[data-selected="true"] {
+  background: transparent;
+  color: var(--foreground);
+}
+
+/* Chapter tiles lose their read / current tints. */
+:root[data-simple="true"] .browse-chapter-grid a {
+  background: var(--surface-card) !important;
+  color: var(--foreground) !important;
+}
+
+.reader-simple-title {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--foreground-soft);
+  text-align: center;
+}
+
+.reader-simple-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3rem;
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.reader-simple-nav a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.25rem;
+  color: var(--foreground-muted);
+  text-decoration: none;
+}
+
+.reader-simple-nav a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.simple-exit-pill {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 45;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  border: 2px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--foreground);
+  box-shadow: var(--surface-shadow-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.simple-exit-pill:hover {
+  background: var(--surface-button-hover);
+}
+
+/* Marker-style switch used in Reader settings. */
+.marker-switch {
+  position: relative;
+  display: inline-flex;
+  width: 3rem;
+  height: 1.7rem;
+  flex-shrink: 0;
+  align-items: center;
+  border: 2px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  padding: 0;
+  transition: background-color 120ms ease;
+}
+
+.marker-switch[aria-checked="true"] {
+  background: var(--accent-primary);
+}
+
+.marker-switch-knob {
+  position: absolute;
+  left: 0.15rem;
+  height: 1.1rem;
+  width: 1.1rem;
+  border: 2px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  transition: transform 120ms ease;
+}
+
+.marker-switch[aria-checked="true"] .marker-switch-knob {
+  transform: translateX(1.3rem);
+  background: var(--surface-button-active);
+}
+
+/* Phones: the wordmark header is the way home once the bottom nav is hidden. */
+:root[data-simple="true"] .app-header {
+  display: block;
+}
+
+/* The insight side panel is hidden, so the reader no longer reserves room for it. */
+@media (min-width: 1024px) {
+  :root[data-simple="true"] .app-main {
+    padding-right: 2rem;
+  }
+}
