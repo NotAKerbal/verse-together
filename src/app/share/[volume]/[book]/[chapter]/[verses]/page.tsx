@@ -14,6 +14,10 @@ type Params = {
 
 const DESCRIPTION_LIMIT = 200;
 
+function typesetDashes(text: string): string {
+  return text.replace(/--/g, "\u2014");
+}
+
 async function loadPassage(raw: { volume: string; book: string; chapter: string; verses: string }) {
   const volume = normalizeScriptureVolume(raw.volume);
   const book = decodeURIComponent(raw.book);
@@ -65,7 +69,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     return { title: "Passage not found · Verse Together" };
   }
   const title = `${passage.reference} · Verse Together`;
-  const description = truncate(passage.verses.map((verse) => verse.text).join(" "), DESCRIPTION_LIMIT);
+  const description = truncate(passage.verses.map((verse) => typesetDashes(verse.text)).join(" "), DESCRIPTION_LIMIT);
   return {
     title,
     description,
@@ -105,7 +109,7 @@ export default async function SharePassagePage({ params }: Params) {
                   return (
                     <li key={number} value={number} id={`v-${number}`}>
                       <sup className="share-verse-number">{number}</sup>
-                      {verse.text}
+                      {typesetDashes(verse.text)}
                     </li>
                   );
                 })}
