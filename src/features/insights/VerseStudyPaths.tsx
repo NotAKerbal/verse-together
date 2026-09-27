@@ -77,7 +77,7 @@ export function VerseStudyPathMarker({
       aria-label={`${open ? "Hide" : "Explore"} study path for verse ${verse}`}
       aria-expanded={open}
       title="A study path is available"
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
+      className={`simple-hide inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
         open
           ? "bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
           : "bg-[color:var(--accent-primary)] text-[#17161a] hover:shadow-[var(--surface-shadow-soft)]"

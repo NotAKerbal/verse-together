@@ -19,7 +19,7 @@ export default function BookProgressBar({ volume, book, chapterCount }: Props) {
       value={read}
       max={chapterCount}
       label={`${read} of ${chapterCount} chapters read`}
-      className="mt-2 max-w-[16rem]"
+      className="simple-hide mt-2 max-w-[16rem]"
     />
   );
 }

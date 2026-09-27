@@ -1,9 +1,10 @@
 "use client";
 
-import { faGear } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
@@ -17,6 +18,7 @@ import type { Footnote } from "@/lib/openscripture";
 import { fetchChapter } from "@/lib/openscripture";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
+import { useSimpleMode } from "@/lib/simpleMode";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
@@ -525,7 +527,9 @@ export default function ChapterReader({
   const [annotationSaving, setAnnotationSaving] = useState(false);
   const [chapterStudyPaths, setChapterStudyPaths] = useState<ChapterStudyPath[]>([]);
   const [openInsightVerse, setOpenInsightVerse] = useState<number | null>(null);
-  const [customMobileSelectionEnabled, setCustomMobileSelectionEnabled] = useState(false);
+  const [customMobileSelectionSupported, setCustomMobileSelectionSupported] = useState(false);
+  const [simpleMode, setSimpleMode] = useSimpleMode();
+  const customMobileSelectionEnabled = customMobileSelectionSupported && !simpleMode;
   const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
@@ -675,7 +679,7 @@ export default function ChapterReader({
 
     function syncCustomMobileSelectionMode() {
       const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
-      setCustomMobileSelectionEnabled(isCoarsePointer && window.innerWidth < 1024);
+      setCustomMobileSelectionSupported(isCoarsePointer && window.innerWidth < 1024);
     }
 
     syncCustomMobileSelectionMode();
@@ -1427,14 +1431,14 @@ export default function ChapterReader({
 
       <div
         ref={layoutGridRef}
-        className={`lg:grid lg:items-start ${
+        className={`reader-layout lg:grid lg:items-start ${
           hasSidebarPanelOpen
             ? "lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:gap-6 xl:gap-8"
             : "lg:grid-cols-1"
         }`}
       >
         <aside
-          className={`hidden lg:block self-start sticky overflow-y-auto pr-1 space-y-3 ${
+          className={`simple-hide hidden lg:block self-start sticky overflow-y-auto pr-1 space-y-3 ${
             isAtTop ? "top-2 max-h-[calc(100vh-1rem)]" : "top-4 max-h-[calc(100vh-2rem)]"
           }`}
         >
@@ -1466,7 +1470,7 @@ export default function ChapterReader({
         >
           <div
             ref={scriptureColumnRef}
-            className="relative w-full max-w-6xl mx-auto"
+            className="reader-column relative w-full max-w-6xl mx-auto"
             style={
               hasSidebarPanelOpen && desktopScriptureOffset > 0
                 ? { left: `-${desktopScriptureOffset}px` }
@@ -1474,7 +1478,7 @@ export default function ChapterReader({
             }
           >
           <header
-            className={`sticky top-2 z-20 transition-all ${
+            className={`simple-hide sticky top-2 z-20 transition-all ${
               isAtTop ? "py-0" : "py-1"
             }`}
           >
@@ -1492,6 +1496,16 @@ export default function ChapterReader({
                     </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+                  title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+                  aria-pressed={simpleMode}
+                  onClick={() => setSimpleMode(!simpleMode)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border surface-card-soft text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
+                >
+                  <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
+                </button>
                 <div ref={settingsAnchorRef} className="relative shrink-0">
                   <button
                     aria-label="Reader settings"
@@ -1550,6 +1564,8 @@ export default function ChapterReader({
               ) : null}
             </div>
           </header>
+
+          <h1 className="simple-only reader-simple-title">{reference}</h1>
 
           <ol
             ref={verseListRef}
@@ -1677,6 +1693,7 @@ export default function ChapterReader({
                       />
                     ) : null}
                     {verseInsightRefs.length > 0 ? (
+                      <span className="contents simple-hide">
                       <VerseInsightMarker
                         verse={v.verse}
                         insights={verseInsightRefs}
@@ -1685,11 +1702,12 @@ export default function ChapterReader({
                           openBuilder();
                         }}
                       />
+                      </span>
                     ) : null}
                   </div>
                   {myVerseAnnotation ? (
                     <div
-                      className={`mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
+                      className={`simple-hide mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
                         (myVerseAnnotation.highlight_color as AnnotationHighlightColor | null) ?? "none"
                       )}`}
                     >
@@ -1702,6 +1720,10 @@ export default function ChapterReader({
             })}
           </ol>
           <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
+          <nav className="simple-only reader-simple-nav" aria-label="Chapter navigation">
+            {prevHref ? <Link href={prevHref}>&larr; Previous</Link> : <span />}
+            {nextHref ? <Link href={nextHref}>Next &rarr;</Link> : <span />}
+          </nav>
           </div>
         </div>
       </div>
@@ -1894,7 +1916,7 @@ export default function ChapterReader({
       {/* One-time onboarding tooltip */}
       {showTapHint && !overlayOpen && !hasSelection ? (
         <div
-          className="fixed inset-x-0 z-40 pointer-events-none"
+          className="simple-hide fixed inset-x-0 z-40 pointer-events-none"
           style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
         >
           <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
@@ -1940,6 +1962,7 @@ export default function ChapterReader({
         </div>
       ) : null}
 
+      {simpleMode ? null : (
       <VerseActionBar
         visible={showMobileActionBar}
         anchorRect={selectionPopoverAnchor}
@@ -1959,6 +1982,7 @@ export default function ChapterReader({
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}
       />
+      )}
     </section>
   );
 }

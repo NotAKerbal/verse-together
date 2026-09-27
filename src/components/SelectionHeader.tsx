@@ -51,7 +51,7 @@ export default function SelectionHeader({
           currentVolume={currentVolume}
           currentBook={currentBook}
           align="right"
-          buttonClassName="browse-header-button h-9 w-9 rounded-xl"
+          buttonClassName="simple-hide browse-header-button h-9 w-9 rounded-xl"
         />
       </div>
     </div>

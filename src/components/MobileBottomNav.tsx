@@ -77,7 +77,7 @@ export default function MobileBottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 z-40 flex justify-center px-4 sm:hidden"
+      className="simple-hide fixed inset-x-0 z-40 flex justify-center px-4 sm:hidden"
       style={{ bottom: "max(0.85rem, env(safe-area-inset-bottom))" }}
       aria-label="Primary mobile navigation"
     >

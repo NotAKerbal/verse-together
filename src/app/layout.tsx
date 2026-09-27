@@ -7,6 +7,7 @@ import AppProviders from "../components/AppProviders";
 import AppMain from "../components/AppMain";
 import AppPreloader from "../components/AppPreloader";
 import MobileBottomNav from "../components/MobileBottomNav";
+import SimpleModeExitPill from "../components/SimpleModeExitPill";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -35,7 +36,7 @@ function HeaderFallback() {
 }
 
 function MobileNavFallback() {
-  return <div className="h-[5.5rem] sm:hidden" aria-hidden="true" />;
+  return <div className="simple-hide h-[5.5rem] sm:hidden" aria-hidden="true" />;
 }
 
 export default function RootLayout({
@@ -48,13 +49,13 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var k="vt_theme_v1";var t=localStorage.getItem(k);if(t!=="light"&&t!=="dark"&&t!=="sepia"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";}catch(_){}})();`,
+            __html: `(function(){try{var k="vt_theme_v1";var t=localStorage.getItem(k);if(t!=="light"&&t!=="dark"&&t!=="sepia"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";if(localStorage.getItem("vt_simple_mode_v1")==="1"){document.documentElement.setAttribute("data-simple","true");}}catch(_){}})();`,
           }}
         />
       </head>
       <body className={`${dmSans.variable} ${bricolage.variable} ${geistMono.variable} app-shell antialiased`}>
         <AppProviders>
-          <div className="relative min-h-screen pb-24 sm:pb-0">
+          <div className="app-body relative min-h-screen pb-24 sm:pb-0">
             <Suspense fallback={null}>
               <AppPreloader />
             </Suspense>
@@ -65,6 +66,7 @@ export default function RootLayout({
             <Suspense fallback={<MobileNavFallback />}>
               <MobileBottomNav />
             </Suspense>
+            <SimpleModeExitPill />
           </div>
         </AppProviders>
       </body>
