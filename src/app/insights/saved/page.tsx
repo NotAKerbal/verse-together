@@ -6,13 +6,7 @@ import Link from "next/link";
 import { api } from "../../../../convex/_generated/api";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import type { InsightDraftSummary } from "@/lib/appData";
-
-function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
-  if (visibility === "friends") return "Friends";
-  if (visibility === "link") return "Link";
-  if (visibility === "public") return "Public";
-  return "Private";
-}
+import { visibilityLabel } from "@/features/insights/NoteMenus";
 
 export default function SavedInsightsPage() {
   const rows = useQuery(api.insights.listMyDrafts, {}) as InsightDraftSummary[] | undefined;
