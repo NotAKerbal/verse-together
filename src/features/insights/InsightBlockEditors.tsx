@@ -6,8 +6,6 @@ import type { InsightDraftBlock } from "@/lib/appData";
 
 type BlockEditorProps = {
   block: InsightDraftBlock;
-  onTextChange: (text: string) => void;
-  onLinkChange: (linkUrl: string) => void;
   onHighlightWordsChange?: (highlightWordIndices: number[]) => void;
 };
 
@@ -192,7 +190,7 @@ function WordHighlightEditor({
   }
 
   return (
-    <div className="px-1 py-1 text-sm whitespace-pre-wrap select-none rounded-md border surface-card-soft">
+    <div className="whitespace-pre-wrap py-0.5 text-sm leading-6 select-none">
       {sourceText ? (
         displayTokens.map((token, idx) => {
           if (token.type === "newline") {
@@ -211,11 +209,11 @@ function WordHighlightEditor({
               className={`inline transition-colors ${
                 highlighted
                   ? [
-                      "bg-amber-300/70 dark:bg-amber-400/40",
+                      "bg-[color:var(--accent-primary)] text-[#17161a]",
                       prevHighlighted ? "" : "rounded-l-sm",
                       nextHighlighted ? "" : "rounded-r-sm",
                     ].join(" ")
-                  : "hover:bg-[var(--surface-button-hover)]"
+                  : "hover:bg-[color:var(--surface-button-hover)]"
               } ${wordStyleHints?.[wordIdx]?.bold ? "font-semibold" : ""} ${wordStyleHints?.[wordIdx]?.italic ? "italic" : ""}`}
               title="Toggle highlight"
             >
@@ -243,19 +241,8 @@ export function ScriptureBlockEditor({ block, onHighlightWordsChange }: BlockEdi
   );
 }
 
-export function TextBlockEditor({ block, onTextChange }: BlockEditorProps) {
-  return (
-    <textarea
-      value={block.text ?? ""}
-      onChange={(e) => onTextChange(e.target.value)}
-      rows={4}
-      className="w-full bg-transparent px-1 py-1 text-sm focus:outline-none"
-      placeholder="Write your note..."
-    />
-  );
-}
-
-export function QuoteBlockEditor({ block, onTextChange, onLinkChange, onHighlightWordsChange }: BlockEditorProps) {
+/** Highlight-words view of a quote. The quote text and source link are edited by the block card. */
+export function QuoteBlockEditor({ block, onHighlightWordsChange }: BlockEditorProps) {
   const sourceText = block.text ?? "";
   const [expanded, setExpanded] = useState(false);
   const allTokens = useMemo(() => tokenizeWords(sourceText), [sourceText]);
@@ -308,7 +295,7 @@ export function QuoteBlockEditor({ block, onTextChange, onLinkChange, onHighligh
     <div className="space-y-2">
       {sourceText.trim() ? (
         <div className="space-y-1">
-          <div className="text-[11px] text-foreground/60">Highlight words</div>
+          <div className="text-[11px] text-foreground/55">Tap words to highlight them</div>
           {hasHiddenPrefix ? <div className="text-[11px] text-foreground/50">... earlier text hidden</div> : null}
           <WordHighlightEditor
             sourceText={visibleText}
@@ -320,20 +307,12 @@ export function QuoteBlockEditor({ block, onTextChange, onLinkChange, onHighligh
             <button
               type="button"
               onClick={() => setExpanded((prev) => !prev)}
-              className="rounded-md border surface-button px-2 py-1 text-[11px] text-foreground/80"
+              className="surface-button rounded-full border-2 px-2.5 py-1 text-[0.7rem]"
             >
-              {expanded ? "Show less" : "Show full card"}
+              {expanded ? "Show less" : "Show the whole quote"}
             </button>
           ) : null}
         </div>
-      ) : null}
-      {(block.link_url ?? "").trim() ? (
-        <input
-          value={block.link_url ?? ""}
-          onChange={(e) => onLinkChange(e.target.value)}
-          className="w-full bg-transparent px-1 py-1 text-xs text-foreground/70 focus:outline-none"
-          placeholder="Source link (https://...)"
-        />
       ) : null}
     </div>
   );
@@ -409,17 +388,17 @@ export function DictionaryBlockEditor({
     <div className="space-y-2">
       {dictionaryMeta ? (
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/70">
-          <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">
+          <span className="rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-2 py-0.5 font-semibold">
             {isEtymology ? "Etymology" : "Dictionary"}
           </span>
-          <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">
+          <span className="rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-2 py-0.5 font-semibold">
             {sourceLabel}
           </span>
           {showHeadingLabel ? (
-            <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">{headingLabel}</span>
+            <span className="rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-2 py-0.5 font-semibold">{headingLabel}</span>
           ) : null}
           {dictionaryMeta.pronounce ? (
-            <span className="rounded-full border border-[color:var(--surface-border)] px-2 py-0.5">{dictionaryMeta.pronounce}</span>
+            <span className="rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-2 py-0.5 font-semibold">{dictionaryMeta.pronounce}</span>
           ) : null}
         </div>
       ) : null}
@@ -439,7 +418,7 @@ export function DictionaryBlockEditor({
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className="text-[11px] text-foreground/70 underline underline-offset-2"
+          className="surface-button rounded-full border-2 px-2.5 py-1 text-[0.7rem]"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
