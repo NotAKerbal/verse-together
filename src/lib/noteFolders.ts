@@ -70,6 +70,67 @@ export function buildFolderPath(folder: string, parentMap: FolderParentMap): str
   return chain.reverse().join(" / ");
 }
 
+export type FolderGroup<T> = { folderLabel: string; items: T[] };
+
+/**
+ * Buckets notes by their folder path ("Parent / Child"), alphabetised within
+ * each bucket. Root (unfiled) notes come back separately so callers can list
+ * them first.
+ */
+export function groupNotesByFolder<T extends { id: string; title: string }>(
+  notes: T[],
+  noteFolderMap: Record<string, string>,
+  folderParentMap: FolderParentMap
+): { rootNotes: T[]; folderGroups: FolderGroup<T>[] } {
+  const rootNotes: T[] = [];
+  const buckets = new Map<string, T[]>();
+  const byTitle = (a: T, b: T) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+  notes.forEach((note) => {
+    const folderPath = buildFolderPath(noteFolderMap[note.id] ?? "", folderParentMap);
+    if (!folderPath) {
+      rootNotes.push(note);
+      return;
+    }
+    const current = buckets.get(folderPath) ?? [];
+    current.push(note);
+    buckets.set(folderPath, current);
+  });
+  rootNotes.sort(byTitle);
+  const folderGroups = Array.from(buckets.entries())
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: "base" }))
+    .map(([folderLabel, items]) => ({ folderLabel, items: items.sort(byTitle) }));
+  return { rootNotes, folderGroups };
+}
+
+/** Folder names in tree order with their depth, for indented pickers. */
+export function listFoldersInTreeOrder(
+  folderNames: string[],
+  folderParentMap: FolderParentMap
+): Array<{ name: string; depth: number; path: string }> {
+  const valid = new Set(folderNames);
+  const childrenByParent = new Map<string | null, string[]>();
+  folderNames.forEach((name) => {
+    const parent = folderParentMap[name];
+    const key = parent && valid.has(parent) && parent !== name ? parent : null;
+    const list = childrenByParent.get(key) ?? [];
+    list.push(name);
+    childrenByParent.set(key, list);
+  });
+  childrenByParent.forEach((list) => list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })));
+  const out: Array<{ name: string; depth: number; path: string }> = [];
+  const seen = new Set<string>();
+  function walk(name: string, depth: number) {
+    if (seen.has(name)) return;
+    seen.add(name);
+    out.push({ name, depth, path: buildFolderPath(name, folderParentMap) });
+    (childrenByParent.get(name) ?? []).forEach((child) => walk(child, depth + 1));
+  }
+  (childrenByParent.get(null) ?? []).forEach((name) => walk(name, 0));
+  // Folders caught in a parent cycle still need to show up somewhere.
+  folderNames.forEach((name) => walk(name, 0));
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Optimistic updates, so drag and drop never waits for the round trip.
 // ---------------------------------------------------------------------------
