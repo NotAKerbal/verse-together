@@ -5,7 +5,7 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { PropsWithChildren, useMemo } from "react";
 import { InsightBuilderProvider } from "@/features/insights/InsightBuilderProvider";
-import InsightBuilderShell from "@/features/insights/InsightBuilderShell";
+import NotebookPanel from "@/features/insights/NotebookPanel";
 
 function ConvexClerkProvider({ children }: PropsWithChildren) {
   const convex = useMemo(() => {
@@ -31,7 +31,7 @@ export default function AppProviders({ children }: PropsWithChildren) {
       <ConvexClerkProvider>
         <InsightBuilderProvider>
           {children}
-          <InsightBuilderShell />
+          <NotebookPanel />
         </InsightBuilderProvider>
       </ConvexClerkProvider>
     </ClerkProvider>
