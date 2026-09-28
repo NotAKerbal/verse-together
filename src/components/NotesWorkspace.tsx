@@ -1,73 +1,57 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faLightbulb } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowLeft,
+  faBook,
+  faDownload,
+  faEllipsis,
+  faFolder,
+  faFolderPlus,
+  faMagnifyingGlass,
+  faPlus,
+  faSpellCheck,
+} from "@fortawesome/free-solid-svg-icons";
 import { SignInButton } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
 import { getInsightDraft, type InsightDraftSummary } from "@/lib/appData";
 import {
+  buildFolderPath,
   clearLegacyLocalFolderData,
-  deriveNoteFolderMaps,
-  optimisticAssignDraftFolder,
   optimisticDeleteFolder,
   optimisticMoveFolder,
   optimisticRenameFolder,
   readLegacyLocalFolderData,
   type FolderParentMap,
 } from "@/lib/noteFolders";
-import type { Id } from "../../convex/_generated/dataModel";
-import InsightEditorPanel from "@/features/insights/InsightEditorPanel";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import { useNoteFolders } from "@/features/insights/useNoteFolders";
+import {
+  ICON_BUTTON_CLASS,
+  LightbulbBadge,
+  MenuItem,
+  NoteOptionsMenu,
+  Popover,
+  ShareButton,
+  StatusPill,
+  useIsPhoneLayout,
+  visibilityLabel,
+} from "@/features/insights/NoteMenus";
+import { NoNotesYet, NoteBlockList, NoteTagChips, SaveStatusLabel, TagChip } from "@/features/insights/NoteBlocks";
+import AiInsightAssistant from "@/features/insights/AiInsightAssistant";
 
-const NOTES_TIP_DISMISSED_KEY = "vt_notes_tip_dismissed_v1";
+type SortKey = "recent" | "alpha" | "scripture";
+type FolderSelection = "all" | "unfiled" | { folder: string };
 
-type SearchFilter = {
-  id: string;
-  kind: "tag" | "uncategorized" | "hasFolder" | "folder" | "draft" | "public";
-  label: string;
-  value?: string;
-};
-type FilterOption = {
-  key: string;
-  group: "quick" | "tag" | "folder";
-  filter: SearchFilter;
-  keywords: string;
-};
-
-function visibilityLabel(visibility: InsightDraftSummary["visibility"]) {
-  if (visibility === "friends") return "Friends";
-  if (visibility === "link") return "Link";
-  if (visibility === "public") return "Public";
-  return "Private";
-}
-
-function getTagChipStyle(tag: string) {
-  const palette = [
-    { backgroundColor: "rgba(59, 130, 246, 0.2)", borderColor: "rgba(96, 165, 250, 0.55)" }, // blue
-    { backgroundColor: "rgba(34, 197, 94, 0.2)", borderColor: "rgba(74, 222, 128, 0.55)" }, // green
-    { backgroundColor: "rgba(244, 63, 94, 0.2)", borderColor: "rgba(251, 113, 133, 0.55)" }, // rose
-    { backgroundColor: "rgba(245, 158, 11, 0.2)", borderColor: "rgba(251, 191, 36, 0.6)" }, // amber
-    { backgroundColor: "rgba(168, 85, 247, 0.2)", borderColor: "rgba(196, 181, 253, 0.6)" }, // violet
-    { backgroundColor: "rgba(14, 165, 233, 0.2)", borderColor: "rgba(56, 189, 248, 0.6)" }, // sky
-    { backgroundColor: "rgba(234, 88, 12, 0.2)", borderColor: "rgba(251, 146, 60, 0.6)" }, // orange
-    { backgroundColor: "rgba(20, 184, 166, 0.2)", borderColor: "rgba(45, 212, 191, 0.6)" }, // teal
-    { backgroundColor: "rgba(236, 72, 153, 0.2)", borderColor: "rgba(244, 114, 182, 0.6)" }, // pink
-    { backgroundColor: "rgba(99, 102, 241, 0.2)", borderColor: "rgba(129, 140, 248, 0.6)" }, // indigo
-    { backgroundColor: "rgba(132, 204, 22, 0.2)", borderColor: "rgba(163, 230, 53, 0.6)" }, // lime
-    { backgroundColor: "rgba(239, 68, 68, 0.2)", borderColor: "rgba(248, 113, 113, 0.6)" }, // red
-  ];
-
-  let hash = 2166136261;
-  for (let i = 0; i < tag.length; i += 1) {
-    hash ^= tag.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return palette[(hash >>> 0) % palette.length];
-}
+const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
+  { key: "recent", label: "Recent" },
+  { key: "alpha", label: "A–Z" },
+  { key: "scripture", label: "By scripture" },
+];
 
 function isDescendant(node: string, maybeAncestor: string, parentMap: FolderParentMap): boolean {
   let current = node;
@@ -118,69 +102,82 @@ function toMarkdownFromDraft(draft: {
   return lines.join("\n");
 }
 
-export default function NotesWorkspace({
-  searchAsHeaderExtension = false,
-  showTitleBelowSearch = false,
-}: {
-  searchAsHeaderExtension?: boolean;
-  showTitleBelowSearch?: boolean;
-}) {
+const NEW_NOTE_BUTTON_CLASS =
+  "inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] px-4 font-display text-[0.95rem] font-extrabold tracking-[-0.01em] text-[#17161a] shadow-[var(--surface-shadow-soft)] hover:shadow-[var(--surface-shadow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-60";
+
+const DASHED_BUTTON_CLASS =
+  "inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-dashed border-[color:var(--surface-border)] px-3.5 text-sm font-bold text-foreground/80 hover:bg-[color:var(--surface-button-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50";
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return <div className="page-eyebrow px-1">{children}</div>;
+}
+
+// ---------------------------------------------------------------------------
+
+export default function NotesWorkspace() {
   const { user, getToken, loading } = useAuth();
-  const rows = useQuery(api.insights.listMyDrafts, user ? {} : "skip") as InsightDraftSummary[] | undefined;
-  const folderWorkspace = useQuery(api.noteFolders.getWorkspace, user ? {} : "skip");
-  const saveDraftSettingsMutation = useMutation(api.insights.saveDraftSettings);
+  const isPhone = useIsPhoneLayout();
+  const {
+    drafts,
+    activeDraftId,
+    activeDraft,
+    isLoading,
+    switchDraft,
+    createDraft,
+    renameDraft,
+    deleteDraft,
+    addTextBlock,
+    addQuoteBlock,
+  } = useInsightBuilder();
+  const {
+    workspace,
+    folderNames,
+    folderParentMap,
+    noteFolderMap,
+    folderIdByName,
+    folderTree,
+    assignFolder,
+  } = useNoteFolders();
   const createFolderMutation = useMutation(api.noteFolders.createFolder);
   const renameFolderMutation = useMutation(api.noteFolders.renameFolder).withOptimisticUpdate(optimisticRenameFolder);
   const moveFolderMutation = useMutation(api.noteFolders.moveFolder).withOptimisticUpdate(optimisticMoveFolder);
   const deleteFolderMutation = useMutation(api.noteFolders.deleteFolder).withOptimisticUpdate(optimisticDeleteFolder);
-  const assignFolderMutation = useMutation(api.noteFolders.assignDraftFolder).withOptimisticUpdate(
-    optimisticAssignDraftFolder
-  );
   const importLocalFoldersMutation = useMutation(api.noteFolders.importLocalFolders);
-  const { switchDraft, createDraft, activeDraftId } = useInsightBuilder();
 
   const [search, setSearch] = useState("");
-  const [notesPage, setNotesPage] = useState<"library" | "editor">(activeDraftId ? "editor" : "library");
-  const [activeFilters, setActiveFilters] = useState<SearchFilter[]>([]);
-  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
-  const [highlightedFilterIndex, setHighlightedFilterIndex] = useState(0);
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
-  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [newFolderParent, setNewFolderParent] = useState<string>("");
-  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
-  const [renameFolderName, setRenameFolderName] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
+  const [folderSelection, setFolderSelection] = useState<FolderSelection>("all");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [mobileView, setMobileView] = useState<"list" | "editor">(activeDraftId ? "editor" : "list");
+  const [folderModal, setFolderModal] = useState<{ mode: "create"; parent: string } | { mode: "rename"; folder: string } | null>(null);
+  const [folderModalName, setFolderModalName] = useState("");
+  const [folderModalParent, setFolderModalParent] = useState("");
   const [isBulkExporting, setIsBulkExporting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [draggedFolderName, setDraggedFolderName] = useState<string | null>(null);
-  const [dragOverFolder, setDragOverFolder] = useState<string | "__root__" | null>(null);
-  const [showTipsTooltip, setShowTipsTooltip] = useState(false);
-  const [tagSavingById, setTagSavingById] = useState<Record<string, boolean>>({});
-  const noteDropHandledRef = useRef(false);
+  const [dragOverTarget, setDragOverTarget] = useState<string | "__root__" | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [shareSignal, setShareSignal] = useState(0);
+  const [focusToken, setFocusToken] = useState(0);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const legacyImportAttemptedRef = useRef(false);
-  const filterBoxRef = useRef<HTMLDivElement | null>(null);
+
+  const rows = drafts;
+  const activeSummary = useMemo(() => rows.find((row) => row.id === activeDraftId) ?? null, [rows, activeDraftId]);
+  const readOnly = activeDraft ? activeDraft.status !== "draft" : false;
 
   useEffect(() => {
-    try {
-      setShowTipsTooltip(!window.localStorage.getItem(NOTES_TIP_DISMISSED_KEY));
-    } catch {
-      setShowTipsTooltip(true);
-    }
-  }, []);
-
-  // Convex is the source of truth; derive the name-keyed maps the tree renders from.
-  const { folderNames, folderParentMap, noteFolderMap, folderIdByName } = useMemo(
-    () => deriveNoteFolderMaps(folderWorkspace),
-    [folderWorkspace]
-  );
+    setTitleDraft(activeDraft?.title ?? "");
+  }, [activeDraft?.id, activeDraft?.title]);
 
   // One-time import of the folder maps that used to live in localStorage.
   useEffect(() => {
-    if (!user || !folderWorkspace || legacyImportAttemptedRef.current) return;
+    if (!user || !workspace || legacyImportAttemptedRef.current) return;
     const legacy = readLegacyLocalFolderData();
     if (!legacy.hasData) return;
     legacyImportAttemptedRef.current = true;
-    if (folderWorkspace.folders.length > 0 || folderWorkspace.assignments.length > 0) {
+    if (workspace.folders.length > 0 || workspace.assignments.length > 0) {
       clearLegacyLocalFolderData();
       console.info("[notes] Folders already live in the cloud; dropped stale local folder data.");
       return;
@@ -200,341 +197,208 @@ export default function NotesWorkspace({
         legacyImportAttemptedRef.current = false;
         console.warn("[notes] Could not import local folders yet; will retry.", error);
       });
-  }, [user, folderWorkspace, importLocalFoldersMutation]);
+  }, [user, workspace, importLocalFoldersMutation]);
 
-  useEffect(() => {
-    function onPointerDown(event: MouseEvent | TouchEvent) {
-      if (!isFilterMenuOpen) return;
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (filterBoxRef.current?.contains(target)) return;
-      setIsFilterMenuOpen(false);
-    }
-    window.addEventListener("mousedown", onPointerDown);
-    window.addEventListener("touchstart", onPointerDown);
-    return () => {
-      window.removeEventListener("mousedown", onPointerDown);
-      window.removeEventListener("touchstart", onPointerDown);
-    };
-  }, [isFilterMenuOpen]);
+  // ---- derived data -------------------------------------------------------
 
   const allTags = useMemo(() => {
-    if (!rows) return [];
     const tags = new Set<string>();
-    for (const row of rows) {
-      for (const tag of row.tags ?? []) tags.add(tag);
-    }
+    for (const row of rows) for (const tag of row.tags ?? []) tags.add(tag);
     return [...tags].sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
-  const allFolders = useMemo(() => {
-    const names = new Set(folderNames);
-    Object.values(noteFolderMap).forEach((name) => {
-      const trimmed = name.trim();
-      if (trimmed) names.add(trimmed);
-    });
-    Object.keys(folderParentMap).forEach((name) => {
-      const trimmed = name.trim();
-      if (trimmed) names.add(trimmed);
-    });
-    Object.values(folderParentMap).forEach((name) => {
-      const trimmed = name.trim();
-      if (trimmed) names.add(trimmed);
-    });
-    return [...names].sort((a, b) => a.localeCompare(b));
-  }, [folderNames, noteFolderMap, folderParentMap]);
-
-  const filteredRows = useMemo(() => {
-    if (!rows) return [];
-    const q = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      const folder = noteFolderMap[row.id] ?? "";
-      const titleMatch = !q || row.title.toLowerCase().includes(q);
-      if (!titleMatch) return false;
-      return activeFilters.every((filter) => {
-        if (filter.kind === "tag") return (row.tags ?? []).includes(filter.value ?? "");
-        if (filter.kind === "folder") return folder === (filter.value ?? "");
-        if (filter.kind === "uncategorized") return !folder;
-        if (filter.kind === "hasFolder") return !!folder;
-        if (filter.kind === "draft") return row.status === "draft";
-        if (filter.kind === "public") return row.visibility === "public";
-        return true;
-      });
-    });
-  }, [rows, search, noteFolderMap, activeFilters]);
-
-  const filterOptions = useMemo<FilterOption[]>(() => {
-    const quick: FilterOption[] = [
-      {
-        key: "quick:uncategorized",
-        group: "quick",
-        filter: { id: "uncategorized", kind: "uncategorized", label: "Uncategorized notes" },
-        keywords: "uncategorized no folder root",
-      },
-      {
-        key: "quick:has-folder",
-        group: "quick",
-        filter: { id: "has-folder", kind: "hasFolder", label: "Has folder" },
-        keywords: "has folder categorized",
-      },
-      {
-        key: "quick:draft",
-        group: "quick",
-        filter: { id: "draft", kind: "draft", label: "Draft notes" },
-        keywords: "draft",
-      },
-      {
-        key: "quick:public",
-        group: "quick",
-        filter: { id: "public", kind: "public", label: "Public notes" },
-        keywords: "public shared",
-      },
-    ];
-    const tags = allTags.map<FilterOption>((tag) => ({
-      key: `tag:${tag}`,
-      group: "tag",
-      filter: { id: `tag:${tag}`, kind: "tag", label: `Tag: ${tag}`, value: tag },
-      keywords: `tag ${tag}`,
-    }));
-    const folders = allFolders.map<FilterOption>((folder) => ({
-      key: `folder:${folder}`,
-      group: "folder",
-      filter: { id: `folder:${folder}`, kind: "folder", label: `In folder: ${folder}`, value: folder },
-      keywords: `folder ${folder}`,
-    }));
-    return [...quick, ...tags, ...folders];
-  }, [allTags, allFolders]);
-
-  const visibleFilterOptions = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return filterOptions;
-    return filterOptions.filter((opt) => {
-      const label = opt.filter.label.toLowerCase();
-      return label.includes(q) || opt.keywords.toLowerCase().includes(q);
-    });
-  }, [filterOptions, search]);
-
-  useEffect(() => {
-    if (!isFilterMenuOpen) return;
-    if (visibleFilterOptions.length === 0) {
-      setHighlightedFilterIndex(0);
-      return;
-    }
-    setHighlightedFilterIndex((prev) => {
-      if (prev < 0) return 0;
-      if (prev >= visibleFilterOptions.length) return visibleFilterOptions.length - 1;
-      return prev;
-    });
-  }, [isFilterMenuOpen, visibleFilterOptions]);
-
   const normalizedParentMap = useMemo(() => {
-    const valid = new Set(allFolders);
+    const valid = new Set(folderNames);
     const out: FolderParentMap = {};
-    for (const folder of allFolders) {
+    for (const folder of folderNames) {
       const parent = folderParentMap[folder];
       if (!parent || !valid.has(parent) || parent === folder) continue;
       if (isDescendant(parent, folder, folderParentMap)) continue;
       out[folder] = parent;
     }
     return out;
-  }, [allFolders, folderParentMap]);
+  }, [folderNames, folderParentMap]);
 
-  const childrenByParent = useMemo(() => {
-    const map = new Map<string | null, string[]>();
-    map.set(null, []);
-    for (const folder of allFolders) map.set(folder, []);
-    for (const folder of allFolders) {
-      const parent = normalizedParentMap[folder] ?? null;
-      if (!map.has(parent)) map.set(parent, []);
-      map.get(parent)!.push(folder);
+  /** Folder -> itself plus every descendant, so selecting a folder shows the whole subtree. */
+  const subtreeByFolder = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const folder of folderNames) {
+      const set = new Set<string>([folder]);
+      for (const other of folderNames) if (isDescendant(other, folder, normalizedParentMap)) set.add(other);
+      map.set(folder, set);
     }
-    map.forEach((children) => children.sort((a, b) => a.localeCompare(b)));
     return map;
-  }, [allFolders, normalizedParentMap]);
+  }, [folderNames, normalizedParentMap]);
 
-  const rootFolders = useMemo(() => childrenByParent.get(null) ?? [], [childrenByParent]);
-
-  const notesByFolder = useMemo(() => {
-    const map = new Map<string, InsightDraftSummary[]>();
-    for (const folder of allFolders) map.set(folder, []);
-    const unfiled: InsightDraftSummary[] = [];
-
-    for (const note of filteredRows) {
-      const folder = noteFolderMap[note.id];
-      if (folder && map.has(folder)) {
-        map.get(folder)!.push(note);
-      } else {
-        unfiled.push(note);
-      }
+  const countByFolder = useMemo(() => {
+    const direct = new Map<string, number>();
+    let unfiled = 0;
+    for (const row of rows) {
+      const folder = noteFolderMap[row.id];
+      if (folder && folderIdByName.has(folder)) direct.set(folder, (direct.get(folder) ?? 0) + 1);
+      else unfiled += 1;
     }
-
-    map.forEach((arr) => arr.sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
-    unfiled.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-
-    return { map, unfiled };
-  }, [allFolders, filteredRows, noteFolderMap]);
-
-  const folderOptions = useMemo(() => {
-    const out: Array<{ name: string; depth: number }> = [];
-    function walk(folder: string, depth: number) {
-      out.push({ name: folder, depth });
-      const children = childrenByParent.get(folder) ?? [];
-      children.forEach((child) => walk(child, depth + 1));
+    const total = new Map<string, number>();
+    for (const [folder, subtree] of subtreeByFolder) {
+      let count = 0;
+      subtree.forEach((name) => (count += direct.get(name) ?? 0));
+      total.set(folder, count);
     }
-    rootFolders.forEach((folder) => walk(folder, 0));
-    return out;
-  }, [childrenByParent, rootFolders]);
+    return { total, unfiled };
+  }, [rows, noteFolderMap, folderIdByName, subtreeByFolder]);
 
-  function toggleFolder(folder: string) {
-    setExpandedFolders((prev) => ({ ...prev, [folder]: !prev[folder] }));
+  const visibleRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = rows.filter((row) => {
+      const folder = noteFolderMap[row.id] ?? "";
+      if (folderSelection === "unfiled" && folder) return false;
+      if (typeof folderSelection === "object" && !(subtreeByFolder.get(folderSelection.folder)?.has(folder) ?? false)) return false;
+      if (selectedTags.length > 0 && !selectedTags.every((tag) => (row.tags ?? []).includes(tag))) return false;
+      if (!q) return true;
+      const haystack = [
+        row.title,
+        ...(row.tags ?? []),
+        buildFolderPath(folder, folderParentMap),
+        row.excerpt ?? "",
+        ...(row.scripture_refs ?? []),
+      ]
+        .join("\n")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+    const byTitle = (a: InsightDraftSummary, b: InsightDraftSummary) =>
+      a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+    if (sort === "alpha") return filtered.sort(byTitle);
+    if (sort === "scripture") {
+      return filtered.sort((a, b) => {
+        const refA = a.scripture_refs?.[0];
+        const refB = b.scripture_refs?.[0];
+        if (refA && refB) return refA.localeCompare(refB, undefined, { numeric: true, sensitivity: "base" }) || byTitle(a, b);
+        if (refA) return -1;
+        if (refB) return 1;
+        return byTitle(a, b);
+      });
+    }
+    return filtered.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }, [rows, search, noteFolderMap, folderParentMap, folderSelection, subtreeByFolder, selectedTags, sort]);
+
+  // A deleted or renamed folder must not leave a stale selection behind.
+  useEffect(() => {
+    if (typeof folderSelection === "object" && !folderIdByName.has(folderSelection.folder)) setFolderSelection("all");
+  }, [folderSelection, folderIdByName]);
+
+  // ---- actions ------------------------------------------------------------
+
+  async function run(work: () => Promise<unknown>) {
+    setBusy(true);
+    try {
+      await work();
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function upsertFolder(name: string, parent?: string | null) {
+  const openNote = useCallback(
+    async (noteId: string) => {
+      if (noteId !== activeDraftId) await switchDraft(noteId);
+      setMobileView("editor");
+    },
+    [activeDraftId, switchDraft]
+  );
+
+  async function onCreateNewNote() {
+    await run(async () => {
+      const createdId = await createDraft("New note");
+      if (!createdId) return;
+      if (typeof folderSelection === "object") await assignFolder(createdId, folderSelection.folder);
+      setMobileView("editor");
+      window.setTimeout(() => titleInputRef.current?.select(), 50);
+    });
+  }
+
+  async function commitTitle() {
+    if (!activeDraft || readOnly) return;
+    const next = titleDraft.trim();
+    if (!next || next === activeDraft.title.trim()) {
+      setTitleDraft(activeDraft.title);
+      return;
+    }
+    await renameDraft(activeDraft.id, next);
+  }
+
+  function onDeleteActive() {
+    if (!activeDraft) return;
+    if (!window.confirm(`Delete "${activeDraft.title}"? This cannot be undone.`)) return;
+    void run(async () => {
+      await deleteDraft(activeDraft.id);
+      setMobileView("list");
+    });
+  }
+
+  async function onWrite() {
+    await run(() => addTextBlock(""));
+    setFocusToken((n) => n + 1);
+  }
+
+  async function onQuote() {
+    await run(() => addQuoteBlock("", ""));
+    setFocusToken((n) => n + 1);
+  }
+
+  async function createFolder(name: string, parent: string | null) {
     const trimmed = name.trim();
-    if (!trimmed) return false;
-    if (allFolders.includes(trimmed)) return false;
+    if (!trimmed || folderNames.includes(trimmed)) return false;
     const parentId = parent ? folderIdByName.get(parent) : undefined;
     if (parent && !parentId) return false;
-    await createFolderMutation({
-      name: trimmed,
-      parentFolderId: parentId,
-    });
-    setExpandedFolders((prev) => ({ ...prev, [trimmed]: true }));
+    await createFolderMutation({ name: trimmed, parentFolderId: parentId });
     return true;
   }
 
-  async function assignFolder(noteId: string, folder: string | null) {
-    const folderId = folder ? folderIdByName.get(folder) : undefined;
-    if (folder && !folderId) return;
-    await assignFolderMutation({
-      draftId: noteId as Id<"insightDrafts">,
-      folderId,
-    });
+  async function renameFolder(from: string, to: string) {
+    const toName = to.trim();
+    if (!toName) return false;
+    if (from === toName) return true;
+    if (folderNames.includes(toName)) return false;
+    const folderId = folderIdByName.get(from);
+    if (!folderId) return false;
+    await renameFolderMutation({ folderId, name: toName });
+    setFolderSelection((prev) => (typeof prev === "object" && prev.folder === from ? { folder: toName } : prev));
+    return true;
   }
 
   async function moveFolder(folder: string, targetParent: string | null) {
-    if (!folder) return;
-    if (targetParent === folder) return;
+    if (!folder || targetParent === folder) return;
     if (targetParent && isDescendant(targetParent, folder, normalizedParentMap)) return;
     const folderId = folderIdByName.get(folder);
     if (!folderId) return;
     const parentId = targetParent ? folderIdByName.get(targetParent) : undefined;
     if (targetParent && !parentId) return;
-    await moveFolderMutation({
-      folderId,
-      parentFolderId: parentId,
-    });
+    await moveFolderMutation({ folderId, parentFolderId: parentId });
   }
 
   async function deleteFolder(folder: string) {
-    const name = folder.trim();
-    if (!name) return;
-    const folderId = folderIdByName.get(name);
+    const folderId = folderIdByName.get(folder);
     if (!folderId) return;
     await deleteFolderMutation({ folderId });
-    setExpandedFolders((prev) => {
-      const out = { ...prev };
-      delete out[name];
-      return out;
-    });
-    setActiveFilters((prev) => prev.filter((filter) => !(filter.kind === "folder" && filter.value === name)));
   }
 
-  async function renameFolder(from: string, to: string) {
-    const fromName = from.trim();
-    const toName = to.trim();
-    if (!fromName || !toName) return false;
-    if (fromName === toName) return true;
-    if (allFolders.includes(toName)) return false;
-    const folderId = folderIdByName.get(fromName);
-    if (!folderId) return false;
-    await renameFolderMutation({ folderId, name: toName });
-
-    setExpandedFolders((prev) => {
-      const out = { ...prev };
-      if (fromName in out) {
-        out[toName] = out[fromName];
-        delete out[fromName];
-      }
-      return out;
-    });
-
-    setActiveFilters((prev) =>
-      prev.map((filter) =>
-        filter.kind === "folder" && filter.value === fromName
-          ? {
-              ...filter,
-              id: `folder:${toName}`,
-              label: `In folder: ${toName}`,
-              value: toName,
-            }
-          : filter
-      )
-    );
-    return true;
+  function openFolderModal(next: { mode: "create"; parent: string } | { mode: "rename"; folder: string }) {
+    setFolderModal(next);
+    setFolderModalName(next.mode === "rename" ? next.folder : "");
+    setFolderModalParent(next.mode === "create" ? next.parent : "");
   }
 
-  async function saveNoteTags(noteId: string, tags: string[]) {
-    const normalized = Array.from(
-      new Set(
-        tags
-          .map((tag) => tag.trim().replace(/^#+/, "").toLowerCase())
-          .filter(Boolean)
-      )
-    ).slice(0, 20);
-    setTagSavingById((prev) => ({ ...prev, [noteId]: true }));
-    try {
-      await saveDraftSettingsMutation({
-        draftId: noteId as any,
-        tags: normalized,
-      });
-    } finally {
-      setTagSavingById((prev) => ({ ...prev, [noteId]: false }));
-    }
-  }
-
-  function addFilter(filter: SearchFilter) {
-    setActiveFilters((prev) => {
-      if (prev.some((f) => f.id === filter.id)) return prev;
-      return [...prev, filter];
-    });
-    setIsFilterMenuOpen(false);
-  }
-
-  function removeFilter(filterId: string) {
-    setActiveFilters((prev) => prev.filter((f) => f.id !== filterId));
-  }
-
-  function applyHighlightedFilter() {
-    if (visibleFilterOptions.length === 0) return;
-    const clamped = Math.max(0, Math.min(highlightedFilterIndex, visibleFilterOptions.length - 1));
-    addFilter(visibleFilterOptions[clamped].filter);
-    setSearch("");
-    setHighlightedFilterIndex(0);
-  }
-
-  async function onCreateNewNote() {
-    const createdId = await createDraft("New note");
-    if (!createdId) return;
-    await switchDraft(createdId);
-    setNotesPage("editor");
-  }
-
-  function onOpenNewFolderModal() {
-    setNewFolderName("");
-    setNewFolderParent("");
-    setIsFolderModalOpen(true);
-  }
-
-  function onDismissTips() {
-    setShowTipsTooltip(false);
-    try {
-      window.localStorage.setItem(NOTES_TIP_DISMISSED_KEY, "1");
-    } catch {}
+  async function submitFolderModal() {
+    if (!folderModal) return;
+    const ok =
+      folderModal.mode === "create"
+        ? await createFolder(folderModalName, folderModalParent || null)
+        : await renameFolder(folderModal.folder, folderModalName);
+    if (ok) setFolderModal(null);
   }
 
   async function exportAllNotes() {
-    if (!user || !rows || rows.length === 0) return;
+    if (!user || rows.length === 0) return;
     setIsBulkExporting(true);
     try {
       const token = await getToken({ template: "convex" });
@@ -547,7 +411,7 @@ export default function NotesWorkspace({
       sections.push("");
 
       for (const row of rows) {
-        const folder = noteFolderMap[row.id] ?? "Root";
+        const folder = buildFolderPath(noteFolderMap[row.id] ?? "", folderParentMap) || "Unfiled";
         const draft = await getInsightDraft(token, row.id);
         sections.push("---");
         sections.push("");
@@ -571,158 +435,57 @@ export default function NotesWorkspace({
     }
   }
 
-  function renderFolderNode(folder: string, depth: number) {
-    const notes = notesByFolder.map.get(folder) ?? [];
-    const expanded = expandedFolders[folder] ?? true;
-    const children = childrenByParent.get(folder) ?? [];
-    const isDropTarget = dragOverFolder === folder;
+  // ---- drag and drop onto folders ----------------------------------------
 
-    return (
-      <section
-        key={folder}
-        onDragOver={(e) => {
-          if (!draggedNoteId && !draggedFolderName) return;
-          e.preventDefault();
-          e.stopPropagation();
-          setDragOverFolder(folder);
-        }}
-        onDragLeave={() => {
-          if (dragOverFolder === folder) setDragOverFolder(null);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const noteId = draggedNoteId || e.dataTransfer.getData("text/note-id");
-          const draggedFolder = draggedFolderName || e.dataTransfer.getData("text/folder-name");
-
-          if (noteId) {
-            void assignFolder(noteId, folder);
-            noteDropHandledRef.current = true;
-          }
-          else if (draggedFolder) void moveFolder(draggedFolder, folder);
-
-          setDraggedNoteId(null);
-          setDraggedFolderName(null);
-          setDragOverFolder(null);
-        }}
-        className={`rounded-lg border p-3 transition-colors ${
-          isDropTarget
-            ? "border-sky-500 bg-sky-500/10"
-            : "surface-card"
-        }`}
-      >
-        <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => toggleFolder(folder)}
-              className="flex-1 text-left"
-            >
-            <span className="font-medium">
-              {expanded ? "▾" : "▸"} {folder}
-            </span>
-              <span className="ml-2 text-xs text-foreground/60">{notes.length} notes</span>
-            </button>
-          <button
-            onClick={() => {
-              setRenamingFolder(folder);
-              setRenameFolderName(folder);
-            }}
-            className="rounded-md border surface-button px-2 py-0.5 text-xs"
-            title={`Rename folder ${folder}`}
-            aria-label={`Rename folder ${folder}`}
-          >
-            Rename
-          </button>
-          <button
-            onClick={() => {
-              const confirmed = window.confirm(
-                `Delete "${folder}"? Notes in this folder will move to root and child folders will move to root.`
-              );
-              if (!confirmed) return;
-              void deleteFolder(folder);
-            }}
-            className="rounded-md border surface-button px-2 py-0.5 text-xs text-red-700 dark:text-red-300"
-            title={`Delete folder ${folder}`}
-            aria-label={`Delete folder ${folder}`}
-          >
-            Delete
-          </button>
-          <span
-            draggable
-            onDragStart={(e) => {
-              setDraggedNoteId(null);
-              setDraggedFolderName(folder);
-              e.dataTransfer.effectAllowed = "move";
-              e.dataTransfer.setData("text/folder-name", folder);
-            }}
-            onDragEnd={() => {
-              setDraggedFolderName(null);
-              setDragOverFolder(null);
-            }}
-            className="cursor-grab text-foreground/50 px-1"
-            title="Drag folder"
-            aria-label={`Drag folder ${folder}`}
-          >
-            ::
-          </span>
-        </div>
-
-        {expanded ? (
-          <div className="mt-2 space-y-2">
-            {notes.length === 0 && children.length === 0 ? <p className="text-xs text-foreground/60">Drop notes or folders here.</p> : null}
-            {notes.map((note) => (
-              <NoteRow
-                key={note.id}
-                note={note}
-                isActive={activeDraftId === note.id}
-                isDragging={draggedNoteId === note.id}
-                onDragStart={(noteId, event) => {
-                  setDraggedFolderName(null);
-                  setDraggedNoteId(noteId);
-                  noteDropHandledRef.current = false;
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/note-id", noteId);
-                }}
-                onDragEnd={(noteId) => {
-                  if (!noteDropHandledRef.current) {
-                    void assignFolder(noteId, null);
-                  }
-                  setDraggedNoteId(null);
-                  setDragOverFolder(null);
-                }}
-              onEdit={async () => {
-                  await switchDraft(note.id);
-                  setNotesPage("editor");
-                }}
-              onSaveTags={(tags) => {
-                void saveNoteTags(note.id, tags);
-              }}
-              tagsSaving={!!tagSavingById[note.id]}
-            />
-          ))}
-            {children.map((child) => renderFolderNode(child, depth + 1))}
-          </div>
-        ) : null}
-      </section>
-    );
+  function dropProps(target: string | "__root__") {
+    return {
+      onDragOver: (event: React.DragEvent) => {
+        if (!draggedNoteId && !draggedFolderName) return;
+        if (draggedFolderName && target !== "__root__" && (draggedFolderName === target || isDescendant(target, draggedFolderName, normalizedParentMap))) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setDragOverTarget(target);
+      },
+      onDragLeave: () => {
+        if (dragOverTarget === target) setDragOverTarget(null);
+      },
+      onDrop: (event: React.DragEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const noteId = draggedNoteId || event.dataTransfer.getData("text/note-id");
+        const folderName = draggedFolderName || event.dataTransfer.getData("text/folder-name");
+        const folder = target === "__root__" ? null : target;
+        if (noteId) void assignFolder(noteId, folder);
+        else if (folderName) void moveFolder(folderName, folder);
+        setDraggedNoteId(null);
+        setDraggedFolderName(null);
+        setDragOverTarget(null);
+      },
+    };
   }
 
+  // ---- states before the workspace ---------------------------------------
+
   if (loading) {
-    return <div className="page-shell-wide text-sm text-[color:var(--foreground-muted)]">Loading notes...</div>;
+    return <div className="text-sm text-[color:var(--foreground-muted)]">Loading notes…</div>;
   }
 
   if (!user) {
     return (
-      <div className="panel-card page-shell mx-auto max-w-3xl rounded-[1.5rem] p-5 space-y-3">
-        <h2 className="text-xl font-semibold">Sign in to use Notes</h2>
-        <p className="text-sm text-[color:var(--foreground-muted)]">
-          Your notes workspace includes folders, tags, exports, and quick actions back into the note editor.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">
+      <div className="panel-card mx-auto flex max-w-xl flex-col items-center gap-4 rounded-[1.5rem] px-6 py-8 text-center">
+        <LightbulbBadge size="lg" />
+        <div>
+          <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use Notes</h1>
+          <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
+            Keep verses, quotes and definitions together in notes, file them in folders, tag them, and share the ones you want to.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link href="/browse" className="surface-button inline-flex h-10 items-center rounded-full border-2 px-4 text-sm">
             Browse scriptures
           </Link>
           <SignInButton mode="modal">
-            <button className="rounded-full bg-foreground px-4 py-2 text-sm text-background">
+            <button className="inline-flex h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]">
               Sign in
             </button>
           </SignInButton>
@@ -731,454 +494,564 @@ export default function NotesWorkspace({
     );
   }
 
-  return (
-    <div className="page-shell-wide space-y-5 pb-24">
-      {showTitleBelowSearch ? (
-        <div className="panel-card rounded-[1.5rem] px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <div className="min-w-0">
-              <div className="page-eyebrow">Notes</div>
-              <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
-                <h1 className="flex items-center gap-2 text-[1.5rem] font-extrabold tracking-[-0.03em] sm:text-[1.8rem]"><span className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] text-[#17161a]"><FontAwesomeIcon icon={faLightbulb} className="h-4 w-4" /></span>Workspace</h1>
-                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--foreground-soft)]">
-                  <span>{rows?.length ?? 0} notes</span>
-                  <span>{allFolders.length} folders</span>
-                  <span>{allTags.length} tags</span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-1 rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-1">
-            <button
-              onClick={() => setNotesPage("library")}
-              className="rounded-full px-4 py-2 text-sm font-bold"
-              style={
-                notesPage === "library"
-                  ? {
-                      background: "var(--mobile-nav-active)",
-                      color: "var(--mobile-nav-active-text)",
-                    }
-                  : undefined
-              }
-            >
-              Library
-            </button>
-            <button
-              onClick={() => setNotesPage("editor")}
-              className="rounded-full px-4 py-2 text-sm font-bold"
-              style={
-                notesPage === "editor"
-                  ? {
-                      background: "var(--mobile-nav-active)",
-                      color: "var(--mobile-nav-active-text)",
-                    }
-                  : undefined
-              }
-            >
-              Editor
-            </button>
-            </div>
-          </div>
+  // ---- pieces -------------------------------------------------------------
+
+  const folderRowClass = (active: boolean, over: boolean) =>
+    `flex h-9 w-full items-center gap-2 rounded-full border-2 px-3 text-left text-sm font-semibold transition-colors ${
+      active
+        ? "border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
+        : over
+        ? "border-dashed border-[color:var(--accent-secondary)] bg-[color:var(--accent-sky-soft)]"
+        : "border-transparent hover:bg-[color:var(--surface-button-hover)]"
+    }`;
+
+  const newNoteButton = (
+    <button type="button" onClick={() => void onCreateNewNote()} disabled={busy} className={NEW_NOTE_BUTTON_CLASS}>
+      <LightbulbBadge size="sm" className="bg-[color:var(--surface-card)]" />
+      New note
+    </button>
+  );
+
+  const leftColumn = (
+    <aside className="flex min-h-0 flex-col gap-4 lg:overflow-y-auto lg:pr-1" aria-label="Folders and tags">
+      {newNoteButton}
+
+      <section className="space-y-1">
+        <div className="flex items-center justify-between">
+          <Eyebrow>Folders</Eyebrow>
         </div>
-      ) : null}
-
-      {notesPage === "library" ? (
-        <section className="space-y-4">
-          <div
-            ref={filterBoxRef}
-            className={`panel-card rounded-[1.7rem] p-4 space-y-3 ${
-              searchAsHeaderExtension ? "rounded-t-none border-t-0 -mt-4" : ""
-            }`}
-          >
-            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-              <div className="relative min-w-[260px]">
-                <div className="soft-input flex min-h-[48px] w-full flex-wrap items-center gap-1 px-2 py-1">
-                  {activeFilters.map((filter) => (
-                    <button
-                      key={filter.id}
-                      onClick={() => removeFilter(filter.id)}
-                      className="inline-flex items-center gap-1 rounded-full border surface-button px-2 py-1 text-[11px]"
-                      title="Remove filter"
-                    >
-                      <span>{filter.label}</span>
-                      <span>x</span>
-                    </button>
-                  ))}
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onFocus={() => setIsFilterMenuOpen(true)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setIsFilterMenuOpen(false);
-                        return;
-                      }
-                      if (e.key === "Backspace" && search.length === 0 && activeFilters.length > 0) {
-                        const last = activeFilters[activeFilters.length - 1];
-                        removeFilter(last.id);
-                        return;
-                      }
-                      if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
-                        if (visibleFilterOptions.length > 0) {
-                          setHighlightedFilterIndex((prev) => (prev + 1) % visibleFilterOptions.length);
-                        }
-                        return;
-                      }
-                      if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        if (!isFilterMenuOpen) setIsFilterMenuOpen(true);
-                        if (visibleFilterOptions.length > 0) {
-                          setHighlightedFilterIndex((prev) => (prev - 1 + visibleFilterOptions.length) % visibleFilterOptions.length);
-                        }
-                        return;
-                      }
-                      if (e.key === "Enter" && isFilterMenuOpen) {
-                        e.preventDefault();
-                        applyHighlightedFilter();
-                      }
-                    }}
-                    placeholder="Search notes, tags, or folders..."
-                    className="min-w-[160px] flex-1 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-[color:var(--foreground-soft)]"
-                  />
-                </div>
-                {isFilterMenuOpen ? (
-                  <div className="panel-card-strong absolute left-0 top-[calc(100%+0.45rem)] z-20 max-h-80 w-full overflow-auto rounded-[1rem] p-2 shadow-lg">
-                    {visibleFilterOptions.length === 0 ? (
-                      <div className="px-2 py-1 text-xs text-[color:var(--foreground-soft)]">No matching filters.</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {visibleFilterOptions.map((option, idx) => (
-                          <button
-                            key={option.key}
-                            onMouseEnter={() => setHighlightedFilterIndex(idx)}
-                            onClick={() => {
-                              addFilter(option.filter);
-                              setSearch("");
-                              setHighlightedFilterIndex(0);
-                            }}
-                            className={`w-full rounded-[0.9rem] px-2.5 py-2 text-left text-xs ${
-                              idx === highlightedFilterIndex ? "bg-foreground text-background" : "border surface-button"
-                            }`}
-                          >
-                            {option.filter.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="flex flex-col gap-3 lg:min-w-[18rem]">
-                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <button
-                    onClick={() => {
-                      void onCreateNewNote();
-                    }}
-                    className="rounded-full px-4 py-2 text-sm font-medium text-[color:var(--mobile-nav-active-text)]"
-                    style={{ background: "var(--mobile-nav-active)", color: "var(--mobile-nav-active-text)" }}
-                  >
-                    New note
-                  </button>
-                  <button onClick={onOpenNewFolderModal} className="rounded-full border surface-button px-4 py-2 text-sm">
-                    New folder
-                  </button>
-                  <button
-                    onClick={() => {
-                      void exportAllNotes();
-                    }}
-                    disabled={isBulkExporting || !rows || rows.length === 0}
-                    className="rounded-full border surface-button px-4 py-2 text-sm disabled:opacity-60"
-                  >
-                    {isBulkExporting ? "Exporting..." : "Export all"}
-                  </button>
-                  {activeFilters.length > 0 ? (
-                    <button onClick={() => setActiveFilters([])} className="rounded-full border surface-button px-3 py-1.5 text-sm">
-                      Clear filters
-                    </button>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--foreground-soft)] lg:justify-end">
-                  <span>{filteredRows.length} shown</span>
-                  {activeFilters.length > 0 ? <span>{activeFilters.length} filters</span> : null}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {rows === undefined ? <p className="text-sm text-foreground/70">Loading notes...</p> : null}
-          {rows !== undefined && rows.length === 0 ? <p className="text-sm text-foreground/70">No saved notes yet.</p> : null}
-          {rows !== undefined && rows.length > 0 && filteredRows.length === 0 ? (
-            <p className="text-sm text-foreground/70">No notes match your current filters.</p>
-          ) : null}
-
-          <div
-            onDragOver={(e) => {
-              if (!draggedNoteId && !draggedFolderName) return;
-              e.preventDefault();
-              setDragOverFolder("__root__");
-            }}
-            onDragLeave={() => {
-              if (dragOverFolder === "__root__") setDragOverFolder(null);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const noteId = draggedNoteId || e.dataTransfer.getData("text/note-id");
-              const folderName = draggedFolderName || e.dataTransfer.getData("text/folder-name");
-              if (noteId) void assignFolder(noteId, null);
-              else if (folderName) void moveFolder(folderName, null);
-              if (noteId) noteDropHandledRef.current = true;
-              setDraggedNoteId(null);
-              setDraggedFolderName(null);
-              setDragOverFolder(null);
-            }}
-            className={`space-y-3 ${dragOverFolder === "__root__" ? "rounded-[1.2rem] ring-2 ring-sky-500/70 ring-offset-2 ring-offset-background p-1" : ""}`}
-          >
-            <div className="rounded-[1.2rem] border border-dashed surface-card-soft px-3 py-2 text-xs text-foreground/60">
-              Root notes
-            </div>
-            {notesByFolder.unfiled.map((note) => (
-              <NoteRow
-                key={note.id}
-                note={note}
-                isActive={activeDraftId === note.id}
-                isDragging={draggedNoteId === note.id}
-                onDragStart={(noteId, event) => {
-                  setDraggedFolderName(null);
-                  setDraggedNoteId(noteId);
-                  noteDropHandledRef.current = false;
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/note-id", noteId);
-                }}
-                onDragEnd={(noteId) => {
-                  if (!noteDropHandledRef.current) {
-                    void assignFolder(noteId, null);
-                  }
+        <button
+          type="button"
+          onClick={() => setFolderSelection("all")}
+          aria-pressed={folderSelection === "all"}
+          className={folderRowClass(folderSelection === "all", false)}
+        >
+          <span className="min-w-0 flex-1 truncate">All notes</span>
+          <span className="text-xs opacity-70">{rows.length}</span>
+        </button>
+        {folderTree.map((entry) => {
+          const active = typeof folderSelection === "object" && folderSelection.folder === entry.name;
+          return (
+            <div
+              key={entry.name}
+              className="group relative"
+              style={{ paddingLeft: `${entry.depth * 0.9}rem` }}
+              {...dropProps(entry.name)}
+            >
+              <button
+                type="button"
+                draggable
+                onDragStart={(event) => {
                   setDraggedNoteId(null);
-                  setDragOverFolder(null);
+                  setDraggedFolderName(entry.name);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/folder-name", entry.name);
                 }}
-                onEdit={async () => {
-                  await switchDraft(note.id);
-                  setNotesPage("editor");
+                onDragEnd={() => {
+                  setDraggedFolderName(null);
+                  setDragOverTarget(null);
                 }}
-                onSaveTags={(tags) => {
-                  void saveNoteTags(note.id, tags);
+                onClick={() => setFolderSelection({ folder: entry.name })}
+                aria-pressed={active}
+                className={`${folderRowClass(active, dragOverTarget === entry.name)} pr-10`}
+              >
+                <FontAwesomeIcon icon={faFolder} className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                <span className="text-xs opacity-70">{countByFolder.total.get(entry.name) ?? 0}</span>
+              </button>
+              <FolderRowMenu
+                folder={entry.name}
+                active={active}
+                onRename={() => openFolderModal({ mode: "rename", folder: entry.name })}
+                onNewSubfolder={() => openFolderModal({ mode: "create", parent: entry.name })}
+                onDelete={() => {
+                  if (!window.confirm(`Delete "${entry.name}"? Notes inside move to Unfiled and subfolders move up a level.`)) return;
+                  void deleteFolder(entry.name);
                 }}
-                tagsSaving={!!tagSavingById[note.id]}
+              />
+            </div>
+          );
+        })}
+        <div {...dropProps("__root__")}>
+          <button
+            type="button"
+            onClick={() => setFolderSelection("unfiled")}
+            aria-pressed={folderSelection === "unfiled"}
+            className={folderRowClass(folderSelection === "unfiled", dragOverTarget === "__root__")}
+          >
+            <span className="min-w-0 flex-1 truncate">Unfiled</span>
+            <span className="text-xs opacity-70">{countByFolder.unfiled}</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => openFolderModal({ mode: "create", parent: "" })}
+          className={`${DASHED_BUTTON_CLASS} mt-1 w-full justify-center`}
+        >
+          <FontAwesomeIcon icon={faFolderPlus} className="h-3.5 w-3.5" aria-hidden="true" />
+          Folder
+        </button>
+      </section>
+
+      {allTags.length > 0 ? (
+        <section className="space-y-2">
+          <Eyebrow>Tags</Eyebrow>
+          <div className="flex flex-wrap gap-1.5 px-1">
+            {allTags.map((tag) => (
+              <TagChip
+                key={tag}
+                tag={tag}
+                size="sm"
+                active={selectedTags.includes(tag)}
+                onClick={() =>
+                  setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]))
+                }
               />
             ))}
-            {notesByFolder.unfiled.length === 0 ? (
-              <div className="rounded-[1rem] border border-dashed surface-card-soft px-3 py-2 text-xs text-foreground/60">
-                Drag notes or folders here to move them to root.
+          </div>
+        </section>
+      ) : null}
+
+      <section className="panel-card-soft mt-auto space-y-2 rounded-[1rem] p-3 text-xs">
+        <div className="font-semibold text-foreground/70">
+          {rows.length} {rows.length === 1 ? "note" : "notes"} · {folderNames.length} {folderNames.length === 1 ? "folder" : "folders"} ·{" "}
+          {allTags.length} {allTags.length === 1 ? "tag" : "tags"}
+        </div>
+        <button
+          type="button"
+          onClick={() => void exportAllNotes()}
+          disabled={isBulkExporting || rows.length === 0}
+          className="surface-button inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-full border-2 px-3 text-xs disabled:opacity-50"
+        >
+          <FontAwesomeIcon icon={faDownload} className="h-3 w-3" aria-hidden="true" />
+          {isBulkExporting ? "Exporting…" : "Export all as markdown"}
+        </button>
+        <Link href="/help" className="block text-center text-[0.7rem] font-semibold text-foreground/55 underline underline-offset-2">
+          Help with notes
+        </Link>
+      </section>
+    </aside>
+  );
+
+  const listColumn = (
+    <section className="flex min-h-0 flex-col gap-3" aria-label="Notes list">
+      {isPhone ? newNoteButton : null}
+      <label className="soft-input flex h-11 items-center gap-2 px-4" style={{ borderRadius: 999 }}>
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="h-3.5 w-3.5 text-foreground/55" aria-hidden="true" />
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search notes"
+          aria-label="Search notes"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-foreground/50"
+        />
+        {search ? (
+          <button type="button" onClick={() => setSearch("")} className="text-xs font-bold text-foreground/60 hover:text-foreground">
+            Clear
+          </button>
+        ) : null}
+      </label>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {isPhone ? (
+          <select
+            aria-label="Folder"
+            value={folderSelection === "all" ? "all" : folderSelection === "unfiled" ? "unfiled" : `folder:${folderSelection.folder}`}
+            onChange={(event) => {
+              const value = event.target.value;
+              setFolderSelection(value === "all" ? "all" : value === "unfiled" ? "unfiled" : { folder: value.slice("folder:".length) });
+            }}
+            className="soft-input h-9 max-w-[45%] px-3 text-sm font-semibold"
+            style={{ borderRadius: 999 }}
+          >
+            <option value="all">All notes ({rows.length})</option>
+            {folderTree.map((entry) => (
+              <option key={entry.name} value={`folder:${entry.name}`}>
+                {`${"  ".repeat(entry.depth)}${entry.name} (${countByFolder.total.get(entry.name) ?? 0})`}
+              </option>
+            ))}
+            <option value="unfiled">Unfiled ({countByFolder.unfiled})</option>
+          </select>
+        ) : null}
+        <div className="segmented-control ml-auto" role="group" aria-label="Sort notes">
+          {SORT_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              data-active={sort === option.key ? "true" : "false"}
+              aria-pressed={sort === option.key}
+              onClick={() => setSort(option.key)}
+              className="segmented-control-button text-xs"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedTags.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-semibold text-foreground/60">Tagged</span>
+          {selectedTags.map((tag) => (
+            <TagChip key={tag} tag={tag} size="sm" onRemove={() => setSelectedTags((prev) => prev.filter((item) => item !== tag))} />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="min-h-0 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1 lg:pb-2">
+        {rows.length === 0 && !isLoading ? (
+          <NoNotesYet size="page" onCreate={() => void onCreateNewNote()} busy={busy} />
+        ) : visibleRows.length === 0 ? (
+          <p className="rounded-[1rem] border-2 border-dashed border-[color:var(--surface-border)] px-4 py-6 text-center text-sm text-foreground/65">
+            No notes match.
+          </p>
+        ) : (
+          visibleRows.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              folderPath={buildFolderPath(noteFolderMap[note.id] ?? "", folderParentMap)}
+              isActive={note.id === activeDraftId}
+              isDragging={draggedNoteId === note.id}
+              onOpen={() => void openNote(note.id)}
+              onDragStart={(event) => {
+                setDraggedFolderName(null);
+                setDraggedNoteId(note.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/note-id", note.id);
+              }}
+              onDragEnd={() => {
+                setDraggedNoteId(null);
+                setDragOverTarget(null);
+              }}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+
+  const editorColumn = (
+    <section className="panel-card flex min-h-[24rem] flex-col overflow-hidden rounded-[20px] lg:min-h-0" aria-label="Note editor">
+      {activeDraft ? (
+        <>
+          <header className="flex shrink-0 items-center gap-2 border-b-2 border-[color:var(--surface-border)] bg-[color:var(--accent-note)] px-3 py-2.5">
+            {isPhone ? (
+              <button
+                type="button"
+                onClick={() => setMobileView("list")}
+                aria-label="Back to the list"
+                className={ICON_BUTTON_CLASS}
+              >
+                <FontAwesomeIcon icon={faArrowLeft} className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : (
+              <LightbulbBadge />
+            )}
+            <input
+              ref={titleInputRef}
+              value={titleDraft}
+              readOnly={readOnly}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={() => void commitTitle()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                } else if (event.key === "Escape") {
+                  setTitleDraft(activeDraft.title);
+                  event.currentTarget.blur();
+                }
+              }}
+              aria-label="Note title"
+              placeholder="Untitled note"
+              className="min-w-0 flex-1 rounded-[0.8rem] border-2 border-transparent bg-transparent px-2 py-1 font-display text-lg font-extrabold tracking-[-0.02em] text-foreground outline-none placeholder:text-foreground/45 focus:border-[color:var(--surface-border)] focus:bg-[color:var(--surface-card)]"
+            />
+            <StatusPill note={activeDraft} className="hidden sm:inline-flex" />
+            <ShareButton note={activeSummary} placement="below" align="right" openSignal={shareSignal} />
+            <NoteOptionsMenu
+              note={activeSummary}
+              currentFolder={noteFolderMap[activeDraft.id] ?? ""}
+              folderTree={folderTree}
+              onRename={() => titleInputRef.current?.select()}
+              onMoveToFolder={(folderName) => void assignFolder(activeDraft.id, folderName)}
+              onVisibility={() => setShareSignal((n) => n + 1)}
+              onDelete={onDeleteActive}
+            />
+          </header>
+
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <NoteTagChips note={activeDraft} readOnly={readOnly} />
+              <SaveStatusLabel className="ml-auto" />
+            </div>
+            {readOnly ? (
+              <p className="rounded-[0.8rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-mint)] px-3 py-2 text-xs font-semibold">
+                This note is published, so it can no longer be edited.
+              </p>
+            ) : null}
+            <NoteBlockList blocks={activeDraft.blocks} readOnly={readOnly} focusToken={focusToken} />
+            {!readOnly ? (
+              <div className="rounded-[1rem] border-2 border-dashed border-[color:var(--surface-border)] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => void onWrite()} disabled={busy} className={DASHED_BUTTON_CLASS}>
+                    <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
+                    Write
+                  </button>
+                  <button type="button" onClick={() => void onQuote()} disabled={busy} className={DASHED_BUTTON_CLASS}>
+                    <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
+                    Quote
+                  </button>
+                  <Link href="/browse" className={DASHED_BUTTON_CLASS} title="Open a chapter, select verses, and tap Add to note">
+                    <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
+                    Scripture
+                  </Link>
+                  <Link href="/browse" className={DASHED_BUTTON_CLASS} title="Select a word in the reader, tap Explore, then Add to note">
+                    <FontAwesomeIcon icon={faSpellCheck} className="h-3 w-3" aria-hidden="true" />
+                    Definition
+                  </Link>
+                </div>
+                <p className="mt-2 text-[0.72rem] text-foreground/55">
+                  Scriptures and definitions come from the reader: select verses or a word there and tap <strong>Add to note</strong>. They land in this note.
+                </p>
               </div>
             ) : null}
+            {!readOnly ? <AiInsightAssistant draft={activeDraft} onAddTextBlock={addTextBlock} /> : null}
           </div>
-
-          <div className="space-y-3">
-            {rootFolders.map((folder) => renderFolderNode(folder, 0))}
-          </div>
-        </section>
+        </>
       ) : (
-        <section>
-          <InsightEditorPanel variant="embedded" />
-        </section>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+          <LightbulbBadge size="lg" />
+          {isLoading && activeDraftId ? (
+            <p className="text-sm text-foreground/65">Loading note…</p>
+          ) : (
+            <>
+              <p className="font-display text-lg font-extrabold tracking-[-0.02em]">Pick a note</p>
+              <p className="max-w-xs text-sm text-foreground/65">Choose one from the list, or start a new one.</p>
+              <button type="button" onClick={() => void onCreateNewNote()} disabled={busy} className={`${DASHED_BUTTON_CLASS} h-10`}>
+                <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
+                New note
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+
+  return (
+    <div className="space-y-4">
+      <h1 className="flex items-center gap-2.5 px-1 font-display text-[1.6rem] font-extrabold tracking-[-0.03em] sm:text-[1.9rem]">
+        <LightbulbBadge />
+        Notes
+      </h1>
+
+      {isPhone ? (
+        mobileView === "editor" && activeDraftId ? (
+          editorColumn
+        ) : (
+          listColumn
+        )
+      ) : (
+        <div className="grid min-h-0 gap-4 lg:h-[calc(100vh-var(--header-height)-7.5rem)] lg:grid-cols-[220px_340px_minmax(0,1fr)]">
+          {leftColumn}
+          {listColumn}
+          {editorColumn}
+        </div>
       )}
 
-      {isFolderModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-md rounded-lg border surface-card-strong p-4 space-y-3">
-            <h2 className="text-lg font-semibold">New folder</h2>
+      {folderModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4" role="dialog" aria-modal="true" aria-label={folderModal.mode === "create" ? "New folder" : "Rename folder"}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitFolderModal();
+            }}
+            className="panel-card-strong w-full max-w-md space-y-3 rounded-[1.25rem] p-5"
+          >
+            <h2 className="font-display text-lg font-extrabold tracking-[-0.02em]">{folderModal.mode === "create" ? "New folder" : "Rename folder"}</h2>
             <input
               autoFocus
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
+              value={folderModalName}
+              onChange={(event) => setFolderModalName(event.target.value)}
               placeholder="Folder name"
-              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
+              aria-label="Folder name"
+              className="soft-input w-full px-3 py-2 text-sm outline-none"
             />
-            <label className="block space-y-1">
-              <span className="text-xs text-foreground/70">Parent folder (optional)</span>
-              <select
-                value={newFolderParent}
-                onChange={(e) => setNewFolderParent(e.target.value)}
-                className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
-              >
-                <option value="">Root level</option>
-                {folderOptions.map((option) => (
-                  <option key={option.name} value={option.name}>
-                    {`${"  ".repeat(option.depth)}${option.name}`}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {folderModal.mode === "create" ? (
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-foreground/70">Inside</span>
+                <select
+                  value={folderModalParent}
+                  onChange={(event) => setFolderModalParent(event.target.value)}
+                  className="soft-input w-full px-3 py-2 text-sm"
+                >
+                  <option value="">No folder (top level)</option>
+                  {folderTree.map((entry) => (
+                    <option key={entry.name} value={entry.name}>
+                      {`${"  ".repeat(entry.depth)}${entry.name}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {folderModalName.trim() && folderNames.includes(folderModalName.trim()) && folderModalName.trim() !== (folderModal.mode === "rename" ? folderModal.folder : "") ? (
+              <p className="text-xs font-semibold" style={{ color: "color-mix(in srgb, var(--accent-coral) 70%, var(--foreground))" }}>
+                A folder with that name already exists.
+              </p>
+            ) : null}
             <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setIsFolderModalOpen(false)}
-                className="rounded-md border surface-button px-3 py-2 text-sm"
-              >
+              <button type="button" onClick={() => setFolderModal(null)} className="surface-button rounded-full border-2 px-4 py-2 text-sm">
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  const created = await upsertFolder(newFolderName, newFolderParent || null);
-                  if (created) setIsFolderModalOpen(false);
-                }}
-                className="rounded-md bg-foreground text-background px-3 py-2 text-sm"
+                type="submit"
+                disabled={!folderModalName.trim()}
+                className="rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 py-2 text-sm font-bold text-[color:var(--surface-button-active-text)] disabled:opacity-50"
               >
-                Create folder
+                {folderModal.mode === "create" ? "Create folder" : "Save"}
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {renamingFolder ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-md rounded-lg border surface-card-strong p-4 space-y-3">
-            <h2 className="text-lg font-semibold">Rename folder</h2>
-            <input
-              autoFocus
-              value={renameFolderName}
-              onChange={(e) => setRenameFolderName(e.target.value)}
-              placeholder="Folder name"
-              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
-            />
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setRenamingFolder(null)}
-                className="rounded-md border surface-button px-3 py-2 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  const renamed = await renameFolder(renamingFolder, renameFolderName);
-                  if (renamed) setRenamingFolder(null);
-                }}
-                className="rounded-md bg-foreground text-background px-3 py-2 text-sm"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showTipsTooltip ? (
-        <div className="fixed bottom-20 right-4 z-40 w-[280px] rounded-lg border surface-card-strong p-3 shadow-lg">
-          <p className="text-xs text-foreground/80">
-            Need help with nested folders, drag-and-drop, exports, or sharing?
-          </p>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <Link href="/help" className="text-xs underline">
-              Open help
-            </Link>
-            <button
-              onClick={onDismissTips}
-              className="rounded-md border surface-button px-2 py-1 text-xs"
-            >
-              Dismiss
-            </button>
-          </div>
+          </form>
         </div>
       ) : null}
     </div>
   );
 }
 
-function NoteRow({
+// ---------------------------------------------------------------------------
+
+function FolderRowMenu({
+  folder,
+  active,
+  onRename,
+  onNewSubfolder,
+  onDelete,
+}: {
+  folder: string;
+  active: boolean;
+  onRename: () => void;
+  onNewSubfolder: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <div
+      className={`absolute right-1 top-1/2 -translate-y-1/2 ${
+        open ? "opacity-100" : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+      }`}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Options for folder ${folder}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] ${
+          active ? "bg-[color:var(--surface-card)] text-foreground" : "bg-[color:var(--surface-card)] text-foreground/70"
+        } hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]`}
+      >
+        <FontAwesomeIcon icon={faEllipsis} className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <Popover open={open} onClose={close} triggerRef={triggerRef} label={`Folder ${folder}`} align="right" className="w-48">
+        <MenuItem
+          onSelect={() => {
+            close();
+            onRename();
+          }}
+        >
+          Rename
+        </MenuItem>
+        <MenuItem
+          onSelect={() => {
+            close();
+            onNewSubfolder();
+          }}
+        >
+          New subfolder
+        </MenuItem>
+        <div className="my-1 border-t-2 border-[color:var(--surface-border)]" />
+        <MenuItem
+          danger
+          onSelect={() => {
+            close();
+            onDelete();
+          }}
+        >
+          Delete folder
+        </MenuItem>
+      </Popover>
+    </div>
+  );
+}
+
+function NoteCard({
   note,
+  folderPath,
   isActive,
   isDragging,
+  onOpen,
   onDragStart,
   onDragEnd,
-  onEdit,
-  onSaveTags,
-  tagsSaving,
 }: {
   note: InsightDraftSummary;
+  folderPath: string;
   isActive: boolean;
   isDragging: boolean;
-  onDragStart: (noteId: string, event: DragEvent<HTMLElement>) => void;
-  onDragEnd: (noteId: string) => void;
-  onEdit: () => Promise<void>;
-  onSaveTags: (tags: string[]) => void;
-  tagsSaving: boolean;
+  onOpen: () => void;
+  onDragStart: (event: React.DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
 }) {
-  const [localTags, setLocalTags] = useState<string[]>(note.tags ?? []);
-
-  useEffect(() => {
-    setLocalTags(note.tags ?? []);
-  }, [note.id, note.tags]);
-
-  function removeTag(tagToRemove: string) {
-    const next = localTags.filter((tag) => tag !== tagToRemove);
-    setLocalTags(next);
-    onSaveTags(next);
-  }
-
+  const refs = note.scripture_refs ?? [];
+  const shownRefs = refs.slice(0, 3);
+  const extraRefs = refs.length - shownRefs.length;
   return (
     <article
-      onClick={() => {
-        void onEdit();
-      }}
-      className={`interactive-card rounded-[1.15rem] border p-3 transition-colors ${
-        isActive ? "surface-card-strong" : "surface-card"
-      } ${isDragging ? "opacity-50" : ""} ${note.status === "draft" ? "cursor-pointer" : ""}`}
-      style={
-        isActive
-          ? {
-              borderColor: "var(--surface-border)",
-              background: "var(--accent-note)",
-            }
-          : undefined
-      }
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`interactive-card rounded-[1rem] border-2 border-[color:var(--surface-border)] ${
+        isActive ? "shadow-[var(--surface-shadow)]" : "shadow-none"
+      } ${isDragging ? "opacity-50" : ""}`}
+      style={{ background: isActive ? "var(--accent-note)" : "var(--surface-card)" }}
+      aria-current={isActive ? "true" : undefined}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 truncate text-sm font-bold"><span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-primary)] text-[#17161a]"><FontAwesomeIcon icon={faLightbulb} className="h-3 w-3" /></span><span className="truncate">{note.title}</span></h3>
-          <p className="text-xs text-[color:var(--foreground-soft)]">
-            {visibilityLabel(note.visibility)} · Updated {new Date(note.updated_at).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="relative flex items-center gap-1.5">
-          {localTags.length > 0 ? (
-            <div className="max-w-[260px] overflow-x-auto">
-              <div className="flex items-center gap-1">
-                {localTags.map((tag) => (
-                  <button
-                    key={`${note.id}-${tag}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeTag(tag);
-                    }}
-                    disabled={note.status !== "draft" || tagsSaving}
-                    className="group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-foreground disabled:opacity-60"
-                    style={getTagChipStyle(tag)}
-                    title={note.status === "draft" ? "Remove tag" : "Tag editing only available for drafts"}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="block w-full cursor-pointer rounded-[1rem] px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+      >
+        <div className="flex items-start gap-2">
+          <LightbulbBadge size="sm" className="mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-display text-[0.98rem] font-extrabold leading-tight tracking-[-0.02em]">{note.title || "Untitled note"}</h3>
+            {note.excerpt ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-foreground/70">{note.excerpt}</p> : null}
+            {shownRefs.length > 0 || folderPath ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {shownRefs.map((reference) => (
+                  <span
+                    key={reference}
+                    className="rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] px-1.5 text-[0.62rem] font-bold leading-4"
                   >
-                    <span>{tag}</span>
-                    {note.status === "draft" ? (
-                      <span className="opacity-0 transition-opacity group-hover:opacity-100">x</span>
-                    ) : null}
-                  </button>
+                    {reference}
+                  </span>
                 ))}
+                {extraRefs > 0 ? <span className="text-[0.66rem] font-bold text-foreground/60">+{extraRefs}</span> : null}
+                {folderPath ? (
+                  <span className="ml-auto truncate text-[0.66rem] font-semibold text-foreground/55">
+                    <FontAwesomeIcon icon={faFolder} className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
+                    {folderPath}
+                  </span>
+                ) : null}
               </div>
-            </div>
-          ) : null}
-          <button
-            draggable
-            onClick={(e) => e.stopPropagation()}
-            onDragStart={(e) => onDragStart(note.id, e)}
-            onDragEnd={() => onDragEnd(note.id)}
-            className="cursor-grab rounded-full px-1.5 text-foreground/50 active:cursor-grabbing"
-            aria-label={`Drag ${note.title}`}
-            title="Drag note"
-          >
-            ::
-          </button>
+            ) : null}
+          </div>
+          <StatusPill note={note} />
         </div>
-      </div>
+      </button>
     </article>
   );
 }
