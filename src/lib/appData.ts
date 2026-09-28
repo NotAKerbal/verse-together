@@ -21,6 +21,10 @@ export type InsightDraftSummary = {
   created_at: string;
   updated_at: string;
   last_active_at: string;
+  /** Preview fields; optional so an older backend still satisfies the type. */
+  block_count?: number;
+  excerpt?: string | null;
+  scripture_refs?: string[];
 };
 
 export type InsightDraftBlock = {

@@ -24,12 +24,21 @@ type DictionaryPayload = {
   entryText: string;
 };
 
+export type NoteSaveStatus = "idle" | "saving" | "saved";
+
 type InsightBuilderContextValue = {
   canUseInsights: boolean;
+  /** Phone bottom sheet. */
   isMobileOpen: boolean;
+  /** Desktop panel: expanded (true) or collapsed to the pill (false). Remembered per user. */
+  isPanelOpen: boolean;
   openBuilder: () => void;
   closeBuilder: () => void;
   toggleMobileBuilder: () => void;
+  togglePanel: () => void;
+  /** "saving" while any note write is in flight, "saved" right after one lands. */
+  saveStatus: NoteSaveStatus;
+  lastSavedAt: number | null;
   drafts: InsightDraftSummary[];
   activeDraftId: string | null;
   activeDraft: InsightDraft | null;
@@ -70,17 +79,23 @@ type InsightBuilderContextValue = {
 
 const InsightBuilderContext = createContext<InsightBuilderContextValue | null>(null);
 const ACTIVE_DRAFT_STORAGE_PREFIX = "vt_reader_active_draft_v1";
+const PANEL_OPEN_STORAGE_PREFIX = "vt_notebook_panel_open_v1";
 
 export function InsightBuilderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const canUseInsights = !!user;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [pendingSaves, setPendingSaves] = useState(0);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const activeDraftStorageKey = useMemo(
     () => (user?.id ? `${ACTIVE_DRAFT_STORAGE_PREFIX}:${user.id}` : null),
     [user?.id]
   );
+  const panelStorageKey = useMemo(() => (user?.id ? `${PANEL_OPEN_STORAGE_PREFIX}:${user.id}` : null), [user?.id]);
   const hasRestoredActiveDraftRef = useRef(false);
+  const hasRestoredPanelRef = useRef(false);
 
   const draftRows = useQuery(api.insights.listMyDrafts, canUseInsights ? {} : "skip") as
     | InsightDraftSummary[]
@@ -107,28 +122,38 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   useEffect(() => {
     hasRestoredActiveDraftRef.current = false;
+    hasRestoredPanelRef.current = false;
   }, [activeDraftStorageKey]);
 
   useEffect(() => {
     if (!canUseInsights) return;
-    if (!activeDraftStorageKey) return;
+    if (!activeDraftStorageKey || !panelStorageKey) return;
     if (draftRows === undefined) return;
     if (hasRestoredActiveDraftRef.current) return;
 
     hasRestoredActiveDraftRef.current = true;
-    if (activeDraftId) return;
     if (typeof window === "undefined") return;
+    let restoredDraftId: string | null = null;
     try {
       const raw = window.localStorage.getItem(activeDraftStorageKey);
-      if (!raw) return;
-      const stored = raw.trim();
-      if (!stored) return;
-      if (!draftRows.some((d) => d.id === stored)) return;
-      setActiveDraftId(stored);
+      const stored = raw?.trim() ?? "";
+      if (stored && draftRows.some((d) => d.id === stored)) restoredDraftId = stored;
     } catch {
       // ignore storage errors
     }
-  }, [canUseInsights, activeDraftStorageKey, draftRows, activeDraftId]);
+    if (!activeDraftId && restoredDraftId) setActiveDraftId(restoredDraftId);
+
+    // The panel remembers whether it was expanded; someone who has never
+    // collapsed it sees it expanded only when a note is already active.
+    const hadNote = Boolean(activeDraftId || restoredDraftId);
+    try {
+      const rawPanel = window.localStorage.getItem(panelStorageKey);
+      setIsPanelOpen(rawPanel === null ? hadNote : rawPanel === "1");
+    } catch {
+      setIsPanelOpen(hadNote);
+    }
+    hasRestoredPanelRef.current = true;
+  }, [canUseInsights, activeDraftStorageKey, panelStorageKey, draftRows, activeDraftId]);
 
   useEffect(() => {
     if (!activeDraftStorageKey) return;
@@ -141,6 +166,15 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       // ignore storage errors
     }
   }, [activeDraftId, activeDraftStorageKey]);
+
+  useEffect(() => {
+    if (!panelStorageKey || !hasRestoredPanelRef.current || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(panelStorageKey, isPanelOpen ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [isPanelOpen, panelStorageKey]);
 
   useEffect(() => {
     if (!canUseInsights) {
@@ -156,26 +190,47 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const openBuilder = useCallback(() => {
     setIsMobileOpen(true);
+    setIsPanelOpen(true);
   }, []);
 
   const closeBuilder = useCallback(() => {
     setIsMobileOpen(false);
+    setIsPanelOpen(false);
   }, []);
 
   const toggleMobileBuilder = useCallback(() => {
     setIsMobileOpen((prev) => !prev);
   }, []);
 
+  const togglePanel = useCallback(() => {
+    setIsPanelOpen((prev) => !prev);
+  }, []);
+
+  // Every write to a note passes through here so the UI can show one honest
+  // "Saving... / Saved just now" line instead of per-field spinners.
+  const tracked = useCallback(async <T,>(work: Promise<T>): Promise<T> => {
+    setPendingSaves((n) => n + 1);
+    try {
+      const result = await work;
+      setLastSavedAt(Date.now());
+      return result;
+    } finally {
+      setPendingSaves((n) => Math.max(0, n - 1));
+    }
+  }, []);
+  const saveStatus: NoteSaveStatus = pendingSaves > 0 ? "saving" : lastSavedAt ? "saved" : "idle";
+
   const createDraft = useCallback(
     async (title?: string) => {
       if (!canUseInsights) return null;
-      const created = await createDraftMutation({ title: title?.trim() || undefined });
+      const created = await tracked(createDraftMutation({ title: title?.trim() || undefined }));
       const id = String(created.id);
       setActiveDraftId(id);
+      setIsPanelOpen(true);
       await setActiveDraftMutation({ draftId: created.id as any });
       return id;
     },
-    [canUseInsights, createDraftMutation, setActiveDraftMutation]
+    [canUseInsights, createDraftMutation, setActiveDraftMutation, tracked]
   );
 
   const ensureActiveDraftId = useCallback(async () => {
@@ -198,99 +253,113 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const renameDraft = useCallback(
     async (draftId: string, title: string) => {
-      await renameDraftMutation({ draftId: draftId as any, title });
+      await tracked(renameDraftMutation({ draftId: draftId as any, title }));
     },
-    [renameDraftMutation]
+    [renameDraftMutation, tracked]
   );
 
   const deleteDraft = useCallback(
     async (draftId: string) => {
-      await deleteDraftMutation({ draftId: draftId as any });
+      await tracked(deleteDraftMutation({ draftId: draftId as any }));
       if (activeDraftId === draftId) setActiveDraftId(null);
     },
-    [deleteDraftMutation, activeDraftId]
+    [deleteDraftMutation, activeDraftId, tracked]
   );
 
   const saveDraftSettings = useCallback(
     async (payload: { draftId: string; title?: string; tags?: string[]; visibility?: InsightVisibility }) => {
-      await saveDraftSettingsMutation({
-        draftId: payload.draftId as any,
-        title: payload.title?.trim() || undefined,
-        tags: payload.tags?.map((tag) => tag.trim()).filter(Boolean) ?? undefined,
-        visibility: payload.visibility,
-      });
+      await tracked(
+        saveDraftSettingsMutation({
+          draftId: payload.draftId as any,
+          title: payload.title?.trim() || undefined,
+          tags: payload.tags?.map((tag) => tag.trim()).filter(Boolean) ?? undefined,
+          visibility: payload.visibility,
+        })
+      );
     },
-    [saveDraftSettingsMutation]
+    [saveDraftSettingsMutation, tracked]
   );
 
   const addTextBlock = useCallback(
     async (text?: string) => {
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
-      await addBlockMutation({
-        draftId: draftId as any,
-        type: "text",
-        text: text?.trim() || undefined,
-      });
+      await tracked(
+        addBlockMutation({
+          draftId: draftId as any,
+          type: "text",
+          text: text?.trim() || undefined,
+        })
+      );
       setIsMobileOpen(true);
+      setIsPanelOpen(true);
     },
-    [addBlockMutation, ensureActiveDraftId]
+    [addBlockMutation, ensureActiveDraftId, tracked]
   );
 
   const addQuoteBlock = useCallback(
     async (text?: string, linkUrl?: string, options?: { highlightText?: string; highlightWordIndices?: number[] }) => {
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
-      await addBlockMutation({
-        draftId: draftId as any,
-        type: "quote",
-        text: text?.trim() || undefined,
-        highlightText: options?.highlightText?.trim() || undefined,
-        highlightWordIndices: options?.highlightWordIndices,
-        linkUrl: linkUrl?.trim() || undefined,
-      });
+      await tracked(
+        addBlockMutation({
+          draftId: draftId as any,
+          type: "quote",
+          text: text?.trim() || undefined,
+          highlightText: options?.highlightText?.trim() || undefined,
+          highlightWordIndices: options?.highlightWordIndices,
+          linkUrl: linkUrl?.trim() || undefined,
+        })
+      );
       setIsMobileOpen(true);
+      setIsPanelOpen(true);
     },
-    [addBlockMutation, ensureActiveDraftId]
+    [addBlockMutation, ensureActiveDraftId, tracked]
   );
 
   const appendScriptureBlock = useCallback(
     async (payload: ScripturePayload) => {
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
-      await appendScriptureBlockMutation({
-        draftId: draftId as any,
-        volume: payload.volume,
-        book: payload.book,
-        chapter: payload.chapter,
-        verseStart: payload.verseStart,
-        verseEnd: payload.verseEnd,
-        reference: payload.reference,
-        text: payload.text?.trim() || undefined,
-      });
+      await tracked(
+        appendScriptureBlockMutation({
+          draftId: draftId as any,
+          volume: payload.volume,
+          book: payload.book,
+          chapter: payload.chapter,
+          verseStart: payload.verseStart,
+          verseEnd: payload.verseEnd,
+          reference: payload.reference,
+          text: payload.text?.trim() || undefined,
+        })
+      );
       setIsMobileOpen(true);
+      setIsPanelOpen(true);
     },
-    [appendScriptureBlockMutation, ensureActiveDraftId]
+    [appendScriptureBlockMutation, ensureActiveDraftId, tracked]
   );
 
   const addDictionaryBlock = useCallback(
     async (payload: DictionaryPayload) => {
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
-      await addBlockMutation({
-        draftId: draftId as any,
-        type: "dictionary",
-        text: payload.entryText?.trim() || undefined,
-        dictionaryMeta: {
-          edition: payload.edition,
-          word: payload.word?.trim() || "Dictionary entry",
-          heading: payload.heading?.trim() || undefined,
-          pronounce: payload.pronounce?.trim() || undefined,
-        },
-      });
+      await tracked(
+        addBlockMutation({
+          draftId: draftId as any,
+          type: "dictionary",
+          text: payload.entryText?.trim() || undefined,
+          dictionaryMeta: {
+            edition: payload.edition,
+            word: payload.word?.trim() || "Dictionary entry",
+            heading: payload.heading?.trim() || undefined,
+            pronounce: payload.pronounce?.trim() || undefined,
+          },
+        })
+      );
       setIsMobileOpen(true);
+      setIsPanelOpen(true);
     },
-    [addBlockMutation, ensureActiveDraftId]
+    [addBlockMutation, ensureActiveDraftId, tracked]
   );
 
   const updateBlock = useCallback(
@@ -309,30 +378,32 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
         };
       }
     ) => {
-      await updateBlockMutation({
-        blockId: blockId as any,
-        text: patch.text?.trim() || undefined,
-        highlightText: patch.highlightText?.trim() || undefined,
-        highlightWordIndices: patch.highlightWordIndices,
-        linkUrl: patch.linkUrl?.trim() || undefined,
-        dictionaryMeta: patch.dictionaryMeta
-          ? {
-              edition: patch.dictionaryMeta.edition,
-              word: patch.dictionaryMeta.word?.trim() || "Dictionary entry",
-              heading: patch.dictionaryMeta.heading?.trim() || undefined,
-              pronounce: patch.dictionaryMeta.pronounce?.trim() || undefined,
-            }
-          : undefined,
-      });
+      await tracked(
+        updateBlockMutation({
+          blockId: blockId as any,
+          text: patch.text?.trim() || undefined,
+          highlightText: patch.highlightText?.trim() || undefined,
+          highlightWordIndices: patch.highlightWordIndices,
+          linkUrl: patch.linkUrl?.trim() || undefined,
+          dictionaryMeta: patch.dictionaryMeta
+            ? {
+                edition: patch.dictionaryMeta.edition,
+                word: patch.dictionaryMeta.word?.trim() || "Dictionary entry",
+                heading: patch.dictionaryMeta.heading?.trim() || undefined,
+                pronounce: patch.dictionaryMeta.pronounce?.trim() || undefined,
+              }
+            : undefined,
+        })
+      );
     },
-    [updateBlockMutation]
+    [updateBlockMutation, tracked]
   );
 
   const removeBlock = useCallback(
     async (blockId: string) => {
-      await removeBlockMutation({ blockId: blockId as any });
+      await tracked(removeBlockMutation({ blockId: blockId as any }));
     },
-    [removeBlockMutation]
+    [removeBlockMutation, tracked]
   );
 
   const reorderBlocks = useCallback(
@@ -343,35 +414,43 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (fromIndex >= ordered.length || toIndex >= ordered.length) return;
       const [moved] = ordered.splice(fromIndex, 1);
       ordered.splice(toIndex, 0, moved);
-      await reorderBlocksMutation({
-        draftId: activeDraft.id as any,
-        blockIds: ordered.map((b) => b.id as any),
-      });
+      await tracked(
+        reorderBlocksMutation({
+          draftId: activeDraft.id as any,
+          blockIds: ordered.map((b) => b.id as any),
+        })
+      );
     },
-    [activeDraft, reorderBlocksMutation]
+    [activeDraft, reorderBlocksMutation, tracked]
   );
 
   const publishDraft = useCallback(
     async (title?: string, summary?: string) => {
       if (!activeDraftId) return;
-      await publishDraftMutation({
-        draftId: activeDraftId as any,
-        title: title?.trim() || undefined,
-        summary: summary?.trim() || undefined,
-      });
+      await tracked(
+        publishDraftMutation({
+          draftId: activeDraftId as any,
+          title: title?.trim() || undefined,
+          summary: summary?.trim() || undefined,
+        })
+      );
       setActiveDraftId(null);
       setIsMobileOpen(false);
     },
-    [activeDraftId, publishDraftMutation]
+    [activeDraftId, publishDraftMutation, tracked]
   );
 
   const value = useMemo<InsightBuilderContextValue>(
     () => ({
       canUseInsights,
       isMobileOpen,
+      isPanelOpen,
       openBuilder,
       closeBuilder,
       toggleMobileBuilder,
+      togglePanel,
+      saveStatus,
+      lastSavedAt,
       drafts,
       activeDraftId,
       activeDraft: activeDraft ?? null,
@@ -394,9 +473,13 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [
       canUseInsights,
       isMobileOpen,
+      isPanelOpen,
       openBuilder,
       closeBuilder,
       toggleMobileBuilder,
+      togglePanel,
+      saveStatus,
+      lastSavedAt,
       drafts,
       activeDraftId,
       activeDraft,

@@ -30,6 +30,28 @@ function toIso(ts: number): string {
   return new Date(ts).toISOString();
 }
 
+// A short preview of the first text block, for note lists.
+function draftExcerpt(blocks: any[]): string | null {
+  const first = blocks.find((b) => b.type === "text" && (b.text ?? "").trim());
+  if (!first) return null;
+  const text = String(first.text).replace(/\s+/g, " ").trim();
+  return text.length > 220 ? `${text.slice(0, 220).trimEnd()}...` : text;
+}
+
+// Distinct scripture references in block order, for reference chips and sorting.
+function draftScriptureRefs(blocks: any[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const block of blocks) {
+    const reference = block.scriptureRef?.reference?.trim();
+    if (!reference || seen.has(reference)) continue;
+    seen.add(reference);
+    out.push(reference);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 function normalizeTags(tags: string[] | undefined): string[] {
   if (!tags) return [];
   const seen = new Set<string>();
@@ -107,16 +129,27 @@ export const listMyDrafts = query({
       .withIndex("by_clerk_last_active", (q: any) => q.eq("clerkId", clerkId))
       .order("desc")
       .collect();
-    return drafts.map((d) => ({
-      id: d._id,
-      title: d.title,
-      status: d.status,
-      visibility: d.visibility ?? "private",
-      tags: d.tags ?? [],
-      created_at: toIso(d.createdAt),
-      updated_at: toIso(d.updatedAt),
-      last_active_at: toIso(d.lastActiveAt),
-    }));
+    const rows = [];
+    for (const d of drafts) {
+      const blocks = await ctx.db
+        .query("insightDraftBlocks")
+        .withIndex("by_draft_order", (q: any) => q.eq("draftId", d._id))
+        .collect();
+      rows.push({
+        id: d._id,
+        title: d.title,
+        status: d.status,
+        visibility: d.visibility ?? "private",
+        tags: d.tags ?? [],
+        created_at: toIso(d.createdAt),
+        updated_at: toIso(d.updatedAt),
+        last_active_at: toIso(d.lastActiveAt),
+        block_count: blocks.length,
+        excerpt: draftExcerpt(blocks),
+        scripture_refs: draftScriptureRefs(blocks),
+      });
+    }
+    return rows;
   },
 });
 
