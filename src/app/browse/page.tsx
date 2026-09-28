@@ -40,7 +40,7 @@ export default async function BrowsePage({
     <section className="page-shell browse-shell">
       <SelectionHeader title="Library" />
       {/* auto-fit: cards that render nothing leave no gap, and the rest share the row. */}
-      <div className="simple-hide grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
+      <div className="simple-hide grid gap-5 px-1 pt-1 grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
         <ContinueReadingCard />
         <ActivePlanCard />
         <ComeFollowMeCard />

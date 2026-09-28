@@ -47,8 +47,8 @@ export default function ActivePlanCard() {
 
   return (
     <article
-      className="panel-card flex h-full flex-col gap-3 p-4 sm:p-5"
-      style={{ background: "var(--accent-note)" }}
+      className="sticky-note rotate-1 flex h-full flex-col gap-3 p-4 sm:p-5"
+      style={{ background: "var(--accent-mint)" }}
       aria-labelledby={headingId}
     >
       <Link href={`/plans/${plan.id}`} className="group flex items-start justify-between gap-3 text-[color:var(--foreground)]" data-tap>
