@@ -26,11 +26,13 @@ import {
 import type { GuidePassage, TocItem } from "@/lib/cfm/cfmGuide";
 import { sideAtScroll, type CompanionSide } from "./companionPanes";
 import {
+  alignAtReadingLine,
   buildSegments,
   guideToScripture,
   scriptureToGuide,
   ScrollOwnership,
   segmentAt,
+  targetStart,
   type GuideMarker,
   type Pane,
   type Segment,
@@ -428,9 +430,18 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
       if (el) scrollTo(guide, "guide", guide.offsetOf(el) - LANDING_GAP);
     }
     if (pending.scriptureTo && scripture) {
-      const { chapter, first } = pending.scriptureTo;
-      const el = document.getElementById(first != null ? scriptureVerseId(book.slug, chapter, first) : scriptureAnchor(book.slug, chapter));
-      if (el) scrollTo(scripture, "scripture", scripture.offsetOf(el) - LANDING_GAP);
+      const start = targetStart(pending.scriptureTo, passages);
+      const el = document.getElementById(
+        start.verse != null ? scriptureVerseId(book.slug, start.chapter, start.verse) : scriptureAnchor(book.slug, start.chapter)
+      );
+      if (el && pending.sync === "scripture") {
+        // A deep link then brings the guide along: put the target's start on the reading line the sync
+        // reads, so the guide lands on that verse's commentary, not on whatever sits 30% further down.
+        const y = scripture.offsetOf(el) + (start.secondHalf ? el.getBoundingClientRect().height / 2 : 0);
+        scrollTo(scripture, "scripture", alignAtReadingLine(y, scripture.height(), READING_LINE));
+      } else if (el) {
+        scrollTo(scripture, "scripture", scripture.offsetOf(el) - LANDING_GAP);
+      }
     }
     if (pending.sync && scripture) sync(pending.sync);
     if (pending.reveal) revealSide(pending.reveal.side, pending.reveal.instant);

@@ -103,6 +103,31 @@ export function scriptureToGuide<T>(segments: readonly Segment<T>[], y: number):
   return spans[spans.length - 1].segment.guideEnd;
 }
 
+/**
+ * Where an explicit scripture target begins. A target that is exactly one of the guide's passages
+ * starts where that passage does, so "57:13–14" (the guide's 57:13b–14) starts at the second half of
+ * verse 13 rather than in the 57:11–13a commentary. Any other verse range starts at its first verse,
+ * whole; a bare chapter starts at its heading (`verse` null).
+ */
+export function targetStart(
+  target: { chapter: number; first?: number; last?: number },
+  passages: readonly { chapter: number; first: number; last: number; firstHalf?: "a" | "b" }[]
+): { chapter: number; verse: number | null; secondHalf: boolean } {
+  if (target.first == null) return { chapter: target.chapter, verse: null, secondHalf: false };
+  const last = target.last ?? target.first;
+  const exact = passages.find((p) => p.chapter === target.chapter && p.first === target.first && p.last === last);
+  return { chapter: target.chapter, verse: target.first, secondHalf: exact?.firstHalf === "b" };
+}
+
+/**
+ * Scroll offset that puts content offset `start` on a pane's reading line (`fraction` of its visible
+ * height), nudged so the line falls just inside what starts there rather than on the boundary with
+ * whatever precedes it (scroll offsets round to whole pixels).
+ */
+export function alignAtReadingLine(start: number, visibleHeight: number, fraction: number, nudge = 1): number {
+  return start + nudge - visibleHeight * fraction;
+}
+
 export type Pane = "guide" | "scripture";
 
 /**

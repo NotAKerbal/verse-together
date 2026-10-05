@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Marked } from "marked";
 import { MOBILE_SIDE_ORDER, sideAtScroll } from "../../features/comeFollowMe/companionPanes.ts";
+import { targetStart } from "../../features/comeFollowMe/scrollSync.ts";
 import { decodeFragment, localScriptureTarget, normalizeTarget, parseScriptureAnchor, passagesOverlapping, scriptureAnchor } from "./cfmAnchors.ts";
 import { parseGuide, readGuide, readGuides, safeHref } from "./cfmGuide.ts";
 import { COME_FOLLOW_ME_WEEKS, getComeFollowMeWeekByStart } from "../comeFollowMe.ts";
@@ -232,6 +233,25 @@ test("a phone swipe settles on whichever side covers more of the strip", () => {
   assert.equal(sideAtScroll(5000, 390), "scripture", "overscroll stays on the last side");
   assert.equal(sideAtScroll(-390, 390), "scripture", "right-to-left offsets are negative");
   assert.equal(sideAtScroll(120, 0), "guide", "before layout the strip is on its first side");
+});
+
+test("deep-link targets start where the guide's matching passage does", () => {
+  const start = (anchor) => targetStart(parseScriptureAnchor(anchor, "isaiah"), late.passages);
+  // #scripture-isaiah-57-v13-14 is exactly the guide's 57:13b–14: it starts mid-verse 13.
+  assert.deepEqual(start("scripture-isaiah-57-v13-14"), { chapter: 57, verse: 13, secondHalf: true });
+  // #…-v11-13 is the guide's 57:11–13a, which starts at the top of verse 11.
+  assert.deepEqual(start("scripture-isaiah-57-v11-13"), { chapter: 57, verse: 11, secondHalf: false });
+  // A bare verse 13 matches neither half exactly, so the whole verse is included from its top.
+  assert.deepEqual(start("scripture-isaiah-57-v13"), { chapter: 57, verse: 13, secondHalf: false });
+  assert.deepEqual(start("scripture-isaiah-53-v4"), { chapter: 53, verse: 4, secondHalf: false });
+  assert.deepEqual(start("scripture-isaiah-53"), { chapter: 53, verse: null, secondHalf: false });
+  // Out-of-range verses are normalized to the chapter before they get here.
+  const count = (chapter) => (chapter === 53 ? 12 : undefined);
+  assert.deepEqual(targetStart(normalizeTarget({ chapter: 53, first: 40 }, count), late.passages), {
+    chapter: 53,
+    verse: null,
+    secondHalf: false,
+  });
 });
 
 test("scripture anchors round-trip", () => {

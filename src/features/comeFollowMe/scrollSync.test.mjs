@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildSegments, guideToScripture, scriptureToGuide, ScrollOwnership, segmentAt } from "./scrollSync.ts";
+import { alignAtReadingLine, buildSegments, guideToScripture, scriptureToGuide, ScrollOwnership, segmentAt } from "./scrollSync.ts";
 import { passageHalves } from "../../lib/cfm/cfmAnchors.ts";
 
 // A small guide: an unmapped introduction, a chapter opening, two passages that split verse 13 into
@@ -108,6 +108,26 @@ test("touching the other pane takes over at once, even mid-scroll", () => {
   ownership.input("scripture", 20);
   assert.equal(ownership.scrolled("scripture", 30, 25), true);
   assert.equal(ownership.scrolled("guide", 40, 30), false, "the guide's leftover momentum no longer drives");
+});
+
+test("an explicit target placed on the reading line brings the guide to that target's own commentary", () => {
+  const height = 600;
+  const line = 0.3;
+  const guideAt = (start, nudge) => {
+    const scrollTop = alignAtReadingLine(start, height, line, nudge);
+    // Scroll offsets are whole pixels.
+    return scriptureToGuide(segments, Math.round(scrollTop) + height * line);
+  };
+  // 57:13b–14 starts mid-verse 13 (offset 130): the guide opens on 13b–14, not inside 11–13a.
+  const at13b = guideAt(130);
+  assert.equal(segmentAt(segments, at13b), 3);
+  assert.ok(at13b - 700 < 5, `${at13b} should be at the start of 13b–14`);
+  // A plain verse start (verse 11 at 40) opens 11–13a.
+  assert.equal(segmentAt(segments, guideAt(40)), 2);
+  // Landing the target at the pane top instead (the old 12px gap) reads 30% further down, past 13b–14.
+  assert.equal(scriptureToGuide(segments, 130 - 12 + height * line), 800);
+  // Without the nudge, a start that rounds a fraction of a pixel up the page reads the previous passage.
+  assert.equal(segmentAt(segments, scriptureToGuide(segments, 129.6)), 2);
 });
 
 test("half-verse suffixes are read from printed ranges", () => {
