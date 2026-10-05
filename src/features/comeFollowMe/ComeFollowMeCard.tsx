@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { getStudyGuideHref, hasStudyGuide } from "@/features/comeFollowMe/guideIndex";
 import ChapterChip from "@/features/plans/ChapterChip";
 import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
 import { useBookProgress } from "@/features/plans/useReadingProgress";
@@ -139,6 +141,15 @@ export default function ComeFollowMeCard() {
           <BookChips key={`${week.start}-${group.volume}-${group.book}`} {...group} />
         ))}
       </ul>
+
+      {hasStudyGuide(week.start) ? (
+        <Link
+          href={getStudyGuideHref(week.start)}
+          className="self-start text-xs font-bold underline decoration-2 underline-offset-4 hover:decoration-[color:var(--accent-secondary)]"
+        >
+          Study guide with scripture side by side
+        </Link>
+      ) : null}
 
       {!isCurrent ? (
         <button

@@ -48,3 +48,6 @@ data/dictionary/
 
 # Claude Code worktrees
 .claude/
+
+# clerk configuration (can include secrets)
+/.clerk/

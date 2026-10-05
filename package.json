@@ -11,7 +11,9 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "test:ai-insights": "node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
+    "test:cfm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/comeFollowMe.test.mjs src/lib/cfm/cfmGuide.test.mjs",
+    "cfm:check": "node scripts/cfm-content.mjs check",
+    "test:ai-insights":"node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
     "batch:insights:prepare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/prepareChapterInsightsBatch.mjs --skip-ref bookofmormon:1nephi:1 --canary-ref bookofmormon:1nephi:2",
     "batch:insights:submit": "node --env-file-if-exists=.env.local scripts/submitChapterInsightsBatch.mjs",
     "batch:insights:process": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/processChapterInsightsBatch.mjs",
@@ -27,6 +29,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@fortawesome/react-fontawesome": "^3.3.0",
     "convex": "^1.31.7",
+    "marked": "^17.0.6",
     "next": "^16.1.6",
     "react": "^19.1.4",
     "react-dom": "^19.1.4"
