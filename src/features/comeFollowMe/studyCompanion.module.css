@@ -163,13 +163,25 @@
 
 /* Companion layout. Default: the guide alone, at a reading measure. */
 
+/*
+  With the scriptures shown, StudyCompanion measures the live page and overrides these on the element:
+  --cfm-chrome-top (the sticky app header's height, 0 where it is hidden), --cfm-toolbar-h, --cfm-vh (the
+  viewport height) and --cfm-bottom-clear (how much of the viewport the fixed bottom navigation covers).
+  The values here are only the first paint's fallbacks.
+*/
 .companion {
   --cfm-toolbar-h: 3.25rem;
   /* Under the app's sticky header where it shows (640px and up); phones have none. */
   --cfm-chrome-top: 0px;
+  --cfm-bottom-clear: 0px;
   display: flex;
   flex-direction: column;
   scroll-margin-top: var(--cfm-chrome-top);
+}
+
+/* The page footer follows the companion, except in the phone reader where it closes the guide side. */
+.companion > .footer {
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
 }
 
 @media (min-width: 640px) {
@@ -188,7 +200,7 @@
   justify-content: flex-end;
   gap: 0.75rem;
   max-width: var(--cfm-measure);
-  min-height: var(--cfm-toolbar-h);
+  min-height: 3.25rem;
   background: var(--background);
 }
 
@@ -277,12 +289,17 @@
     gap: clamp(2rem, 4vw, 4rem);
   }
 
+  /*
+    The scripture column fills exactly the viewport under the header and the switch row once it sticks.
+    Its scroll chains to the page at either end (no overscroll containment), so scrolling back past its
+    top simply carries on up the page.
+  */
   .companion[data-mode="columns"] .scripturePanel {
     position: sticky;
     top: calc(var(--cfm-chrome-top) + var(--cfm-toolbar-h));
-    max-height: calc(100vh - var(--cfm-chrome-top) - var(--cfm-toolbar-h) - 1rem);
+    height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top) - var(--cfm-toolbar-h));
     overflow-y: auto;
-    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     padding: 0.5rem 1rem 3rem clamp(1.25rem, 2.5vw, 2rem);
     border-left: 1px solid var(--cfm-rule);
     scrollbar-width: thin;
@@ -290,16 +307,27 @@
 }
 
 /*
+  A pane that is not docked yet is not a scroller at all, so a wheel turn or touch over it moves the page
+  until the reader docks. It can still be positioned by the sync; overflow: hidden only stops the reader
+  from scrolling it. (The attribute is maintained by StudyCompanion from readerDock.paneScrolling.)
+*/
+.companion[data-mode="columns"] .scripturePanel[data-pane-scroll="off"],
+.companion[data-mode="strip"] .scripturePanel[data-pane-scroll="off"],
+.companion[data-mode="strip"] .guidePanel[data-pane-scroll="off"] {
+  overflow-y: hidden;
+}
+
+/*
   Phones and small tablets with scriptures: a native horizontal scroll-snap strip, the guide first and
   the scripture one swipe to the right. Each side is its own vertical scroller, so each keeps its place.
-  The strip is one screen tall; nothing is stretched to the guide's length.
+  The reader is exactly the viewport under the header (none on phones) and the page ends at its bottom
+  edge, so the page's own scroll limit is the docked position. The fixed bottom navigation overlays the
+  reader's last strip; each side pads its end by that much instead of shortening the reader.
 */
 @media (max-width: 899.98px) {
   .companion[data-mode="strip"] {
-    /* The bottom navigation floats over the last 6rem or so on phones. */
-    height: calc(100vh - 6.5rem);
-    height: calc(100svh - 6.5rem);
-    min-height: 24rem;
+    /* No min-height: a reader taller than the viewport would push its toolbar off screen when docked. */
+    height: calc(var(--cfm-vh, 100svh) - var(--cfm-chrome-top));
   }
 
   .companion[data-mode="strip"] .toolbar {
@@ -333,14 +361,7 @@
     overflow-y: auto;
     scroll-snap-align: start;
     scroll-snap-stop: always;
-    padding: 1.25rem 0.35rem 2.5rem;
-  }
-}
-
-@media (min-width: 640px) and (max-width: 899.98px) {
-  .companion[data-mode="strip"] {
-    height: calc(100vh - var(--header-height) - 1rem);
-    height: calc(100svh - var(--header-height) - 1rem);
+    padding: 1.25rem 0.35rem calc(2.5rem + var(--cfm-bottom-clear));
   }
 }
 

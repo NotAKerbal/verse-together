@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from "react";
 import { getChapterHref } from "@/features/plans/scriptureCatalog";
 import {
@@ -37,6 +38,7 @@ import {
   type Pane,
   type Segment,
 } from "./scrollSync";
+import { isDocked, paneScrolling, paneTakesWheel, redockScroll, trailingPull } from "./readerDock";
 import styles from "./studyCompanion.module.css";
 
 export type CompanionChapter = { chapter: number; verses: Array<{ verse: number; text: string }> };
@@ -48,6 +50,11 @@ type Props = {
   passages: GuidePassage[];
   book: { label: string; slug: string; volume: string };
   chapters: CompanionChapter[];
+  /**
+   * The page footer. It normally follows the companion; in the phone reader it closes the guide side
+   * instead, so nothing trails the docked reader on the page.
+   */
+  footer?: ReactNode;
 };
 
 /** guide: the guide alone (default). columns: guide and scripture side by side. strip: phone swipe. */
@@ -178,7 +185,7 @@ function focusWithoutScrolling(element: HTMLElement | null) {
   element.focus({ preventScroll: true });
 }
 
-export default function StudyCompanion({ html, toc, passages, book, chapters }: Props) {
+export default function StudyCompanion({ html, toc, passages, book, chapters, footer }: Props) {
   const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
   const passageLabels = useMemo(() => new Map(passages.map((passage) => [passage.id, passage.label])), [passages]);
   const passagesByStart = useMemo(() => {
@@ -218,6 +225,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
   const savedScriptureRef = useRef<ScriptureMark | null>(null);
   /** A side the strip is being scrolled to programmatically. */
   const heading = useRef<{ side: CompanionSide; timer: number } | null>(null);
+  /** Which panes may scroll by themselves right now (see readerDock.ts); kept current by the geometry effect. */
+  const paneScrollRef = useRef({ guide: false, scripture: false });
+  /** Re-measure the reader geometry and docked state at once (after a programmatic page scroll). */
+  const refreshDockRef = useRef<(() => void) | null>(null);
   const guideHtml = useMemo(() => ({ __html: html }), [html]);
 
   useEffect(() => {
@@ -400,6 +411,161 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
     strip.scrollTo({ left: panel.offsetLeft, behavior: instant || matches(REDUCED_MOTION_QUERY) ? "auto" : "smooth" });
   }, []);
 
+  // Reader geometry and docking, while the scripture is shown. Declared before the pending-work effect
+  // so each commit sizes the reader before anything scrolls. Everything is measured from the live page
+  // (the app header, the bottom navigation, the toolbar, the viewport), never from constants.
+  useLayoutEffect(() => {
+    const companion = companionRef.current;
+    const guidePanel = guidePanelRef.current;
+    const scripturePanel = scriptureRef.current;
+    if (!companion) return;
+    const reset = () => {
+      for (const name of ["--cfm-chrome-top", "--cfm-toolbar-h", "--cfm-vh", "--cfm-bottom-clear"]) {
+        companion.style.removeProperty(name);
+      }
+      companion.style.marginBottom = "";
+      delete companion.dataset.docked;
+      guidePanel?.removeAttribute("data-pane-scroll");
+      scripturePanel?.removeAttribute("data-pane-scroll");
+      paneScrollRef.current = { guide: false, scripture: false };
+      refreshDockRef.current = null;
+    };
+    if (mode === "guide") {
+      reset();
+      return;
+    }
+
+    let chromeTop = 0;
+    let toolbarHeight = 0;
+    let pull = 0;
+    /** The viewport height the current geometry was measured for. */
+    let measuredViewport = -1;
+    /** The last evaluated dock state, and whether a viewport resize must restore it. */
+    let docked = false;
+    let redockAfterResize = false;
+    const readerElement = () => (mode === "strip" ? companion : scripturePanel);
+    const dockLine = () => (mode === "strip" ? chromeTop : chromeTop + toolbarHeight);
+    // A viewport change (URL bar, rotation, on-screen keyboard closing) resizes the reader only after the
+    // browser has already clamped the page to the old, shorter document, which can leave a docked reader
+    // stranded part-way down. Remember that it was docked, so the next measurement can put it back.
+    const noteViewportChange = () => {
+      if (docked) redockAfterResize = true;
+    };
+    const applyDock = () => {
+      const reader = readerElement();
+      if (!reader) return;
+      if (window.innerHeight !== measuredViewport) {
+        // The geometry is stale: keep the docked intent and let the measurement decide.
+        noteViewportChange();
+        scheduleMeasure();
+        return;
+      }
+      const root = document.documentElement;
+      docked = isDocked({
+        readerTop: reader.getBoundingClientRect().top,
+        dockTop: dockLine(),
+        scrollTop: window.scrollY,
+        maxScroll: root.scrollHeight - window.innerHeight,
+      });
+      const panes = paneScrolling(mode, docked);
+      paneScrollRef.current = panes;
+      if (docked) companion.dataset.docked = "true";
+      else delete companion.dataset.docked;
+      guidePanel?.setAttribute("data-pane-scroll", panes.guide ? "on" : "off");
+      scripturePanel?.setAttribute("data-pane-scroll", panes.scripture ? "on" : "off");
+    };
+    const measure = () => {
+      const header = document.querySelector<HTMLElement>(".app-header");
+      chromeTop = 0;
+      if (header) {
+        const style = getComputedStyle(header);
+        // Only a header that stays on screen covers the top of the viewport.
+        if (style.display !== "none" && (style.position === "sticky" || style.position === "fixed")) {
+          chromeTop = header.getBoundingClientRect().height;
+        }
+      }
+      const nav = document.querySelector<HTMLElement>('nav[aria-label="Primary mobile navigation"]');
+      const bottomClear =
+        nav && getComputedStyle(nav).display !== "none" ? Math.max(0, window.innerHeight - nav.getBoundingClientRect().top) : 0;
+      toolbarHeight = toolbarRef.current?.getBoundingClientRect().height ?? 0;
+      companion.style.setProperty("--cfm-chrome-top", `${chromeTop}px`);
+      companion.style.setProperty("--cfm-toolbar-h", `${toolbarHeight}px`);
+      companion.style.setProperty("--cfm-vh", `${window.innerHeight}px`);
+      companion.style.setProperty("--cfm-bottom-clear", `${bottomClear}px`);
+      if (mode === "strip") {
+        // End the page exactly at the reader's bottom edge, so docking is the page's own scroll limit.
+        const next = trailingPull({
+          documentHeight: document.documentElement.scrollHeight,
+          readerBottom: companion.getBoundingClientRect().bottom + window.scrollY,
+          currentPull: pull,
+        });
+        if (next !== pull) {
+          pull = next;
+          companion.style.marginBottom = pull ? `-${pull}px` : "";
+        }
+      }
+      measuredViewport = window.innerHeight;
+      const reader = readerElement();
+      if (reader) {
+        // Now that the reader and the page end match the new viewport, return a reader that was docked to
+        // the dock line. Only the page moves; the panes' own scroll positions are untouched.
+        const target = redockScroll({
+          wasDocked: redockAfterResize,
+          readerTop: reader.getBoundingClientRect().top,
+          dockTop: dockLine(),
+          scrollTop: window.scrollY,
+          maxScroll: document.documentElement.scrollHeight - window.innerHeight,
+        });
+        if (target != null) window.scrollTo(0, target);
+      }
+      redockAfterResize = false;
+      applyDock();
+    };
+
+    let measureFrame = 0;
+    let dockFrame = 0;
+    function scheduleMeasure() {
+      if (!measureFrame) {
+        measureFrame = window.requestAnimationFrame(() => {
+          measureFrame = 0;
+          measure();
+        });
+      }
+    }
+    const scheduleDock = () => {
+      if (!dockFrame) {
+        dockFrame = window.requestAnimationFrame(() => {
+          dockFrame = 0;
+          // A pending measurement re-evaluates the dock itself, with geometry that matches the viewport.
+          if (!measureFrame) applyDock();
+        });
+      }
+    };
+    const onViewportResize = () => {
+      noteViewportChange();
+      scheduleMeasure();
+    };
+    measure();
+    refreshDockRef.current = measure;
+    window.addEventListener("scroll", scheduleDock, { passive: true });
+    window.addEventListener("resize", onViewportResize);
+    window.visualViewport?.addEventListener("resize", onViewportResize);
+    const resize = new ResizeObserver(scheduleMeasure);
+    resize.observe(companion);
+    if (toolbarRef.current) resize.observe(toolbarRef.current);
+    const header = document.querySelector<HTMLElement>(".app-header");
+    if (header) resize.observe(header);
+    return () => {
+      window.removeEventListener("scroll", scheduleDock);
+      window.removeEventListener("resize", onViewportResize);
+      window.visualViewport?.removeEventListener("resize", onViewportResize);
+      resize.disconnect();
+      if (measureFrame) window.cancelAnimationFrame(measureFrame);
+      if (dockFrame) window.cancelAnimationFrame(dockFrame);
+      reset();
+    };
+  }, [mode]);
+
   // Carry out scheduled work once the DOM shows the new layout, before paint.
   useLayoutEffect(() => {
     const pending = pendingRef.current;
@@ -410,7 +576,11 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
     const guide = guideBox();
     const scripture = scriptureBox();
     const root = guideRef.current;
-    if (pending.enterStrip) companionRef.current?.scrollIntoView({ block: "start" });
+    // Phones: any navigation into the reader docks it first, so neither side opens half off screen.
+    if (mode === "strip" && (pending.enterStrip || pending.guideTo || pending.scriptureTo || pending.reveal)) {
+      companionRef.current?.scrollIntoView({ block: "start" });
+      refreshDockRef.current?.();
+    }
     if (pending.guideAnchor && root) {
       const block = guideBlocks(root)[pending.guideAnchor.index];
       if (block) {
@@ -481,7 +651,24 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
       if (event.target instanceof Node && scriptureEl.contains(event.target)) return;
       ownership.input("guide", performance.now());
     };
-    const markScripture = () => ownership.input("scripture", performance.now());
+    // Input over the scripture belongs to it only if the scripture will actually move: a pane that is
+    // not docked yet, or a wheel turn past its end, scrolls the page (the guide, on desktop) instead.
+    const markScripture = (event: Event) => {
+      const scrollable = paneScrollRef.current.scripture;
+      const takes =
+        event.type === "wheel"
+          ? paneTakesWheel(
+              {
+                scrollTop: scriptureEl.scrollTop,
+                clientHeight: scriptureEl.clientHeight,
+                scrollHeight: scriptureEl.scrollHeight,
+                scrollable,
+              },
+              (event as WheelEvent).deltaY
+            )
+          : scrollable;
+      ownership.input(takes ? "scripture" : "guide", performance.now());
+    };
     const inputs = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
     for (const type of inputs) {
       guideTarget.addEventListener(type, markGuide, { passive: true });
@@ -718,6 +905,7 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
             </ol>
           </details>
           <div ref={guideRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={guideHtml} />
+          {mode === "strip" ? footer : null}
         </section>
 
         <section
@@ -780,6 +968,7 @@ export default function StudyCompanion({ html, toc, passages, book, chapters }: 
           </div>
         </section>
       </div>
+      {mode !== "strip" ? footer : null}
     </div>
   );
 }

@@ -140,22 +140,23 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         passages={parsed.passages}
         book={{ label: range.book, slug: range.slug, volume: range.volume }}
         chapters={chapters}
+        footer={
+          <footer className={styles.footer}>
+            <p>
+              <span className={styles.attribution}>{ATTRIBUTION}</span>. Guide by {guide.author}. Scripture text is the
+              King James Version from Verse Together&apos;s local library.
+            </p>
+            <p>
+              Originally published at{" "}
+              <a href={SOURCE_SITE} target="_blank" rel="noopener noreferrer">
+                isaacstuff.com/cfm
+              </a>
+              . Paintings are public domain and credited where they appear.
+            </p>
+            <WeekNav week={week} />
+          </footer>
+        }
       />
-
-      <footer className={styles.footer}>
-        <p>
-          <span className={styles.attribution}>{ATTRIBUTION}</span>. Guide by {guide.author}. Scripture text is the
-          King James Version from Verse Together&apos;s local library.
-        </p>
-        <p>
-          Originally published at{" "}
-          <a href={SOURCE_SITE} target="_blank" rel="noopener noreferrer">
-            isaacstuff.com/cfm
-          </a>
-          . Paintings are public domain and credited where they appear.
-        </p>
-        <WeekNav week={week} />
-      </footer>
     </section>
   );
 }
