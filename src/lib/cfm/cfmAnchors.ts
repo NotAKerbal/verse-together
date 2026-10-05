@@ -62,6 +62,18 @@ export function localScriptureTarget(
   return target && chapters.includes(target.chapter) ? target : null;
 }
 
+/**
+ * Clamp a target to real verses: unknown chapters are rejected, a first verse past the end falls back to
+ * the whole chapter, and a last verse past the end is cut to the chapter's final verse.
+ */
+export function normalizeTarget(target: ScriptureTarget, verseCount: (chapter: number) => number | undefined): ScriptureTarget | null {
+  const count = verseCount(target.chapter);
+  if (count == null) return null;
+  if (target.first == null) return { chapter: target.chapter };
+  if (target.first < 1 || target.first > count) return { chapter: target.chapter };
+  return { chapter: target.chapter, first: target.first, last: Math.min(Math.max(target.last ?? target.first, target.first), count) };
+}
+
 /** Passages whose verse span overlaps the target (a whole-chapter target overlaps every passage in it). */
 export function passagesOverlapping<P extends { chapter: number; first: number; last: number }>(
   passages: readonly P[],

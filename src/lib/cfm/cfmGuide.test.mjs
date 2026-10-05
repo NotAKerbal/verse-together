@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Marked } from "marked";
-import { decodeFragment, localScriptureTarget, parseScriptureAnchor, passagesOverlapping, scriptureAnchor } from "./cfmAnchors.ts";
+import { MOBILE_SIDE_ORDER, sideAtScroll } from "../../features/comeFollowMe/companionPanes.ts";
+import { decodeFragment, localScriptureTarget, normalizeTarget, parseScriptureAnchor, passagesOverlapping, scriptureAnchor } from "./cfmAnchors.ts";
 import { parseGuide, readGuide, readGuides, safeHref } from "./cfmGuide.ts";
 import { COME_FOLLOW_ME_WEEKS, getComeFollowMeWeekByStart } from "../comeFollowMe.ts";
 
@@ -99,8 +100,10 @@ test("every heading, table, blockquote, list item, and link survives", () => {
     assert.equal(tag("h3"), counts.heading3, `${guide.slug} h3`);
     assert.equal(tag("table"), counts.table, `${guide.slug} tables`);
     assert.equal(tag("blockquote"), counts.blockquote, `${guide.slug} blockquotes`);
-    // Sources panels add their own <li> items; source list items are those outside them.
-    const withoutPanels = html.replace(/<details class="cfm-sources"[\s\S]*?<\/details>/g, "");
+    // Sources panels and art labels add their own <li> items; source list items are those outside them.
+    const withoutPanels = html
+      .replace(/<details class="cfm-sources"[\s\S]*?<\/details>/g, "")
+      .replace(/<figure class="cfm-art[\s\S]*?<\/figure>/g, "");
     assert.equal((withoutPanels.match(/<li[\s>]/g) ?? []).length, counts.list_item, `${guide.slug} list items`);
     assert.equal((html.match(/<section class="cfm-section"/g) ?? []).length, counts.heading2, `${guide.slug} sections`);
     for (const href of hrefs) {
@@ -199,6 +202,32 @@ test("malformed URL fragments are ignored instead of throwing", () => {
   assert.equal(decodeFragment(""), "");
 });
 
+test("deep links resolve to real verses, keeping a/b halves on their base verse", () => {
+  const bundle = JSON.parse(fs.readFileSync(path.join(root, "public/scripture-data/oldtestament.json"), "utf8"));
+  const isaiah = bundle.books.find((book) => book.title === "Isaiah");
+  const count = (chapter) => (chapter >= 50 && chapter <= 57 ? isaiah.chapters.find((c) => c.chapter === chapter).verses.length : undefined);
+  // Both halves of the 57:13 split, as their heading links write them.
+  for (const passage of late.passages.filter((p) => /[ab]/.test(p.label))) {
+    const anchor = scriptureAnchor("isaiah", passage.chapter, passage.first, passage.last);
+    assert.deepEqual(normalizeTarget(parseScriptureAnchor(anchor, "isaiah"), count), { chapter: 57, first: passage.first, last: passage.last });
+  }
+  assert.deepEqual(normalizeTarget({ chapter: 53, first: 4, last: 99 }, count), { chapter: 53, first: 4, last: 12 });
+  assert.deepEqual(normalizeTarget({ chapter: 53, first: 40, last: 41 }, count), { chapter: 53 });
+  assert.deepEqual(normalizeTarget({ chapter: 53, first: 6, last: 4 }, count), { chapter: 53, first: 6, last: 6 });
+  assert.equal(normalizeTarget({ chapter: 61, first: 1 }, count), null);
+});
+
+test("a phone swipe settles on whichever side covers more of the strip", () => {
+  assert.deepEqual(MOBILE_SIDE_ORDER, ["guide", "scripture"]);
+  assert.equal(sideAtScroll(0, 390), "guide");
+  assert.equal(sideAtScroll(190, 390), "guide");
+  assert.equal(sideAtScroll(200, 390), "scripture");
+  assert.equal(sideAtScroll(390, 390), "scripture");
+  assert.equal(sideAtScroll(5000, 390), "scripture", "overscroll stays on the last side");
+  assert.equal(sideAtScroll(-390, 390), "scripture", "right-to-left offsets are negative");
+  assert.equal(sideAtScroll(120, 0), "guide", "before layout the strip is on its first side");
+});
+
 test("scripture anchors round-trip", () => {
   for (const target of [{ chapter: 53 }, { chapter: 53, first: 4, last: 4 }, { chapter: 57, first: 13, last: 14 }]) {
     assert.deepEqual(parseScriptureAnchor(scriptureAnchor("isaiah", target.chapter, target.first, target.last), "isaiah"), target);
@@ -222,7 +251,41 @@ test("paintings sit at their passages with full credits", () => {
       '<figcaption><a href="https://commons.wikimedia.org/wiki/File:Carl_Heinrich_Bloch_-_Gethsemane.jpg"><cite>Christ in Gethsemane</cite></a>, Carl Bloch, 1873. Public domain, via Wikimedia Commons.</figcaption>'
     )
   );
-  for (const guide of [early, late]) assert.equal((guide.html.match(/<figure /g) ?? []).length, 1);
+  assert.equal((early.html.match(/<figure /g) ?? []).length, 1);
+  assert.equal((late.html.match(/<figure /g) ?? []).length, 2);
+});
+
+test("the generated tent diagram sits between the Isaiah 54:2–3 heading and its first paragraph", () => {
+  const heading = /<h3 id="isaiah-54-2-3-make-room"[^>]*>[\s\S]*?<\/h3>\n/.exec(late.html);
+  assert.ok(heading, "Isaiah 54:2–3 heading");
+  const after = late.html.slice(heading.index + heading[0].length);
+  const figure = /^<figure class="cfm-art cfm-art-diagram" data-cfm-added="art"[^>]*>[\s\S]*?<\/figure>\n/.exec(after);
+  assert.ok(figure, "figure immediately follows the heading");
+  // The section's first source block (the quoted verse) follows the figure, unchanged.
+  assert.match(after.slice(figure[0].length), /^<blockquote>\n<p>&quot;Enlarge the place of thy tent, and let them stretch forth/);
+  assert.ok(
+    figure[0].includes(
+      'src="/cfm/art/isaiah-54-enlarged-tent.webp" width="840" height="630" alt="Diagram of a goat-hair tent enlarged: curtains extended, cords lengthened, stakes strengthened, as described in Isaiah 54:2."'
+    )
+  );
+  assert.ok(
+    figure[0].includes(
+      "<figcaption>Illustration of Isaiah 54:2: enlarged curtains, lengthened cords, and strengthened stakes. Generated illustration; not a historical reconstruction.</figcaption>"
+    )
+  );
+  // Each label quotes the KJV verse exactly as the scripture pane shows it.
+  const bundle = JSON.parse(fs.readFileSync(path.join(root, "public/scripture-data/oldtestament.json"), "utf8"));
+  const verse = bundle.books
+    .find((book) => book.title === "Isaiah")
+    .chapters.find((chapter) => chapter.chapter === 54)
+    .verses.find((entry) => entry.verse === 2).text;
+  for (const phrase of ["Enlarge the place of thy tent", "stretch forth the curtains", "lengthen thy cords", "strengthen thy stakes"]) {
+    assert.ok(figure[0].includes(`<li>“${phrase}”</li>`), phrase);
+    assert.ok(verse.includes(phrase), `Isaiah 54:2 contains "${phrase}"`);
+  }
+  const webp = fs.readFileSync(path.join(root, "public/cfm/art/isaiah-54-enlarged-tent.webp"));
+  assert.equal(webp.subarray(0, 4).toString("latin1"), "RIFF");
+  assert.equal(webp.subarray(8, 12).toString("latin1"), "WEBP");
 });
 
 test("raw HTML, images, and unsafe links are refused", () => {

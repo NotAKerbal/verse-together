@@ -2,140 +2,158 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
-  Marker theme: flat paper ground with a dotted grid, 2px ink borders,
-  hard offset shadows, highlighter accents. No blur, no gradients.
+  Study-page theme (branch experiment), after the Come, Follow Me guides:
+  cream paper and warm ink, one rubric red for emphasis, hairline rules
+  instead of boxes, serif display and reading type over a quiet sans for
+  labels and controls. No dotted grid, no offset shadows.
+  Token names are unchanged so every component inherits the new language.
 */
 
 :root {
-  --background: #fffcf3;
-  --paper-dot: #d9d3c2;
-  --foreground: #17161a;
-  --foreground-muted: rgba(23, 22, 26, 0.72);
-  --foreground-soft: rgba(23, 22, 26, 0.55);
-  --ink: #17161a;
-  --surface-card: #ffffff;
-  --surface-card-strong: #ffffff;
-  --surface-card-soft: #fdf7e6;
-  --surface-border: #17161a;
-  --surface-shadow: 5px 5px 0 #17161a;
-  --surface-shadow-soft: 3px 3px 0 #17161a;
-  --surface-shadow-lift: 7px 7px 0 #17161a;
-  --surface-button: #ffffff;
-  --surface-button-hover: #fff3a8;
-  --surface-button-active: #17161a;
-  --surface-button-active-text: #ffffff;
-  --accent-primary: #ffd23f;
-  --accent-secondary: #2f7fc9;
-  --accent-tertiary: #ff8a7a;
-  --accent-sky: #b9e6ff;
-  --accent-sky-soft: #d6ecff;
-  --accent-mint: #c9f0d0;
-  --accent-note: #fff3a8;
-  --accent-coral: #ff8a7a;
-  --browse-ink: #17161a;
+  --background: #f6f3ec;
+  --paper-dot: #e0d9cb;
+  --foreground: #1f1d1a;
+  --foreground-muted: rgba(31, 29, 26, 0.74);
+  --foreground-soft: rgba(31, 29, 26, 0.58);
+  --ink: #1f1d1a;
+  --rule: #e0d9cb;
+  --rule-strong: #c8bfad;
+  --accent-rubric: #9a3020;
+  --accent-rubric-line: rgba(154, 48, 32, 0.4);
+  --surface-card: #fbf9f4;
+  --surface-card-strong: #fffdf9;
+  --surface-card-soft: #f1ede3;
+  --surface-border: #d9d1c1;
+  --surface-shadow: none;
+  --surface-shadow-soft: 0 1px 2px rgba(31, 29, 26, 0.05), 0 10px 24px -18px rgba(31, 29, 26, 0.35);
+  --surface-shadow-lift: 0 1px 2px rgba(31, 29, 26, 0.06), 0 14px 30px -18px rgba(31, 29, 26, 0.4);
+  --surface-button: #fbf9f4;
+  --surface-button-hover: #efe9dc;
+  --surface-button-active: #1f1d1a;
+  --surface-button-active-text: #f6f3ec;
+  --accent-primary: #ecdcae;
+  --accent-secondary: #9a3020;
+  --accent-tertiary: #b5523f;
+  --accent-sky: #dfe3dd;
+  --accent-sky-soft: #efe9dc;
+  --accent-mint: #e4e8d9;
+  --accent-note: #f2ead6;
+  --accent-coral: #e8c6bb;
+  --browse-ink: #1f1d1a;
   --browse-glow: transparent;
-  --browse-grid: #d9d3c2;
+  --browse-grid: #e0d9cb;
   --shell-max-width: 1180px;
   --shell-max-width-wide: 1400px;
   --shell-gutter: clamp(1rem, 2.6vw, 2rem);
   --header-height: 4.75rem;
-  --input-surface: #ffffff;
+  --input-surface: #fffdf9;
   --mobile-floating-button-left: 1rem;
   --mobile-floating-button-size: 2.75rem;
   --mobile-floating-button-gap: 0.2rem;
-  --mobile-nav-shell: #ffffff;
-  --mobile-nav-ring: #17161a;
-  --mobile-nav-active: #17161a;
-  --mobile-nav-active-text: #ffffff;
-  --mobile-nav-icon: #17161a;
-  --footnote-highlight: rgba(255, 210, 63, 0.55);
-  --footnote-highlight-active: rgba(185, 230, 255, 0.95);
+  --mobile-nav-shell: #fbf9f4;
+  --mobile-nav-ring: #d9d1c1;
+  --mobile-nav-active: #1f1d1a;
+  --mobile-nav-active-text: #f6f3ec;
+  --mobile-nav-icon: #46423b;
+  --footnote-highlight: rgba(214, 180, 96, 0.34);
+  --footnote-highlight-active: rgba(154, 48, 32, 0.16);
+  /* Book-like serif for titles and scripture; the sans stays for labels and controls. */
+  --font-serif-text: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", P052, Georgia, serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-dm-sans);
-  --font-display: var(--font-bricolage);
+  --font-serif: var(--font-serif-text);
+  --font-display: var(--font-serif-text);
   --font-mono: var(--font-geist-mono);
 }
 
 [data-theme="dark"] {
-  --background: #1a191e;
-  --paper-dot: #2f2e35;
-  --foreground: #f6f1e4;
-  --foreground-muted: rgba(246, 241, 228, 0.74);
-  --foreground-soft: rgba(246, 241, 228, 0.55);
-  --ink: #f6f1e4;
-  --surface-card: #25242b;
-  --surface-card-strong: #2a2931;
-  --surface-card-soft: #302f37;
-  --surface-border: #f6f1e4;
-  --surface-shadow: 5px 5px 0 #f6f1e4;
-  --surface-shadow-soft: 3px 3px 0 #f6f1e4;
-  --surface-shadow-lift: 7px 7px 0 #f6f1e4;
-  --surface-button: #25242b;
-  --surface-button-hover: #3d3a2e;
-  --surface-button-active: #ffd23f;
-  --surface-button-active-text: #17161a;
-  --accent-primary: #ffd23f;
-  --accent-secondary: #7cb8f0;
-  --accent-tertiary: #ff8a7a;
-  --accent-sky: #2d5f8a;
-  --accent-sky-soft: #27435c;
-  --accent-mint: #2f6a45;
-  --accent-note: #5c4d10;
-  --accent-coral: #a84b3f;
-  --browse-ink: #f6f1e4;
+  --background: #181715;
+  --paper-dot: #33302b;
+  --foreground: #ebe6db;
+  --foreground-muted: rgba(235, 230, 219, 0.76);
+  --foreground-soft: rgba(235, 230, 219, 0.58);
+  --ink: #ebe6db;
+  --rule: #33302b;
+  --rule-strong: #4a463e;
+  --accent-rubric: #e3907a;
+  --accent-rubric-line: rgba(227, 144, 122, 0.45);
+  --surface-card: #201f1c;
+  --surface-card-strong: #25231f;
+  --surface-card-soft: #2a2824;
+  --surface-border: #3d3a34;
+  --surface-shadow: none;
+  --surface-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 26px -18px rgba(0, 0, 0, 0.8);
+  --surface-shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 30px -18px rgba(0, 0, 0, 0.85);
+  --surface-button: #201f1c;
+  --surface-button-hover: #2e2b26;
+  --surface-button-active: #ebe6db;
+  --surface-button-active-text: #181715;
+  --accent-primary: #c9ad6a;
+  --accent-secondary: #e3907a;
+  --accent-tertiary: #e3907a;
+  --accent-sky: #2c3331;
+  --accent-sky-soft: #26241f;
+  --accent-mint: #2a2e25;
+  --accent-note: #2c281d;
+  --accent-coral: #4a2c24;
+  --browse-ink: #ebe6db;
   --browse-glow: transparent;
-  --browse-grid: #2f2e35;
-  --input-surface: #25242b;
-  --mobile-nav-shell: #25242b;
-  --mobile-nav-ring: #f6f1e4;
-  --mobile-nav-active: #ffd23f;
-  --mobile-nav-active-text: #17161a;
-  --mobile-nav-icon: #f6f1e4;
-  --footnote-highlight: rgba(255, 210, 63, 0.35);
-  --footnote-highlight-active: rgba(124, 184, 240, 0.45);
+  --browse-grid: #33302b;
+  --input-surface: #201f1c;
+  --mobile-nav-shell: #201f1c;
+  --mobile-nav-ring: #3d3a34;
+  --mobile-nav-active: #ebe6db;
+  --mobile-nav-active-text: #181715;
+  --mobile-nav-icon: #cdc6b8;
+  --footnote-highlight: rgba(201, 173, 106, 0.28);
+  --footnote-highlight-active: rgba(227, 144, 122, 0.28);
 }
 
 [data-theme="sepia"] {
-  --background: #f6ead2;
-  --paper-dot: #d6c5a0;
+  --background: #f3e9d6;
+  --paper-dot: #dccdb0;
   --foreground: #2b2118;
-  --foreground-muted: rgba(43, 33, 24, 0.74);
-  --foreground-soft: rgba(43, 33, 24, 0.55);
+  --foreground-muted: rgba(43, 33, 24, 0.76);
+  --foreground-soft: rgba(43, 33, 24, 0.58);
   --ink: #2b2118;
-  --surface-card: #fff8e8;
-  --surface-card-strong: #fffaf0;
-  --surface-card-soft: #f3e6c8;
-  --surface-border: #2b2118;
-  --surface-shadow: 5px 5px 0 #2b2118;
-  --surface-shadow-soft: 3px 3px 0 #2b2118;
-  --surface-shadow-lift: 7px 7px 0 #2b2118;
-  --surface-button: #fff8e8;
-  --surface-button-hover: #f1dc9b;
+  --rule: #dccdb0;
+  --rule-strong: #c4b08c;
+  --accent-rubric: #8a3420;
+  --accent-rubric-line: rgba(138, 52, 32, 0.42);
+  --surface-card: #f8f0e0;
+  --surface-card-strong: #fbf5e9;
+  --surface-card-soft: #ede0c6;
+  --surface-border: #d3c2a2;
+  --surface-shadow: none;
+  --surface-shadow-soft: 0 1px 2px rgba(43, 33, 24, 0.06), 0 10px 24px -18px rgba(43, 33, 24, 0.38);
+  --surface-shadow-lift: 0 1px 2px rgba(43, 33, 24, 0.07), 0 14px 30px -18px rgba(43, 33, 24, 0.42);
+  --surface-button: #f8f0e0;
+  --surface-button-hover: #ecdfc3;
   --surface-button-active: #2b2118;
-  --surface-button-active-text: #fff8e8;
-  --accent-primary: #f2c53d;
-  --accent-secondary: #2b6ca8;
-  --accent-tertiary: #e8806f;
-  --accent-sky: #bfe0f3;
-  --accent-sky-soft: #dbebf5;
-  --accent-mint: #cfe9cc;
-  --accent-note: #fbeaa6;
-  --accent-coral: #f2a191;
+  --surface-button-active-text: #f8f0e0;
+  --accent-primary: #e6cf93;
+  --accent-secondary: #8a3420;
+  --accent-tertiary: #a85a3c;
+  --accent-sky: #e0dccb;
+  --accent-sky-soft: #ece1c9;
+  --accent-mint: #e0e2c8;
+  --accent-note: #efe1bd;
+  --accent-coral: #e6c0a8;
   --browse-ink: #2b2118;
   --browse-glow: transparent;
-  --browse-grid: #d6c5a0;
-  --input-surface: #fff8e8;
-  --mobile-nav-shell: #fff8e8;
-  --mobile-nav-ring: #2b2118;
+  --browse-grid: #dccdb0;
+  --input-surface: #fbf5e9;
+  --mobile-nav-shell: #f8f0e0;
+  --mobile-nav-ring: #d3c2a2;
   --mobile-nav-active: #2b2118;
-  --mobile-nav-active-text: #fff8e8;
-  --mobile-nav-icon: #2b2118;
-  --footnote-highlight: rgba(242, 197, 61, 0.5);
-  --footnote-highlight-active: rgba(191, 224, 243, 0.95);
+  --mobile-nav-active-text: #f8f0e0;
+  --mobile-nav-icon: #4a3b2c;
+  --footnote-highlight: rgba(205, 165, 80, 0.36);
+  --footnote-highlight-active: rgba(138, 52, 32, 0.16);
 }
 
 html {
@@ -144,8 +162,6 @@ html {
 
 body {
   background-color: var(--background);
-  background-image: radial-gradient(var(--paper-dot) 1px, transparent 1px);
-  background-size: 22px 22px;
   color: var(--foreground);
   font-family: var(--font-dm-sans), system-ui, sans-serif;
   min-height: 100vh;
@@ -156,13 +172,19 @@ h1,
 h2,
 h3,
 .font-display {
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
-  letter-spacing: -0.02em;
+  font-family: var(--font-serif-text);
+  letter-spacing: -0.012em;
+}
+
+/* Display type is set like the guides: normal weight, never heavy. Unlayered, so it wins over
+   Tailwind weight utilities on display text only. */
+.font-display {
+  font-weight: 500;
 }
 
 ::selection {
   background: var(--accent-primary);
-  color: #17161a;
+  color: #1f1d1a;
 }
 
 mark {
@@ -172,26 +194,25 @@ mark {
   border-radius: 0.2em;
 }
 
-/* Marker treats the default 1px utility borders as 2px ink lines and
-   rounds the small radii up so legacy markup matches the new system. */
+/* Utility borders are hairlines and radii stay modest, so legacy markup matches the system. */
 @layer utilities {
   .border {
-    border-width: 2px;
+    border-width: 1px;
   }
   .rounded {
-    border-radius: 0.6rem;
+    border-radius: 0.4rem;
   }
   .rounded-md {
-    border-radius: 0.75rem;
+    border-radius: 0.5rem;
   }
   .rounded-lg {
-    border-radius: 1rem;
+    border-radius: 0.6rem;
   }
   .rounded-xl {
-    border-radius: 1rem;
+    border-radius: 0.7rem;
   }
   .rounded-2xl {
-    border-radius: 1.1rem;
+    border-radius: 0.8rem;
   }
   .shadow-sm {
     box-shadow: none;
@@ -201,8 +222,37 @@ mark {
   .shadow-lg,
   .shadow-xl,
   .shadow-2xl {
-    box-shadow: var(--surface-shadow);
+    box-shadow: var(--surface-shadow-soft);
   }
+}
+
+/*
+  The marker theme drew 2px ink outlines everywhere. Here they become hairlines in the rule color
+  (unlayered, so they win over the Tailwind width utilities); thicker accent bars are untouched.
+*/
+.border-2 {
+  border-width: 1px;
+}
+
+.border-t-2 {
+  border-top-width: 1px;
+}
+
+.border-b-2 {
+  border-bottom-width: 1px;
+}
+
+.border-l-2 {
+  border-left-width: 1px;
+}
+
+.border-r-2 {
+  border-right-width: 1px;
+}
+
+/* Sticky notes lie flat. */
+.sticky-note {
+  rotate: none;
 }
 
 .surface-card {
@@ -261,14 +311,15 @@ mark {
 }
 
 .brand-wordmark {
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-family: var(--font-serif-text);
+  font-weight: 400;
+  letter-spacing: -0.01em;
   line-height: 1;
 }
 
 .brand-wordmark span {
-  color: var(--accent-secondary);
+  color: var(--accent-rubric);
+  font-style: italic;
 }
 
 .shell-container {
@@ -305,34 +356,33 @@ mark {
   gap: 1rem;
 }
 
+/* Page heads are type on paper, not boxes: a rubric kicker, a serif title, a quiet lede. */
 .page-hero {
   position: relative;
-  border: 2px solid var(--surface-border);
-  border-radius: 1.25rem;
-  padding: clamp(1.2rem, 2vw, 1.6rem);
-  background: var(--surface-card);
-  box-shadow: var(--surface-shadow);
+  padding: clamp(0.5rem, 1.5vw, 1rem) 0.25rem;
 }
 
 .page-eyebrow {
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--foreground-soft);
+  color: var(--accent-rubric);
 }
 
 .page-title {
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
+  font-family: var(--font-serif-text);
   font-size: clamp(1.9rem, 3vw, 2.6rem);
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.016em;
 }
 
 .page-subtitle {
-  max-width: 52rem;
+  max-width: 40rem;
   color: var(--foreground-muted);
+  font-family: var(--font-serif-text);
+  font-size: 1.06rem;
   line-height: 1.6;
 }
 
@@ -340,15 +390,15 @@ mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.2rem;
-  padding: 0.4rem 0.8rem;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.7rem;
   border-radius: 999px;
-  border: 2px solid var(--surface-border);
-  background: var(--accent-sky-soft);
-  color: var(--foreground);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  border: 1px solid var(--accent-rubric-line);
+  background: transparent;
+  color: var(--accent-rubric);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -358,24 +408,21 @@ mark {
 
 .browse-hero {
   position: relative;
-  border: 2px solid var(--surface-border);
-  border-radius: 1rem;
-  padding: 0.3rem 0.6rem;
-  background: var(--surface-card);
-  box-shadow: var(--surface-shadow-soft);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.3rem 0.25rem 0.6rem;
 }
 
 .browse-title {
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 1.15rem;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-family: var(--font-serif-text);
+  font-size: 1.3rem;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 
 .browse-header-button {
-  border: 2px solid var(--surface-border);
+  border: 1px solid var(--surface-border);
   background: var(--surface-button);
 }
 
@@ -390,11 +437,10 @@ mark {
 
 .browse-summary-card {
   position: relative;
-  border: 2px solid var(--surface-border);
-  border-radius: 1.1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.6rem;
   padding: 1rem 1.1rem;
   background: var(--surface-card-soft);
-  box-shadow: var(--surface-shadow-soft);
 }
 
 .browse-chapter-grid {
@@ -447,49 +493,48 @@ mark {
 }
 
 .panel-card {
-  border: 2px solid var(--surface-border);
-  border-radius: 1.25rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.6rem;
   background: var(--surface-card);
-  box-shadow: var(--surface-shadow);
+  box-shadow: none;
 }
 
 .panel-card-strong {
-  border: 2px solid var(--surface-border);
-  border-radius: 1.25rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.6rem;
   background: var(--surface-card-strong);
-  box-shadow: var(--surface-shadow);
+  box-shadow: none;
 }
 
 .panel-card-soft {
-  border: 2px solid var(--surface-border);
-  border-radius: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.6rem;
   background: var(--surface-card-soft);
-  box-shadow: var(--surface-shadow-soft);
+  box-shadow: none;
 }
 
 .interactive-card {
-  transition: transform 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .interactive-card:hover {
-  transform: translate(-1px, -1px);
   background: var(--surface-button-hover);
-  box-shadow: var(--surface-shadow-lift);
+  border-color: var(--rule-strong);
 }
 
 .interactive-card:active {
-  transform: translate(2px, 2px);
-  box-shadow: var(--surface-shadow-soft);
+  box-shadow: none;
 }
 
 .soft-input {
-  border: 2px solid var(--surface-border);
-  border-radius: 0.9rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.5rem;
   background: var(--input-surface);
 }
 
 .soft-input:focus-within {
   background: var(--surface-card);
+  border-color: var(--rule-strong);
   outline: none;
 }
 
@@ -497,10 +542,10 @@ mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
-  border: 2px solid var(--surface-border);
+  border-radius: 0.5rem;
+  border: 1px solid var(--surface-border);
   background: var(--accent-primary);
-  color: #17161a;
+  color: #1f1d1a;
 }
 
 .pill-tag {
@@ -508,12 +553,12 @@ mark {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 2px solid var(--surface-border);
-  background: var(--accent-sky-soft);
-  color: var(--foreground);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  border: 1px solid var(--accent-rubric-line);
+  background: transparent;
+  color: var(--accent-rubric);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -521,11 +566,10 @@ mark {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  border: 2px solid var(--surface-border);
+  border: 1px solid var(--surface-border);
   border-radius: 999px;
-  padding: 0.25rem;
+  padding: 0.2rem;
   background: var(--surface-card);
-  box-shadow: var(--surface-shadow-soft);
 }
 
 .segmented-control-button {
@@ -555,10 +599,9 @@ mark {
 
 .sticky-note {
   position: relative;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.4rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.5rem;
   background: var(--accent-note);
-  box-shadow: var(--surface-shadow-soft);
 }
 
 .verse-badge {
@@ -568,7 +611,7 @@ mark {
   width: 1.55rem;
   height: 1.55rem;
   margin-right: 0.55rem;
-  border: 2px solid var(--surface-border);
+  border: 1px solid var(--surface-border);
   border-radius: 999px;
   background: var(--surface-card);
   color: var(--foreground);
@@ -651,22 +694,21 @@ mark {
   }
 }
 
+/* Pressed controls dim slightly instead of jumping like a marker sticker. */
 .tap-feedback {
-  transition: transform 100ms ease, box-shadow 100ms ease;
-  transform: translate(0, 0);
+  transition: opacity 100ms ease, box-shadow 100ms ease;
 }
 
 .tap-feedback:active {
-  transform: translate(2px, 2px);
+  opacity: 0.82;
 }
 
 :where(button, [role="button"], .segmented-control-button, a.surface-button, a[data-tap], [data-tap]) {
-  transition: transform 100ms ease, box-shadow 100ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-  transform: translate(0, 0);
+  transition: opacity 100ms ease, box-shadow 100ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 :where(button, [role="button"], .segmented-control-button, a.surface-button, a[data-tap], [data-tap]):active {
-  transform: translate(2px, 2px);
+  opacity: 0.82;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -777,9 +819,9 @@ mark {
 
 .reader-simple-title {
   margin: 0 0 1.5rem;
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-family: var(--font-serif-text);
+  font-size: 1.25rem;
+  font-weight: 400;
   letter-spacing: -0.01em;
   color: var(--foreground-soft);
   text-align: center;
@@ -822,13 +864,13 @@ mark {
   align-items: center;
   gap: 0.5rem;
   padding: 0 1rem;
-  border: 2px solid var(--surface-border);
+  border: 1px solid var(--surface-border);
   border-radius: 999px;
   background: var(--surface-card);
   color: var(--foreground);
   box-shadow: var(--surface-shadow-soft);
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .simple-exit-pill:hover {
@@ -843,7 +885,7 @@ mark {
   height: 1.7rem;
   flex-shrink: 0;
   align-items: center;
-  border: 2px solid var(--surface-border);
+  border: 1px solid var(--rule-strong);
   border-radius: 999px;
   background: var(--surface-card);
   padding: 0;
@@ -859,7 +901,7 @@ mark {
   left: 0.15rem;
   height: 1.1rem;
   width: 1.1rem;
-  border: 2px solid var(--surface-border);
+  border: 1px solid var(--rule-strong);
   border-radius: 999px;
   background: var(--surface-card);
   transition: transform 120ms ease;
@@ -946,19 +988,19 @@ mark {
 
 .share-reference {
   margin: 0;
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  font-family: var(--font-serif-text);
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.016em;
 }
 
 .share-card {
   width: 100%;
-  border: 2px solid var(--surface-border);
-  border-radius: 1.25rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
   background: var(--surface-card);
-  box-shadow: var(--surface-shadow);
+  box-shadow: none;
   padding: clamp(1.25rem, 4vw, 2.5rem) clamp(1.1rem, 4.5vw, 2.75rem);
 }
 
@@ -966,7 +1008,7 @@ mark {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-family: var(--font-serif-text);
   font-size: clamp(1.25rem, 2.4vw, 1.8rem);
   line-height: 1.65;
   text-wrap: pretty;
@@ -1003,9 +1045,8 @@ mark {
 .share-gap::after {
   content: "";
   flex: 1;
-  height: 2px;
-  background: var(--surface-border);
-  opacity: 0.35;
+  height: 1px;
+  background: var(--rule-strong);
 }
 
 .share-footer {

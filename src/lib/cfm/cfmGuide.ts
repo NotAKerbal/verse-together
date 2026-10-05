@@ -134,8 +134,9 @@ export function validateGuideMarkdown(markdown: string) {
   if (!/^# .+/m.test(markdown) || !/^## /m.test(markdown)) throw new Error("Guide needs a title and sections");
 }
 
-// Public-domain paintings in public/cfm/art. Each is placed once, beside the passage it illustrates, as
-// page chrome (data-cfm-added="art"), never inside the source Markdown.
+// Artwork in public/cfm/art: two public-domain paintings and one generated explanatory diagram. Each is
+// placed once, right after the passage heading or lead it illustrates, as page chrome
+// (data-cfm-added="art"), never inside the source Markdown.
 type Art = {
   book: string;
   chapter: string;
@@ -145,7 +146,11 @@ type Art = {
   height: number;
   maxWidth: number;
   alt: string;
+  /** Caption HTML: full credit for paintings, provenance for generated illustrations. */
   credit: string;
+  /** Exact scripture phrases the image points to, listed as text beside it. */
+  labels?: { heading: string; phrases: string[] };
+  kind?: "painting" | "diagram";
 };
 const ART: Art[] = [
   {
@@ -158,10 +163,25 @@ const ART: Art[] = [
     alt: "An angel comforts Jesus as He kneels in Gethsemane, in a painting by Carl Bloch.",
     credit: '<a href="https://commons.wikimedia.org/wiki/File:Carl_Heinrich_Bloch_-_Gethsemane.jpg"><cite>Christ in Gethsemane</cite></a>, Carl Bloch, 1873. Public domain, via Wikimedia Commons.',
   },
+  {
+    book: "Isaiah", chapter: "54", verse: 2, src: "/cfm/art/isaiah-54-enlarged-tent.webp", width: 840, height: 630, maxWidth: 280,
+    kind: "diagram",
+    alt: "Diagram of a goat-hair tent enlarged: curtains extended, cords lengthened, stakes strengthened, as described in Isaiah 54:2.",
+    credit: "Illustration of Isaiah 54:2: enlarged curtains, lengthened cords, and strengthened stakes. Generated illustration; not a historical reconstruction.",
+    labels: {
+      heading: "Phrases from Isaiah 54:2 shown in the diagram",
+      phrases: ["Enlarge the place of thy tent", "stretch forth the curtains", "lengthen thy cords", "strengthen thy stakes"],
+    },
+  },
 ];
 const artFigure = (art: Art) =>
-  `<figure class="cfm-art" data-cfm-added="art" style="--cfm-art-w:${art.maxWidth}px">` +
+  `<figure class="cfm-art${art.kind === "diagram" ? " cfm-art-diagram" : ""}" data-cfm-added="art" style="--cfm-art-w:${art.maxWidth}px">` +
   `<img src="${art.src}" width="${art.width}" height="${art.height}" alt="${escapeHtml(art.alt)}" loading="lazy" decoding="async">` +
+  (art.labels
+    ? `<ul class="cfm-art-labels" aria-label="${escapeHtml(art.labels.heading)}">` +
+      art.labels.phrases.map((phrase) => `<li>“${escapeHtml(phrase)}”</li>`).join("") +
+      "</ul>"
+    : "") +
   `<figcaption>${art.credit}</figcaption></figure>\n`;
 
 export function readingTime(words: number) {

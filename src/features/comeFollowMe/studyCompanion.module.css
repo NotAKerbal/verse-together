@@ -1,86 +1,125 @@
 /*
-  Come, Follow Me study companion. Scoped to this route: guide HTML from the parser uses cfm-* class
-  names, reached only through :global() under .guide. Colors and type come from the theme tokens, so
-  light, dark, and sepia all apply.
+  Come, Follow Me study companion, set like the guides at isaacstuff.com/cfm: cream paper, warm ink,
+  rubric red for references and numerals, serif reading type, sans only for small labels, and space
+  instead of boxes. Every color comes from the app theme tokens, so light, dark, and sepia all apply.
+  Guide HTML from the parser uses cfm-* class names, reached only through :global() under .guide.
+
+  Layout: two columns from 900px (scripture sticky on the left, the full guide on the right); below that,
+  a native horizontal scroll-snap strip with one side per screen width, each side scrolling on its own.
 */
 
 .page {
-  --cfm-anchor-offset: calc(var(--header-height) + 4.5rem);
-  gap: 1.25rem;
+  --cfm-serif: var(--font-serif-text);
+  --cfm-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --cfm-ink: var(--foreground);
+  --cfm-ink-2: var(--foreground-muted);
+  --cfm-muted: var(--foreground-soft);
+  --cfm-rule: var(--rule);
+  --cfm-rule-strong: var(--rule-strong);
+  --cfm-rubric: var(--accent-rubric);
+  --cfm-rubric-line: var(--accent-rubric-line);
+  --cfm-panel: var(--surface-card);
+  --cfm-measure: 40rem;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
 }
+
+/* Page head: rubric kicker, normal-weight serif title, serif lede, quiet sans byline. */
 
 .header {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  max-width: 52rem;
-  padding-inline: 0.25rem;
+  gap: 0.75rem;
+  max-width: 46rem;
+  padding: clamp(0.5rem, 3vw, 2rem) 0.25rem 0;
 }
 
 .backLink {
   align-self: flex-start;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--foreground-muted);
+  font-size: 0.8125rem;
+  color: var(--cfm-muted);
 }
 
 .backLink:hover {
-  color: var(--foreground);
+  color: var(--cfm-ink);
 }
 
 .eyebrow {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
+  font-family: var(--cfm-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--foreground-muted);
+  color: var(--cfm-rubric);
+}
+
+.eyebrow span + span {
+  color: var(--cfm-muted);
+}
+
+.eyebrow span + span::before {
+  content: "·";
+  margin: 0 0.7rem;
+  color: var(--cfm-rule-strong);
 }
 
 .title {
-  font-family: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
-  font-size: clamp(1.7rem, 4vw, 2.6rem);
-  font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: -0.03em;
+  font-family: var(--cfm-serif);
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3.1rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
 }
 
 .summary {
-  max-width: 44rem;
-  color: var(--foreground-muted);
-  line-height: 1.55;
+  max-width: 34em;
+  font-family: var(--cfm-serif);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--cfm-ink-2);
+  text-wrap: pretty;
 }
 
 .byline {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--foreground-muted);
+  gap: 0.25rem 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--cfm-muted);
 }
 
 .attribution {
-  font-weight: 700;
-  color: var(--foreground);
+  color: var(--cfm-ink-2);
 }
 
 .footer {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  max-width: 52rem;
-  padding: 1.25rem 0.25rem 0;
-  border-top: 2px solid var(--surface-border);
-  font-size: 0.85rem;
-  line-height: 1.55;
-  color: var(--foreground-muted);
+  max-width: 46rem;
+  padding: 2rem 0.25rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--cfm-muted);
 }
 
 .footer a,
 .noGuide a {
+  color: var(--cfm-ink-2);
   text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+}
+
+.footer a:hover,
+.noGuide a:hover {
+  color: var(--cfm-rubric);
 }
 
 .weekNav {
@@ -88,193 +127,278 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 700;
+  margin-top: 1rem;
+  font-family: var(--cfm-serif);
+  font-size: 1.05rem;
+  color: var(--cfm-ink);
 }
 
-.weekNav a:hover {
-  color: var(--accent-secondary);
+.page .weekNav a {
+  text-decoration: none;
+  color: var(--cfm-ink);
+}
+
+.page .weekNav a:hover {
+  color: var(--cfm-rubric);
 }
 
 .noGuide {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  max-width: 40rem;
-  padding: 1.25rem;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.6rem;
-  background: var(--surface-card);
-  box-shadow: var(--surface-shadow-soft);
-  line-height: 1.55;
+  gap: 1rem;
+  max-width: var(--cfm-measure);
+  padding-inline: 0.25rem;
+  font-family: var(--cfm-serif);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--cfm-ink-2);
 }
 
 .noGuide ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 1rem;
-  font-weight: 700;
+  gap: 0.4rem 1.25rem;
 }
 
-/* Layout */
+/* Companion layout: phones first. */
 
 .companion {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  /* The bottom navigation floats over the last 6rem or so on phones. */
+  height: calc(100vh - 6.5rem);
+  height: calc(100svh - 6.5rem);
+  min-height: 24rem;
+  scroll-margin-top: 0.5rem;
 }
 
-.tabs {
-  position: sticky;
-  top: calc(var(--header-height) - 0.25rem);
-  z-index: 10;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 0.35rem;
-  padding: 0.3rem;
-  border: 2px solid var(--surface-border);
-  border-radius: 999px;
-  background: var(--surface-card);
-  box-shadow: var(--surface-shadow-soft);
+@media (min-width: 640px) {
+  .companion {
+    height: calc(100vh - var(--header-height) - 1rem);
+    height: calc(100svh - var(--header-height) - 1rem);
+    scroll-margin-top: var(--header-height);
+  }
 }
 
-.tab {
-  min-height: 2.5rem;
-  padding: 0 0.75rem;
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.1rem 0.4rem;
+  border-bottom: 1px solid var(--cfm-rule);
+}
+
+/*
+  Small phones: the app's fixed menu button (Navbar, `sm:hidden`) floats at the top left, over the
+  pager whenever the companion fills the screen. Reserve its width plus the usual gap, measured from
+  the viewport edge: AppMain's 1rem phone gutter (px-4) already covers part of the button's left offset.
+  Simple mode hides that button, so the reservation goes away with it.
+*/
+@media (max-width: 639.98px) {
+  .pager {
+    padding-left: calc(
+      var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap) - 1rem
+    );
+  }
+
+  :global(:root[data-simple="true"]) .pager {
+    padding-left: 0.1rem;
+  }
+}
+
+.pagerButton {
+  min-height: 2.75rem;
+  max-width: 45%;
+  padding: 0 0.35rem;
   overflow: hidden;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-family: var(--cfm-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--foreground);
+  color: var(--cfm-muted);
 }
 
-.tab[aria-selected="true"] {
-  background: var(--surface-button-active);
-  color: var(--surface-button-active-text);
+.pagerButton[aria-pressed="true"] {
+  color: var(--cfm-rubric);
 }
 
-.tab:focus-visible,
+.pagerButton:focus-visible,
 .chapterButton:focus-visible,
 .textButton:focus-visible,
-.guideChip:focus-visible {
-  outline: 3px solid var(--accent-secondary);
+.guideChip:focus-visible,
+.backToGuide:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
   outline-offset: 2px;
+  border-radius: 3px;
 }
 
-.columns {
-  display: block;
+.pagerDots {
+  display: inline-flex;
+  gap: 0.4rem;
 }
 
-.scripturePanel[data-active="false"],
-.guidePanel[data-active="false"] {
+.pagerDots span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--cfm-rule-strong);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.pagerDots span[data-on] {
+  background: var(--cfm-rubric);
+  transform: scale(1.25);
+}
+
+.strip {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar {
   display: none;
 }
 
-@media (min-width: 1024px) {
-  .tabs {
+.scripturePanel,
+.guidePanel {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 1.25rem 0.35rem 2.5rem;
+}
+
+/* On phones the guide comes first; its chapter is one swipe to the right. */
+.guidePanel {
+  order: 0;
+}
+
+.scripturePanel {
+  order: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pagerDots span {
+    transition: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .companion {
+    height: auto;
+    min-height: 0;
+  }
+
+  .pager {
     display: none;
   }
 
-  .columns {
+  .strip {
     display: grid;
-    grid-template-columns: minmax(20rem, 0.85fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(17rem, 0.8fr) minmax(0, 1.2fr);
     align-items: start;
-    gap: 2rem;
-  }
-
-  .scripturePanel[data-active="false"],
-  .guidePanel[data-active="false"] {
-    display: block;
+    gap: clamp(2rem, 4vw, 4rem);
+    overflow: visible;
   }
 
   .scripturePanel {
+    order: 0;
     position: sticky;
     top: calc(var(--header-height) + 0.75rem);
-  }
-
-  .pane {
-    max-height: calc(100vh - var(--header-height) - 1.75rem);
-    overflow-y: auto;
+    height: auto;
+    max-height: calc(100vh - var(--header-height) - 1.5rem);
     overscroll-behavior: contain;
+    padding: 0.25rem 1.25rem 1.5rem 0;
+    border-right: 1px solid var(--cfm-rule);
+    scrollbar-width: thin;
+  }
+
+  .guidePanel {
+    order: 1;
+    height: auto;
+    overflow: visible;
+    padding: 0.25rem 0 0;
   }
 }
 
-/* Scripture pane */
-
-.pane {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 1rem 1.1rem 1.25rem;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.6rem;
-  background: var(--surface-card);
-  box-shadow: var(--surface-shadow-soft);
-}
+/* Scripture side */
 
 .paneControls {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 2px dashed var(--paper-dot);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .chapterNav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.375rem;
 }
 
 .chapterButton {
   display: inline-flex;
-  min-width: 2.4rem;
-  min-height: 2.2rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
   align-items: center;
   justify-content: center;
-  padding: 0 0.5rem;
-  border: 2px solid var(--surface-border);
+  padding: 0 0.6rem;
+  border: 1px solid var(--cfm-rule);
   border-radius: 999px;
-  background: var(--surface-button);
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-family: var(--cfm-serif);
+  font-size: 1rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--cfm-ink-2);
 }
 
 .chapterButton:hover {
-  background: var(--surface-button-hover);
+  border-color: var(--cfm-rule-strong);
+  color: var(--cfm-ink);
 }
 
 .chapterButton[aria-current="true"] {
-  background: var(--surface-button-active);
-  color: var(--surface-button-active-text);
+  border-color: var(--cfm-rubric);
+  background: var(--cfm-rubric);
+  color: var(--background);
 }
 
 .rangeRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--foreground-muted);
+  gap: 0.5rem 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--cfm-muted);
 }
 
 .rangeRow label {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .rangeRow select {
-  min-height: 2rem;
-  padding: 0 0.4rem;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--cfm-rule);
+  border-radius: 4px;
   background: var(--input-surface);
-  color: var(--foreground);
-  font-weight: 700;
+  color: var(--cfm-ink);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .rangeRow select:disabled {
@@ -285,81 +409,119 @@
   display: none !important;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 900px) {
   .followToggle {
     display: inline-flex !important;
-    margin-left: auto;
   }
 }
 
 .textButton {
   align-self: flex-start;
-  font-size: 0.8rem;
-  font-weight: 700;
+  min-height: 2.25rem;
+  font-size: 0.8125rem;
+  color: var(--cfm-ink-2);
   text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
-  color: var(--foreground);
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+}
+
+.textButton:hover {
+  color: var(--cfm-rubric);
 }
 
 .paneTitle {
-  scroll-margin-top: var(--cfm-anchor-offset);
-  font-size: 1.35rem;
-  font-weight: 800;
-  line-height: 1.1;
+  margin-bottom: 1.25rem;
+  font-family: var(--cfm-serif);
+  font-weight: 400;
+}
+
+.paneBook {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cfm-rubric);
+}
+
+.paneChapter {
+  display: block;
+  font-size: clamp(2.6rem, 2rem + 2vw, 3.4rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: lining-nums;
+  color: var(--cfm-rubric);
 }
 
 .paneRange {
-  color: var(--foreground-muted);
+  font-size: 0.5em;
+  letter-spacing: 0;
+  color: var(--cfm-muted);
 }
 
 .backToGuide {
   align-self: flex-start;
-  min-height: 2rem;
-  padding: 0 0.75rem;
-  border: 2px solid var(--surface-border);
-  border-radius: 999px;
-  background: var(--surface-button);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-@media (min-width: 1024px) {
-  .backToGuide {
-    display: none;
-  }
+  min-height: 2.75rem;
+  margin: -0.5rem 0 0.5rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cfm-rubric);
 }
 
 .covering {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem 0.6rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--foreground-muted);
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--cfm-muted);
+}
+
+.covering > span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .covering a {
-  color: var(--foreground);
+  color: var(--cfm-ink);
+  font-variant-numeric: lining-nums;
   text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+}
+
+.covering a:hover {
+  color: var(--cfm-rubric);
 }
 
 .verses {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  font-size: 1.06rem;
-  line-height: 1.7;
+  gap: 0.8rem;
+  max-width: 34rem;
+  font-family: var(--cfm-serif);
+  font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.15rem);
+  line-height: 1.68;
+  color: var(--cfm-ink);
+  font-variant-numeric: oldstyle-nums proportional-nums;
 }
 
 .verses li {
-  scroll-margin-top: var(--cfm-anchor-offset);
-  padding: 0.1rem 0.35rem;
-  border-radius: 0.3rem;
+  margin-inline: -0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  text-wrap: pretty;
 }
 
 .verses li[data-selected="true"] {
@@ -367,12 +529,13 @@
 }
 
 .verseNumber {
-  margin-right: 0.4rem;
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 0.72rem;
-  font-weight: 800;
-  vertical-align: 0.35em;
-  color: var(--foreground-muted);
+  margin-right: 0.35rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  vertical-align: 0.4em;
+  color: var(--cfm-rubric);
 }
 
 .srOnly {
@@ -386,158 +549,243 @@
 
 .guideChip {
   display: inline-block;
-  margin-left: 0.45rem;
-  padding: 0 0.45rem;
-  border: 1.5px solid var(--surface-border);
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--cfm-rule);
   border-radius: 999px;
-  background: var(--accent-sky-soft);
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.5;
-  vertical-align: 0.15em;
+  font-family: var(--cfm-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-variant-numeric: lining-nums;
+  line-height: 1.6;
   white-space: nowrap;
+  vertical-align: 0.15em;
+  color: var(--cfm-ink-2);
 }
 
 .guideChip:hover {
-  background: var(--surface-button-hover);
+  border-color: var(--cfm-rubric-line);
+  color: var(--cfm-rubric);
 }
 
 .readerLink {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--foreground-muted);
+  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  color: var(--cfm-muted);
 }
 
 .readerLink a:hover {
-  color: var(--foreground);
+  color: var(--cfm-ink);
 }
 
-/* Guide column */
-
-.guidePanel {
-  min-width: 0;
-}
+/* Guide side */
 
 .contents {
-  margin-bottom: 1.25rem;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.6rem;
-  background: var(--surface-card);
-  font-size: 0.88rem;
+  max-width: var(--cfm-measure);
+  margin-bottom: 2.25rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.875rem;
+  line-height: 1.35;
 }
 
 .contents summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
   cursor: pointer;
-  padding: 0.6rem 0.9rem;
-  font-weight: 800;
+  list-style: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cfm-muted);
+}
+
+.contents summary::-webkit-details-marker {
+  display: none;
+}
+
+.contents summary::before {
+  content: "+";
+  font-size: 0.875rem;
+  letter-spacing: 0;
+}
+
+.contents[open] summary::before {
+  content: "–";
 }
 
 .contents > ol {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.15rem;
   max-height: 60vh;
   overflow-y: auto;
-  padding: 0 0.9rem 0.9rem;
-  font-weight: 700;
+  padding: 0.25rem 0 0.75rem 0.9rem;
+  border-left: 1px solid var(--cfm-rule);
+}
+
+.contents > ol > li > a {
+  display: block;
+  padding: 0.35rem 0;
+  color: var(--cfm-ink);
 }
 
 .contents ol ol {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  margin: 0.25rem 0 0.35rem 0.9rem;
-  font-weight: 500;
-  color: var(--foreground-muted);
+  gap: 0.1rem;
+  margin: 0 0 0.5rem 0.9rem;
+  color: var(--cfm-ink-2);
+}
+
+.contents ol ol a {
+  display: block;
+  padding: 0.25rem 0;
 }
 
 .contents a:hover {
-  color: var(--accent-secondary);
+  color: var(--cfm-rubric);
 }
 
 .contentsRef {
-  font-weight: 700;
-  color: var(--foreground);
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--cfm-rubric);
 }
 
 .guide {
-  max-width: 44rem;
-  font-size: 1.02rem;
-  line-height: 1.72;
+  max-width: var(--cfm-measure);
+  font-family: var(--cfm-serif);
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.1875rem);
+  font-kerning: normal;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  line-height: 1.68;
+  overflow-wrap: break-word;
+  color: var(--cfm-ink);
 }
 
-.guide :global(.cfm-preamble),
-.guide :global(.cfm-section) {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.guide :is(p, li) {
+  text-wrap: pretty;
 }
 
-.guide :global(.cfm-section) {
-  margin-top: 2.25rem;
-  padding-top: 1.75rem;
-  border-top: 2px solid var(--surface-border);
-}
-
+/* Anchors land just inside a phone side; under the sticky header on desktop. */
 .guide [id] {
-  scroll-margin-top: var(--cfm-anchor-offset);
+  scroll-margin-top: 1rem;
+}
+
+@media (min-width: 900px) {
+  .guide [id] {
+    scroll-margin-top: calc(var(--header-height) + 1.5rem);
+  }
+}
+
+.guide :global(.cfm-section) > *,
+.guide :global(.cfm-preamble) > * {
+  margin: 0;
+}
+
+.guide :global(.cfm-section) > * + *,
+.guide :global(.cfm-preamble) > * + * {
+  margin-top: 1.05em;
+}
+
+.guide :global(.cfm-section + .cfm-section) {
+  margin-top: clamp(4rem, 9vw, 6.5rem);
+}
+
+.guide :global(.cfm-preamble) {
+  margin-bottom: 2.25rem;
+  font-style: italic;
+  color: var(--cfm-muted);
+}
+
+/* The source's thematic breaks stay in the DOM; space does their work, as on the guide site. */
+.guide hr {
+  display: none;
 }
 
 .guide h2 {
-  font-size: 1.55rem;
-  font-weight: 800;
-  line-height: 1.15;
+  margin-bottom: 1.5rem;
+  font-family: var(--cfm-serif);
+  font-size: clamp(1.75rem, 1.3rem + 1.7vw, 2.375rem);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
+  font-variant-numeric: lining-nums;
 }
 
-.guide h3 {
-  margin-top: 0.75rem;
-  font-size: 1.15rem;
-  font-weight: 800;
-  line-height: 1.25;
-}
-
-.guide :global(.cfm-h-chapter) {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.guide :global(.cfm-section:first-child > h2:not(.cfm-h-chapter)) {
+  font-size: clamp(1.4rem, 1.2rem + 0.8vw, 1.75rem);
+  line-height: 1.22;
 }
 
 .guide :global(.cfm-ch-book) {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: 0.5rem;
+  font: 600 0.75rem/1 var(--cfm-sans);
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--foreground-muted);
+  color: var(--cfm-rubric);
 }
 
 .guide :global(.cfm-ch-num) {
-  font-size: 2.1rem;
-  line-height: 1;
+  display: block;
+  font: 400 clamp(3.5rem, 2.4rem + 4.5vw, 5.25rem) / 0.9 var(--cfm-serif);
+  letter-spacing: -0.03em;
+  color: var(--cfm-rubric);
 }
 
-.guide :global(.cfm-h-chapter .cfm-local) {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+.guide :global(.cfm-ch-title) {
+  display: block;
+  margin-top: 0.5em;
+}
+
+.guide :global(h2.cfm-h-chapter) {
+  margin-bottom: 2rem;
+}
+
+.guide :global(h2.cfm-h-chapter a.cfm-local) {
+  display: block;
+  color: inherit;
   text-decoration: none;
 }
 
-.guide :global(.cfm-h-chapter .cfm-local:hover .cfm-ch-num) {
-  color: var(--accent-secondary);
+.guide :global(h2.cfm-h-chapter a.cfm-local:hover .cfm-ch-num) {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.08em;
 }
 
-.guide :global(.cfm-h-verse) {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+.guide h3 {
+  margin-top: 2.4em;
+  margin-bottom: 0.75em;
+  font: italic 400 1.375em/1.25 var(--cfm-serif);
+  letter-spacing: -0.008em;
+  text-wrap: balance;
+}
+
+.guide :global(h3.cfm-h-verse) {
+  margin-top: 3em;
+  font-size: 1.4em;
+  font-style: normal;
+  line-height: 1.22;
 }
 
 .guide :global(.cfm-vref) {
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--foreground-muted);
+  display: block;
+  margin-bottom: 0.55rem;
+  font: 600 0.8125rem/1.3 var(--cfm-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--cfm-rubric);
+}
+
+.guide :global(.cfm-vtitle) {
+  display: block;
 }
 
 .guide :global(.cfm-sr) {
@@ -549,142 +797,292 @@
   white-space: nowrap;
 }
 
-.guide a {
-  text-decoration: underline;
-  text-decoration-color: var(--foreground-soft);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
+.guide :is(h2, h3) + * {
+  margin-top: 0;
 }
 
-.guide a:hover {
-  text-decoration-color: var(--accent-secondary);
-}
-
-.guide :global(a.cfm-scripture) {
-  text-decoration-style: dotted;
-}
-
-.guide :global(a.cfm-local) {
-  text-decoration-style: solid;
-  text-decoration-color: var(--accent-secondary);
-}
-
-.guide :global(.cfm-lead) strong:first-child {
-  font-weight: 800;
-}
-
-.guide :global(p[data-cfm-passage]) {
-  margin-top: 0.5rem;
-}
-
-.guide ul,
-.guide ol {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding-left: 1.4rem;
-}
-
-.guide ul {
-  list-style: disc;
-}
-
-.guide ol {
-  list-style: decimal;
-}
-
-.guide blockquote {
-  padding: 0.5rem 0 0.5rem 1rem;
-  border-left: 4px solid var(--accent-primary);
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  font-size: 1.05rem;
-}
-
-.guide hr {
-  border: 0;
-  border-top: 2px dashed var(--paper-dot);
+.guide strong {
+  font-weight: 600;
 }
 
 .guide em {
   font-style: italic;
 }
 
+.guide :global(p.cfm-lead > strong:first-child) {
+  color: var(--cfm-rubric);
+  font-weight: 600;
+}
+
+.guide a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.guide a:hover {
+  color: var(--cfm-rubric);
+  text-decoration-color: currentColor;
+}
+
+.guide :global(a.cfm-scripture) {
+  text-decoration-style: dotted;
+  text-decoration-color: var(--cfm-rule-strong);
+}
+
+.guide :global(a.cfm-scripture:hover) {
+  text-decoration-style: solid;
+  text-decoration-color: currentColor;
+}
+
+.guide :global(.cfm-vref a.cfm-scripture),
+.guide :global(p.cfm-lead > strong:first-child a.cfm-local) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.guide :global(.cfm-vref a.cfm-scripture:hover),
+.guide :global(p.cfm-lead > strong:first-child a.cfm-local:hover) {
+  text-decoration: underline;
+}
+
+.guide blockquote {
+  margin-block: 1.6em;
+  padding: 0.15em 0 0.15em 1.25em;
+  border-left: 2px solid var(--cfm-rubric-line);
+  color: var(--cfm-ink-2);
+}
+
+.guide blockquote > * {
+  margin: 0;
+}
+
+.guide blockquote > * + * {
+  margin-top: 0.8em;
+}
+
+.guide :is(ul, ol) {
+  padding-left: 1.5em;
+}
+
+.guide ul {
+  list-style: disc outside;
+}
+
+.guide ul ul {
+  list-style-type: circle;
+}
+
+.guide ol {
+  list-style: decimal outside;
+}
+
+.guide ol ol {
+  list-style-type: lower-alpha;
+}
+
+.guide li + li,
+.guide li > :is(ul, ol) {
+  margin-top: 0.55em;
+}
+
+.guide li::marker {
+  color: var(--cfm-rubric);
+}
+
+.guide ol > li::marker {
+  font: 600 0.82em var(--cfm-sans);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.guide ol > li {
+  padding-left: 0.25em;
+}
+
 .guide :global(.cfm-table) {
   overflow-x: auto;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.5rem;
-  background: var(--surface-card);
+  margin-top: 1.75em;
 }
 
 .guide table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font: 0.9rem/1.5 var(--cfm-sans);
+  font-variant-numeric: lining-nums;
 }
 
 .guide th,
 .guide td {
-  padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--paper-dot);
+  padding: 0.6rem 0.75rem 0.6rem 0;
+  border-bottom: 1px solid var(--cfm-rule);
   text-align: left;
   vertical-align: top;
 }
 
 .guide th {
-  background: var(--surface-card-soft);
-  font-weight: 800;
-}
-
-.guide :global(.cfm-art) {
-  float: right;
-  width: min(var(--cfm-art-w), 45%);
-  margin: 0.25rem 0 0.75rem 1.25rem;
+  border-bottom-color: var(--cfm-rule-strong);
   font-size: 0.72rem;
-  line-height: 1.4;
-  color: var(--foreground-muted);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cfm-muted);
 }
 
-.guide :global(.cfm-art img) {
-  width: 100%;
-  height: auto;
-  border: 2px solid var(--surface-border);
-  border-radius: 0.3rem;
-}
-
-.guide :global(.cfm-art figcaption) {
-  margin-top: 0.35rem;
+.guide h2,
+.guide h3,
+.guide :global(.cfm-sources) {
+  clear: both;
 }
 
 .guide :global(.cfm-sources) {
-  clear: both;
-  align-self: flex-start;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--foreground-muted);
+  margin-top: 0.5em;
+  font: 0.8125rem/1.5 var(--cfm-sans);
+  font-variant-numeric: lining-nums;
+  color: var(--cfm-muted);
 }
 
-.guide :global(.cfm-sources summary) {
+.guide :global(.cfm-sources > summary) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
   cursor: pointer;
-  font-weight: 700;
+  list-style: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.guide :global(.cfm-sources > summary::-webkit-details-marker) {
+  display: none;
+}
+
+.guide :global(.cfm-sources > summary::before) {
+  content: "+";
+  font-size: 0.875rem;
+  letter-spacing: 0;
+}
+
+.guide :global(.cfm-sources[open] > summary::before) {
+  content: "–";
+}
+
+.guide :global(.cfm-sources > summary:hover) {
+  color: var(--cfm-ink);
 }
 
 .guide :global(.cfm-sources ul) {
-  margin-top: 0.35rem;
-  gap: 0.2rem;
+  margin: 0;
+  padding: 0 0 0 0.9rem;
+  border-left: 1px solid var(--cfm-rule);
   list-style: none;
-  padding-left: 0.6rem;
-  border-left: 2px solid var(--paper-dot);
+}
+
+.guide :global(.cfm-sources li::marker) {
+  content: "";
+}
+
+.guide :global(.cfm-sources li + li) {
+  margin-top: 0.35rem;
 }
 
 .guide :global(.cfm-sources p) {
-  margin-top: 0.3rem;
+  margin: 0.5rem 0 0 0.9rem;
+  font-style: italic;
 }
 
-@media (max-width: 480px) {
+.guide :global(.cfm-sources a) {
+  color: var(--cfm-ink-2);
+}
+
+.guide :global(.cfm-section[data-kind="sources"]) {
+  font: 0.96875rem/1.65 var(--cfm-sans);
+  font-variant-numeric: lining-nums;
+  color: var(--cfm-ink-2);
+}
+
+.guide :global(.cfm-section[data-kind="sources"]) :is(h2, h3) {
+  font-family: var(--cfm-serif);
+  color: var(--cfm-ink);
+}
+
+.guide :global(.cfm-section[data-kind="sources"] p.cfm-lead > strong:first-child) {
+  color: var(--cfm-ink);
+}
+
+.guide :global(.cfm-section[data-kind="sources"]) a {
+  color: var(--cfm-ink);
+}
+
+/* Artwork: paintings and the tent diagram float beside their passage on wider screens. */
+
+.guide :global(.cfm-art) {
+  float: right;
+  clear: right;
+  width: var(--cfm-art-w, 12rem);
+  max-width: 42%;
+  margin: 0.3em 0 1.25em 1.75em;
+  font: 0.75rem/1.45 var(--cfm-sans);
+  color: var(--cfm-muted);
+}
+
+.guide :global(.cfm-art img) {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+  background: var(--cfm-panel);
+}
+
+.guide :global(.cfm-art figcaption) {
+  margin-top: 0.5rem;
+  font-variant-numeric: lining-nums;
+  text-wrap: pretty;
+}
+
+.guide :global(.cfm-art figcaption a) {
+  color: inherit;
+}
+
+.guide :global(.cfm-art cite) {
+  font-style: italic;
+}
+
+.guide :global(.cfm-art-labels) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--cfm-serif);
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--cfm-ink-2);
+}
+
+.guide :global(.cfm-art-labels li) {
+  margin: 0;
+  padding: 0;
+}
+
+.guide :global(.cfm-art-labels li::marker) {
+  content: "";
+}
+
+@media (max-width: 560px) {
   .guide :global(.cfm-art) {
     float: none;
-    width: min(var(--cfm-art-w), 70%);
-    margin: 0.25rem auto 0.5rem;
+    max-width: 70%;
+    margin: 1.5em auto;
+  }
+
+  .guide :global(.cfm-art-diagram) {
+    max-width: 100%;
   }
 }

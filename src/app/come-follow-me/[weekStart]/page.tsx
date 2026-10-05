@@ -71,7 +71,10 @@ function NoGuide({ week }: { week: ComeFollowMeWeek }) {
         <Link href="/browse" className={styles.backLink}>
           <span aria-hidden="true">←</span> Library
         </Link>
-        <p className={styles.eyebrow}>Come, Follow Me · {formatWeekRange(week)}</p>
+        <p className={styles.eyebrow}>
+          <span>Come, Follow Me</span>
+          <span>{formatWeekRange(week)}</span>
+        </p>
         <h1 className={styles.title}>{week.block}</h1>
       </header>
       <div className={styles.noGuide}>
@@ -116,7 +119,9 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
           <span aria-hidden="true">←</span> Library
         </Link>
         <p className={styles.eyebrow}>
-          Come, Follow Me · {guide.scripture} · {guide.dateLabel}
+          <span>{guide.scripture}</span>
+          <span>Come, Follow Me</span>
+          <span>{guide.dateLabel}</span>
         </p>
         <h1 className={styles.title}>{parsed.title}</h1>
         <p className={styles.summary}>{guide.summary}</p>
