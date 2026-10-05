@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { Marked, type Token, type Tokens } from "marked";
-import { scriptureAnchor } from "./cfmAnchors.ts";
+import { passageHalves, scriptureAnchor, type VerseHalf } from "./cfmAnchors.ts";
 import {
   escapeHtml,
   findBook,
@@ -57,6 +57,10 @@ export type GuidePassage = {
   /** Base verse numbers; "13a" and "13b" both select verse 13. */
   first: number;
   last: number;
+  /** "b" when the passage starts halfway through `first` ("13b–14"). */
+  firstHalf?: VerseHalf;
+  /** "a" when the passage stops halfway through `last` ("11–13a"). */
+  lastHalf?: VerseHalf;
 };
 export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number };
 export type ParsedGuide = {
@@ -232,7 +236,9 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     (first != null ? ` data-first="${first}" data-last="${last ?? first}"` : "") +
     `>${html}</a>`;
   const passageAttrs = (passage: GuidePassage) =>
-    ` data-cfm-passage data-chapter="${passage.chapter}" data-first="${passage.first}" data-last="${passage.last}"`;
+    ` data-cfm-passage data-chapter="${passage.chapter}" data-first="${passage.first}" data-last="${passage.last}"` +
+    (passage.firstHalf ? ` data-first-half="${passage.firstHalf}"` : "") +
+    (passage.lastHalf ? ` data-last-half="${passage.lastHalf}"` : "");
 
   const parser = new Marked({
     gfm: true,
@@ -294,7 +300,8 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
             const anchor = ref && ref[1] ? localTarget(ref[1], chapter, first, last) : null;
             let refHtml: string;
             if (anchor) {
-              const passage = { id, label: verse[1].slice(verse[1].lastIndexOf(" ") + 1), chapter, first, last };
+              const label = verse[1].slice(verse[1].lastIndexOf(" ") + 1);
+              const passage: GuidePassage = { id, label, chapter, first, last, ...passageHalves(label) };
               passages.push(passage);
               attrs = passageAttrs(passage);
               refHtml = localLink(anchor, shown[1], chapter, first, last);
@@ -339,7 +346,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
             inner = `<strong>${link}${inner.slice(leadLength)}`;
           }
           if (anchor) {
-            const passage = { id, label: local.text, chapter, first, last };
+            const passage: GuidePassage = { id, label: local.text, chapter, first, last, ...passageHalves(local.text) };
             passages.push(passage);
             attrs = passageAttrs(passage);
           }

@@ -604,28 +604,30 @@ mark {
   background: var(--accent-note);
 }
 
+/*
+  Verse numbers are plain rubric numerals, as in the study guides: no circle. The whole verse line
+  stays the click and selection target, so nothing is lost by dropping the badge's box.
+*/
 .verse-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.55rem;
-  height: 1.55rem;
-  margin-right: 0.55rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 999px;
-  background: var(--surface-card);
-  color: var(--foreground);
+  display: inline-block;
+  min-width: 1.1rem;
+  margin-right: 0.4rem;
+  color: var(--accent-rubric);
   font-family: var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 0.66rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
   line-height: 1;
-  vertical-align: 0.15em;
+  vertical-align: 0.35em;
   user-select: none;
 }
 
 .verse-badge[data-selected="true"] {
-  background: var(--surface-button-active);
-  color: var(--surface-button-active-text);
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-rubric);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
 }
 
 /*
@@ -799,16 +801,21 @@ mark {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--foreground-soft);
+  color: var(--accent-rubric);
   font-size: 0.7em;
   font-weight: 600;
   line-height: 1;
   vertical-align: super;
 }
 
+/* Same selected treatment as the base rule: ink numeral with a rubric underline. */
 :root[data-simple="true"] .verse-badge[data-selected="true"] {
   background: transparent;
   color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-rubric);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
 }
 
 /* Chapter tiles lose their read / current tints. */

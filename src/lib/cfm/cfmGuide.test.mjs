@@ -133,6 +133,12 @@ test("newer H3 ranges with a/b halves select the base verse and keep distinct an
   assert.deepEqual([a.chapter, a.first, a.last], [57, 11, 13]);
   assert.deepEqual([b.chapter, b.first, b.last], [57, 13, 14]);
   assert.notEqual(a.id, b.id);
+  // The halves are marked so the scripture sync can split verse 13 between them.
+  assert.equal(a.lastHalf, "a");
+  assert.equal(b.firstHalf, "b");
+  assert.match(late.html, new RegExp(`<h3 id="${a.id}"[^>]* data-last="13" data-last-half="a">`));
+  assert.match(late.html, new RegExp(`<h3 id="${b.id}"[^>]* data-first="13" data-last="14" data-first-half="b">`));
+  assert.equal(late.passages.filter((p) => p.firstHalf || p.lastHalf).length, 2);
   assert.match(late.html, new RegExp(`<h3 id="${a.id}"[^>]*><span class="cfm-vref"><a [^>]*href="#scripture-isaiah-57-v11-13"`));
   assert.match(late.html, new RegExp(`<h3 id="${b.id}"[^>]*><span class="cfm-vref"><a [^>]*href="#scripture-isaiah-57-v13-14"`));
   // Verse 13 leads to both halves of the commentary.

@@ -62,6 +62,23 @@ export function localScriptureTarget(
   return target && chapters.includes(target.chapter) ? target : null;
 }
 
+export type VerseHalf = "a" | "b";
+
+/**
+ * Half-verse suffixes of a printed range: "57:11–13a" ends at the first half of verse 13, "57:13b–14"
+ * starts at its second half. Plain ranges have neither.
+ */
+export function passageHalves(label: string): { firstHalf?: VerseHalf; lastHalf?: VerseHalf } {
+  const match = /(?:^|\s|:)\d{1,3}([ab])?(?:[–-]\d{1,3}([ab])?)?$/.exec(label);
+  if (!match) return {};
+  const halves: { firstHalf?: VerseHalf; lastHalf?: VerseHalf } = {};
+  if (match[1]) halves.firstHalf = match[1] as VerseHalf;
+  // A single half-verse ("13a") is both its own first and last half.
+  const last = match[2] ?? (/[–-]/.test(match[0]) ? undefined : match[1]);
+  if (last) halves.lastHalf = last as VerseHalf;
+  return halves;
+}
+
 /**
  * Clamp a target to real verses: unknown chapters are rejected, a first verse past the end falls back to
  * the whole chapter, and a last verse past the end is cut to the chapter's final verse.

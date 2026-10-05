@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { getStudyGuideHref, hasStudyGuide } from "@/features/comeFollowMe/guideIndex";
 import ChapterChip from "@/features/plans/ChapterChip";
@@ -143,12 +142,9 @@ export default function ComeFollowMeCard() {
       </ul>
 
       {hasStudyGuide(week.start) ? (
-        <Link
-          href={getStudyGuideHref(week.start)}
-          className="self-start text-xs font-bold underline decoration-2 underline-offset-4 hover:decoration-[color:var(--accent-secondary)]"
-        >
-          Study guide with scripture side by side
-        </Link>
+        <div className="flex">
+          <ChapterChip href={getStudyGuideHref(week.start)} label="Study Guide" read={false} />
+        </div>
       ) : null}
 
       {!isCurrent ? (
