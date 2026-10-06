@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
-import ThemeSelect from "@/components/ThemeSelect";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
 type Props = {
@@ -191,25 +190,19 @@ export default function MobileNavDrawer({ open, onClose }: Props) {
           })}
         </nav>
 
-        <div className="mt-6 rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-3">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold">Appearance</p>
-              <p className="text-xs text-[color:var(--foreground-soft)]">Theme and account</p>
-            </div>
-            {user ? (
-              <UserButton
-                appearance={{
-                  elements: {
-                    userButtonAvatarBox: "h-8 w-8",
-                  },
-                }}
-                afterSignOutUrl="/"
-              />
-            ) : null}
+        {user ? (
+          <div className="mt-6 flex items-center justify-between gap-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-3">
+            <p className="text-sm font-bold">Account</p>
+            <UserButton
+              appearance={{
+                elements: {
+                  userButtonAvatarBox: "h-8 w-8",
+                },
+              }}
+              afterSignOutUrl="/"
+            />
           </div>
-          <ThemeSelect compact />
-        </div>
+        ) : null}
 
         <div className="mt-auto pt-4">
           {!user ? (

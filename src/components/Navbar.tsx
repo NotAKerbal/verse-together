@@ -11,7 +11,6 @@ import {
   faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import MobileNavDrawer from "@/components/MobileNavDrawer";
-import ThemeSelect from "@/components/ThemeSelect";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
@@ -69,7 +68,7 @@ export default function Navbar() {
     <>
       <header className={`app-header hidden w-full sm:block ${browseRoute ? "app-header-scroll" : ""}`}>
         <div className="shell-container grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 py-4">
-          <Link href="/" className="brand-wordmark min-w-0 text-[1.35rem] sm:text-[1.5rem]">
+          <Link href="/" className="brand-wordmark brand-pill min-w-0 text-[1.35rem] sm:text-[1.5rem]">
             Verse<span>Together</span>
           </Link>
           <nav className="simple-hide hidden min-w-0 sm:flex items-center justify-center overflow-x-auto no-scrollbar" aria-label="Primary">
@@ -97,7 +96,6 @@ export default function Navbar() {
           </nav>
 
           <div className="simple-hide hidden min-w-0 sm:flex items-center justify-self-end gap-3">
-            <ThemeSelect compact />
             {user ? (
               <span className="inline-flex rounded-full border-2 border-[color:var(--surface-border)] p-0.5">
                 <UserButton

@@ -113,49 +113,6 @@
   --footnote-highlight-active: rgba(227, 144, 122, 0.28);
 }
 
-[data-theme="sepia"] {
-  --background: #f3e9d6;
-  --paper-dot: #dccdb0;
-  --foreground: #2b2118;
-  --foreground-muted: rgba(43, 33, 24, 0.76);
-  --foreground-soft: rgba(43, 33, 24, 0.58);
-  --ink: #2b2118;
-  --rule: #dccdb0;
-  --rule-strong: #c4b08c;
-  --accent-rubric: #8a3420;
-  --accent-rubric-line: rgba(138, 52, 32, 0.42);
-  --surface-card: #f8f0e0;
-  --surface-card-strong: #fbf5e9;
-  --surface-card-soft: #ede0c6;
-  --surface-border: #d3c2a2;
-  --surface-shadow: none;
-  --surface-shadow-soft: 0 1px 2px rgba(43, 33, 24, 0.06), 0 10px 24px -18px rgba(43, 33, 24, 0.38);
-  --surface-shadow-lift: 0 1px 2px rgba(43, 33, 24, 0.07), 0 14px 30px -18px rgba(43, 33, 24, 0.42);
-  --surface-button: #f8f0e0;
-  --surface-button-hover: #ecdfc3;
-  --surface-button-active: #2b2118;
-  --surface-button-active-text: #f8f0e0;
-  --accent-primary: #e6cf93;
-  --accent-secondary: #8a3420;
-  --accent-tertiary: #a85a3c;
-  --accent-sky: #e0dccb;
-  --accent-sky-soft: #ece1c9;
-  --accent-mint: #e0e2c8;
-  --accent-note: #efe1bd;
-  --accent-coral: #e6c0a8;
-  --browse-ink: #2b2118;
-  --browse-glow: transparent;
-  --browse-grid: #dccdb0;
-  --input-surface: #fbf5e9;
-  --mobile-nav-shell: #f8f0e0;
-  --mobile-nav-ring: #d3c2a2;
-  --mobile-nav-active: #2b2118;
-  --mobile-nav-active-text: #f8f0e0;
-  --mobile-nav-icon: #4a3b2c;
-  --footnote-highlight: rgba(205, 165, 80, 0.36);
-  --footnote-highlight-active: rgba(138, 52, 32, 0.16);
-}
-
 html {
   min-height: 100%;
 }
@@ -320,6 +277,17 @@ mark {
 .brand-wordmark span {
   color: var(--accent-rubric);
   font-style: italic;
+}
+
+/* The header wordmark on a quiet paper pill, matching the header's other rounded controls. */
+.brand-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  padding: 0.55rem 1.05rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
 }
 
 .shell-container {

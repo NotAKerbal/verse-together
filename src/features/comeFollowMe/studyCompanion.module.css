@@ -1,12 +1,14 @@
 /*
   Come, Follow Me study companion, set like the guides at isaacstuff.com/cfm: cream paper, warm ink,
   rubric red for references and numerals, serif reading type, sans only for small labels, and space
-  instead of boxes. Every color comes from the app theme tokens, so light, dark, and sepia all apply.
+  instead of boxes. Every color comes from the app theme tokens, so light and dark both apply.
   Guide HTML from the parser uses cfm-* class names, reached only through :global() under .guide.
 
-  Layout: the complete guide alone by default. "Show scriptures" adds the complete assigned scripture:
-  from 900px a sticky column beside the guide (which does not move); below that, a native horizontal
-  scroll-snap strip with one side per screen width, each side scrolling on its own.
+  Layout from 900px: the complete guide alone by default, as one reading column centered in the page;
+  "Show scriptures" adds the complete assigned scripture as a sticky column beside the guide (the pair
+  then starts at the page's left edge). Below 900px there is no switch: the guide and the complete
+  scripture are always a native horizontal scroll-snap strip, guide first, one side per screen width,
+  each side scrolling on its own.
 */
 
 .page {
@@ -191,6 +193,18 @@
 }
 
 /*
+  Guide alone: the page head and the companion (switch, guide, footer) share one column at the reading
+  measure, centered in the wide page shell. Only the column moves; its text stays left-aligned. With the
+  scriptures shown none of this applies, so the columns and the strip keep the full shell width.
+*/
+.page:has(> .companion[data-mode="guide"]) > .header,
+.page:has(> .companion[data-mode="guide"]) > .companion {
+  width: 100%;
+  max-width: var(--cfm-measure);
+  margin-inline: auto;
+}
+
+/*
   The sticky scriptures switch. On its own (guide only, and desktop columns) it is only as wide as the
   switch: it shrink-wraps the button and keeps its right edge on the guide's right edge (the companion is
   a flex column, so align-self: flex-end plus a right margin of "whatever lies beyond the guide measure"
@@ -270,9 +284,12 @@
   display: none;
 }
 
-/* Desktop with scriptures: the guide stays exactly where it was; the scripture opens beside it. */
+/*
+  Desktop with scriptures: the guide keeps its measure and wrapping, moving from the centered column to
+  the page's left edge, and the scripture opens beside it.
+*/
 @media (min-width: 900px) {
-  /* The switch stays put at the guide's right edge in both states. */
+  /* The switch stays at the guide's right edge in both states. */
   .companion[data-mode="columns"] .layout {
     display: grid;
     grid-template-columns: minmax(0, var(--cfm-measure)) minmax(16rem, 32rem);
@@ -309,19 +326,27 @@
 }
 
 /*
-  Phones and small tablets with scriptures: a native horizontal scroll-snap strip, the guide first and
-  the scripture one swipe to the right. Each side is its own vertical scroller, so each keeps its place.
+  Phones and small tablets: a native horizontal scroll-snap strip, the guide first and the scripture
+  one swipe to the right. Each side is its own vertical scroller, so each keeps its place.
   The reader is exactly the viewport under the header (none on phones) and the page ends at its bottom
   edge, so the page's own scroll limit is the docked position. The fixed bottom navigation overlays the
   reader's last strip; each side pads its end by that much instead of shortening the reader.
 */
 @media (max-width: 899.98px) {
+  /*
+    The server renders the desktop guide-only layout; a phone switches to the strip once it hydrates.
+    Until then, keep the desktop-only Show/Hide switch off the phone's first paint.
+  */
+  .companion[data-mode="guide"] .toolbar {
+    display: none;
+  }
+
   .companion[data-mode="strip"] {
     /* No min-height: a reader taller than the viewport would push its toolbar off screen when docked. */
     height: calc(var(--cfm-vh, 100svh) - var(--cfm-chrome-top));
   }
 
-  /* With the pager the switch row legitimately spans the reader: pager on the left, switch on the right. */
+  /* The pager row spans the reader (there is no switch on phones). */
   .companion[data-mode="strip"] .toolbar {
     align-self: stretch;
     justify-content: space-between;
@@ -365,7 +390,7 @@
   Small phones: the app's fixed menu button (Navbar, `sm:hidden`) floats at the top left, over the
   reader's full-width switch row once it docks. Reserve its width plus the usual gap, measured from the
   viewport edge: AppMain's 1rem phone gutter (px-4) already covers part of the button's left offset.
-  Simple mode hides that button. The compact guide-only switch sits at the right edge and needs no room.
+  Simple mode hides that button.
 */
 @media (max-width: 639.98px) {
   .companion[data-mode="strip"] .toolbar {

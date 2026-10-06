@@ -57,7 +57,10 @@ type Props = {
   footer?: ReactNode;
 };
 
-/** guide: the guide alone (default). columns: guide and scripture side by side. strip: phone swipe. */
+/**
+ * Desktop: guide (the guide alone, default) or columns (guide and scripture side by side), under the
+ * Show/Hide switch. Phones and small tablets: always the strip, guide first, scripture one swipe away.
+ */
 type Mode = "guide" | "columns" | "strip";
 
 type SegmentMeta = { target: ScriptureTarget; label: string };
@@ -74,7 +77,6 @@ type Pending = {
   guideTo?: string;
   scriptureTo?: ScriptureTarget;
   sync?: Pane;
-  enterStrip?: boolean;
   reveal?: { side: CompanionSide; instant: boolean };
   focusId?: string;
   focusToggle?: boolean;
@@ -199,7 +201,8 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   const firstChapter = chapters[0].chapter;
   const lastChapter = chapters[chapters.length - 1].chapter;
 
-  // The guide alone is the default on every visit; nothing is remembered between visits.
+  // Desktop only: the guide alone is the default on every visit; nothing is remembered between visits.
+  // Phones always have the scripture one swipe away, and leave this desktop choice alone.
   const [scriptureOn, setScriptureOn] = useState(false);
   const [side, setSide] = useState<CompanionSide>("guide");
   const [active, setActive] = useState<ScriptureTarget | null>(null);
@@ -208,7 +211,21 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   // Server render and hydration assume desktop; phones settle on the strip right after.
   const desktop = useSyncExternalStore(subscribeDesktop, () => matches(DESKTOP_QUERY), () => true);
-  const mode: Mode = !scriptureOn ? "guide" : desktop ? "columns" : "strip";
+  const mode: Mode = !desktop ? "strip" : scriptureOn ? "columns" : "guide";
+
+  // Arriving at desktop width resets the phone strip's side to the guide (and drops "Back to the guide"),
+  // so the next time the strip renders, its first commit is already on the guide side. Adjusted during
+  // render, the way React derives state from a changed input, so it commits with the desktop layout itself.
+  // Only a change to desktop counts: a phone's hydration (server "desktop", then the phone's own) is a
+  // change away from it, and must keep whatever side a scripture deep link has already chosen.
+  const [renderedDesktop, setRenderedDesktop] = useState(desktop);
+  if (renderedDesktop !== desktop) {
+    setRenderedDesktop(desktop);
+    if (desktop) {
+      setSide("guide");
+      setReturnTo(null);
+    }
+  }
 
   const companionRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -229,6 +246,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   const paneScrollRef = useRef({ guide: false, scripture: false });
   /** Re-measure the reader geometry and docked state at once (after a programmatic page scroll). */
   const refreshDockRef = useRef<(() => void) | null>(null);
+  /** The guide's reading position as of its last settled scroll, carried across a desktop/phone resize. */
+  const lastGuideAnchorRef = useRef<GuideAnchor | null>(null);
+  /** Whether the viewport was last settled at desktop width; null until the first commit. */
+  const settledDesktopRef = useRef<boolean | null>(null);
   const guideHtml = useMemo(() => ({ __html: html }), [html]);
 
   useEffect(() => {
@@ -566,10 +587,41 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     };
   }, [mode]);
 
+  // A real resize across the desktop breakpoint: carry the guide's reading position into the new layout,
+  // and bring the scripture along where it shows. Nothing scrolls the page or docks the reader. The first
+  // render after hydration on a phone (server snapshot "desktop", then the phone's own) is not a resize.
+  // Declared after the geometry effect, so the new layout is sized before the pending work below runs.
+  useLayoutEffect(() => {
+    const live = matches(DESKTOP_QUERY);
+    if (settledDesktopRef.current === null) {
+      settledDesktopRef.current = live;
+      return;
+    }
+    if (desktop !== live || settledDesktopRef.current === desktop) return;
+    settledDesktopRef.current = desktop;
+    if (!desktop) {
+      // The side state is already "guide" (reset when the desktop layout rendered); put the strip itself
+      // there too, before paint, and drop any programmatic side change that was still in flight.
+      if (heading.current) {
+        window.clearTimeout(heading.current.timer);
+        heading.current = null;
+      }
+      if (stripRef.current) stripRef.current.scrollLeft = 0;
+    }
+    pendingRef.current = {
+      ...pendingRef.current,
+      guideAnchor: lastGuideAnchorRef.current,
+      sync: mode === "guide" ? undefined : "guide",
+    };
+  }, [desktop, mode]);
+
   // Carry out scheduled work once the DOM shows the new layout, before paint.
   useLayoutEffect(() => {
     const pending = pendingRef.current;
     if (!pending) return;
+    // Wait while the rendered layout does not match the viewport yet (a phone's first render after
+    // hydration, or a resize React has not caught up with); that re-render follows immediately.
+    if ((mode === "strip") !== !matches(DESKTOP_QUERY)) return;
     pendingRef.current = null;
     segmentsRef.current = null;
     segmentIndexRef.current = -1;
@@ -577,7 +629,8 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     const scripture = scriptureBox();
     const root = guideRef.current;
     // Phones: any navigation into the reader docks it first, so neither side opens half off screen.
-    if (mode === "strip" && (pending.enterStrip || pending.guideTo || pending.scriptureTo || pending.reveal)) {
+    // Restoring a reading position alone (a resize) leaves the page where it is.
+    if (mode === "strip" && (pending.guideTo || pending.scriptureTo || pending.reveal)) {
       companionRef.current?.scrollIntoView({ block: "start" });
       refreshDockRef.current?.();
     }
@@ -697,26 +750,36 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     };
   }, [mode, sync]);
 
+  // Remember where the guide is once a scroll settles, for a resize across the breakpoint. By the time
+  // the viewport crosses it, the CSS has already reflowed the old layout, so it cannot be measured then.
+  useEffect(() => {
+    const target: HTMLElement | Window | null = mode === "strip" ? guidePanelRef.current : window;
+    if (!target) return;
+    let timer = 0;
+    const note = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if ((mode === "strip") === !matches(DESKTOP_QUERY)) lastGuideAnchorRef.current = captureGuideAnchor();
+      }, 150);
+    };
+    target.addEventListener("scroll", note, { passive: true });
+    return () => {
+      target.removeEventListener("scroll", note);
+      window.clearTimeout(timer);
+    };
+  }, [mode, captureGuideAnchor]);
+
+  // Desktop only: the switch is not rendered in the phone strip.
   const toggleScripture = () => {
     const guideAnchor = captureGuideAnchor();
-    const phone = !matches(DESKTOP_QUERY);
     if (scriptureOn) {
       saveScripturePosition();
       const focusInside = !!scriptureRef.current?.contains(document.activeElement);
       setScriptureOn(false);
-      setSide("guide");
-      setReturnTo(null);
       schedule({ guideAnchor, focusToggle: focusInside });
     } else {
       setScriptureOn(true);
-      if (phone) setSide("scripture");
-      schedule({
-        guideAnchor,
-        restoreScripture: true,
-        sync: "guide",
-        enterStrip: phone,
-        reveal: phone ? { side: "scripture", instant: false } : undefined,
-      });
+      schedule({ guideAnchor, restoreScripture: true, sync: "guide" });
     }
   };
 
@@ -725,9 +788,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
       const target = normalize(raw);
       if (!target) return;
       const phone = !matches(DESKTOP_QUERY);
-      const entering = !scriptureOn;
+      // Phones always have the scripture; only the desktop layout changes when it opens.
+      const entering = !phone && !scriptureOn;
       setActive(target);
-      setScriptureOn(true);
+      if (!phone) setScriptureOn(true);
       if (options.updateHash) {
         window.history.replaceState(null, "", `#${scriptureAnchor(book.slug, target.chapter, target.first, target.last)}`);
       }
@@ -741,7 +805,6 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
         // A deep link into the scripture also brings the guide to its commentary; a click inside the
         // guide leaves the reader's place in the guide alone.
         sync: options.initial ? "scripture" : undefined,
-        enterStrip: phone && entering,
         reveal: phone ? { side: "scripture", instant: !!options.initial } : undefined,
         focusId:
           phone && !options.initial
@@ -761,11 +824,11 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
       const target = targetFromGuideElement(element);
       if (target) setActive(target);
       if (options.updateHash) window.history.replaceState(null, "", `#${id}`);
-      const strip = scriptureOn && !matches(DESKTOP_QUERY);
+      const strip = !matches(DESKTOP_QUERY);
       if (strip) setSide("guide");
       schedule({
         guideTo: id,
-        sync: scriptureOn ? "guide" : undefined,
+        sync: strip || scriptureOn ? "guide" : undefined,
         reveal: strip ? { side: "guide", instant: !!options.initial } : undefined,
         focusId: strip && !options.initial ? id : undefined,
       });
@@ -868,17 +931,18 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
               {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
             </span>
           </div>
-        ) : null}
-        <button
-          ref={toggleRef}
-          type="button"
-          className={styles.toggle}
-          aria-expanded={scriptureOn}
-          aria-controls="cfm-panel-scripture"
-          onClick={toggleScripture}
-        >
-          {scriptureOn ? "Hide scriptures" : "Show scriptures"}
-        </button>
+        ) : (
+          <button
+            ref={toggleRef}
+            type="button"
+            className={styles.toggle}
+            aria-expanded={scriptureOn}
+            aria-controls="cfm-panel-scripture"
+            onClick={toggleScripture}
+          >
+            {scriptureOn ? "Hide scriptures" : "Show scriptures"}
+          </button>
+        )}
       </div>
 
       <div ref={stripRef} className={styles.layout} onScroll={onStripScroll}>
@@ -913,7 +977,7 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
           id="cfm-panel-scripture"
           aria-label={`Scripture: ${book.label} ${firstChapter}–${lastChapter}`}
           className={styles.scripturePanel}
-          hidden={!scriptureOn}
+          hidden={mode === "guide"}
           inert={scriptureHidden}
         >
           {returnTo && mode === "strip" ? (
