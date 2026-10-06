@@ -319,9 +319,26 @@
     height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top) - var(--cfm-toolbar-h));
     overflow-y: auto;
     scrollbar-gutter: stable;
-    padding: 0.5rem 1rem 3rem clamp(1.25rem, 2.5vw, 2rem);
+    padding: 0 1rem 3rem clamp(1.25rem, 2.5vw, 2rem);
     border-left: 1px solid var(--cfm-rule);
     scrollbar-width: thin;
+  }
+
+  /*
+    A soft top reading edge. Free scrolling and the sync can leave a line straddling the column's top, which
+    a hard cut slices mid-glyph; this strip stays at the top and fades whatever passes under it into the paper.
+    It is also the column's top clearance, so at rest nothing sits under it, and it matches LANDING_GAP
+    (StudyCompanion), so a verse or chapter a navigation lands lies just below it, untouched.
+  */
+  .companion[data-mode="columns"] .scripturePanel::before {
+    content: "";
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: block;
+    height: 0.75rem;
+    background: linear-gradient(var(--background) 15%, transparent);
+    pointer-events: none;
   }
 }
 

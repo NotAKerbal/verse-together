@@ -235,6 +235,7 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   const guideRef = useRef<HTMLDivElement>(null);
   const scriptureRef = useRef<HTMLElement>(null);
   const scriptureDocRef = useRef<HTMLDivElement>(null);
+  const backToGuideRef = useRef<HTMLButtonElement>(null);
   const pendingRef = useRef<Pending | null>(null);
   const ownershipRef = useRef(new ScrollOwnership());
   const segmentsRef = useRef<Segment<SegmentMeta>[] | null>(null);
@@ -663,7 +664,13 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
         const y = scripture.offsetOf(el) + (start.secondHalf ? el.getBoundingClientRect().height / 2 : 0);
         scrollTo(scripture, "scripture", alignAtReadingLine(y, scripture.height(), READING_LINE));
       } else if (el) {
-        scrollTo(scripture, "scripture", scripture.offsetOf(el) - LANDING_GAP);
+        // On phones the sticky "Back to the guide" button covers the side's top; land below it.
+        const back = backToGuideRef.current?.getBoundingClientRect();
+        const covered =
+          back && back.height > 0 && scriptureRef.current
+            ? Math.max(0, back.bottom - scriptureRef.current.getBoundingClientRect().top)
+            : 0;
+        scrollTo(scripture, "scripture", scripture.offsetOf(el) - covered - LANDING_GAP);
       }
     }
     if (pending.sync && scripture) sync(pending.sync);
@@ -981,7 +988,7 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
           inert={scriptureHidden}
         >
           {returnTo && mode === "strip" ? (
-            <button type="button" className={styles.backToGuide} onClick={() => showGuide(returnTo, { updateHash: true })}>
+            <button ref={backToGuideRef} type="button" className={styles.backToGuide} onClick={() => showGuide(returnTo, { updateHash: true })}>
               <span aria-hidden="true">‹ </span>Back to the guide
             </button>
           ) : null}
