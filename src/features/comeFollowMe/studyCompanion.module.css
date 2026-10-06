@@ -4,9 +4,10 @@
   instead of boxes. Every color comes from the app theme tokens, so light, dark, and sepia all apply.
   Guide HTML from the parser uses cfm-* class names, reached only through :global() under .guide.
 
-  Layout: the complete guide alone by default. "Show scriptures" adds the complete assigned scripture:
-  from 900px a sticky column beside the guide (which does not move); below that, a native horizontal
-  scroll-snap strip with one side per screen width, each side scrolling on its own.
+  Layout: the complete guide alone by default, as one reading column centered in the page. "Show
+  scriptures" adds the complete assigned scripture: from 900px a sticky column beside the guide (the
+  pair then starts at the page's left edge); below that, a native horizontal scroll-snap strip with
+  one side per screen width, each side scrolling on its own.
 */
 
 .page {
@@ -191,6 +192,18 @@
 }
 
 /*
+  Guide alone: the page head and the companion (switch, guide, footer) share one column at the reading
+  measure, centered in the wide page shell. Only the column moves; its text stays left-aligned. With the
+  scriptures shown none of this applies, so the columns and the strip keep the full shell width.
+*/
+.page:has(> .companion[data-mode="guide"]) > .header,
+.page:has(> .companion[data-mode="guide"]) > .companion {
+  width: 100%;
+  max-width: var(--cfm-measure);
+  margin-inline: auto;
+}
+
+/*
   The sticky scriptures switch. On its own (guide only, and desktop columns) it is only as wide as the
   switch: it shrink-wraps the button and keeps its right edge on the guide's right edge (the companion is
   a flex column, so align-self: flex-end plus a right margin of "whatever lies beyond the guide measure"
@@ -270,9 +283,12 @@
   display: none;
 }
 
-/* Desktop with scriptures: the guide stays exactly where it was; the scripture opens beside it. */
+/*
+  Desktop with scriptures: the guide keeps its measure and wrapping, moving from the centered column to
+  the page's left edge, and the scripture opens beside it.
+*/
 @media (min-width: 900px) {
-  /* The switch stays put at the guide's right edge in both states. */
+  /* The switch stays at the guide's right edge in both states. */
   .companion[data-mode="columns"] .layout {
     display: grid;
     grid-template-columns: minmax(0, var(--cfm-measure)) minmax(16rem, 32rem);
