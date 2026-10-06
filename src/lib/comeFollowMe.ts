@@ -167,6 +167,11 @@ export function getComeFollowMeWeek(date: Date): ComeFollowMeWeek | null {
   return COME_FOLLOW_ME_WEEKS.find((week) => week.start <= key && key <= week.end) ?? null;
 }
 
+/** The week starting on a YYYY-MM-DD Monday key, or null when it is not in the schedule. */
+export function getComeFollowMeWeekByStart(start: string): ComeFollowMeWeek | null {
+  return COME_FOLLOW_ME_WEEKS.find((week) => week.start === start) ?? null;
+}
+
 /** The week `delta` steps away, or null past either end of the schedule. */
 export function getAdjacentWeek(week: ComeFollowMeWeek, delta: 1 | -1): ComeFollowMeWeek | null {
   const index = COME_FOLLOW_ME_WEEKS.indexOf(week);

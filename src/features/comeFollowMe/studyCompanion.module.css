@@ -1,0 +1,1071 @@
+/*
+  Come, Follow Me study companion, set like the guides at isaacstuff.com/cfm: cream paper, warm ink,
+  rubric red for references and numerals, serif reading type, sans only for small labels, and space
+  instead of boxes. Every color comes from the app theme tokens, so light, dark, and sepia all apply.
+  Guide HTML from the parser uses cfm-* class names, reached only through :global() under .guide.
+
+  Layout: the complete guide alone by default. "Show scriptures" adds the complete assigned scripture:
+  from 900px a sticky column beside the guide (which does not move); below that, a native horizontal
+  scroll-snap strip with one side per screen width, each side scrolling on its own.
+*/
+
+.page {
+  --cfm-serif: var(--font-serif-text);
+  --cfm-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --cfm-ink: var(--foreground);
+  --cfm-ink-2: var(--foreground-muted);
+  --cfm-muted: var(--foreground-soft);
+  --cfm-rule: var(--rule);
+  --cfm-rule-strong: var(--rule-strong);
+  --cfm-rubric: var(--accent-rubric);
+  --cfm-rubric-line: var(--accent-rubric-line);
+  --cfm-panel: var(--surface-card);
+  --cfm-measure: 40rem;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+/* Page head: rubric kicker, normal-weight serif title, serif lede, quiet sans byline. */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 46rem;
+  padding: clamp(0.5rem, 3vw, 2rem) 0.25rem 0;
+}
+
+.backLink {
+  align-self: flex-start;
+  font-size: 0.8125rem;
+  color: var(--cfm-muted);
+}
+
+.backLink:hover {
+  color: var(--cfm-ink);
+}
+
+.eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
+  font-family: var(--cfm-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cfm-rubric);
+}
+
+.eyebrow span + span {
+  color: var(--cfm-muted);
+}
+
+.eyebrow span + span::before {
+  content: "·";
+  margin: 0 0.7rem;
+  color: var(--cfm-rule-strong);
+}
+
+.title {
+  font-family: var(--cfm-serif);
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3.1rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
+}
+
+.summary {
+  max-width: 34em;
+  font-family: var(--cfm-serif);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--cfm-ink-2);
+  text-wrap: pretty;
+}
+
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--cfm-muted);
+}
+
+.attribution {
+  color: var(--cfm-ink-2);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 46rem;
+  padding: 2rem 0.25rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--cfm-muted);
+}
+
+.footer a,
+.noGuide a {
+  color: var(--cfm-ink-2);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+}
+
+.footer a:hover,
+.noGuide a:hover {
+  color: var(--cfm-rubric);
+}
+
+.weekNav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  font-family: var(--cfm-serif);
+  font-size: 1.05rem;
+  color: var(--cfm-ink);
+}
+
+.page .weekNav a {
+  text-decoration: none;
+  color: var(--cfm-ink);
+}
+
+.page .weekNav a:hover {
+  color: var(--cfm-rubric);
+}
+
+.noGuide {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: var(--cfm-measure);
+  padding-inline: 0.25rem;
+  font-family: var(--cfm-serif);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--cfm-ink-2);
+}
+
+.noGuide ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+}
+
+/* Companion layout. Default: the guide alone, at a reading measure. */
+
+/*
+  With the scriptures shown, StudyCompanion measures the live page and overrides these on the element:
+  --cfm-chrome-top (the sticky app header's height, 0 where it is hidden), --cfm-toolbar-h, --cfm-vh (the
+  viewport height) and --cfm-bottom-clear (how much of the viewport the fixed bottom navigation covers).
+  The values here are only the first paint's fallbacks.
+*/
+.companion {
+  --cfm-toolbar-h: 3.25rem;
+  /* Under the app's sticky header where it shows (640px and up); phones have none. */
+  --cfm-chrome-top: 0px;
+  --cfm-bottom-clear: 0px;
+  display: flex;
+  flex-direction: column;
+  scroll-margin-top: var(--cfm-chrome-top);
+}
+
+/* The page footer follows the companion, except in the phone reader where it closes the guide side. */
+.companion > .footer {
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+@media (min-width: 640px) {
+  .companion {
+    --cfm-chrome-top: var(--header-height);
+  }
+}
+
+/*
+  The sticky scriptures switch. On its own (guide only, and desktop columns) it is only as wide as the
+  switch: it shrink-wraps the button and keeps its right edge on the guide's right edge (the companion is
+  a flex column, so align-self: flex-end plus a right margin of "whatever lies beyond the guide measure"
+  puts it there at any width). Its paper background therefore covers only the button's own area, not a
+  measure-wide strip over the guide's text. Its height is the button's 44px target; StudyCompanion
+  measures the real height for docking and anchor offsets.
+*/
+.toolbar {
+  position: sticky;
+  top: var(--cfm-chrome-top);
+  z-index: 5;
+  display: flex;
+  align-self: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin-right: calc(100% - min(100%, var(--cfm-measure)));
+  padding: 0 0.15rem 0 0.6rem;
+  border-radius: 999px;
+  background: var(--background);
+}
+
+.toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 0.15rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cfm-rubric);
+}
+
+.toggle::after {
+  content: "";
+  display: block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.5rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-0.1rem) rotate(-45deg);
+}
+
+.toggle[aria-expanded="true"]::after {
+  transform: translateY(0) rotate(135deg);
+}
+
+.toggle:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+.toggle:focus-visible,
+.pagerButton:focus-visible,
+.guideLink:focus-visible,
+.backToGuide:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.layout {
+  display: block;
+}
+
+.guidePanel {
+  min-width: 0;
+  max-width: var(--cfm-measure);
+}
+
+.scripturePanel[hidden] {
+  display: none;
+}
+
+/* Desktop with scriptures: the guide stays exactly where it was; the scripture opens beside it. */
+@media (min-width: 900px) {
+  /* The switch stays put at the guide's right edge in both states. */
+  .companion[data-mode="columns"] .layout {
+    display: grid;
+    grid-template-columns: minmax(0, var(--cfm-measure)) minmax(16rem, 32rem);
+    align-items: start;
+    gap: clamp(2rem, 4vw, 4rem);
+  }
+
+  /*
+    The scripture column fills exactly the viewport under the header and the switch row once it sticks.
+    Its scroll chains to the page at either end (no overscroll containment), so scrolling back past its
+    top simply carries on up the page.
+  */
+  .companion[data-mode="columns"] .scripturePanel {
+    position: sticky;
+    top: calc(var(--cfm-chrome-top) + var(--cfm-toolbar-h));
+    height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top) - var(--cfm-toolbar-h));
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: 0.5rem 1rem 3rem clamp(1.25rem, 2.5vw, 2rem);
+    border-left: 1px solid var(--cfm-rule);
+    scrollbar-width: thin;
+  }
+}
+
+/*
+  A pane that is not docked yet is not a scroller at all, so a wheel turn or touch over it moves the page
+  until the reader docks. It can still be positioned by the sync; overflow: hidden only stops the reader
+  from scrolling it. (The attribute is maintained by StudyCompanion from readerDock.paneScrolling.)
+*/
+.companion[data-mode="columns"] .scripturePanel[data-pane-scroll="off"],
+.companion[data-mode="strip"] .scripturePanel[data-pane-scroll="off"],
+.companion[data-mode="strip"] .guidePanel[data-pane-scroll="off"] {
+  overflow-y: hidden;
+}
+
+/*
+  Phones and small tablets with scriptures: a native horizontal scroll-snap strip, the guide first and
+  the scripture one swipe to the right. Each side is its own vertical scroller, so each keeps its place.
+  The reader is exactly the viewport under the header (none on phones) and the page ends at its bottom
+  edge, so the page's own scroll limit is the docked position. The fixed bottom navigation overlays the
+  reader's last strip; each side pads its end by that much instead of shortening the reader.
+*/
+@media (max-width: 899.98px) {
+  .companion[data-mode="strip"] {
+    /* No min-height: a reader taller than the viewport would push its toolbar off screen when docked. */
+    height: calc(var(--cfm-vh, 100svh) - var(--cfm-chrome-top));
+  }
+
+  /* With the pager the switch row legitimately spans the reader: pager on the left, switch on the right. */
+  .companion[data-mode="strip"] .toolbar {
+    align-self: stretch;
+    justify-content: space-between;
+    min-height: 3.25rem;
+    margin-right: 0;
+    padding: 0;
+    border-radius: 0;
+    border-bottom: 1px solid var(--cfm-rule);
+  }
+
+  .companion[data-mode="strip"] .layout {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .companion[data-mode="strip"] .layout::-webkit-scrollbar {
+    display: none;
+  }
+
+  .companion[data-mode="strip"] .guidePanel,
+  .companion[data-mode="strip"] .scripturePanel {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    overflow-y: auto;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    padding: 1.25rem 0.35rem calc(2.5rem + var(--cfm-bottom-clear));
+  }
+}
+
+/*
+  Small phones: the app's fixed menu button (Navbar, `sm:hidden`) floats at the top left, over the
+  reader's full-width switch row once it docks. Reserve its width plus the usual gap, measured from the
+  viewport edge: AppMain's 1rem phone gutter (px-4) already covers part of the button's left offset.
+  Simple mode hides that button. The compact guide-only switch sits at the right edge and needs no room.
+*/
+@media (max-width: 639.98px) {
+  .companion[data-mode="strip"] .toolbar {
+    padding-left: calc(
+      var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap) - 1rem
+    );
+  }
+
+  :global(:root[data-simple="true"]) .companion[data-mode="strip"] .toolbar {
+    padding-left: 0;
+  }
+}
+
+.pager {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.pagerButton {
+  min-height: 2.75rem;
+  max-width: 48%;
+  padding: 0 0.2rem;
+  overflow: hidden;
+  font-family: var(--cfm-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--cfm-muted);
+}
+
+.pagerButton[aria-pressed="true"] {
+  color: var(--cfm-ink);
+}
+
+.pagerDots {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 0.35rem;
+}
+
+.pagerDots span {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--cfm-rule-strong);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.pagerDots span[data-on] {
+  background: var(--cfm-rubric);
+  transform: scale(1.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pagerDots span {
+    transition: none;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The scripture: every assigned chapter and verse, one continuous document. */
+
+.backToGuide {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  margin-bottom: 0.5rem;
+  padding-right: 0.75rem;
+  background: var(--background);
+  font-family: var(--cfm-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cfm-rubric);
+}
+
+.scriptureDoc {
+  max-width: 32rem;
+}
+
+.scriptureChapter + .scriptureChapter {
+  margin-top: clamp(3rem, 7vw, 4.5rem);
+}
+
+.chapterTitle {
+  margin-bottom: 1.25rem;
+  font-family: var(--cfm-serif);
+  font-weight: 400;
+}
+
+.chapterBook {
+  display: block;
+  margin-bottom: 0.4rem;
+  font: 600 0.72rem/1 var(--cfm-sans);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cfm-rubric);
+}
+
+.chapterNumber {
+  display: block;
+  font-size: clamp(2.4rem, 1.9rem + 1.6vw, 3rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: lining-nums;
+  color: var(--cfm-rubric);
+}
+
+.verses {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  font-family: var(--cfm-serif);
+  font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.15rem);
+  line-height: 1.68;
+  color: var(--cfm-ink);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+.verses li {
+  scroll-margin-top: 1rem;
+  margin-inline: -0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 3px;
+  text-wrap: pretty;
+  transition: background-color 200ms ease;
+}
+
+/* The passage the guide is on (or a link pointed to). Color only, so the layout never shifts. */
+.verses li[data-active="true"] {
+  background: var(--footnote-highlight);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verses li {
+    transition: none;
+  }
+}
+
+.verseNumber {
+  margin-right: 0.35rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  vertical-align: 0.4em;
+  color: var(--cfm-rubric);
+}
+
+.guideLink {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-variant-numeric: lining-nums;
+  white-space: nowrap;
+  color: var(--cfm-muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+}
+
+.guideLink:hover {
+  color: var(--cfm-rubric);
+}
+
+.readerLink {
+  margin-top: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--cfm-muted);
+}
+
+.readerLink a:hover {
+  color: var(--cfm-ink);
+}
+
+/* Guide side */
+
+.contents {
+  max-width: var(--cfm-measure);
+  margin-bottom: 2.25rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.contents summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cfm-muted);
+}
+
+.contents summary::-webkit-details-marker {
+  display: none;
+}
+
+.contents summary::before {
+  content: "+";
+  font-size: 0.875rem;
+  letter-spacing: 0;
+}
+
+.contents[open] summary::before {
+  content: "–";
+}
+
+.contents > ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.25rem 0 0.75rem 0.9rem;
+  border-left: 1px solid var(--cfm-rule);
+}
+
+.contents > ol > li > a {
+  display: block;
+  padding: 0.35rem 0;
+  color: var(--cfm-ink);
+}
+
+.contents ol ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0 0 0.5rem 0.9rem;
+  color: var(--cfm-ink-2);
+}
+
+.contents ol ol a {
+  display: block;
+  padding: 0.25rem 0;
+}
+
+.contents a:hover {
+  color: var(--cfm-rubric);
+}
+
+.contentsRef {
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--cfm-rubric);
+}
+
+.guide {
+  max-width: var(--cfm-measure);
+  font-family: var(--cfm-serif);
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.1875rem);
+  font-kerning: normal;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  line-height: 1.68;
+  overflow-wrap: break-word;
+  color: var(--cfm-ink);
+}
+
+.guide :is(p, li) {
+  text-wrap: pretty;
+}
+
+/* Native anchor jumps land below the sticky header and switch row; inside a phone side, just below its top. */
+.guide [id] {
+  scroll-margin-top: calc(var(--cfm-chrome-top) + var(--cfm-toolbar-h) + 1rem);
+}
+
+.companion[data-mode="strip"] .guide [id] {
+  scroll-margin-top: 1rem;
+}
+
+.guide :global(.cfm-section) > *,
+.guide :global(.cfm-preamble) > * {
+  margin: 0;
+}
+
+.guide :global(.cfm-section) > * + *,
+.guide :global(.cfm-preamble) > * + * {
+  margin-top: 1.05em;
+}
+
+.guide :global(.cfm-section + .cfm-section) {
+  margin-top: clamp(4rem, 9vw, 6.5rem);
+}
+
+.guide :global(.cfm-preamble) {
+  margin-bottom: 2.25rem;
+  font-style: italic;
+  color: var(--cfm-muted);
+}
+
+/* The source's thematic breaks stay in the DOM; space does their work, as on the guide site. */
+.guide hr {
+  display: none;
+}
+
+.guide h2 {
+  margin-bottom: 1.5rem;
+  font-family: var(--cfm-serif);
+  font-size: clamp(1.75rem, 1.3rem + 1.7vw, 2.375rem);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
+  font-variant-numeric: lining-nums;
+}
+
+.guide :global(.cfm-section:first-child > h2:not(.cfm-h-chapter)) {
+  font-size: clamp(1.4rem, 1.2rem + 0.8vw, 1.75rem);
+  line-height: 1.22;
+}
+
+.guide :global(.cfm-ch-book) {
+  display: block;
+  margin-bottom: 0.5rem;
+  font: 600 0.75rem/1 var(--cfm-sans);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cfm-rubric);
+}
+
+.guide :global(.cfm-ch-num) {
+  display: block;
+  font: 400 clamp(3.5rem, 2.4rem + 4.5vw, 5.25rem) / 0.9 var(--cfm-serif);
+  letter-spacing: -0.03em;
+  color: var(--cfm-rubric);
+}
+
+.guide :global(.cfm-ch-title) {
+  display: block;
+  margin-top: 0.5em;
+}
+
+.guide :global(h2.cfm-h-chapter) {
+  margin-bottom: 2rem;
+}
+
+.guide :global(h2.cfm-h-chapter a.cfm-local) {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.guide :global(h2.cfm-h-chapter a.cfm-local:hover .cfm-ch-num) {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.08em;
+}
+
+.guide h3 {
+  margin-top: 2.4em;
+  margin-bottom: 0.75em;
+  font: italic 400 1.375em/1.25 var(--cfm-serif);
+  letter-spacing: -0.008em;
+  text-wrap: balance;
+}
+
+.guide :global(h3.cfm-h-verse) {
+  margin-top: 3em;
+  font-size: 1.4em;
+  font-style: normal;
+  line-height: 1.22;
+}
+
+.guide :global(.cfm-vref) {
+  display: block;
+  margin-bottom: 0.55rem;
+  font: 600 0.8125rem/1.3 var(--cfm-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--cfm-rubric);
+}
+
+.guide :global(.cfm-vtitle) {
+  display: block;
+}
+
+.guide :global(.cfm-sr) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.guide :is(h2, h3) + * {
+  margin-top: 0;
+}
+
+.guide strong {
+  font-weight: 600;
+}
+
+.guide em {
+  font-style: italic;
+}
+
+.guide :global(p.cfm-lead > strong:first-child) {
+  color: var(--cfm-rubric);
+  font-weight: 600;
+}
+
+.guide a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--cfm-rubric-line);
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.guide a:hover {
+  color: var(--cfm-rubric);
+  text-decoration-color: currentColor;
+}
+
+.guide :global(a.cfm-scripture) {
+  text-decoration-style: dotted;
+  text-decoration-color: var(--cfm-rule-strong);
+}
+
+.guide :global(a.cfm-scripture:hover) {
+  text-decoration-style: solid;
+  text-decoration-color: currentColor;
+}
+
+.guide :global(.cfm-vref a.cfm-scripture),
+.guide :global(p.cfm-lead > strong:first-child a.cfm-local) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.guide :global(.cfm-vref a.cfm-scripture:hover),
+.guide :global(p.cfm-lead > strong:first-child a.cfm-local:hover) {
+  text-decoration: underline;
+}
+
+.guide blockquote {
+  margin-block: 1.6em;
+  padding: 0.15em 0 0.15em 1.25em;
+  border-left: 2px solid var(--cfm-rubric-line);
+  color: var(--cfm-ink-2);
+}
+
+.guide blockquote > * {
+  margin: 0;
+}
+
+.guide blockquote > * + * {
+  margin-top: 0.8em;
+}
+
+.guide :is(ul, ol) {
+  padding-left: 1.5em;
+}
+
+.guide ul {
+  list-style: disc outside;
+}
+
+.guide ul ul {
+  list-style-type: circle;
+}
+
+.guide ol {
+  list-style: decimal outside;
+}
+
+.guide ol ol {
+  list-style-type: lower-alpha;
+}
+
+.guide li + li,
+.guide li > :is(ul, ol) {
+  margin-top: 0.55em;
+}
+
+.guide li::marker {
+  color: var(--cfm-rubric);
+}
+
+.guide ol > li::marker {
+  font: 600 0.82em var(--cfm-sans);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.guide ol > li {
+  padding-left: 0.25em;
+}
+
+.guide :global(.cfm-table) {
+  overflow-x: auto;
+  margin-top: 1.75em;
+}
+
+.guide table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 0.9rem/1.5 var(--cfm-sans);
+  font-variant-numeric: lining-nums;
+}
+
+.guide th,
+.guide td {
+  padding: 0.6rem 0.75rem 0.6rem 0;
+  border-bottom: 1px solid var(--cfm-rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.guide th {
+  border-bottom-color: var(--cfm-rule-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cfm-muted);
+}
+
+.guide h2,
+.guide h3,
+.guide :global(.cfm-sources) {
+  clear: both;
+}
+
+.guide :global(.cfm-sources) {
+  margin-top: 0.5em;
+  font: 0.8125rem/1.5 var(--cfm-sans);
+  font-variant-numeric: lining-nums;
+  color: var(--cfm-muted);
+}
+
+.guide :global(.cfm-sources > summary) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.guide :global(.cfm-sources > summary::-webkit-details-marker) {
+  display: none;
+}
+
+.guide :global(.cfm-sources > summary::before) {
+  content: "+";
+  font-size: 0.875rem;
+  letter-spacing: 0;
+}
+
+.guide :global(.cfm-sources[open] > summary::before) {
+  content: "–";
+}
+
+.guide :global(.cfm-sources > summary:hover) {
+  color: var(--cfm-ink);
+}
+
+.guide :global(.cfm-sources ul) {
+  margin: 0;
+  padding: 0 0 0 0.9rem;
+  border-left: 1px solid var(--cfm-rule);
+  list-style: none;
+}
+
+.guide :global(.cfm-sources li::marker) {
+  content: "";
+}
+
+.guide :global(.cfm-sources li + li) {
+  margin-top: 0.35rem;
+}
+
+.guide :global(.cfm-sources p) {
+  margin: 0.5rem 0 0 0.9rem;
+  font-style: italic;
+}
+
+.guide :global(.cfm-sources a) {
+  color: var(--cfm-ink-2);
+}
+
+.guide :global(.cfm-section[data-kind="sources"]) {
+  font: 0.96875rem/1.65 var(--cfm-sans);
+  font-variant-numeric: lining-nums;
+  color: var(--cfm-ink-2);
+}
+
+.guide :global(.cfm-section[data-kind="sources"]) :is(h2, h3) {
+  font-family: var(--cfm-serif);
+  color: var(--cfm-ink);
+}
+
+.guide :global(.cfm-section[data-kind="sources"] p.cfm-lead > strong:first-child) {
+  color: var(--cfm-ink);
+}
+
+.guide :global(.cfm-section[data-kind="sources"]) a {
+  color: var(--cfm-ink);
+}
+
+/* Artwork: paintings and the tent diagram float beside their passage on wider screens. */
+
+.guide :global(.cfm-art) {
+  float: right;
+  clear: right;
+  width: var(--cfm-art-w, 12rem);
+  max-width: 42%;
+  margin: 0.3em 0 1.25em 1.75em;
+  font: 0.75rem/1.45 var(--cfm-sans);
+  color: var(--cfm-muted);
+}
+
+.guide :global(.cfm-art img) {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+  background: var(--cfm-panel);
+}
+
+.guide :global(.cfm-art figcaption) {
+  margin-top: 0.5rem;
+  font-variant-numeric: lining-nums;
+  text-wrap: pretty;
+}
+
+.guide :global(.cfm-art figcaption a) {
+  color: inherit;
+}
+
+.guide :global(.cfm-art cite) {
+  font-style: italic;
+}
+
+.guide :global(.cfm-art-labels) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--cfm-serif);
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--cfm-ink-2);
+}
+
+.guide :global(.cfm-art-labels li) {
+  margin: 0;
+  padding: 0;
+}
+
+.guide :global(.cfm-art-labels li::marker) {
+  content: "";
+}
+
+@media (max-width: 560px) {
+  .guide :global(.cfm-art) {
+    float: none;
+    max-width: 70%;
+    margin: 1.5em auto;
+  }
+
+  .guide :global(.cfm-art-diagram) {
+    max-width: 100%;
+  }
+}

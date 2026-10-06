@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getStudyGuideHref, hasStudyGuide } from "@/features/comeFollowMe/guideIndex";
 import ChapterChip from "@/features/plans/ChapterChip";
 import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
 import { useBookProgress } from "@/features/plans/useReadingProgress";
@@ -134,11 +135,20 @@ export default function ComeFollowMeCard() {
         <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{week.suggestion.note}</p>
       ) : null}
 
-      <ul className="flex flex-wrap gap-2" aria-label="This week's chapters">
-        {groupByBook(ranges).map((group) => (
-          <BookChips key={`${week.start}-${group.volume}-${group.book}`} {...group} />
-        ))}
-      </ul>
+      {/* The week's reading and its study guide share one row; the chapter list wraps within its own
+          column on weeks with many ranges, and chips truncate rather than overflow a narrow card. */}
+      <div className="flex min-w-0 items-start gap-2">
+        <ul className="flex min-w-0 flex-wrap gap-2" aria-label="This week's chapters">
+          {groupByBook(ranges).map((group) => (
+            <BookChips key={`${week.start}-${group.volume}-${group.book}`} {...group} />
+          ))}
+        </ul>
+        {hasStudyGuide(week.start) ? (
+          <div className="flex shrink-0">
+            <ChapterChip href={getStudyGuideHref(week.start)} label="Study Guide" read={false} />
+          </div>
+        ) : null}
+      </div>
 
       {!isCurrent ? (
         <button
