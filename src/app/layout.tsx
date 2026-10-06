@@ -41,9 +41,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/*
+          Before first paint: the theme follows the system light/dark preference, and keeps following it
+          while the page is open (the listener lives as long as the document). There is no stored choice.
+          Simple mode is read separately, so blocked storage never stops the theme from being set.
+        */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var k="vt_theme_v1";var t=localStorage.getItem(k);if(t!=="light"&&t!=="dark"&&t!=="sepia"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t==="dark"?"dark":"light";if(localStorage.getItem("vt_simple_mode_v1")==="1"){document.documentElement.setAttribute("data-simple","true");}}catch(_){}})();`,
+            __html: `(function(){var d=document.documentElement;try{var m=window.matchMedia("(prefers-color-scheme: dark)");var a=function(){var t=m.matches?"dark":"light";d.setAttribute("data-theme",t);d.style.colorScheme=t;};a();if(m.addEventListener){m.addEventListener("change",a);}else if(m.addListener){m.addListener(a);}}catch(_){}try{if(localStorage.getItem("vt_simple_mode_v1")==="1"){d.setAttribute("data-simple","true");}}catch(_){}})();`,
           }}
         />
       </head>
