@@ -190,35 +190,26 @@
   }
 }
 
-/* A slim sticky row holding the scriptures switch (and on phones, with scriptures shown, the pager). */
+/*
+  The sticky scriptures switch. On its own (guide only, and desktop columns) it is only as wide as the
+  switch: it shrink-wraps the button and keeps its right edge on the guide's right edge (the companion is
+  a flex column, so align-self: flex-end plus a right margin of "whatever lies beyond the guide measure"
+  puts it there at any width). Its paper background therefore covers only the button's own area, not a
+  measure-wide strip over the guide's text. Its height is the button's 44px target; StudyCompanion
+  measures the real height for docking and anchor offsets.
+*/
 .toolbar {
   position: sticky;
   top: var(--cfm-chrome-top);
   z-index: 5;
   display: flex;
+  align-self: flex-end;
   align-items: center;
-  justify-content: flex-end;
   gap: 0.75rem;
-  max-width: var(--cfm-measure);
-  min-height: 3.25rem;
+  margin-right: calc(100% - min(100%, var(--cfm-measure)));
+  padding: 0 0.15rem 0 0.6rem;
+  border-radius: 999px;
   background: var(--background);
-}
-
-/*
-  Small phones: the app's fixed menu button (Navbar, `sm:hidden`) floats at the top left, over this row
-  once it sticks. Reserve its width plus the usual gap, measured from the viewport edge: AppMain's 1rem
-  phone gutter (px-4) already covers part of the button's left offset. Simple mode hides that button.
-*/
-@media (max-width: 639.98px) {
-  .toolbar {
-    padding-left: calc(
-      var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap) - 1rem
-    );
-  }
-
-  :global(:root[data-simple="true"]) .toolbar {
-    padding-left: 0;
-  }
 }
 
 .toggle {
@@ -330,9 +321,14 @@
     height: calc(var(--cfm-vh, 100svh) - var(--cfm-chrome-top));
   }
 
+  /* With the pager the switch row legitimately spans the reader: pager on the left, switch on the right. */
   .companion[data-mode="strip"] .toolbar {
-    max-width: none;
+    align-self: stretch;
     justify-content: space-between;
+    min-height: 3.25rem;
+    margin-right: 0;
+    padding: 0;
+    border-radius: 0;
     border-bottom: 1px solid var(--cfm-rule);
   }
 
@@ -362,6 +358,24 @@
     scroll-snap-align: start;
     scroll-snap-stop: always;
     padding: 1.25rem 0.35rem calc(2.5rem + var(--cfm-bottom-clear));
+  }
+}
+
+/*
+  Small phones: the app's fixed menu button (Navbar, `sm:hidden`) floats at the top left, over the
+  reader's full-width switch row once it docks. Reserve its width plus the usual gap, measured from the
+  viewport edge: AppMain's 1rem phone gutter (px-4) already covers part of the button's left offset.
+  Simple mode hides that button. The compact guide-only switch sits at the right edge and needs no room.
+*/
+@media (max-width: 639.98px) {
+  .companion[data-mode="strip"] .toolbar {
+    padding-left: calc(
+      var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap) - 1rem
+    );
+  }
+
+  :global(:root[data-simple="true"]) .companion[data-mode="strip"] .toolbar {
+    padding-left: 0;
   }
 }
 
