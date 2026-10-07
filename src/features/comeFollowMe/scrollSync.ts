@@ -67,6 +67,56 @@ export function guideToScripture<T>(segments: readonly Segment<T>[], y: number):
   return start + fraction(y, segment.guideStart, segment.guideEnd) * (end - start);
 }
 
+/** A scroll pane's visible height and the clearance kept at its top and bottom edges. */
+export type PaneView = { height: number; top: number; bottom: number };
+
+/**
+ * The scroll offset nearest `scrollTop` that shows all of `span` with the view's clearance at both edges,
+ * or `scrollTop` itself when the span is too tall to show whole.
+ */
+export function keepSpanInView(scrollTop: number, span: Span, view: PaneView): number {
+  const lowest = span.end + view.bottom - view.height;
+  const highest = span.start - view.top;
+  if (lowest > highest) return scrollTop;
+  return Math.min(highest, Math.max(lowest, scrollTop));
+}
+
+/**
+ * Where the scripture pane should scroll while the guide drives, for guide offset `y`.
+ *
+ * It follows guideToScripture, which puts the matching scripture on the pane's reading line (`line`
+ * pixels below its top). A passage short enough to fit in the pane is held wholly in view instead:
+ * from its first verse to its last, clear of the pane's edges, for as long as the guide is on it. Taller
+ * passages scroll through continuously, as before. Over the last `blend` pixels of guide before the next
+ * segment, the pane glides to where that segment will start, so a passage boundary never jumps.
+ * Null where the guide has nothing to align (the scripture holds still).
+ */
+export function guideScrollTop<T>(
+  segments: readonly Segment<T>[],
+  y: number,
+  line: number,
+  view: PaneView,
+  blend: number
+): number | null {
+  const index = segmentAt(segments, y);
+  if (index < 0) return null;
+  const placed = (i: number, at: number) => {
+    const span = segments[i].scripture;
+    if (!span) return null;
+    const raw = span.start + fraction(at, segments[i].guideStart, segments[i].guideEnd) * (span.end - span.start) - line;
+    return keepSpanInView(raw, span, view);
+  };
+  const here = placed(index, y);
+  if (here == null) return null;
+  const segment = segments[index];
+  const next = index + 1 < segments.length ? placed(index + 1, segments[index + 1].guideStart) : null;
+  const zone = Math.min(blend, (segment.guideEnd - segment.guideStart) / 2);
+  // Nothing to blend into (the next segment holds still), or this segment already ends where it starts.
+  if (next == null || zone <= 0 || Math.abs(next - (placed(index, segment.guideEnd) ?? next)) < 0.5) return here;
+  const t = (y - (segment.guideEnd - zone)) / zone;
+  return t <= 0 ? here : here + Math.min(1, t) * (next - here);
+}
+
 /**
  * Scripture spans in reading order, each starting no earlier than the previous one ended, so a verse
  * shared by two segments (57:11–13a and 57:13b–14 both touch verse 13) belongs to exactly one of them.
@@ -101,6 +151,33 @@ export function scriptureToGuide<T>(segments: readonly Segment<T>[], y: number):
     }
   }
   return spans[spans.length - 1].segment.guideEnd;
+}
+
+/**
+ * The reader driving the scripture after the guide had placed it. guideScrollTop holds a fitting passage
+ * still while the guide reads on, so the plain reverse map (scriptureToGuide) of the held scripture can lie
+ * far from where the guide actually is; it is not an inverse there. This carries the difference (`bias`)
+ * into the reader's own scripture driving, so the guide continues from where it is, and works it off as
+ * the scripture moves. `raw` is the plain reverse-mapped guide offset of the last step.
+ */
+export type ReverseFollow = { bias: number; raw: number };
+
+/** Takeover: the guide is at `guide` while the plain reverse map of the scripture's position reads `raw`. */
+export function startReverseFollow(guide: number, raw: number): ReverseFollow {
+  return { bias: guide - raw, raw };
+}
+
+/**
+ * The guide offset for the scripture's new plain reverse-mapped offset `raw`. The guide always moves the
+ * same way as the plain mapping, from where it was (never a jump), and `catchUp` of each move's size is
+ * taken off the bias: moving toward the plain mapping, the guide goes that much slower; moving away from
+ * it, that much faster. Once the bias is gone, it is the plain mapping exactly.
+ */
+export function followScripture(state: ReverseFollow, raw: number, catchUp = 0.5): { guide: number; state: ReverseFollow } {
+  const move = raw - state.raw;
+  const absorbed = Math.min(Math.abs(state.bias), Math.abs(move) * catchUp);
+  const bias = state.bias - Math.sign(state.bias) * absorbed;
+  return { guide: raw + bias, state: { bias, raw } };
 }
 
 /**
