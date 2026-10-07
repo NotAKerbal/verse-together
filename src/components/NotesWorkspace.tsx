@@ -17,6 +17,7 @@ import {
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import AccountControl from "@/components/AccountControl";
 import { useAuth } from "@/lib/auth";
 import { getInsightDraft, type InsightDraftSummary } from "@/lib/appData";
 import {
@@ -467,30 +468,38 @@ export default function NotesWorkspace() {
   // ---- states before the workspace ---------------------------------------
 
   if (loading) {
-    return <div className="text-sm text-[color:var(--foreground-muted)]">Loading notes…</div>;
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm text-[color:var(--foreground-muted)]">Loading notes…</div>
+        <AccountControl variant="page" />
+      </div>
+    );
   }
 
   if (!user) {
     return (
-      <div className="panel-card mx-auto flex max-w-xl flex-col items-center gap-4 rounded-[1.5rem] px-6 py-8 text-center">
-        <LightbulbBadge size="lg" />
-        <div>
-          <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use Notes</h1>
-          <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
-            Keep verses, quotes and definitions together in notes, file them in folders, tag them, and share the ones you want to.
-          </p>
+      <>
+        <AccountControl variant="page" />
+        <div className="panel-card mx-auto flex max-w-xl flex-col items-center gap-4 rounded-[1.5rem] px-6 py-8 text-center">
+          <LightbulbBadge size="lg" />
+          <div>
+            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use Notes</h1>
+            <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
+              Keep verses, quotes and definitions together in notes, file them in folders, tag them, and share the ones you want to.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Link href="/browse" className="surface-button inline-flex h-10 items-center rounded-full border-2 px-4 text-sm">
+              Browse scriptures
+            </Link>
+            <SignInButton mode="modal">
+              <button className="inline-flex h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]">
+                Sign in
+              </button>
+            </SignInButton>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Link href="/browse" className="surface-button inline-flex h-10 items-center rounded-full border-2 px-4 text-sm">
-            Browse scriptures
-          </Link>
-          <SignInButton mode="modal">
-            <button className="inline-flex h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]">
-              Sign in
-            </button>
-          </SignInButton>
-        </div>
-      </div>
+      </>
     );
   }
 
@@ -841,10 +850,13 @@ export default function NotesWorkspace() {
 
   return (
     <div className="space-y-4">
-      <h1 className="flex items-center gap-2.5 px-1 font-display text-[1.6rem] font-extrabold tracking-[-0.03em] sm:text-[1.9rem]">
-        <LightbulbBadge />
-        Notes
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="flex min-w-0 items-center gap-2.5 px-1 font-display text-[1.6rem] font-extrabold tracking-[-0.03em] sm:text-[1.9rem]">
+          <LightbulbBadge />
+          Notes
+        </h1>
+        <AccountControl variant="page" />
+      </div>
 
       {isPhone ? (
         mobileView === "editor" && activeDraftId ? (

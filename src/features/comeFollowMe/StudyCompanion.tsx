@@ -25,7 +25,16 @@ import {
   type ScriptureTarget,
 } from "@/lib/cfm/cfmAnchors";
 import type { GuidePassage, TocItem } from "@/lib/cfm/cfmGuide";
-import { sideAtScroll, type CompanionSide } from "./companionPanes";
+import {
+  guideSectionAt,
+  returnsToGuide,
+  ScriptureDeparture,
+  scripturePositionAt,
+  sideAtScroll,
+  type CompanionSide,
+  type ScriptureMark,
+  type StripInput,
+} from "./companionPanes";
 import {
   alignAtReadingLine,
   buildSegments,
@@ -117,6 +126,8 @@ const READING_LINE = 0.3;
 const LANDING_GAP = 12;
 /** The contents mark the entry whose heading has passed this far below the measured chrome as current. */
 const SECTION_LINE = 80;
+/** A strip movement this soon after the reader's last touch, wheel turn, or key on it is their swipe. */
+const STRIP_INPUT_MS = 400;
 const MARKERS = [
   "section.cfm-section > h2",
   "[data-cfm-passage]",
@@ -158,6 +169,17 @@ function windowBox(covered: () => number): ScrollBox {
     max: () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
     offsetOf: (node) => node.getBoundingClientRect().top - covered() + window.scrollY,
   };
+}
+
+/**
+ * A text selection in `root`, or a modal dialog open on the page (annotations, guide highlights, contents):
+ * a horizontal movement then is part of selecting or editing, not the reader turning to the other side.
+ */
+function busyWithin(root: HTMLElement | null): boolean {
+  if (document.querySelector("dialog[open]")) return true;
+  const selection = window.getSelection();
+  if (!root || !selection || selection.isCollapsed) return false;
+  return [selection.anchorNode, selection.focusNode].some((node) => node != null && root.contains(node));
 }
 
 /** Height of the app's sticky header where it is shown (it is hidden on phones). */
@@ -285,6 +307,10 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   const reverseRef = useRef<ReverseFollow | null>(null);
   /** A side the strip is being scrolled to programmatically. */
   const heading = useRef<{ side: CompanionSide; timer: number } | null>(null);
+  /** Phones: the strip's first movement away from a scripture side it rested on. */
+  const departureRef = useRef(new ScriptureDeparture());
+  /** Phones: fingers on the strip, and when the reader last touched, turned, or keyed it. */
+  const stripInputRef = useRef<StripInput>({ touches: 0, at: Number.NEGATIVE_INFINITY });
   /** Which panes may scroll by themselves right now (see readerDock.ts); kept current by the geometry effect. */
   const paneScrollRef = useRef({ guide: false, scripture: false });
   /** Re-measure the reader geometry and docked state at once (after a programmatic page scroll). */
@@ -491,6 +517,52 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     },
     [guideBox, scriptureBox, segments, scrollTo, noteSegment, scriptureCovered, bottomCovered, scriptureLineOf]
   );
+
+  /**
+   * Phones, turning from the scripture back to the guide: the guide opens at the start of the commentary for
+   * the verse on the scripture's reading line (its passage, or its chapter's opening), just below the side's
+   * top, instead of wherever the live sync's proportional mapping, a deep link, or the reader's own guide
+   * reading left it. Every return does this, the first after a deep link or a reference included. The
+   * scripture stays where it is, and its next movement continues the guide from here (a hand-off), so
+   * nothing jumps back. Repeating it with the scripture unmoved lands on the same place, so it scrolls nothing.
+   */
+  const openGuideAtScripture = useCallback(() => {
+    if (mode !== "strip" || matches(DESKTOP_QUERY)) return;
+    if (busyWithin(companionRef.current)) return;
+    const scripture = scriptureBox();
+    const root = guideRef.current;
+    if (!scripture || !root) return;
+    const line = scripture.top() + scriptureLineOf(scripture);
+    // Each chapter's heading, then its verses, in document order; measuring stops at the first one below the line.
+    const marks: ScriptureMark[] = [];
+    const below = () => marks.length > 0 && marks[marks.length - 1].top > line;
+    for (const entry of chapters) {
+      for (const verse of [null, ...entry.verses.map((item) => item.verse)]) {
+        const el = document.getElementById(
+          verse == null ? scriptureAnchor(book.slug, entry.chapter) : scriptureVerseId(book.slug, entry.chapter, verse)
+        );
+        if (!el) continue;
+        const height = verse == null ? 0 : el.getBoundingClientRect().height;
+        marks.push({ chapter: entry.chapter, verse, top: scripture.offsetOf(el), height });
+        if (below()) break;
+      }
+      if (below()) break;
+    }
+    const position = scripturePositionAt(marks, { scrollTop: scripture.top(), line });
+    if (!position) return;
+    const section = guideSectionAt(position, passages);
+    const el =
+      section.kind === "passage"
+        ? document.getElementById(section.id)
+        : root.querySelector<HTMLElement>(`section.cfm-section[data-chapter="${section.chapter}"] > h2`);
+    if (!el || !root.contains(el)) return;
+    const guide = guideBox();
+    scrollTo(guide, "guide", guide.offsetOf(el) - LANDING_GAP);
+    reverseRef.current = null;
+    handoffRef.current = { scripture: scripture.top() };
+    // The pager label and verse highlight name the section landed on (1px inside it, past any rounding).
+    noteSegment(segments(guide, scripture), guide.offsetOf(el) + 1);
+  }, [mode, scriptureBox, scriptureLineOf, chapters, book.slug, passages, guideBox, scrollTo, noteSegment, segments]);
 
   const captureGuideAnchor = useCallback((): GuideAnchor | null => {
     const intro = introRef.current;
@@ -781,6 +853,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
         heading.current = null;
       }
       if (stripRef.current) stripRef.current.scrollLeft = 0;
+      departureRef.current.reset();
     }
     pendingRef.current = { ...pendingRef.current, guideAnchor: lastGuideAnchorRef.current, sync: "guide" };
   }, [desktop]);
@@ -985,6 +1058,30 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     };
   }, [mode, captureGuideAnchor]);
 
+  // Phones: note the reader's own input on the strip, so a swipe can be told from the strip re-snapping
+  // after a resize or rotation, which moves it with no one touching it. Listeners are passive. A change
+  // to the strip's own width is measured into the departure tracker as it happens, so the re-snap that
+  // follows is never taken for a swipe, however recent the reader's last touch or wheel turn was.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || mode !== "strip") return;
+    const input = stripInputRef.current;
+    const departure = departureRef.current;
+    const note = (event: Event) => {
+      input.at = performance.now();
+      if ("touches" in event) input.touches = (event as TouchEvent).touches.length;
+    };
+    const types = ["touchstart", "touchmove", "touchend", "touchcancel", "wheel", "pointerdown", "keydown"] as const;
+    for (const type of types) strip.addEventListener(type, note, { passive: true });
+    const resize = new ResizeObserver(() => departure.resized(strip.scrollLeft, strip.scrollWidth - strip.clientWidth));
+    resize.observe(strip);
+    return () => {
+      for (const type of types) strip.removeEventListener(type, note);
+      resize.disconnect();
+      input.touches = 0;
+    };
+  }, [mode]);
+
   const showScripture = useCallback(
     (
       raw: ScriptureTarget,
@@ -1080,6 +1177,14 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   const onStripScroll = () => {
     const strip = stripRef.current;
     if (!strip || mode !== "strip") return;
+    // The reader's own swipe off the scripture: place the guide at its first movement, while the guide is
+    // still all but out of view, so it slides in already at the commentary's start. Once per departure; a
+    // programmatic move (heading) or a movement with nobody on the strip only uses the departure up, and a
+    // re-snap to a new strip width is not a departure at all (see ScriptureDeparture).
+    const departed = departureRef.current.scrolled(strip.scrollLeft, strip.scrollWidth - strip.clientWidth);
+    if (returnsToGuide(departed, !!heading.current, stripInputRef.current, performance.now(), STRIP_INPUT_MS)) {
+      openGuideAtScripture();
+    }
     const settled = sideAtScroll(strip.scrollLeft, strip.clientWidth);
     if (heading.current) {
       if (settled !== heading.current.side) return;
@@ -1105,11 +1210,18 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     });
   };
 
+  // The pager's way from the scripture back to the guide opens the guide just as a swipe does.
+  const turnToGuide = () => {
+    if (side === "scripture" && !heading.current) openGuideAtScripture();
+    revealSide("guide");
+  };
+
   const onPagerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
     const next = event.key === "ArrowLeft" ? "guide" : "scripture";
-    revealSide(next);
+    if (next === "guide") turnToGuide();
+    else revealSide(next);
     document.getElementById(`cfm-show-${next}`)?.focus();
   };
 
@@ -1132,7 +1244,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
             className={styles.pagerButton}
             aria-controls="cfm-panel-guide"
             aria-pressed={side === "guide"}
-            onClick={() => revealSide("guide")}
+            onClick={turnToGuide}
             onKeyDown={onPagerKeyDown}
           >
             <span aria-hidden="true">‹ </span>Guide
