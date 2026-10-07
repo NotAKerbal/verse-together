@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import AccountControl from "@/components/AccountControl";
 import { useAuth } from "@/lib/auth";
 import ProgressBar from "./ProgressBar";
 import PlansSignedOut from "./PlansSignedOut";
@@ -208,10 +209,11 @@ export default function PlanDetail({ planId }: { planId: string }) {
 
   return (
     <section className="page-shell py-4 sm:py-8">
-      <div className="px-1">
+      <div className="flex items-center justify-between gap-3 px-1">
         <Link href="/plans" className="surface-button inline-flex min-h-9 items-center rounded-full border-2 px-3 text-sm" data-tap>
           {"←"} All plans
         </Link>
+        <AccountControl variant="page" />
       </div>
       {content}
     </section>

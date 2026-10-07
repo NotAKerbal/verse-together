@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import AccountControl from "@/components/AccountControl";
 import { useAuth } from "@/lib/auth";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import PlansSignedOut from "./PlansSignedOut";
@@ -930,10 +931,11 @@ export default function PlanBuilder({ planId }: { planId?: string }) {
 
   return (
     <section className="page-shell py-4 sm:py-8">
-      <div className="px-1">
+      <div className="flex items-center justify-between gap-3 px-1">
         <Link href={editing ? `/plans/${planId}` : "/plans"} className="surface-button inline-flex min-h-9 items-center rounded-full border-2 px-3 text-sm" data-tap>
           {"←"} {editing ? "Back to plan" : "All plans"}
         </Link>
+        <AccountControl variant="page" />
       </div>
       <header className="page-hero space-y-3">
         <div className="page-eyebrow">Study plans</div>

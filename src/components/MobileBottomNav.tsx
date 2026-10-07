@@ -31,11 +31,15 @@ function BookIcon({ active }: { active: boolean }) {
   );
 }
 
-function SearchIcon({ active }: { active: boolean }) {
+function ListCheckIcon({ active }: { active: boolean }) {
   return (
     <svg aria-hidden="true" {...iconProps} className={`h-5 w-5 ${active ? "scale-105" : ""}`}>
-      <circle cx="11" cy="11" r="5.5" />
-      <path d="m15.2 15.2 4.3 4.3" />
+      <path d="m3.5 6.5 1.5 1.5 3-3" />
+      <path d="M11 7h9" />
+      <path d="m3.5 12.5 1.5 1.5 3-3" />
+      <path d="M11 13h9" />
+      <path d="M4 19h4" />
+      <path d="M11 19h9" />
     </svg>
   );
 }
@@ -58,10 +62,10 @@ const navItems: NavItem[] = [
     active: (pathname) => pathname === "/" || isBrowseDiscoveryPath(pathname) || isReaderPath(pathname),
   },
   {
-    href: "/search",
-    label: "Search",
-    icon: SearchIcon,
-    active: (pathname) => isPathActive(pathname, "/search"),
+    href: "/plans",
+    label: "Plans",
+    icon: ListCheckIcon,
+    active: (pathname) => isPathActive(pathname, "/plans"),
   },
   {
     href: "/notes",

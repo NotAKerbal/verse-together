@@ -1463,7 +1463,7 @@ export default function ChapterReader({
               isAtTop ? "py-0" : "py-1"
             }`}
           >
-            <div className="panel-card-strong mobile-menu-clearance relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 sm:px-4">
+            <div className="panel-card-strong relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 sm:px-4">
               <div className="flex items-center justify-between gap-2 sm:gap-3">
                 <div className="min-w-0 flex flex-1 items-center gap-2 pl-0.5 sm:gap-3 sm:pl-1">
                   <ScriptureQuickNav

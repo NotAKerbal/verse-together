@@ -47,9 +47,6 @@
   --shell-gutter: clamp(1rem, 2.6vw, 2rem);
   --header-height: 4.75rem;
   --input-surface: #fffdf9;
-  --mobile-floating-button-left: 1rem;
-  --mobile-floating-button-size: 2.75rem;
-  --mobile-floating-button-gap: 0.2rem;
   --mobile-nav-shell: #fbf9f4;
   --mobile-nav-ring: #d9d1c1;
   --mobile-nav-active: #1f1d1a;
@@ -455,11 +452,6 @@ mark {
   }
 }
 
-.mobile-menu-clearance {
-  margin-left: calc(var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap));
-  width: calc(100% - (var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap)));
-}
-
 .panel-card {
   border: 1px solid var(--surface-border);
   border-radius: 0.6rem;
@@ -706,13 +698,6 @@ mark {
   }
 }
 
-@media (min-width: 640px) {
-  .mobile-menu-clearance {
-    margin-left: 0;
-    width: 100%;
-  }
-}
-
 /*
   Simple mode: <html data-simple="true"> (see src/lib/simpleMode.ts).
   Hides study tools and chrome so only the scripture text remains.
@@ -733,11 +718,6 @@ mark {
 :root[data-simple="true"] .app-main:not([data-fixed="true"]) {
   padding-top: 2.5rem;
   padding-bottom: 5.5rem;
-}
-
-:root[data-simple="true"] .mobile-menu-clearance {
-  margin-left: 0;
-  width: 100%;
 }
 
 /* Pure paper: the dotted grid is gone altogether. */

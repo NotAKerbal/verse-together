@@ -411,24 +411,6 @@
   }
 }
 
-/*
-  Small phones: the app's fixed menu button (Navbar, `sm:hidden`) floats at the top left, over the
-  reader's full-width pager row once it docks. Reserve its width plus the usual gap, measured from the
-  viewport edge: AppMain's 1rem phone gutter (px-4) already covers part of the button's left offset.
-  Simple mode hides that button.
-*/
-@media (max-width: 639.98px) {
-  .companion[data-mode="strip"] .toolbar {
-    padding-left: calc(
-      var(--mobile-floating-button-left) + var(--mobile-floating-button-size) + var(--mobile-floating-button-gap) - 1rem
-    );
-  }
-
-  :global(:root[data-simple="true"]) .companion[data-mode="strip"] .toolbar {
-    padding-left: 0;
-  }
-}
-
 .pager {
   display: flex;
   flex: 1;
