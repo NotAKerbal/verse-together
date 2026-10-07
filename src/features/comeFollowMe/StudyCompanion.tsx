@@ -322,12 +322,34 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     return el ? elementBox(el) : null;
   }, []);
 
-  /** How much of the scripture side's top the phones' sticky "Back to the guide" button covers. */
+  /**
+   * Where reading starts inside the docked scripture pane, from its top. On desktop the pane's own scroller
+   * runs up to the viewport top, exactly like the page-scrolled guide beside it, so its text passes under and
+   * between the transparent app header's floating controls; that header (measured) is where reading starts.
+   * On phones the strip side starts below its pager row, with nothing floating over it.
+   * This is a reading and landing measure only: the pane still clips at its real top edge.
+   */
+  const scriptureReadingTop = useCallback(() => (mode === "columns" ? headerBottom() : 0), [mode]);
+
+  /**
+   * How much of the scripture pane's top an explicit landing or a held passage keeps clear of: the reading top,
+   * or on phones the sticky "Back to the guide" button where it shows.
+   */
   const scriptureCovered = useCallback(() => {
     const back = backToGuideRef.current?.getBoundingClientRect();
     const panel = scriptureRef.current;
-    return back && back.height > 0 && panel ? Math.max(0, back.bottom - panel.getBoundingClientRect().top) : 0;
-  }, []);
+    const backCover = back && back.height > 0 && panel ? Math.max(0, back.bottom - panel.getBoundingClientRect().top) : 0;
+    return Math.max(scriptureReadingTop(), backCover);
+  }, [scriptureReadingTop]);
+
+  /** The scripture pane's reading line: READING_LINE of the way down the part of it below its reading top. */
+  const scriptureLineOf = useCallback(
+    (scripture: ScrollBox) => {
+      const top = scriptureReadingTop();
+      return top + (scripture.height() - top) * READING_LINE;
+    },
+    [scriptureReadingTop]
+  );
 
   /** How much of the reader's bottom the phones' fixed bottom navigation covers (measured by the geometry effect). */
   const bottomCovered = useCallback(
@@ -429,7 +451,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
       if (!scripture) return;
       const list = segments(guide, scripture);
       const guideLine = guide.height() * READING_LINE;
-      const scriptureLine = scripture.height() * READING_LINE;
+      const scriptureLine = scriptureLineOf(scripture);
       if (from === "guide") {
         const guideY = guide.top() + guideLine;
         // A passage that fits in the pane is kept whole, clear of the pane's top and bottom (see guideScrollTop).
@@ -462,7 +484,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
         noteSegment(list, step.guide);
       }
     },
-    [guideBox, scriptureBox, segments, scrollTo, noteSegment, scriptureCovered, bottomCovered]
+    [guideBox, scriptureBox, segments, scrollTo, noteSegment, scriptureCovered, bottomCovered, scriptureLineOf]
   );
 
   const captureGuideAnchor = useCallback((): GuideAnchor | null => {
@@ -600,10 +622,11 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     /** The last evaluated dock state, and whether a viewport resize must restore it. */
     let docked = false;
     let redockAfterResize = false;
-    // Phones dock the whole reader (pager row first); desktop docks the scripture column, which sticks right
-    // under the app header: the desktop toolbar row is in the guide column only, so it adds nothing here.
+    // Phones dock the whole reader (pager row first) under the app header where one shows. Desktop docks the
+    // scripture column at the viewport top, its real clipping edge, the same edge the page-scrolled guide
+    // has; the transparent app header floats over both columns alike.
     const readerElement = () => (mode === "strip" ? companion : scripturePanel);
-    const dockLine = () => chromeTop;
+    const dockLine = () => (mode === "strip" ? chromeTop : 0);
     // A viewport change (URL bar, rotation, on-screen keyboard closing) resizes the reader only after the
     // browser has already clamped the page to the old, shorter document, which can leave a docked reader
     // stranded part-way down. Remember that it was docked, so the next measurement can put it back.
@@ -788,22 +811,56 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
       const el = document.getElementById(pending.guideTo);
       if (el) scrollTo(guide, "guide", guide.offsetOf(el) - LANDING_GAP);
     }
+    /** The scripture target, where its reading starts inside it, and the pane scroll its landing asked for. */
+    let landing: { el: HTMLElement; lead: number; requested: number } | null = null;
     if (pending.scriptureTo && scripture) {
       const start = targetStart(pending.scriptureTo, passages);
       const el = document.getElementById(
         start.verse != null ? scriptureVerseId(book.slug, start.chapter, start.verse) : scriptureAnchor(book.slug, start.chapter)
       );
-      if (el && pending.sync === "scripture") {
-        // A deep link then brings the guide along: put the target's start on the reading line the sync
-        // reads, so the guide lands on that verse's commentary, not on whatever sits 30% further down.
-        const y = scripture.offsetOf(el) + (start.secondHalf ? el.getBoundingClientRect().height / 2 : 0);
-        scrollTo(scripture, "scripture", alignAtReadingLine(y, scripture.height(), READING_LINE));
-      } else if (el) {
-        // On phones the sticky "Back to the guide" button covers the side's top; land below it.
-        scrollTo(scripture, "scripture", scripture.offsetOf(el) - scriptureCovered() - LANDING_GAP);
+      if (el) {
+        // A second-half target (57:13b–14) starts halfway down its verse, not at the verse's top.
+        const lead = start.secondHalf ? el.getBoundingClientRect().height / 2 : 0;
+        const y = scripture.offsetOf(el) + lead;
+        let requested: number;
+        if (pending.sync === "scripture") {
+          // A deep link then brings the guide along: put the target's start on the reading line the sync
+          // reads, so the guide lands on that verse's commentary, not on whatever sits 30% further down.
+          // (The line is measured below the pane's reading top, so both offsets are taken from there.)
+          const top = scriptureReadingTop();
+          requested = alignAtReadingLine(y - top, scripture.height() - top, READING_LINE);
+        } else {
+          // Land the target's verse below whatever covers the pane's top: the app header on desktop, the Back
+          // button on phones.
+          requested = scripture.offsetOf(el) - scriptureCovered() - LANDING_GAP;
+        }
+        scrollTo(scripture, "scripture", requested);
+        landing = { el, lead, requested };
       }
     }
     if (pending.sync && scripture) sync(pending.sync);
+    const panel = scriptureRef.current;
+    const layout = stripRef.current;
+    // Only a genuine start-of-scripture target: its landing asked for a scroll above the pane's first pixel
+    // (so the pane could not place it), and the pane's own native scroll is in fact still at 0.
+    if (mode === "columns" && landing && landing.requested < 1 && panel && layout && panel.scrollTop < 1) {
+      // Desktop: a target at the very start of the scripture (its first chapter heading) cannot be scrolled clear
+      // of the app header inside the pane: the pane is already at the top of its own scroll, and while it is
+      // docked its top is the viewport top. Only the page can show it, and only by leaving the reader undocked.
+      // So the page goes to the reader's natural origin: the pane's top at the measured header bottom (lower
+      // if the target needs more room to clear it by LANDING_GAP). The guide, which is the page, then shows
+      // the start of the same chapter beside it, and a guide-driven pass settles the panes' sync state there.
+      const header = headerBottom();
+      const targetTop = landing.el.getBoundingClientRect().top + landing.lead;
+      if (targetTop < header + LANDING_GAP) {
+        // The target's offset inside the pane (the pane is at scroll 0), and the pane's natural document top:
+        // the layout row it starts, which is not sticky.
+        const offset = targetTop - panel.getBoundingClientRect().top;
+        const paneTop = Math.max(header, header + LANDING_GAP - offset);
+        scrollPage(layout.getBoundingClientRect().top + window.scrollY - paneTop);
+        sync("guide");
+      }
+    }
     if (pending.reveal) revealSide(pending.reveal.side, pending.reveal.instant);
     if (pending.focusId) focusWithoutScrolling(document.getElementById(pending.focusId));
   });
@@ -995,7 +1052,9 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
       const id = decodeFragment(window.location.hash);
       if (!id) return;
       const target = parseScriptureAnchor(id, book.slug);
-      if (target) showScriptureRef.current(target, { updateHash: false, fromGuide: null, initial });
+      // A scripture deep link brings the guide to its commentary whether it opens the page or arrives later
+      // on the same page (a changed fragment, back/forward), so the two panes never show different chapters.
+      if (target) showScriptureRef.current(target, { updateHash: false, fromGuide: null, initial, follow: true });
       else showGuideRef.current(id, { updateHash: false, initial });
     };
     apply(true);
@@ -1048,7 +1107,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
 
   // The reader's sticky toolbar row. Phones: the pager row across the top of the whole strip. Desktop: only
   // the compact Contents button, at the top of the guide column alone (hidden, and zero-height, where the
-  // contents rail shows), so the scripture column beside it starts and docks level with the guide column.
+  // contents rail shows), so the scripture column beside it starts level with the guide column.
   const toolbar = (
     <div ref={toolbarRef} className={styles.toolbar}>
       <ContentsOpener onOpen={openContents} />

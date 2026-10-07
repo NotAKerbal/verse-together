@@ -222,8 +222,8 @@
   The reader's sticky toolbar row. It holds only what the reader needs at its top: on phones the pager row
   across the whole strip (see below); on desktop the compact Contents button, at the top of the guide
   column only, and only where the contents rail does not show (with the rail showing it is empty and
-  zero-height). The scripture column beside it therefore starts, and docks, level with the guide column's
-  top. It is transparent, like the app header above it: on desktop it is only as wide as its button, which
+  zero-height). The scripture column beside it therefore starts level with the guide column's top (and
+  docks at the viewport top, see below). It is transparent, like the app header above it: on desktop it is only as wide as its button, which
   carries its own small background. StudyCompanion measures its real height (including zero) for the
   guide's landings and reading top.
 */
@@ -294,15 +294,17 @@
   }
 
   /*
-    The scripture column fills exactly the viewport under the measured app header once it sticks (the
-    guide's toolbar row is beside it, not above it), so its own scroller never runs under the transparent
-    header. Its scroll chains to the page at either end (no overscroll containment), so scrolling back past
-    its top simply carries on up the page.
+    Once it sticks, the scripture column fills the whole viewport, top edge to bottom edge, so its scroller
+    clips its text at the same real edge as the page-scrolled guide beside it: the viewport top. The app's
+    transparent header floats over both columns alike, and text passes under and between its controls on
+    either side. (StudyCompanion keeps landings and held passages below the measured header; that is a
+    reading measure, not a clip.) Its scroll chains to the page at either end (no overscroll containment),
+    so scrolling back past its top simply carries on up the page.
   */
   .companion[data-mode="columns"] .scripturePanel {
     position: sticky;
-    top: var(--cfm-chrome-top);
-    height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top));
+    top: 0;
+    height: var(--cfm-vh, 100vh);
     overflow-y: auto;
     scrollbar-gutter: stable;
     /* No fade at its top edge; the top padding matches the guide's. */
