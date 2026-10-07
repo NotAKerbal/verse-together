@@ -43,6 +43,8 @@ import {
 } from "./scrollSync";
 import { isDocked, paneScrolling, paneTakesWheel, redockScroll, trailingPull } from "./readerDock";
 import ContentsNav, { ContentsOpener, type ContentsHandle } from "./ContentsNav";
+import { useGuideHighlights } from "./useGuideHighlights";
+import { useScriptureAnnotations } from "./useScriptureAnnotations";
 import styles from "./studyCompanion.module.css";
 
 export type CompanionChapter = { chapter: number; verses: Array<{ verse: number; text: string }> };
@@ -60,6 +62,8 @@ type Props = {
   passages: GuidePassage[];
   book: { label: string; slug: string; volume: string };
   chapters: CompanionChapter[];
+  /** The guide's week start (its route key), which identifies the guide for the reader's guide highlights. */
+  weekStart: string;
   /**
    * The page footer. It normally follows the companion; in the phone reader it closes the guide side
    * instead, so nothing trails the docked reader on the page.
@@ -219,7 +223,7 @@ function focusWithoutScrolling(element: HTMLElement | null) {
   element.focus({ preventScroll: true });
 }
 
-export default function StudyCompanion({ introductionHtml, readerHtml, toc, passages, book, chapters, footer }: Props) {
+export default function StudyCompanion({ introductionHtml, readerHtml, toc, passages, book, chapters, weekStart, footer }: Props) {
   const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
   const passageLabels = useMemo(() => new Map(passages.map((passage) => [passage.id, passage.label])), [passages]);
   const passagesByStart = useMemo(() => {
@@ -256,7 +260,6 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     }
   }
 
-  const introWrapRef = useRef<HTMLDivElement>(null);
   const introRef = useRef<HTMLDivElement>(null);
   const contentsRef = useRef<ContentsHandle>(null);
   const companionRef = useRef<HTMLDivElement>(null);
@@ -294,6 +297,8 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   const guideHtml = useMemo(() => ({ __html: readerHtml }), [readerHtml]);
   /** Every contents entry, in document order (introduction, then the reader). */
   const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
+  const annotations = useScriptureAnnotations(book, chapterNumbers, scriptureDocRef);
+  const guideHighlights = useGuideHighlights(weekStart, introRef, guideRef);
 
   useEffect(() => {
     const pendingMove = heading;
@@ -568,13 +573,21 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     [mode]
   );
 
-  /** Left edge of the reading region (page head, introduction, reader), which the contents rail stays clear of. */
+  /**
+   * Left edge the reading region (page head, introduction, reader, one column) has when centered in the app's
+   * main column, which the contents rail sizes itself to stay clear of. Computed, not read off the region:
+   * while the rail shows, the region moves over to center beside it (see .page in the CSS), and sizing the
+   * rail from where that leaves it would feed back. The column's width is the same either way.
+   */
   const contentLeft = useCallback(() => {
-    const page = companionRef.current?.parentElement;
-    const regions = [page?.querySelector<HTMLElement>(":scope > header"), introWrapRef.current, companionRef.current];
-    let left = Number.POSITIVE_INFINITY;
-    for (const region of regions) if (region) left = Math.min(left, region.getBoundingClientRect().left);
-    return Number.isFinite(left) ? left : 0;
+    const companion = companionRef.current;
+    const main = companion?.parentElement?.parentElement;
+    if (!companion || !main) return 0;
+    const box = main.getBoundingClientRect();
+    const style = getComputedStyle(main);
+    const left = box.left + parseFloat(style.paddingLeft);
+    const right = box.right - parseFloat(style.paddingRight);
+    return (left + right - companion.getBoundingClientRect().width) / 2;
   }, []);
 
   /** Phones: bring a side into view. Its own vertical scroll position is untouched. */
@@ -1159,8 +1172,10 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
         layoutKey={mode}
         onNavigate={navigateToSection}
       />
+      {annotations.layer}
+      {guideHighlights.layer}
       {introductionHtml ? (
-        <div ref={introWrapRef} className={styles.introduction}>
+        <div className={styles.introduction}>
           <ContentsOpener onOpen={openContents} />
           <div ref={introRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={introHtml} />
         </div>
@@ -1195,14 +1210,16 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
                     <span className={styles.chapterNumber}>{entry.chapter}</span>
                   </h2>
                   <ol className={styles.verses}>
-                    {entry.verses.map((verse) => (
+                    {entry.verses.map((verse, index) => (
                       <li
                         key={verse.verse}
                         id={scriptureVerseId(book.slug, entry.chapter, verse.verse)}
                         value={verse.verse}
                         data-active={highlighted(entry.chapter, verse.verse) ? "true" : undefined}
+                        {...annotations.verseAttributes(entry.chapter, verse.verse)}
                       >
-                        <span className={styles.verseNumber} aria-hidden="true">
+                        {/* The verse number doubles as the verse's annotate button (same box, same text). */}
+                        <span className={styles.verseNumber} {...annotations.verseNumberProps(entry.chapter, verse.verse, index === 0)}>
                           {verse.verse}
                         </span>
                         <span className={styles.srOnly}>Verse {verse.verse}: </span>

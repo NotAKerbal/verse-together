@@ -92,73 +92,76 @@ export default function ComeFollowMeCard() {
   const next = getAdjacentWeek(week, 1);
   const ranges = week.refs.length > 0 ? week.refs : week.suggestion ? [week.suggestion.ref] : [];
 
+  // `.sticky-note` lies flat, so the tilt goes on a wrapper, as on ContinueReadingCard.
   return (
-    <article
-      className="sticky-note -rotate-1 flex h-full flex-col gap-3 p-4 sm:p-5"
-      style={{ background: "var(--accent-sky-soft)" }}
-      aria-labelledby="come-follow-me-heading"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[0.66rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-muted)]">
-            Come, Follow Me{isCurrent ? " · This week" : ""}
-          </p>
-          <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{formatWeekRange(week)}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            className={ARROW_CLASS}
-            aria-label="Previous week"
-            disabled={!previous}
-            onClick={() => previous && setWeek(previous)}
-          >
-            <ChevronIcon direction="left" />
-          </button>
-          <button
-            type="button"
-            className={ARROW_CLASS}
-            aria-label="Next week"
-            disabled={!next}
-            onClick={() => next && setWeek(next)}
-          >
-            <ChevronIcon direction="right" />
-          </button>
-        </div>
-      </div>
-
-      <h2 id="come-follow-me-heading" className="font-display text-[1.35rem] font-extrabold leading-tight tracking-[-0.03em]">
-        {week.block}
-      </h2>
-
-      {week.suggestion ? (
-        <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{week.suggestion.note}</p>
-      ) : null}
-
-      {/* The week's reading and its study guide share one row; the chapter list wraps within its own
-          column on weeks with many ranges, and chips truncate rather than overflow a narrow card. */}
-      <div className="flex min-w-0 items-start gap-2">
-        <ul className="flex min-w-0 flex-wrap gap-2" aria-label="This week's chapters">
-          {groupByBook(ranges).map((group) => (
-            <BookChips key={`${week.start}-${group.volume}-${group.book}`} {...group} />
-          ))}
-        </ul>
-        {hasStudyGuide(week.start) ? (
-          <div className="flex shrink-0">
-            <ChapterChip href={getStudyGuideHref(week.start)} label="Study Guide" read={false} />
+    <div className="h-full max-w-full -rotate-1 px-2 pt-1">
+      <article
+        className="sticky-note flex h-full flex-col gap-3 p-4 sm:p-5"
+        style={{ background: "var(--accent-sky-soft)" }}
+        aria-labelledby="come-follow-me-heading"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[0.66rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-muted)]">
+              Come, Follow Me{isCurrent ? " · This week" : ""}
+            </p>
+            <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{formatWeekRange(week)}</p>
           </div>
-        ) : null}
-      </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              className={ARROW_CLASS}
+              aria-label="Previous week"
+              disabled={!previous}
+              onClick={() => previous && setWeek(previous)}
+            >
+              <ChevronIcon direction="left" />
+            </button>
+            <button
+              type="button"
+              className={ARROW_CLASS}
+              aria-label="Next week"
+              disabled={!next}
+              onClick={() => next && setWeek(next)}
+            >
+              <ChevronIcon direction="right" />
+            </button>
+          </div>
+        </div>
 
-      {!isCurrent ? (
-        <button
-          type="button"
-          onClick={() => setWeek(currentWeek)}
-          className="surface-button mt-auto inline-flex min-h-8 items-center self-start rounded-full border-2 px-3 text-xs"
-        >
-          Back to this week
-        </button>
-      ) : null}
-    </article>
+        <h2 id="come-follow-me-heading" className="font-display text-[1.35rem] font-extrabold leading-tight tracking-[-0.03em]">
+          {week.block}
+        </h2>
+
+        {week.suggestion ? (
+          <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{week.suggestion.note}</p>
+        ) : null}
+
+        {/* The week's reading and its study guide share one row; the chapter list wraps within its own
+            column on weeks with many ranges, and chips truncate rather than overflow a narrow card. */}
+        <div className="flex min-w-0 items-start gap-2">
+          <ul className="flex min-w-0 flex-wrap gap-2" aria-label="This week's chapters">
+            {groupByBook(ranges).map((group) => (
+              <BookChips key={`${week.start}-${group.volume}-${group.book}`} {...group} />
+            ))}
+          </ul>
+          {hasStudyGuide(week.start) ? (
+            <div className="flex shrink-0">
+              <ChapterChip href={getStudyGuideHref(week.start)} label="Study Guide" read={false} />
+            </div>
+          ) : null}
+        </div>
+
+        {!isCurrent ? (
+          <button
+            type="button"
+            onClick={() => setWeek(currentWeek)}
+            className="surface-button mt-auto inline-flex min-h-8 items-center self-start rounded-full border-2 px-3 text-xs"
+          >
+            Back to this week
+          </button>
+        ) : null}
+      </article>
+    </div>
   );
 }

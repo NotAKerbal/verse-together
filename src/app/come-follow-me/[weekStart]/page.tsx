@@ -141,6 +141,7 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         passages={parsed.passages}
         book={{ label: range.book, slug: range.slug, volume: range.volume }}
         chapters={chapters}
+        weekStart={week.start}
         footer={
           <footer className={styles.footer}>
             <p>

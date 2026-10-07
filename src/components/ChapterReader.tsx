@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
@@ -33,23 +33,12 @@ import {
 import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
 import { getBookLabel } from "@/features/plans/scriptureCatalog";
+import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
+import { annotationHighlightClass, highlightOf, type VerseAnnotation } from "@/features/annotations/verseAnnotations";
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 type CompareChapter = { translation: string; verses: Verse[] };
-type VerseAnnotation = {
-  id: string;
-  verse: number;
-  body: string;
-  visibility: "private";
-  highlight_color: "yellow" | "blue" | "green" | "pink" | "purple" | null;
-  user_id: string;
-  is_mine: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-type AnnotationHighlightColor = "none" | "yellow" | "blue" | "green" | "pink" | "purple";
 type SelectedVerse = { verse: number; text: string };
 type ChapterSelectionState = {
   selectedText: string;
@@ -85,15 +74,6 @@ type HandleKind = "start" | "end";
 
 const MOBILE_SELECTION_EDGE_SCROLL_ZONE = 56;
 const MOBILE_SELECTION_EDGE_SCROLL_STEP = 18;
-
-function annotationHighlightClass(color: AnnotationHighlightColor) {
-  if (color === "yellow") return "border-[color:var(--surface-border)] bg-[color:var(--accent-note)]";
-  if (color === "blue") return "border-[color:var(--surface-border)] bg-[color:var(--accent-sky-soft)]";
-  if (color === "green") return "border-emerald-500/40 bg-emerald-500/7";
-  if (color === "pink") return "border-pink-500/40 bg-pink-500/7";
-  if (color === "purple") return "border-violet-500/40 bg-violet-500/7";
-  return "border-[color:var(--surface-border)] bg-black/[0.015] dark:bg-white/[0.025]";
-}
 
 function extractFirstWord(value: string): string {
   const match = value.match(/[A-Za-z][A-Za-z'\-]*/);
@@ -308,19 +288,6 @@ function getHighlightRectsFromRange(range: Range): HighlightRect[] {
     }));
 }
 
-const ANNOTATION_HIGHLIGHT_OPTIONS: Array<{
-  value: AnnotationHighlightColor;
-  label: string;
-  swatchClass: string;
-}> = [
-  { value: "none", label: "None", swatchClass: "bg-transparent border border-[color:var(--surface-border)]" },
-  { value: "yellow", label: "Yellow", swatchClass: "bg-[color:var(--accent-primary)] border-2 border-[color:var(--surface-border)]" },
-  { value: "blue", label: "Blue", swatchClass: "bg-[color:var(--accent-sky)] border-2 border-[color:var(--surface-border)]" },
-  { value: "green", label: "Green", swatchClass: "bg-emerald-400/80 border border-emerald-500/80" },
-  { value: "pink", label: "Pink", swatchClass: "bg-pink-400/80 border border-pink-500/80" },
-  { value: "purple", label: "Purple", swatchClass: "bg-violet-400/80 border border-violet-500/80" },
-];
-
 type DiffSegment = {
   kind: "equal" | "change";
   primary: string[];
@@ -499,8 +466,6 @@ export default function ChapterReader({
   const { user, getToken, promptSignIn } = useAuth();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
   const annotationsApi = (api as any).annotations;
-  const saveAnnotation = useMutation(annotationsApi.upsertVerseAnnotation);
-  const removeAnnotation = useMutation(annotationsApi.deleteVerseAnnotation);
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
     volume,
     book,
@@ -534,9 +499,6 @@ export default function ChapterReader({
   const [isAtTop, setIsAtTop] = useState(true);
   const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
   const [annotationEditorVerse, setAnnotationEditorVerse] = useState<number | null>(null);
-  const [annotationText, setAnnotationText] = useState("");
-  const [annotationHighlightColor, setAnnotationHighlightColor] = useState<AnnotationHighlightColor>("none");
-  const [annotationSaving, setAnnotationSaving] = useState(false);
   const [chapterStudyPaths, setChapterStudyPaths] = useState<ChapterStudyPath[]>([]);
   const [openInsightVerse, setOpenInsightVerse] = useState<number | null>(null);
   const [customMobileSelectionSupported, setCustomMobileSelectionSupported] = useState(false);
@@ -969,51 +931,10 @@ export default function ChapterReader({
     return out;
   }, [annotationsByVerse]);
 
-  function openAnnotationEditor(verse: number) {
-    const mine = myAnnotationByVerse.get(verse);
-    setAnnotationEditorVerse(verse);
-    setAnnotationText(mine?.body ?? "");
-    setAnnotationHighlightColor((mine?.highlight_color as AnnotationHighlightColor | null) ?? "none");
-  }
-
-  async function onSaveAnnotation() {
-    if (!annotationEditorVerse || !user) return;
-    setAnnotationSaving(true);
-    try {
-      await saveAnnotation({
-        volume,
-        book,
-        chapter,
-        verse: annotationEditorVerse,
-        body: annotationText,
-        highlightColor: annotationHighlightColor === "none" ? undefined : annotationHighlightColor,
-      });
-      setAnnotationEditorVerse(null);
-    } finally {
-      setAnnotationSaving(false);
-    }
-  }
-
   function onOpenAnnotation() {
     if (!hasSelection) return;
     if (!selectedBounds) return;
-    openAnnotationEditor(selectedBounds.start);
-  }
-
-  async function onDeleteAnnotation() {
-    if (!annotationEditorVerse || !user) return;
-    const mine = myAnnotationByVerse.get(annotationEditorVerse);
-    if (!mine) {
-      setAnnotationEditorVerse(null);
-      return;
-    }
-    setAnnotationSaving(true);
-    try {
-      await removeAnnotation({ annotationId: mine.id as any });
-      setAnnotationEditorVerse(null);
-    } finally {
-      setAnnotationSaving(false);
-    }
+    setAnnotationEditorVerse(selectedBounds.start);
   }
 
   useEffect(() => {
@@ -1768,11 +1689,16 @@ export default function ChapterReader({
                   {myVerseAnnotation ? (
                     <div
                       className={`simple-hide mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
-                        (myVerseAnnotation.highlight_color as AnnotationHighlightColor | null) ?? "none"
+                        highlightOf(myVerseAnnotation)
                       )}`}
                     >
-                      <div className="text-[11px] uppercase tracking-wide text-foreground/60">Your annotation</div>
-                      <div className="mt-1 whitespace-pre-wrap">{myVerseAnnotation.body}</div>
+                      {/* A highlight with no note shows its color without an empty note body. */}
+                      <div className="text-[11px] uppercase tracking-wide text-foreground/60">
+                        {myVerseAnnotation.body ? "Your annotation" : "Your highlight"}
+                      </div>
+                      {myVerseAnnotation.body ? (
+                        <div className="mt-1 whitespace-pre-wrap">{myVerseAnnotation.body}</div>
+                      ) : null}
                     </div>
                   ) : null}
                 </li>
@@ -1876,101 +1802,18 @@ export default function ChapterReader({
       ) : null}
 
       {annotationEditorVerse ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-xl rounded-lg border surface-card-strong p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">
-                Add annotation - Verse {annotationEditorVerse}
-              </h2>
-              <button
-                onClick={() => setAnnotationEditorVerse(null)}
-                className="rounded-md border surface-button px-2 py-1 text-sm"
-              >
-                Close
-              </button>
-            </div>
-            {annotationsByVerse[annotationEditorVerse]?.length ? (
-              <div className="max-h-40 overflow-auto rounded-md border surface-card-soft p-2 space-y-1.5 text-xs">
-                {annotationsByVerse[annotationEditorVerse].map((row) => (
-                  <div key={row.id} className="rounded border surface-card px-2 py-1.5">
-                    <div className="text-[11px] text-foreground/60">
-                      {row.is_mine ? "You" : "Saved note"}
-                    </div>
-                    <div className="mt-0.5 whitespace-pre-wrap">{row.body}</div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {!user ? (
-              <div className="space-y-2">
-                <p className="text-sm text-foreground/70">Sign in to add annotations.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void promptSignIn();
-                  }}
-                  className="rounded-md border surface-button px-3 py-2 text-sm"
-                >
-                  Sign in
-                </button>
-              </div>
-            ) : (
-              <>
-                <textarea
-                  value={annotationText}
-                  onChange={(e) => setAnnotationText(e.target.value)}
-                  rows={4}
-                  placeholder="Write a note tied to this verse..."
-                  className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
-                />
-                <div className="space-y-1">
-                  <div className="text-sm text-foreground/70">Highlight</div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {ANNOTATION_HIGHLIGHT_OPTIONS.map((option) => {
-                      const active = annotationHighlightColor === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setAnnotationHighlightColor(option.value)}
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
-                            active ? "border-foreground bg-foreground text-background" : "surface-button"
-                          }`}
-                          aria-pressed={active}
-                        >
-                          <span className={`h-3 w-3 rounded-full ${option.swatchClass}`} />
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  {myAnnotationByVerse.get(annotationEditorVerse) ? (
-                    <button
-                      onClick={() => {
-                        void onDeleteAnnotation();
-                      }}
-                      disabled={annotationSaving}
-                      className="rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-700 dark:text-red-300 disabled:opacity-60"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
-                  <button
-                    onClick={() => {
-                      void onSaveAnnotation();
-                    }}
-                    disabled={annotationSaving || !annotationText.trim()}
-                    className="rounded-md bg-foreground text-background px-3 py-2 text-sm disabled:opacity-60"
-                  >
-                    {annotationSaving ? "Saving..." : "Add annotation"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <VerseAnnotationEditor
+          key={annotationEditorVerse}
+          target={{ volume, book, chapter, verse: annotationEditorVerse }}
+          label={`Verse ${annotationEditorVerse}`}
+          rows={annotationsByVerse[annotationEditorVerse] ?? []}
+          loaded={chapterAnnotationData !== undefined}
+          signedIn={!!user}
+          onSignIn={() => {
+            void promptSignIn();
+          }}
+          onClose={() => setAnnotationEditorVerse(null)}
+        />
       ) : null}
 
       {/* One-time onboarding tooltip */}
