@@ -29,23 +29,33 @@ import { sideAtScroll, type CompanionSide } from "./companionPanes";
 import {
   alignAtReadingLine,
   buildSegments,
-  guideToScripture,
+  followScripture,
+  guideScrollTop,
   scriptureToGuide,
+  startReverseFollow,
   ScrollOwnership,
   segmentAt,
   targetStart,
   type GuideMarker,
   type Pane,
+  type ReverseFollow,
   type Segment,
 } from "./scrollSync";
 import { isDocked, paneScrolling, paneTakesWheel, redockScroll, trailingPull } from "./readerDock";
+import ContentsNav, { ContentsOpener, type ContentsHandle } from "./ContentsNav";
 import styles from "./studyCompanion.module.css";
 
 export type CompanionChapter = { chapter: number; verses: Array<{ verse: number; text: string }> };
 
 type Props = {
-  /** Guide HTML from the parser: escaped source text, safe links, and page-added art/sources only. */
-  html: string;
+  /**
+   * Guide HTML from the parser (escaped source text, safe links, and page-added art/sources only), split at
+   * the guide's first chapter section. The introduction is read on its own, as ordinary page content, in
+   * every layout; the reader HTML (every chapter, then the closing synthesis and sources) is the guide
+   * side of the paired reader.
+   */
+  introductionHtml: string;
+  readerHtml: string;
   toc: TocItem[];
   passages: GuidePassage[];
   book: { label: string; slug: string; volume: string };
@@ -65,8 +75,11 @@ type Mode = "guide" | "columns" | "strip";
 
 type SegmentMeta = { target: ScriptureTarget; label: string };
 
-/** A reading position inside the guide that survives a layout change: a top-level block and how far into it. */
-type GuideAnchor = { index: number; ratio: number };
+/**
+ * A reading position inside the guide that survives a layout change: a top-level block of the introduction
+ * or of the reader's guide, and how far into it.
+ */
+type GuideAnchor = { part: "introduction" | "reader"; index: number; ratio: number };
 /** The same for the scripture text: a verse (or chapter heading) id and how far into it. */
 type ScriptureMark = { id: string; ratio: number };
 
@@ -96,8 +109,14 @@ const DESKTOP_QUERY = "(min-width: 900px)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 /** Both panes align at this fraction of their visible height, where the eye usually reads. */
 const READING_LINE = 0.3;
-/** Gap left above an element an explicit navigation brings to the top. */
+/**
+ * Gap left above an element an explicit navigation brings to the top, below the reading edge. It matches
+ * the top padding of the guide and scripture columns, so landing on the first chapter docks the reader
+ * exactly, with its heading just clear of the edge.
+ */
 const LANDING_GAP = 12;
+/** The contents mark the entry whose heading has passed this far below the reading edge as current. */
+const SECTION_LINE = 80;
 const MARKERS = [
   "section.cfm-section > h2",
   "[data-cfm-passage]",
@@ -179,6 +198,23 @@ function guideBlocks(root: HTMLElement) {
   return Array.from(root.querySelectorAll<HTMLElement>(":scope > div > *, :scope > section > *"));
 }
 
+/** The block at content offset `line` of `box`, and how far into it. */
+function blockAt(blocks: HTMLElement[], box: ScrollBox, line: number): { index: number; ratio: number } | null {
+  let index = -1;
+  for (let i = 0; i < blocks.length; i += 1) {
+    if (box.offsetOf(blocks[i]) <= line) index = i;
+    else break;
+  }
+  if (index < 0) return null;
+  const height = blocks[index].getBoundingClientRect().height || 1;
+  return { index, ratio: Math.min(1, Math.max(0, (line - box.offsetOf(blocks[index])) / height)) };
+}
+
+/** The page under the app header: where the introduction scrolls, in every layout. */
+function pageBox(): ScrollBox {
+  return windowBox(headerBottom);
+}
+
 function focusWithoutScrolling(element: HTMLElement | null) {
   if (!element) return;
   if (!element.hasAttribute("tabindex") && !element.matches("a[href], button, input, select, textarea")) {
@@ -187,7 +223,7 @@ function focusWithoutScrolling(element: HTMLElement | null) {
   element.focus({ preventScroll: true });
 }
 
-export default function StudyCompanion({ html, toc, passages, book, chapters, footer }: Props) {
+export default function StudyCompanion({ introductionHtml, readerHtml, toc, passages, book, chapters, footer }: Props) {
   const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
   const passageLabels = useMemo(() => new Map(passages.map((passage) => [passage.id, passage.label])), [passages]);
   const passagesByStart = useMemo(() => {
@@ -227,6 +263,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     }
   }
 
+  const introWrapRef = useRef<HTMLDivElement>(null);
+  const introRef = useRef<HTMLDivElement>(null);
+  const edgeRef = useRef<HTMLDivElement>(null);
+  const contentsRef = useRef<ContentsHandle>(null);
   const companionRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -240,6 +280,15 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   const ownershipRef = useRef(new ScrollOwnership());
   const segmentsRef = useRef<Segment<SegmentMeta>[] | null>(null);
   const segmentIndexRef = useRef(-1);
+  /**
+   * A hand-off waiting for the next scripture-driven pass: the scripture's scroll offset it starts from. The
+   * guide then continues from wherever it is at that moment. Set where the last guide-driven sync left the
+   * scripture (on scripture-mapped commentary only), and again where the scripture is when a layout change
+   * interrupts a hand-off in progress; null otherwise, and after any explicit navigation.
+   */
+  const handoffRef = useRef<{ scripture: number } | null>(null);
+  /** While the reader drives the scripture: the guide's carried offset (see followScripture), on the current layout. */
+  const reverseRef = useRef<ReverseFollow | null>(null);
   const savedScriptureRef = useRef<ScriptureMark | null>(null);
   /** A side the strip is being scrolled to programmatically. */
   const heading = useRef<{ side: CompanionSide; timer: number } | null>(null);
@@ -251,7 +300,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   const lastGuideAnchorRef = useRef<GuideAnchor | null>(null);
   /** Whether the viewport was last settled at desktop width; null until the first commit. */
   const settledDesktopRef = useRef<boolean | null>(null);
-  const guideHtml = useMemo(() => ({ __html: html }), [html]);
+  const introHtml = useMemo(() => ({ __html: introductionHtml }), [introductionHtml]);
+  const guideHtml = useMemo(() => ({ __html: readerHtml }), [readerHtml]);
+  /** Every contents entry, in document order (introduction, then the reader). */
+  const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
 
   useEffect(() => {
     const pendingMove = heading;
@@ -275,6 +327,19 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     const el = scriptureRef.current;
     return el && !el.hidden ? elementBox(el) : null;
   }, []);
+
+  /** How much of the scripture side's top the phones' sticky "Back to the guide" button covers. */
+  const scriptureCovered = useCallback(() => {
+    const back = backToGuideRef.current?.getBoundingClientRect();
+    const panel = scriptureRef.current;
+    return back && back.height > 0 && panel ? Math.max(0, back.bottom - panel.getBoundingClientRect().top) : 0;
+  }, []);
+
+  /** How much of the reader's bottom the phones' fixed bottom navigation covers (measured by the geometry effect). */
+  const bottomCovered = useCallback(
+    () => parseFloat(companionRef.current?.style.getPropertyValue("--cfm-bottom-clear") ?? "") || 0,
+    []
+  );
 
   const normalize = useCallback(
     (target: ScriptureTarget) => normalizeTarget(target, (chapter) => chapters.find((entry) => entry.chapter === chapter)?.verses.length),
@@ -373,34 +438,128 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
       const scriptureLine = scripture.height() * READING_LINE;
       if (from === "guide") {
         const guideY = guide.top() + guideLine;
-        const y = guideToScripture(list, guideY);
-        if (y != null) scrollTo(scripture, "scripture", y - scriptureLine);
+        // A passage that fits in the pane is kept whole below its reading edge (see guideScrollTop).
+        const view = { height: scripture.height(), top: scriptureCovered() + LANDING_GAP, bottom: bottomCovered() + LANDING_GAP };
+        const y = guideScrollTop(list, guideY, scriptureLine, view, guideLine);
+        if (y != null) scrollTo(scripture, "scripture", y);
+        // The guide drives again: any carried offset from scripture driving ends here. Remember this placement,
+        // so a reader who takes over the scripture next continues from it.
+        reverseRef.current = null;
+        handoffRef.current = y != null ? { scripture: scripture.top() } : null;
         noteSegment(list, guideY);
       } else {
-        const y = scriptureToGuide(list, scripture.top() + scriptureLine);
-        if (y == null) return;
-        scrollTo(guide, "guide", y - guideLine);
-        noteSegment(list, y);
+        const raw = scriptureToGuide(list, scripture.top() + scriptureLine);
+        if (raw == null) return;
+        // The plain reverse map is not an inverse of a held placement: from one, the first scripture movement
+        // would throw the guide to wherever the map reads, even backward. So a hand-off starts from where the
+        // guide is now, measured on the current layout against where the scripture was before this movement,
+        // and the guide then follows the scripture's movement from there (followScripture). Without a hand-off
+        // (deep links, explicit targets, unmapped commentary) there is nothing to carry: the plain map applies.
+        let state = reverseRef.current;
+        if (!state) {
+          const handoff = handoffRef.current;
+          const from = handoff ? scriptureToGuide(list, handoff.scripture + scriptureLine) : null;
+          state = from != null ? startReverseFollow(guide.top() + guideLine, from) : startReverseFollow(raw, raw);
+          handoffRef.current = null;
+        }
+        const step = followScripture(state, raw);
+        reverseRef.current = step.state;
+        scrollTo(guide, "guide", step.guide - guideLine);
+        noteSegment(list, step.guide);
       }
     },
-    [guideBox, scriptureBox, segments, scrollTo, noteSegment]
+    [guideBox, scriptureBox, segments, scrollTo, noteSegment, scriptureCovered, bottomCovered]
   );
 
   const captureGuideAnchor = useCallback((): GuideAnchor | null => {
+    const intro = introRef.current;
+    const companion = companionRef.current;
+    // Until the page's reading line reaches the reader, the reading position is in the introduction.
+    const page = pageBox();
+    const pageLine = page.top() + page.height() * READING_LINE;
+    if (intro && companion && pageLine < page.offsetOf(companion)) {
+      const found = blockAt(guideBlocks(intro), page, pageLine);
+      return found && { part: "introduction", ...found };
+    }
     const root = guideRef.current;
     if (!root) return null;
     const guide = guideBox();
-    const line = guide.top() + guide.height() * READING_LINE;
-    const blocks = guideBlocks(root);
-    let index = -1;
-    for (let i = 0; i < blocks.length; i += 1) {
-      if (guide.offsetOf(blocks[i]) <= line) index = i;
+    const found = blockAt(guideBlocks(root), guide, guide.top() + guide.height() * READING_LINE);
+    return found && { part: "reader", ...found };
+  }, [guideBox]);
+
+  /** Scroll the page itself (the introduction's scroller) so `top` is at the top of the area under the header. */
+  const scrollPage = useCallback(
+    (top: number) => {
+      // On desktop the page is also the guide's scroller, so the sync must know this move is not the reader's.
+      if (matches(DESKTOP_QUERY)) scrollTo(pageBox(), "guide", top);
+      else window.scrollTo(0, Math.max(0, Math.min(top, pageBox().max())));
+    },
+    [scrollTo]
+  );
+
+  /**
+   * The contents entry the reader is in: the last heading (or lead) that has passed SECTION_LINE below the
+   * reading edge. The introduction is measured against the page; the reader's guide against its own column
+   * on phones, and only once the reader has reached the reading edge there.
+   */
+  const locateSection = useCallback((): string | null => {
+    const companion = companionRef.current;
+    const intro = introRef.current;
+    if (!companion) return null;
+    const pageLine = headerBottom() + SECTION_LINE;
+    let readerLine = pageLine + (toolbarRef.current?.offsetHeight ?? 0);
+    if (mode === "strip") {
+      const panel = guidePanelRef.current;
+      readerLine =
+        panel && companion.getBoundingClientRect().top <= pageLine
+          ? panel.getBoundingClientRect().top + SECTION_LINE
+          : Number.NEGATIVE_INFINITY;
+    }
+    let found: string | null = null;
+    for (const id of tocIds) {
+      const element = document.getElementById(id);
+      if (!element) continue;
+      const line = intro?.contains(element) ? pageLine : readerLine;
+      if (element.getBoundingClientRect().top <= line) found = id;
       else break;
     }
-    if (index < 0) return null;
-    const height = blocks[index].getBoundingClientRect().height || 1;
-    return { index, ratio: Math.min(1, Math.max(0, (line - guide.offsetOf(blocks[index])) / height)) };
-  }, [guideBox]);
+    return found;
+  }, [mode, tocIds]);
+
+  const subscribeSection = useCallback(
+    (notify: () => void) => {
+      let frame = 0;
+      const queue = () => {
+        if (!frame) {
+          frame = window.requestAnimationFrame(() => {
+            frame = 0;
+            notify();
+          });
+        }
+      };
+      const panel = mode === "strip" ? guidePanelRef.current : null;
+      window.addEventListener("scroll", queue, { passive: true });
+      window.addEventListener("resize", queue);
+      panel?.addEventListener("scroll", queue, { passive: true });
+      return () => {
+        window.removeEventListener("scroll", queue);
+        window.removeEventListener("resize", queue);
+        panel?.removeEventListener("scroll", queue);
+        if (frame) window.cancelAnimationFrame(frame);
+      };
+    },
+    [mode]
+  );
+
+  /** Left edge of the reading region (page head, introduction, reader), which the contents rail stays clear of. */
+  const contentLeft = useCallback(() => {
+    const page = companionRef.current?.parentElement;
+    const regions = [page?.querySelector<HTMLElement>(":scope > header"), introWrapRef.current, companionRef.current];
+    let left = Number.POSITIVE_INFINITY;
+    for (const region of regions) if (region) left = Math.min(left, region.getBoundingClientRect().left);
+    return Number.isFinite(left) ? left : 0;
+  }, []);
 
   const saveScripturePosition = useCallback(() => {
     const scripture = scriptureBox();
@@ -626,6 +785,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     pendingRef.current = null;
     segmentsRef.current = null;
     segmentIndexRef.current = -1;
+    // Explicit targets, deep links, the Show/Hide switch, and breakpoint changes start from the plain mapping:
+    // no hand-off is carried (a guide-driven sync below may start a fresh one).
+    handoffRef.current = null;
+    reverseRef.current = null;
     const guide = guideBox();
     const scripture = scriptureBox();
     const root = guideRef.current;
@@ -635,11 +798,16 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
       companionRef.current?.scrollIntoView({ block: "start" });
       refreshDockRef.current?.();
     }
-    if (pending.guideAnchor && root) {
-      const block = guideBlocks(root)[pending.guideAnchor.index];
+    if (pending.guideAnchor) {
+      const { part, index, ratio } = pending.guideAnchor;
+      const intro = part === "introduction";
+      const box = intro ? pageBox() : guide;
+      const scope = intro ? introRef.current : root;
+      const block = scope ? guideBlocks(scope)[index] : undefined;
       if (block) {
-        const y = guide.offsetOf(block) + pending.guideAnchor.ratio * block.getBoundingClientRect().height;
-        scrollTo(guide, "guide", y - guide.height() * READING_LINE);
+        const y = box.offsetOf(block) + ratio * block.getBoundingClientRect().height - box.height() * READING_LINE;
+        if (intro) scrollPage(y);
+        else scrollTo(guide, "guide", y);
       }
     }
     if (pending.restoreScripture && scripture && savedScriptureRef.current) {
@@ -665,12 +833,7 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
         scrollTo(scripture, "scripture", alignAtReadingLine(y, scripture.height(), READING_LINE));
       } else if (el) {
         // On phones the sticky "Back to the guide" button covers the side's top; land below it.
-        const back = backToGuideRef.current?.getBoundingClientRect();
-        const covered =
-          back && back.height > 0 && scriptureRef.current
-            ? Math.max(0, back.bottom - scriptureRef.current.getBoundingClientRect().top)
-            : 0;
-        scrollTo(scripture, "scripture", scripture.offsetOf(el) - covered - LANDING_GAP);
+        scrollTo(scripture, "scripture", scripture.offsetOf(el) - scriptureCovered() - LANDING_GAP);
       }
     }
     if (pending.sync && scripture) sync(pending.sync);
@@ -736,12 +899,21 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     }
     guideTarget.addEventListener("scroll", onGuideScroll, { passive: true });
     scriptureEl.addEventListener("scroll", onScriptureScroll, { passive: true });
-    // Images, fonts, and width changes move anchors: measure again on the next pass.
+    // Images, fonts, and width changes move anchors: measure again on the next pass. The introduction sits
+    // above the reader on the page, so its height moves every page offset of the guide.
+    // A carried offset was measured on the old layout too, so it is dropped. A hand-off in progress (waiting
+    // for a takeover, or the reader driving the scripture) is not: it restarts from where the scripture is
+    // now (already re-laid-out by the time this reads it), so the next scripture movement is re-anchored on
+    // the new layout from wherever the guide is then, instead of falling back to the plain map with a jump.
     const invalidate = () => {
       segmentsRef.current = null;
+      if (reverseRef.current || handoffRef.current) handoffRef.current = { scripture: scriptureEl.scrollTop };
+      reverseRef.current = null;
     };
+    invalidate();
     const resize = new ResizeObserver(invalidate);
     if (guideRef.current) resize.observe(guideRef.current);
+    if (introRef.current) resize.observe(introRef.current);
     if (scriptureDocRef.current) resize.observe(scriptureDocRef.current);
     window.addEventListener("resize", invalidate);
     return () => {
@@ -759,9 +931,9 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
 
   // Remember where the guide is once a scroll settles, for a resize across the breakpoint. By the time
   // the viewport crosses it, the CSS has already reflowed the old layout, so it cannot be measured then.
+  // The page always scrolls the introduction; on phones the reader's guide scrolls its own side.
   useEffect(() => {
-    const target: HTMLElement | Window | null = mode === "strip" ? guidePanelRef.current : window;
-    if (!target) return;
+    const panel = mode === "strip" ? guidePanelRef.current : null;
     let timer = 0;
     const note = () => {
       window.clearTimeout(timer);
@@ -769,12 +941,50 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
         if ((mode === "strip") === !matches(DESKTOP_QUERY)) lastGuideAnchorRef.current = captureGuideAnchor();
       }, 150);
     };
-    target.addEventListener("scroll", note, { passive: true });
+    window.addEventListener("scroll", note, { passive: true });
+    panel?.addEventListener("scroll", note, { passive: true });
     return () => {
-      target.removeEventListener("scroll", note);
+      window.removeEventListener("scroll", note);
+      panel?.removeEventListener("scroll", note);
       window.clearTimeout(timer);
     };
   }, [mode, captureGuideAnchor]);
+
+  // The reading edge: an opaque band of page paper over the app's transparent sticky header and, once the
+  // reader's toolbar row sticks under it, over that row too. Text scrolling up then disappears at one clean
+  // edge shared by the guide and the scripture column, instead of showing through between the header's
+  // floating controls and the toolbar. Written straight to the DOM: it changes with every scroll.
+  useEffect(() => {
+    const edge = edgeRef.current;
+    const toolbar = toolbarRef.current;
+    const companion = companionRef.current;
+    if (!edge || !toolbar || !companion) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const stickyTop = parseFloat(getComputedStyle(toolbar).top) || 0;
+      const bar = toolbar.getBoundingClientRect();
+      const stuck = bar.height > 0 && bar.top <= stickyTop + 0.5 && companion.getBoundingClientRect().top < stickyTop - 0.5;
+      const bottom = Math.max(headerBottom(), stuck ? bar.bottom : 0);
+      edge.style.height = `${bottom}px`;
+      if (bottom > 0 && window.scrollY > 0) edge.dataset.scrolled = "true";
+      else delete edge.dataset.scrolled;
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const resize = new ResizeObserver(schedule);
+    resize.observe(toolbar);
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      resize.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [mode]);
 
   // Desktop only: the switch is not rendered in the phone strip.
   const toggleScripture = () => {
@@ -791,7 +1001,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   };
 
   const showScripture = useCallback(
-    (raw: ScriptureTarget, options: { updateHash: boolean; fromGuide?: string | null; initial?: boolean }) => {
+    (
+      raw: ScriptureTarget,
+      options: { updateHash: boolean; fromGuide?: string | null; initial?: boolean; follow?: boolean }
+    ) => {
       const target = normalize(raw);
       if (!target) return;
       const phone = !matches(DESKTOP_QUERY);
@@ -809,9 +1022,10 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
       schedule({
         guideAnchor: entering ? captureGuideAnchor() : undefined,
         scriptureTo: target,
-        // A deep link into the scripture also brings the guide to its commentary; a click inside the
-        // guide leaves the reader's place in the guide alone.
-        sync: options.initial ? "scripture" : undefined,
+        // A deep link into the scripture, or a reference clicked in the introduction (which is not beside
+        // the scripture), also brings the guide to its commentary; a click inside the reader's guide leaves
+        // the reader's place in the guide alone.
+        sync: options.initial || options.follow ? "scripture" : undefined,
         reveal: phone ? { side: "scripture", instant: !!options.initial } : undefined,
         focusId:
           phone && !options.initial
@@ -825,23 +1039,37 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
   );
 
   const showGuide = useCallback(
-    (id: string, options: { updateHash: boolean; initial?: boolean }) => {
+    (id: string, options: { updateHash: boolean; initial?: boolean; focus?: boolean }) => {
       const element = document.getElementById(id);
-      if (!element || !guideRef.current?.contains(element)) return;
+      if (!element) return;
+      const strip = !matches(DESKTOP_QUERY);
+      if (introRef.current?.contains(element)) {
+        // The introduction is page content: scroll the page to it, below the app header. The reader is left
+        // as it is (on phones its strip goes back to the guide side, ready for the next visit).
+        if (options.updateHash) window.history.replaceState(null, "", `#${id}`);
+        if (strip) revealSide("guide", true);
+        scrollPage(pageBox().offsetOf(element) - LANDING_GAP);
+        if (options.focus || (strip && !options.initial)) focusWithoutScrolling(element);
+        return;
+      }
+      if (!guideRef.current?.contains(element)) return;
       const target = targetFromGuideElement(element);
       if (target) setActive(target);
       if (options.updateHash) window.history.replaceState(null, "", `#${id}`);
-      const strip = !matches(DESKTOP_QUERY);
       if (strip) setSide("guide");
       schedule({
         guideTo: id,
         sync: strip || scriptureOn ? "guide" : undefined,
         reveal: strip ? { side: "guide", instant: !!options.initial } : undefined,
-        focusId: strip && !options.initial ? id : undefined,
+        focusId: options.focus || (strip && !options.initial) ? id : undefined,
       });
     },
-    [schedule, scriptureOn]
+    [revealSide, schedule, scriptureOn, scrollPage]
   );
+
+  /** A contents entry: the introduction scrolls the page; the reader lands on it below the toolbar. */
+  const navigateToSection = useCallback((id: string) => showGuide(id, { updateHash: true, focus: true }), [showGuide]);
+  const openContents = useCallback((opener: HTMLElement) => contentsRef.current?.open(opener), []);
 
   // Deep links: `#scripture-isaiah-53-v4` shows the scripture there; any commentary id scrolls the guide.
   const showScriptureRef = useRef(showScripture);
@@ -878,15 +1106,20 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     setSide(settled);
   };
 
+  // Scripture references in the introduction or the reader's guide open the local scripture.
   const onGuideClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = (event.target as Element).closest("a");
-    const root = guideRef.current;
-    if (!link || !root || !root.contains(link)) return;
+    const root = event.currentTarget;
+    if (!link || !root.contains(link)) return;
     const target = localScriptureTarget(link.getAttribute("href"), book, chapterNumbers);
     if (!target) return;
     event.preventDefault();
-    showScripture(target, { updateHash: true, fromGuide: nearestGuideAnchor(root, link) });
+    showScripture(target, {
+      updateHash: true,
+      fromGuide: nearestGuideAnchor(root, link),
+      follow: root === introRef.current,
+    });
   };
 
   const onPagerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -903,143 +1136,141 @@ export default function StudyCompanion({ html, toc, passages, book, chapters, fo
     active != null && active.chapter === chapter && active.first != null && verse >= active.first && verse <= (active.last ?? active.first);
 
   return (
-    <div ref={companionRef} className={styles.companion} data-mode={mode}>
-      <div ref={toolbarRef} className={styles.toolbar}>
-        {mode === "strip" ? (
-          <div className={styles.pager} role="group" aria-label="Study guide and scripture">
+    <>
+      <div ref={edgeRef} className={styles.readingEdge} aria-hidden="true" />
+      <ContentsNav
+        toc={toc}
+        handle={contentsRef}
+        subscribe={subscribeSection}
+        getActive={locateSection}
+        contentLeft={contentLeft}
+        layoutKey={mode}
+        onNavigate={navigateToSection}
+      />
+      {introductionHtml ? (
+        <div ref={introWrapRef} className={styles.introduction}>
+          <ContentsOpener onOpen={openContents} />
+          <div ref={introRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={introHtml} />
+        </div>
+      ) : null}
+      <div ref={companionRef} className={styles.companion} data-mode={mode}>
+        <div ref={toolbarRef} className={styles.toolbar}>
+          <ContentsOpener onOpen={openContents} />
+          {mode === "strip" ? (
+            <div className={styles.pager} role="group" aria-label="Study guide and scripture">
+              <button
+                id="cfm-show-guide"
+                type="button"
+                className={styles.pagerButton}
+                aria-controls="cfm-panel-guide"
+                aria-pressed={side === "guide"}
+                onClick={() => revealSide("guide")}
+                onKeyDown={onPagerKeyDown}
+              >
+                <span aria-hidden="true">‹ </span>Guide
+              </button>
+              <span className={styles.pagerDots} aria-hidden="true">
+                <span data-on={side === "guide" ? "true" : undefined} />
+                <span data-on={side === "scripture" ? "true" : undefined} />
+              </span>
+              <button
+                id="cfm-show-scripture"
+                type="button"
+                className={styles.pagerButton}
+                aria-controls="cfm-panel-scripture"
+                aria-pressed={side === "scripture"}
+                onClick={() => revealSide("scripture")}
+                onKeyDown={onPagerKeyDown}
+              >
+                {label}
+                <span aria-hidden="true"> ›</span>
+              </button>
+              <span className={styles.srOnly} aria-live="polite">
+                {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
+              </span>
+            </div>
+          ) : (
             <button
-              id="cfm-show-guide"
+              ref={toggleRef}
               type="button"
-              className={styles.pagerButton}
-              aria-controls="cfm-panel-guide"
-              aria-pressed={side === "guide"}
-              onClick={() => revealSide("guide")}
-              onKeyDown={onPagerKeyDown}
-            >
-              <span aria-hidden="true">‹ </span>Guide
-            </button>
-            <span className={styles.pagerDots} aria-hidden="true">
-              <span data-on={side === "guide" ? "true" : undefined} />
-              <span data-on={side === "scripture" ? "true" : undefined} />
-            </span>
-            <button
-              id="cfm-show-scripture"
-              type="button"
-              className={styles.pagerButton}
+              className={styles.toggle}
+              aria-expanded={scriptureOn}
               aria-controls="cfm-panel-scripture"
-              aria-pressed={side === "scripture"}
-              onClick={() => revealSide("scripture")}
-              onKeyDown={onPagerKeyDown}
+              onClick={toggleScripture}
             >
-              {label}
-              <span aria-hidden="true"> ›</span>
+              {scriptureOn ? "Hide scriptures" : "Show scriptures"}
             </button>
-            <span className={styles.srOnly} aria-live="polite">
-              {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
-            </span>
-          </div>
-        ) : (
-          <button
-            ref={toggleRef}
-            type="button"
-            className={styles.toggle}
-            aria-expanded={scriptureOn}
-            aria-controls="cfm-panel-scripture"
-            onClick={toggleScripture}
+          )}
+        </div>
+
+        <div ref={stripRef} className={styles.layout} onScroll={onStripScroll}>
+          <section ref={guidePanelRef} id="cfm-panel-guide" aria-label="Study guide" className={styles.guidePanel} inert={guideHidden}>
+            <div ref={guideRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={guideHtml} />
+            {mode === "strip" ? footer : null}
+          </section>
+
+          <section
+            ref={scriptureRef}
+            id="cfm-panel-scripture"
+            aria-label={`Scripture: ${book.label} ${firstChapter}–${lastChapter}`}
+            className={styles.scripturePanel}
+            hidden={mode === "guide"}
+            inert={scriptureHidden}
           >
-            {scriptureOn ? "Hide scriptures" : "Show scriptures"}
-          </button>
-        )}
-      </div>
-
-      <div ref={stripRef} className={styles.layout} onScroll={onStripScroll}>
-        <section ref={guidePanelRef} id="cfm-panel-guide" aria-label="Study guide" className={styles.guidePanel} inert={guideHidden}>
-          <details className={styles.contents}>
-            <summary>Contents</summary>
-            <ol>
-              {toc.map((item) => (
-                <li key={item.id}>
-                  <a href={`#${item.id}`}>{item.text}</a>
-                  {item.verses.length > 0 ? (
-                    <ol>
-                      {item.verses.map((verse) => (
-                        <li key={verse.id}>
-                          <a href={`#${verse.id}`}>
-                            <span className={styles.contentsRef}>{verse.short}</span> {verse.text}
+            {returnTo && mode === "strip" ? (
+              <button ref={backToGuideRef} type="button" className={styles.backToGuide} onClick={() => showGuide(returnTo, { updateHash: true })}>
+                <span aria-hidden="true">‹ </span>Back to the guide
+              </button>
+            ) : null}
+            <div ref={scriptureDocRef} className={styles.scriptureDoc}>
+              {chapters.map((entry) => (
+                <section key={entry.chapter} className={styles.scriptureChapter} aria-labelledby={scriptureAnchor(book.slug, entry.chapter)}>
+                  <h2 id={scriptureAnchor(book.slug, entry.chapter)} className={styles.chapterTitle}>
+                    <span className={styles.chapterBook}>{book.label}</span>
+                    <span className={styles.chapterNumber}>{entry.chapter}</span>
+                  </h2>
+                  <ol className={styles.verses}>
+                    {entry.verses.map((verse) => (
+                      <li
+                        key={verse.verse}
+                        id={scriptureVerseId(book.slug, entry.chapter, verse.verse)}
+                        value={verse.verse}
+                        data-active={highlighted(entry.chapter, verse.verse) ? "true" : undefined}
+                      >
+                        <span className={styles.verseNumber} aria-hidden="true">
+                          {verse.verse}
+                        </span>
+                        <span className={styles.srOnly}>Verse {verse.verse}: </span>
+                        {typesetDashes(verse.text)}
+                        {(passagesByStart.get(`${entry.chapter}:${verse.verse}`) ?? []).map((passage) => (
+                          <a
+                            key={passage.id}
+                            href={`#${passage.id}`}
+                            className={styles.guideLink}
+                            aria-label={`Read commentary on ${book.label} ${passage.label}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              showGuide(passage.id, { updateHash: true });
+                            }}
+                          >
+                            Guide {passage.label}
                           </a>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                </li>
+                        ))}
+                      </li>
+                    ))}
+                  </ol>
+                  <p className={styles.readerLink}>
+                    <Link href={getChapterHref({ volume: book.volume, book: book.slug, chapter: entry.chapter })}>
+                      Open {book.label} {entry.chapter} in the reader
+                    </Link>
+                  </p>
+                </section>
               ))}
-            </ol>
-          </details>
-          <div ref={guideRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={guideHtml} />
-          {mode === "strip" ? footer : null}
-        </section>
-
-        <section
-          ref={scriptureRef}
-          id="cfm-panel-scripture"
-          aria-label={`Scripture: ${book.label} ${firstChapter}–${lastChapter}`}
-          className={styles.scripturePanel}
-          hidden={mode === "guide"}
-          inert={scriptureHidden}
-        >
-          {returnTo && mode === "strip" ? (
-            <button ref={backToGuideRef} type="button" className={styles.backToGuide} onClick={() => showGuide(returnTo, { updateHash: true })}>
-              <span aria-hidden="true">‹ </span>Back to the guide
-            </button>
-          ) : null}
-          <div ref={scriptureDocRef} className={styles.scriptureDoc}>
-            {chapters.map((entry) => (
-              <section key={entry.chapter} className={styles.scriptureChapter} aria-labelledby={scriptureAnchor(book.slug, entry.chapter)}>
-                <h2 id={scriptureAnchor(book.slug, entry.chapter)} className={styles.chapterTitle}>
-                  <span className={styles.chapterBook}>{book.label}</span>
-                  <span className={styles.chapterNumber}>{entry.chapter}</span>
-                </h2>
-                <ol className={styles.verses}>
-                  {entry.verses.map((verse) => (
-                    <li
-                      key={verse.verse}
-                      id={scriptureVerseId(book.slug, entry.chapter, verse.verse)}
-                      value={verse.verse}
-                      data-active={highlighted(entry.chapter, verse.verse) ? "true" : undefined}
-                    >
-                      <span className={styles.verseNumber} aria-hidden="true">
-                        {verse.verse}
-                      </span>
-                      <span className={styles.srOnly}>Verse {verse.verse}: </span>
-                      {typesetDashes(verse.text)}
-                      {(passagesByStart.get(`${entry.chapter}:${verse.verse}`) ?? []).map((passage) => (
-                        <a
-                          key={passage.id}
-                          href={`#${passage.id}`}
-                          className={styles.guideLink}
-                          aria-label={`Read commentary on ${book.label} ${passage.label}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            showGuide(passage.id, { updateHash: true });
-                          }}
-                        >
-                          Guide {passage.label}
-                        </a>
-                      ))}
-                    </li>
-                  ))}
-                </ol>
-                <p className={styles.readerLink}>
-                  <Link href={getChapterHref({ volume: book.volume, book: book.slug, chapter: entry.chapter })}>
-                    Open {book.label} {entry.chapter} in the reader
-                  </Link>
-                </p>
-              </section>
-            ))}
-          </div>
-        </section>
+            </div>
+          </section>
+        </div>
+        {mode !== "strip" ? footer : null}
       </div>
-      {mode !== "strip" ? footer : null}
-    </div>
+    </>
   );
 }

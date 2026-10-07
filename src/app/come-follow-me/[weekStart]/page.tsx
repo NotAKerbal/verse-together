@@ -135,7 +135,8 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
       </header>
 
       <StudyCompanion
-        html={parsed.html}
+        introductionHtml={parsed.introductionHtml}
+        readerHtml={parsed.readerHtml}
         toc={parsed.toc}
         passages={parsed.passages}
         book={{ label: range.book, slug: range.slug, volume: range.volume }}

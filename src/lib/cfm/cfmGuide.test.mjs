@@ -128,6 +128,104 @@ test("introductions and source lists are kept as their own sections", () => {
   assert.equal(late.toc.filter((item) => item.kind === "chapter").length, 8);
 });
 
+test("the guide splits into introduction and reader at its first chapter section, losing and repeating nothing", () => {
+  const ids = (html) => Array.from(html.matchAll(/ id="([^"]+)"/g), (match) => match[1]);
+  for (const guide of [early, late]) {
+    const name = guide.title;
+    // The complete guide, in source order, is exactly the two parts back to back.
+    assert.equal(guide.html, guide.introductionHtml + guide.readerHtml, name);
+    assert.ok(guide.introductionHtml.length > 1000, `${name}: introduction`);
+    // The reader opens on the first chapter of the guide's own range, as parsed (not a string search).
+    const firstChapter = guide.toc.find((item) => item.kind === "chapter");
+    assert.equal(Number(firstChapter.number), guide.range.first, name);
+    assert.ok(
+      guide.readerHtml.startsWith(
+        `<section class="cfm-section" data-kind="chapter" data-chapter="${guide.range.first}" aria-labelledby="${firstChapter.id}">`
+      ),
+      `${name}: reader starts at chapter ${guide.range.first}`
+    );
+    // No chapter section, passage, or verse anchor is in the introduction.
+    assert.ok(!/data-chapter="\d+" aria-labelledby/.test(guide.introductionHtml), `${name}: chapter in introduction`);
+    assert.ok(!guide.introductionHtml.includes("data-cfm-passage"), `${name}: passage in introduction`);
+    for (const passage of guide.passages) assert.ok(guide.readerHtml.includes(` id="${passage.id}"`), passage.id);
+    // Nothing appears twice: every anchor is unique across both parts, and in exactly one of them.
+    const all = ids(guide.html);
+    assert.equal(new Set(all).size, all.length, `${name}: duplicate anchors`);
+    const intro = new Set(ids(guide.introductionHtml));
+    for (const id of ids(guide.readerHtml)) assert.ok(!intro.has(id), `${name}: ${id} in both parts`);
+    // Each part is whole sections (or the preamble), so neither cuts a section in two.
+    const sections = (html) => (html.match(/<section class="cfm-section"/g) ?? []).length;
+    const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
+    assert.equal(sections(guide.introductionHtml), closes(guide.introductionHtml), name);
+    assert.equal(sections(guide.readerHtml), closes(guide.readerHtml), name);
+    // The contents follow the same split, in document order.
+    const parts = guide.toc.map((item) => item.part);
+    const firstReader = parts.indexOf("reader");
+    assert.ok(firstReader > 0 && parts.slice(0, firstReader).every((part) => part === "introduction"), name);
+    assert.ok(parts.slice(firstReader).every((part) => part === "reader"), name);
+    assert.equal(guide.toc[firstReader], firstChapter, name);
+    for (const item of guide.toc) {
+      const home = item.part === "introduction" ? guide.introductionHtml : guide.readerHtml;
+      assert.ok(home.includes(` id="${item.id}"`), `${name}: ${item.id} in its part`);
+    }
+  }
+  // Front matter and orientation come first; synthesis and source notes stay after the chapters.
+  const sectionsOf = (guide, part) => guide.toc.filter((item) => item.part === part && item.kind !== "chapter").map((item) => item.text);
+  assert.deepEqual(sectionsOf(early, "introduction"), ["How to use this guide", "Historical orientation"]);
+  assert.deepEqual(sectionsOf(early, "reader"), ["Synthesis", "Source notes"]);
+  assert.deepEqual(sectionsOf(late, "introduction"), [
+    "Come, Follow Me study guide: Isaiah 50–57, October 5–11, 2026",
+    "Historical and literary orientation",
+  ]);
+  assert.deepEqual(sectionsOf(late, "reader"), ["Synthesis", "Source method and bibliography note"]);
+  // The older guide's untitled preamble is introduction too.
+  assert.ok(early.introductionHtml.startsWith('<div class="cfm-preamble">'));
+  assert.ok(early.introductionHtml.includes("Come, Follow Me, September 28–October 4, 2026"));
+  assert.ok(!early.readerHtml.includes("cfm-preamble"));
+  // Anchors are unchanged by the split.
+  assert.ok(early.introductionHtml.includes('<h2 id="historical-orientation">'));
+  assert.ok(late.introductionHtml.includes('<h2 id="historical-and-literary-orientation">'));
+  assert.ok(early.readerHtml.includes('<p id="cfm-v-40-9-11" class="cfm-lead"'));
+  assert.ok(late.readerHtml.includes('<h3 id="isaiah-53-4-the-great-reversal"'));
+});
+
+test("a guide with no chapter of its own range keeps everything in the reader", () => {
+  const guide = { ...guides[0] };
+  const parsedOnly = parseGuide(guide, "# Title\n\nPreamble.\n\n## About\n\nText.\n\n## Isaiah 61\n\nOutside the range.\n");
+  assert.equal(parsedOnly.introductionHtml, "");
+  assert.equal(parsedOnly.readerHtml, parsedOnly.html);
+  assert.ok(parsedOnly.html.includes("Preamble.") && parsedOnly.html.includes("Outside the range."));
+  assert.ok(parsedOnly.toc.every((item) => item.part === "reader"));
+});
+
+test("both contents formats nest verses under their chapter, in reading order", () => {
+  // Older guide: bold close-reading leads ("**40:1–2, …**"). Newer guide: verse H3s ("Isaiah 50:1–3 — …").
+  const formats = [
+    [early, /^cfm-v-(\d+)-/],
+    [late, /^isaiah-(\d+)-/],
+  ];
+  for (const [guide, pattern] of formats) {
+    const chapters = guide.toc.filter((item) => item.kind === "chapter");
+    assert.equal(chapters.length, guide.range.last - guide.range.first + 1);
+    for (const item of chapters) {
+      assert.equal(item.book, "Isaiah");
+      assert.ok(item.verses.length > 0, `${item.id}: no verses`);
+      let last = -1;
+      for (const verse of item.verses) {
+        assert.equal(pattern.exec(verse.id)?.[1], item.number, `${verse.id} under ${item.id}`);
+        assert.match(verse.short, new RegExp(`^${item.number}:\\d`), verse.id);
+        assert.ok(verse.text.length > 0, verse.id);
+        // Every entry is a real anchor in the reader, after its chapter heading and the entry before it.
+        const at = guide.readerHtml.indexOf(` id="${verse.id}"`);
+        assert.ok(at > guide.readerHtml.indexOf(` id="${item.id}"`) && at > last, verse.id);
+        last = at;
+      }
+    }
+    // Sections that are not chapters carry no verse entries.
+    for (const item of guide.toc.filter((entry) => entry.kind !== "chapter")) assert.deepEqual(item.verses, [], item.id);
+  }
+});
+
 test("newer H3 ranges with a/b halves select the base verse and keep distinct anchors", () => {
   const a = late.passages.find((passage) => passage.label === "57:11–13a");
   const b = late.passages.find((passage) => passage.label === "57:13b–14");

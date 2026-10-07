@@ -7,6 +7,8 @@
 // - Passage references inside the guide's own chapter range link to the paired scripture pane
 //   (`#scripture-isaiah-50-v1-3`) instead of an external page, and are returned as `passages`.
 // - The document title is returned so the page can render it as the h1.
+// - The rendered guide is also returned in two parts, split at its first chapter section: the
+//   introduction (read on its own) and the chapter-by-chapter reader (paired with the scripture).
 // Every source paragraph, list, table, blockquote, heading, and link is still rendered.
 
 import fs from "node:fs";
@@ -42,6 +44,8 @@ export type TocItem = {
   text: string;
   depth: number;
   kind: "chapter" | "section" | "sources";
+  /** "introduction" for sections before the guide's first chapter section; "reader" from it on. */
+  part: "introduction" | "reader";
   book?: string;
   number?: string;
   subtitle?: string;
@@ -65,7 +69,15 @@ export type GuidePassage = {
 export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number };
 export type ParsedGuide = {
   title: string;
+  /** The complete guide in source order: exactly `introductionHtml + readerHtml`. */
   html: string;
+  /**
+   * The preamble and every section before the first chapter section of the guide's own range (front
+   * matter, orientation). Empty when the guide has no such chapter section.
+   */
+  introductionHtml: string;
+  /** From the first chapter section on: every chapter, then whatever follows them (synthesis, sources). */
+  readerHtml: string;
   toc: TocItem[];
   passages: GuidePassage[];
   range: GuideRange | null;
@@ -275,7 +287,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
         let attrs = "";
         // Structured headings only add wrappers; every source word and separator stays in the DOM.
         if (depth === 2) {
-          const item: TocItem = { id, text: plain, depth, kind: "section", verses: [] };
+          const item: TocItem = { id, text: plain, depth, kind: "section", part: "reader", verses: [] };
           const chapter = CHAPTER.exec(plain);
           const shown = CHAPTER.exec(inner);
           if (chapter && shown) {
@@ -481,9 +493,14 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     return html;
   };
   const [preamble, ...sections] = groups;
-  let html = preamble.some((token) => token.type !== "space")
+  // The paired reader starts at the first chapter section of the guide's own range (a section the parser
+  // has already identified as chapter N of this guide's book); everything before it is introduction, and
+  // everything from it on, including the closing synthesis and sources, is the reader.
+  let introductionHtml = preamble.some((token) => token.type !== "space")
     ? `<div class="cfm-preamble">\n${render(preamble)}</div>\n`
     : "";
+  let readerHtml = "";
+  let reading = false;
   for (const group of sections) {
     const first = toc.length;
     const head = group[0] as Tokens.Heading;
@@ -493,7 +510,21 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     const item = toc[first];
     const chapterAttr =
       context && localTarget(context.book, Number(context.chapter)) ? ` data-chapter="${context.chapter}"` : "";
-    html += `<section class="cfm-section" data-kind="${item.kind}"${chapterAttr} aria-labelledby="${item.id}">\n${content}</section>\n`;
+    const section = `<section class="cfm-section" data-kind="${item.kind}"${chapterAttr} aria-labelledby="${item.id}">\n${content}</section>\n`;
+    if (chapterAttr) reading = true;
+    if (reading) {
+      readerHtml += section;
+    } else {
+      item.part = "introduction";
+      introductionHtml += section;
+    }
   }
-  return { title, html, toc, passages, range, words: markdown.split(/\s+/).length };
+  if (!reading) {
+    // No chapter of the range to pair with: the whole guide stays in the reader, as one document.
+    readerHtml = introductionHtml;
+    introductionHtml = "";
+    for (const item of toc) item.part = "reader";
+  }
+  const html = introductionHtml + readerHtml;
+  return { title, html, introductionHtml, readerHtml, toc, passages, range, words: markdown.split(/\s+/).length };
 }

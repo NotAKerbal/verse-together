@@ -4,11 +4,19 @@
   instead of boxes. Every color comes from the app theme tokens, so light and dark both apply.
   Guide HTML from the parser uses cfm-* class names, reached only through :global() under .guide.
 
-  Layout from 900px: the complete guide alone by default, as one reading column centered in the page;
-  "Show scriptures" adds the complete assigned scripture as a sticky column beside the guide (the page
-  then narrows to the pair, so the pair is centered as well). Below 900px there is no switch: the guide and the complete
-  scripture are always a native horizontal scroll-snap strip, guide first, one side per screen width,
-  each side scrolling on its own.
+  The page reads top to bottom: the page head, then the guide's introduction (front matter and orientation,
+  everything before its first chapter) as ordinary page content at a slightly wider measure, then the
+  chapter-by-chapter reader. The head and introduction are centered on their own measure in every layout;
+  the reader is centered on its own width, which depends on its mode.
+
+  Reader from 900px: the guide alone by default, one reading column; "Show scriptures" adds the complete
+  assigned scripture as a sticky column beside the guide, and the reader widens to the pair, still
+  centered. Below 900px there is no switch: the guide and the complete scripture are always a native
+  horizontal scroll-snap strip, guide first, one side per screen width, each side scrolling on its own.
+
+  The contents sit outside all of this: a rail fixed in the left margin where the margin is wide enough,
+  otherwise a drawer opened from compact Contents buttons (top of the introduction, and the reader's
+  toolbar row).
 */
 
 .page {
@@ -23,6 +31,7 @@
   --cfm-rubric-line: var(--accent-rubric-line);
   --cfm-panel: var(--surface-card);
   --cfm-measure: 40rem;
+  --cfm-intro-measure: 44rem;
   --cfm-columns-gap: clamp(2rem, 4vw, 4rem);
   gap: clamp(1.5rem, 4vw, 2.5rem);
 }
@@ -194,38 +203,68 @@
 }
 
 /*
-  Guide alone: the page head and the companion (switch, guide, footer) share one column at the reading
-  measure, centered in the wide page shell. Only the column moves; its text stays left-aligned. With the
-  scriptures shown none of this applies: the strip keeps the full shell width, and desktop columns narrow
-  the page itself (below).
+  Centering. The page head and the introduction share one column at the introduction measure, centered
+  in the wide page shell whatever the reader's mode, so showing or hiding the scriptures never moves them.
+  The reader is centered on its own: at the guide measure alone, at the full pair with the scriptures
+  shown (below), and across the whole shell as the phone strip. Columns move; text stays left-aligned.
 */
-.page:has(> .companion[data-mode="guide"]) > .header,
-.page:has(> .companion[data-mode="guide"]) > .companion {
+.page:has(> .companion) > .header,
+.page > .introduction {
+  width: 100%;
+  max-width: var(--cfm-intro-measure);
+  margin-inline: auto;
+}
+
+.page > .companion {
   width: 100%;
   max-width: var(--cfm-measure);
   margin-inline: auto;
 }
 
+.page > .companion[data-mode="strip"] {
+  max-width: none;
+}
+
 /*
-  The sticky scriptures switch. On its own (guide only, and desktop columns) it is only as wide as the
-  switch: it shrink-wraps the button and keeps its right edge on the guide's right edge (the companion is
-  a flex column, so align-self: flex-end plus a right margin of "whatever lies beyond the guide measure"
-  puts it there at any width). Its paper background therefore covers only the button's own area, not a
-  measure-wide strip over the guide's text. Its height is the button's 44px target; StudyCompanion
-  measures the real height for docking and anchor offsets.
+  The reading edge (StudyCompanion keeps its height current): page paper from the top of the viewport down
+  to the bottom of the app's transparent sticky header, and down to the bottom of the reader's toolbar row
+  once that row is stuck. Whatever scrolls up disappears at that one edge, in the guide and the scripture
+  column alike, instead of showing through between the header's floating controls. A hairline marks the
+  edge once the page has scrolled. It sits under the header, the toolbar, and the contents rail.
+*/
+.readingEdge {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 4;
+  height: 0;
+  background: var(--background);
+  pointer-events: none;
+}
+
+.readingEdge[data-scrolled] {
+  box-shadow: 0 1px 0 var(--cfm-rule);
+}
+
+/*
+  The reader's sticky toolbar row, across the guide column: the compact Contents button at its left (when
+  the rail is not shown) and the scriptures switch at its right, on the guide's right edge. Its height is
+  the buttons' 44px target; StudyCompanion measures the real height for docking and anchor offsets.
 */
 .toolbar {
   position: sticky;
   top: var(--cfm-chrome-top);
   z-index: 5;
   display: flex;
-  align-self: flex-end;
+  align-self: flex-start;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.75rem;
-  margin-right: calc(100% - min(100%, var(--cfm-measure)));
-  padding: 0 0.15rem 0 0.6rem;
-  border-radius: 999px;
+  width: min(100%, var(--cfm-measure));
   background: var(--background);
+}
+
+.toolbar > .contentsOpener {
+  margin-right: auto;
 }
 
 .toggle {
@@ -265,6 +304,10 @@
 }
 
 .toggle:focus-visible,
+.contentsOpener:focus-visible,
+.contentsExpand:focus-visible,
+.drawerClose:focus-visible,
+.contentsGroups a:focus-visible,
 .pagerButton:focus-visible,
 .guideLink:focus-visible,
 .backToGuide:focus-visible {
@@ -292,12 +335,20 @@
 */
 @media (min-width: 900px) {
   /*
-    The page shell (already centered by margin-inline: auto) is capped at the pair's full width, so the
-    pair is centered and the page head, switch and footer stay on the guide's left and right edges.
-    Narrower than that, the cap does nothing and the guide column gives up width as before.
+    The reader is capped at the pair's full width and centered on its own, so the pair is centered while
+    the page head and introduction keep their place. Narrower than that, the cap does nothing and the
+    guide column gives up width as before.
   */
-  .page:has(> .companion[data-mode="columns"]) {
+  .page > .companion[data-mode="columns"] {
     max-width: calc(var(--cfm-measure) + 32rem + var(--cfm-columns-gap));
+  }
+
+  /*
+    Both columns start this far below the reader's toolbar row (LANDING_GAP in StudyCompanion), so the
+    first chapter heading, and anything a navigation lands on, sits clear of the reading edge.
+  */
+  .companion:not([data-mode="strip"]) .guidePanel {
+    padding-top: 0.75rem;
   }
 
   /* The switch stays at the guide's right edge in both states. */
@@ -319,26 +370,13 @@
     height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top) - var(--cfm-toolbar-h));
     overflow-y: auto;
     scrollbar-gutter: stable;
-    padding: 0 1rem 3rem clamp(1.25rem, 2.5vw, 2rem);
+    /*
+      Its top is the reading edge: the same line where the guide beside it disappears under the edge band,
+      with no fade (a faded half-line read as a rendering fault). The top padding matches the guide's.
+    */
+    padding: 0.75rem 1rem 3rem clamp(1.25rem, 2.5vw, 2rem);
     border-left: 1px solid var(--cfm-rule);
     scrollbar-width: thin;
-  }
-
-  /*
-    A soft top reading edge. Free scrolling and the sync can leave a line straddling the column's top, which
-    a hard cut slices mid-glyph; this strip stays at the top and fades whatever passes under it into the paper.
-    It is also the column's top clearance, so at rest nothing sits under it, and it matches LANDING_GAP
-    (StudyCompanion), so a verse or chapter a navigation lands lies just below it, untouched.
-  */
-  .companion[data-mode="columns"] .scripturePanel::before {
-    content: "";
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    display: block;
-    height: 0.75rem;
-    background: linear-gradient(var(--background) 15%, transparent);
-    pointer-events: none;
   }
 }
 
@@ -374,15 +412,29 @@
     height: calc(var(--cfm-vh, 100svh) - var(--cfm-chrome-top));
   }
 
-  /* The pager row spans the reader (there is no switch on phones). */
+  /* The pager row spans the reader (there is no switch on phones); the Contents button closes it. */
   .companion[data-mode="strip"] .toolbar {
     align-self: stretch;
     justify-content: space-between;
+    width: auto;
     min-height: 3.25rem;
-    margin-right: 0;
     padding: 0;
-    border-radius: 0;
     border-bottom: 1px solid var(--cfm-rule);
+  }
+
+  .companion[data-mode="strip"] .toolbar > .contentsOpener {
+    order: 1;
+    margin-right: 0;
+    padding-inline: 0.5rem 0.2rem;
+  }
+
+  .companion[data-mode="strip"] .toolbar .contentsOpenerLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .companion[data-mode="strip"] .layout {
@@ -616,75 +668,190 @@
   color: var(--cfm-ink);
 }
 
-/* Guide side */
+/* Introduction: the guide's front matter and orientation, read as page content before the reader. */
 
-.contents {
-  max-width: var(--cfm-measure);
-  margin-bottom: 2.25rem;
-  font-family: var(--cfm-sans);
-  font-size: 0.875rem;
-  line-height: 1.35;
+.introduction {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-bottom: clamp(1rem, 4vw, 2.5rem);
 }
 
-.contents summary {
+.introduction > .guide {
+  align-self: stretch;
+  max-width: var(--cfm-intro-measure);
+}
+
+/* Native anchor jumps into the introduction land below the app header (none on phones). */
+.introduction .guide [id] {
+  scroll-margin-top: 1rem;
+}
+
+@media (min-width: 640px) {
+  .introduction .guide [id] {
+    scroll-margin-top: calc(var(--header-height) + 1rem);
+  }
+}
+
+/* Contents */
+
+.contentsOpener {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   min-height: 2.75rem;
-  cursor: pointer;
-  list-style: none;
-  font-size: 0.6875rem;
+  padding: 0 0.15rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cfm-muted);
+}
+
+.contentsOpener:hover {
+  color: var(--cfm-ink);
+}
+
+.contentsIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/*
+  The rail: fixed in the page's left margin, under the app header, never in the reading region. It shows
+  only where the margin beside the centered reading region (the head and introduction at their measure, or
+  the reader's pair) leaves room for it: 12rem plus 1rem from the viewport edge and 1.5rem from the reading
+  region. These widths decide the first paint; StudyCompanion then sizes it to the margin it measures
+  (--cfm-rail-w) and stands it down (data-blocked) where something else, like the Notebook panel, takes the
+  room. Wherever the rail does not show, the compact Contents buttons do.
+*/
+.contentsRail {
+  --cfm-rail-content: var(--cfm-intro-measure);
+  position: fixed;
+  top: calc(var(--header-height) + 1rem);
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 6;
+  display: none;
+  flex-direction: column;
+  width: var(--cfm-rail-w, clamp(12rem, calc(50vw - var(--cfm-rail-content) / 2 - 3rem), 17rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 0.5rem 1rem 0;
+  scrollbar-width: thin;
+}
+
+@media (min-width: 75rem) {
+  .page:has(> .companion[data-mode="guide"]) > .contentsRail:not([data-blocked]) {
+    display: flex;
+  }
+
+  .page:has(> .companion[data-mode="guide"]):has(> .contentsRail:not([data-blocked])) .contentsOpener {
+    display: none;
+  }
+}
+
+@media (min-width: 106.5rem) {
+  .page:has(> .companion[data-mode="columns"]) > .contentsRail {
+    --cfm-rail-content: calc(var(--cfm-measure) + 32rem + var(--cfm-columns-gap));
+  }
+
+  .page:has(> .companion[data-mode="columns"]) > .contentsRail:not([data-blocked]) {
+    display: flex;
+  }
+
+  .page:has(> .companion[data-mode="columns"]):has(> .contentsRail:not([data-blocked])) .contentsOpener {
+    display: none;
+  }
+}
+
+.contentsTitle {
+  font: 600 0.6875rem/1.4 var(--cfm-sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--cfm-muted);
 }
 
-.contents summary::-webkit-details-marker {
-  display: none;
+.contentsRail > .contentsTitle {
+  padding: 0.6rem 0 0.4rem;
 }
 
-.contents summary::before {
-  content: "+";
-  font-size: 0.875rem;
-  letter-spacing: 0;
-}
-
-.contents[open] summary::before {
-  content: "–";
-}
-
-.contents > ol {
+.contentsGroups {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 0.25rem 0 0.75rem 0.9rem;
-  border-left: 1px solid var(--cfm-rule);
+  gap: 1rem;
+  font-family: var(--cfm-sans);
+  font-size: 0.84375rem;
+  line-height: 1.35;
 }
 
-.contents > ol > li > a {
-  display: block;
-  padding: 0.35rem 0;
-  color: var(--cfm-ink);
+.contentsGroupLabel {
+  margin-bottom: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cfm-muted);
 }
 
-.contents ol ol {
+.contentsGroup > ol {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-  margin: 0 0 0.5rem 0.9rem;
-  color: var(--cfm-ink-2);
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--cfm-rule);
 }
 
-.contents ol ol a {
+.contentsRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.contentsGroups a {
   display: block;
-  padding: 0.25rem 0;
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0;
+  color: var(--cfm-ink-2);
+  text-wrap: pretty;
 }
 
-.contents a:hover {
+.contentsGroups .contentsItem {
+  color: var(--cfm-ink);
+}
+
+.contentsGroups a:hover {
   color: var(--cfm-rubric);
+}
+
+/* The entry being read: rubric ink and a rule mark in the list's own left border. */
+.contentsGroups a[aria-current] {
+  position: relative;
+  color: var(--cfm-rubric);
+}
+
+.contentsGroups a[aria-current]::before {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  left: calc(-0.75rem - 1px);
+  width: 2px;
+  background: var(--cfm-rubric);
+}
+
+.contentsVerses a[aria-current]::before {
+  left: calc(-1.5rem - 1px);
+}
+
+.contentsGroup li[data-current] > .contentsRow > .contentsItem {
+  font-weight: 600;
 }
 
 .contentsRef {
@@ -692,6 +859,110 @@
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--cfm-rubric);
 }
+
+.contentsSubtitle {
+  color: var(--cfm-ink-2);
+  font-weight: 400;
+}
+
+.contentsExpand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 3px;
+  color: var(--cfm-muted);
+}
+
+.contentsExpand::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-0.1rem) rotate(45deg);
+}
+
+.contentsExpand[aria-expanded="true"]::before {
+  transform: translateY(0.1rem) rotate(-135deg);
+}
+
+.contentsExpand:hover {
+  color: var(--cfm-ink);
+}
+
+.contentsVerses {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 0.4rem 0.75rem;
+}
+
+.contentsVerses[hidden] {
+  display: none;
+}
+
+.contentsVerses a {
+  padding: 0.25rem 0;
+}
+
+/* The drawer (native <dialog>): a sheet from the left edge, over a dimmed page. */
+.contentsDrawer {
+  width: min(22rem, 88vw);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0 auto 0 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--cfm-rule);
+  background: var(--background);
+  color: var(--cfm-ink);
+}
+
+.contentsDrawer::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+.drawerPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: max(0.75rem, env(safe-area-inset-top)) 0 0 1rem;
+}
+
+.drawerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 0.5rem;
+}
+
+.drawerClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--cfm-muted);
+}
+
+.drawerClose:hover {
+  color: var(--cfm-ink);
+}
+
+.drawerList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 1rem max(1.5rem, env(safe-area-inset-bottom)) 0;
+}
+
+/* Guide side */
 
 .guide {
   max-width: var(--cfm-measure);

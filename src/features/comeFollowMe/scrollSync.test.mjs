@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { alignAtReadingLine, buildSegments, guideToScripture, scriptureToGuide, ScrollOwnership, segmentAt } from "./scrollSync.ts";
+import {
+  alignAtReadingLine,
+  buildSegments,
+  followScripture,
+  guideScrollTop,
+  guideToScripture,
+  keepSpanInView,
+  scriptureToGuide,
+  ScrollOwnership,
+  segmentAt,
+  startReverseFollow,
+} from "./scrollSync.ts";
 import { passageHalves } from "../../lib/cfm/cfmAnchors.ts";
 
 // A small guide: an unmapped introduction, a chapter opening, two passages that split verse 13 into
@@ -128,6 +139,167 @@ test("an explicit target placed on the reading line brings the guide to that tar
   assert.equal(scriptureToGuide(segments, 130 - 12 + height * line), 800);
   // Without the nudge, a start that rounds a fraction of a pixel up the page reads the previous passage.
   assert.equal(segmentAt(segments, scriptureToGuide(segments, 129.6)), 2);
+});
+
+// The owner's desktop case: a 439.4px scripture pane under the reading edge, 12px clearance at each edge,
+// both panes reading at 30%. Scripture: chapter heading 0–60, 50:6 60–160, 50:7–9 160–480 (320px: fits),
+// 50:10 480–600, a long 800px passage 600–1400 (does not fit), then the chapter's questions and a bibliography.
+const pane = { height: 439.4, top: 12, bottom: 12 };
+const readingLine = pane.height * 0.3;
+const blend = readingLine;
+const owner = buildSegments(
+  [
+    { top: 0, kind: "mapped", scripture: { start: 0, end: 60 } },
+    { top: 200, kind: "mapped", scripture: { start: 60, end: 160 } },
+    { top: 600, kind: "mapped", scripture: { start: 160, end: 480 } },
+    { top: 2000, kind: "mapped", scripture: { start: 480, end: 600 } },
+    { top: 2400, kind: "mapped", scripture: { start: 600, end: 1400 } },
+    { top: 3400, kind: "hold" },
+    { top: 3600, kind: "unmapped" },
+  ],
+  4000
+);
+const placed = (y) => guideScrollTop(owner, y, readingLine, pane, blend);
+
+test("a span is kept whole in the pane when it fits, and left alone when it does not", () => {
+  const view = { height: 400, top: 12, bottom: 12 };
+  const span = { start: 160, end: 480 };
+  // Whole placements: from 480 + 12 - 400 = 92 up to 160 - 12 = 148.
+  assert.equal(keepSpanInView(100, span, view), 100, "already whole: unchanged");
+  assert.equal(keepSpanInView(233.9, span, view), 148, "first verse cut off: brought down below the top edge");
+  assert.equal(keepSpanInView(20, span, view), 92, "last verse below the bottom: brought up");
+  // Exactly fitting (span plus both clearances is the pane height) has one placement.
+  const exact = { start: 100, end: 476 };
+  assert.equal(keepSpanInView(0, exact, view), 88);
+  assert.equal(keepSpanInView(500, exact, view), 88);
+  // One pixel too tall: never forced.
+  assert.equal(keepSpanInView(321, { start: 100, end: 477 }, view), 321);
+});
+
+test("guide-driven sync keeps a fitting passage's first and last verses visible", () => {
+  // Reading the middle of the long 50:7–9 commentary (the owner's Verse 9 paragraph).
+  const raw = guideToScripture(owner, 1500) - readingLine;
+  assert.ok(raw > 160 - 12, `the plain reading line would hide verse 7 (scroll ${raw})`);
+  assert.equal(placed(1500), 148, "verse 7 starts 12px below the pane top");
+  // Everywhere before the hand-off to 50:10, verses 7 through 9 are whole inside the pane.
+  for (let y = 600; y <= 2000 - blend; y += 5) {
+    const top = placed(y);
+    assert.ok(top <= 160 - pane.top + 1e-9, `at ${y}: verse 7 cut (scroll ${top})`);
+    assert.ok(top + pane.height - pane.bottom >= 480 - 1e-9, `at ${y}: verse 9 cut (scroll ${top})`);
+  }
+  // The chapter opening fits too: its heading is never above the pane top.
+  for (let y = 0; y < 200 - blend; y += 5) assert.ok(placed(y) <= 0 - pane.top + 1e-9, `chapter heading cut at ${y}`);
+});
+
+test("a passage too tall for the pane still scrolls through continuously", () => {
+  for (let y = 2400; y < 3400; y += 7) {
+    const raw = guideToScripture(owner, y) - readingLine;
+    assert.ok(Math.abs(placed(y) - raw) < 1e-9, `at ${y}: ${placed(y)} instead of ${raw}`);
+  }
+  // Closing material still rests at the end of the last passage; unmapped material holds still.
+  assert.ok(Math.abs(placed(3500) - (1400 - readingLine)) < 1e-9);
+  assert.equal(placed(3700), null);
+  assert.equal(placed(-5), null);
+});
+
+test("held passages hand over to the next one without a jump and never run backward", () => {
+  let previous = null;
+  let steepest = 0;
+  for (let y = 0; y < 3600; y += 0.5) {
+    const top = placed(y);
+    if (previous != null) {
+      assert.ok(top >= previous - 1e-9, `at ${y}: ${top} < ${previous}`);
+      steepest = Math.max(steepest, top - previous);
+    }
+    previous = top;
+  }
+  // Half a guide pixel never moves the scripture more than a couple of pixels, boundaries included.
+  assert.ok(steepest < 2, `largest step ${steepest}`);
+  // At the boundary itself the pane is already where 50:10 begins.
+  assert.ok(Math.abs(placed(1999.999) - placed(2000)) < 0.01);
+});
+
+test("the plain reverse map has no flat stretch, and agrees with guide driving where nothing is held", () => {
+  const guideAt = (scrollTop) => scriptureToGuide(owner, scrollTop + readingLine);
+  assert.ok(guideAt(148) < guideAt(149) && guideAt(149) < guideAt(150), "no flat stretch to leap across");
+  // Where the guide-driven placement was not held (the passage was already whole at the plain reading line),
+  // the plain map is a true inverse. Where it was held, it is not (next test).
+  const scrollTop = 100;
+  assert.ok(Math.abs(placed(guideAt(scrollTop)) - scrollTop) < 1e-6);
+});
+
+test("taking over the scripture from a held placement continues the guide from where it is", () => {
+  // The owner's case: the guide reads deep into the 50:7–9 commentary and the scripture is held whole.
+  const guide = 1500;
+  const held = placed(guide);
+  assert.equal(held, 148);
+  const rawAt = (scrollTop) => scriptureToGuide(owner, scrollTop + readingLine);
+  // The regression: the plain reverse map of the held scripture lies far behind the guide, so a 45px
+  // downward turn of the scripture would have thrown the guide backward.
+  assert.ok(rawAt(held + 45) < guide, "plain map after a downward turn is behind the guide");
+  // With the carried offset, the takeover is continuous and the guide moves the same way as the scripture.
+  let state = startReverseFollow(guide, rawAt(held));
+  const first = followScripture(state, rawAt(held));
+  assert.equal(first.guide, guide, "no movement until the scripture moves");
+  let previous = guide;
+  for (let scrollTop = held + 5; scrollTop <= held + 400; scrollTop += 5) {
+    const step = followScripture(state, rawAt(scrollTop));
+    const plainMove = rawAt(scrollTop) - rawAt(scrollTop - 5);
+    assert.ok(step.guide >= previous, `scripture ${scrollTop}: guide went back to ${step.guide}`);
+    // Never faster than the plain mapping toward it, never more than half as slow (catch-up 0.5).
+    assert.ok(step.guide - previous <= plainMove + 1e-9 && step.guide - previous >= plainMove / 2 - 1e-9, `scripture ${scrollTop}`);
+    previous = step.guide;
+    state = step.state;
+  }
+  // The offset is worked off: well past the held passage, the guide is on the plain mapping again.
+  assert.equal(state.bias, 0);
+  assert.equal(previous, rawAt(held + 400));
+});
+
+test("a carried offset also unwinds when the scripture is driven the other way, without reversing", () => {
+  const guide = 1500;
+  const held = placed(guide);
+  const rawAt = (scrollTop) => scriptureToGuide(owner, scrollTop + readingLine);
+  let state = startReverseFollow(guide, rawAt(held));
+  const carried = state.bias;
+  let previous = guide;
+  for (let scrollTop = held - 5; scrollTop >= 0; scrollTop -= 5) {
+    const step = followScripture(state, rawAt(scrollTop));
+    const plainMove = rawAt(scrollTop) - rawAt(scrollTop + 5);
+    // Back toward the chapter opening the guide runs a little faster than the plain map, never the other way.
+    assert.ok(step.guide < previous, `scripture ${scrollTop}: guide went forward to ${step.guide}`);
+    assert.ok(step.guide - previous >= plainMove * 1.5 - 1e-9, `scripture ${scrollTop}`);
+    assert.ok(Math.abs(step.state.bias) <= Math.abs(state.bias), "the offset never grows");
+    previous = step.guide;
+    state = step.state;
+  }
+  assert.ok(state.bias > 0 && state.bias < carried / 2, `offset worked down from ${carried} to ${state.bias}`);
+  // A takeover with nothing carried (deep links, explicit targets) is the plain mapping from the start.
+  const plain = startReverseFollow(rawAt(300), rawAt(300));
+  assert.equal(followScripture(plain, rawAt(320)).guide, rawAt(320));
+});
+
+test("a layout change during scripture driving re-anchors on the new layout instead of jumping", () => {
+  // Take over from the held placement, then turn the scripture down 45px and back up 20px.
+  const rawBefore = (scrollTop) => scriptureToGuide(owner, scrollTop + readingLine);
+  let state = startReverseFollow(1500, rawBefore(148));
+  let guide = 1500;
+  for (const scrollTop of [193, 173]) ({ guide, state } = followScripture(state, rawBefore(scrollTop)));
+  // The pane grows (a taller window, or a phone's browser chrome), so its reading line moves down: the same
+  // scroll offset now maps to a different place in the guide, and the carried offset is meaningless.
+  const tallerLine = 500.4 * 0.3;
+  const rawAfter = (scrollTop) => scriptureToGuide(owner, scrollTop + tallerLine);
+  // The regression: falling back to the plain map, a 1px downward turn throws the guide backward.
+  assert.ok(rawAfter(174) < guide - 20, `plain map ${rawAfter(174)} vs guide ${guide}`);
+  // Re-anchored where the guide is, against the scripture's current offset on the new layout: the first
+  // pixel moves the guide forward, by no more than the plain map's own movement.
+  const rebased = startReverseFollow(guide, rawAfter(173));
+  const next = followScripture(rebased, rawAfter(174));
+  const plainMove = rawAfter(174) - rawAfter(173);
+  assert.ok(next.guide > guide, `guide went from ${guide} to ${next.guide}`);
+  assert.ok(next.guide - guide <= plainMove + 1e-9 && next.guide - guide >= plainMove / 2 - 1e-9);
+  // An upward pixel moves it back instead.
+  assert.ok(followScripture(rebased, rawAfter(172)).guide < guide);
 });
 
 test("half-verse suffixes are read from printed ranges", () => {
