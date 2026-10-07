@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireClerkId } from "./utils";
+import { annotationProblem, normalizeAnnotationBody } from "./annotationRules";
 
 function toIso(ts: number): string {
   return new Date(ts).toISOString();
@@ -10,10 +11,6 @@ function toIso(ts: number): string {
 async function maybeClerkId(ctx: any): Promise<string | null> {
   const identity = await ctx.auth.getUserIdentity();
   return identity?.subject ?? null;
-}
-
-function normalizeBody(body: string): string {
-  return body.trim().replace(/\s+/g, " ");
 }
 
 export const getChapterAnnotations = query({
@@ -92,9 +89,10 @@ export const upsertVerseAnnotation = mutation({
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
-    const body = normalizeBody(args.body);
-    if (!body) throw new Error("Annotation text is required");
-    if (body.length > 1200) throw new Error("Annotation text is too long");
+    // A note, a highlight, or both; a highlight alone is stored with an empty body.
+    const problem = annotationProblem(args.body, args.highlightColor);
+    if (problem) throw new Error(problem);
+    const body = normalizeAnnotationBody(args.body);
     const existing = await ctx.db
       .query("verseAnnotations")
       .withIndex("by_user_verse", (q: any) =>

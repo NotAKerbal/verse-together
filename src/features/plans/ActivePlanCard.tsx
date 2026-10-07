@@ -45,47 +45,50 @@ export default function ActivePlanCard() {
 
   const headingId = `active-plan-${plan.id}`;
 
+  // `.sticky-note` lies flat, so the tilt goes on a wrapper, as on ContinueReadingCard.
   return (
-    <article
-      className="sticky-note rotate-1 flex h-full flex-col gap-3 p-4 sm:p-5"
-      style={{ background: "var(--accent-mint)" }}
-      aria-labelledby={headingId}
-    >
-      <Link href={`/plans/${plan.id}`} className="group flex items-start justify-between gap-3 text-[color:var(--foreground)]" data-tap>
-        <div className="min-w-0">
-          <p className="text-[0.66rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-muted)]">
-            Your plan · {schedule.todayTitle}
-          </p>
-          <h2 id={headingId} className="font-display truncate text-[1.35rem] font-extrabold leading-tight tracking-[-0.03em]">
-            {plan.title}
-          </h2>
-        </div>
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] transition-transform duration-150 group-hover:translate-x-0.5">
-          <ArrowIcon />
-        </span>
-      </Link>
-
-      {schedule.todayNote ? (
-        <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{schedule.todayNote}</p>
-      ) : null}
-
-      <ProgressBar value={plan.readCount} max={plan.stepCount} label={`${plan.readCount} of ${plan.stepCount} chapters read`} />
-
-      {schedule.todaySteps.length > 0 ? (
-        <ul className="flex flex-wrap gap-2" aria-label="Today's chapters">
-          {schedule.todaySteps.map((step) => (
-            <li key={step.index} className="max-w-full">
-              <ChapterChip href={getChapterHref(step)} label={step.label} read={!!step.readAt} />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {plans.length > 1 ? (
-        <Link href="/plans" className="mt-auto self-start text-xs font-bold underline-offset-4 hover:underline">
-          {plans.length} plans
+    <div className="h-full max-w-full rotate-1 px-2 pt-1">
+      <article
+        className="sticky-note flex h-full flex-col gap-3 p-4 sm:p-5"
+        style={{ background: "var(--accent-mint)" }}
+        aria-labelledby={headingId}
+      >
+        <Link href={`/plans/${plan.id}`} className="group flex items-start justify-between gap-3 text-[color:var(--foreground)]" data-tap>
+          <div className="min-w-0">
+            <p className="text-[0.66rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-muted)]">
+              Your plan · {schedule.todayTitle}
+            </p>
+            <h2 id={headingId} className="font-display truncate text-[1.35rem] font-extrabold leading-tight tracking-[-0.03em]">
+              {plan.title}
+            </h2>
+          </div>
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] transition-transform duration-150 group-hover:translate-x-0.5">
+            <ArrowIcon />
+          </span>
         </Link>
-      ) : null}
-    </article>
+
+        {schedule.todayNote ? (
+          <p className="text-xs font-semibold text-[color:var(--foreground-muted)]">{schedule.todayNote}</p>
+        ) : null}
+
+        <ProgressBar value={plan.readCount} max={plan.stepCount} label={`${plan.readCount} of ${plan.stepCount} chapters read`} />
+
+        {schedule.todaySteps.length > 0 ? (
+          <ul className="flex flex-wrap gap-2" aria-label="Today's chapters">
+            {schedule.todaySteps.map((step) => (
+              <li key={step.index} className="max-w-full">
+                <ChapterChip href={getChapterHref(step)} label={step.label} read={!!step.readAt} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {plans.length > 1 ? (
+          <Link href="/plans" className="mt-auto self-start text-xs font-bold underline-offset-4 hover:underline">
+            {plans.length} plans
+          </Link>
+        ) : null}
+      </article>
+    </div>
   );
 }

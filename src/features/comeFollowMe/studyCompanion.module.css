@@ -7,7 +7,8 @@
   The page reads top to bottom: the page head, then the guide's introduction (front matter and orientation,
   everything before its first chapter) as ordinary page content, then the chapter-by-chapter reader. From
   900px the head, the introduction, and the reader share one centered column as wide as the reader's pair
-  (guide plus gap plus scripture), so all three have the same outer edges.
+  (guide plus gap plus scripture), so all three have the same outer edges. While the contents rail shows,
+  that column centers in the room to the rail's right rather than in the whole page.
 
   Reader from 900px: always the guide and the complete assigned scripture side by side, the scripture a
   sticky column. Below 900px: the guide and the complete scripture are a native horizontal scroll-snap
@@ -36,6 +37,8 @@
   --cfm-columns-gap: clamp(2rem, 4vw, 4rem);
   /* The reader's pair at full width: guide measure, gap, scripture column. */
   --cfm-pair: calc(var(--cfm-measure) + var(--cfm-columns-gap) + 32rem);
+  /* The contents rail's width (see .contentsRail); the page also uses it to center beside the rail. */
+  --cfm-rail-width: var(--cfm-rail-w, clamp(12rem, calc(50vw - var(--cfm-pair) / 2 - 3rem), 17rem));
   gap: clamp(1.5rem, 4vw, 2.5rem);
 }
 
@@ -208,7 +211,8 @@
 /*
   Centering. The page head, the introduction, and the reader are one column: as wide as the reader's pair
   where there is room, else the whole shell, centered in the wide page shell, so all three share their outer
-  edges. Below 900px the pair is wider than the shell, so all three simply fill it.
+  edges. Below 900px the pair is wider than the shell, so all three simply fill it. (Beside the contents
+  rail the shell itself moves over; see .contentsRail.)
 */
 .page:has(> .companion) > .header,
 .page > .introduction,
@@ -256,7 +260,9 @@
 .contentsGroups a:focus-visible,
 .pagerButton:focus-visible,
 .guideLink:focus-visible,
-.backToGuide:focus-visible {
+.backToGuide:focus-visible,
+.verseNumber[role="button"]:focus-visible,
+.annotateChip:focus-visible {
   outline: 2px solid var(--cfm-rubric);
   outline-offset: 2px;
   border-radius: 3px;
@@ -557,9 +563,48 @@
   transition: background-color 200ms ease;
 }
 
+/*
+  The reader's own annotations (useScriptureAnnotations), color only like the passage mark below, so the
+  layout never shifts: a highlight tints the verse (a background image, so it layers over the passage
+  mark rather than replacing it), and any annotation, note or highlight, marks the verse's left edge
+  inside its existing padding.
+*/
+.verses li[data-annotated] {
+  box-shadow: inset 3px 0 0 var(--cfm-annotation-mark, var(--cfm-rubric-line));
+}
+
+.verses li[data-highlight] {
+  background-image: linear-gradient(var(--cfm-annotation-tint), var(--cfm-annotation-tint));
+}
+
+.verses li[data-highlight="yellow"] {
+  --cfm-annotation-tint: rgb(234 196 64 / 0.3);
+  --cfm-annotation-mark: rgb(234 196 64 / 0.95);
+}
+
+.verses li[data-highlight="blue"] {
+  --cfm-annotation-tint: rgb(96 150 220 / 0.22);
+  --cfm-annotation-mark: rgb(96 150 220 / 0.9);
+}
+
+.verses li[data-highlight="green"] {
+  --cfm-annotation-tint: rgb(52 211 153 / 0.22);
+  --cfm-annotation-mark: rgb(52 211 153 / 0.9);
+}
+
+.verses li[data-highlight="pink"] {
+  --cfm-annotation-tint: rgb(244 114 182 / 0.2);
+  --cfm-annotation-mark: rgb(244 114 182 / 0.9);
+}
+
+.verses li[data-highlight="purple"] {
+  --cfm-annotation-tint: rgb(167 139 250 / 0.24);
+  --cfm-annotation-mark: rgb(167 139 250 / 0.9);
+}
+
 /* The passage the guide is on (or a link pointed to). Color only, so the layout never shifts. */
 .verses li[data-active="true"] {
-  background: var(--footnote-highlight);
+  background-color: var(--footnote-highlight);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -575,6 +620,50 @@
   font-weight: 600;
   font-variant-numeric: lining-nums tabular-nums;
   vertical-align: 0.4em;
+  color: var(--cfm-rubric);
+}
+
+/* The verse number is the verse's annotate button; it keeps exactly its inline box. */
+.verseNumber[role="button"] {
+  position: relative;
+  cursor: pointer;
+}
+
+.verseNumber[role="button"]:hover {
+  color: var(--cfm-ink);
+}
+
+/* On touch, a finger-sized target around the small numeral, drawn outside the text flow. */
+@media (pointer: coarse) {
+  .verseNumber[role="button"]::after {
+    content: "";
+    position: absolute;
+    inset: -0.65rem -0.45rem;
+  }
+}
+
+/* The Annotate button beside a text selection in the scripture pane (placed by useScriptureAnnotations). */
+.annotateChip {
+  position: fixed;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  height: 2.25rem;
+  padding: 0 0.85rem;
+  overflow: hidden;
+  border: 1px solid var(--cfm-rule-strong);
+  border-radius: 999px;
+  background: var(--cfm-panel);
+  box-shadow: var(--surface-shadow-soft);
+  font-family: var(--cfm-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--cfm-ink);
+}
+
+.annotateChip:hover {
   color: var(--cfm-rubric);
 }
 
@@ -664,14 +753,13 @@
 
 /*
   The rail: fixed in the page's left margin, under the app header, never in the reading region. It shows
-  only where the margin beside the centered reading region (head, introduction, and reader, all at the
+  only where the margin beside the page-centered reading region (head, introduction, and reader, all at the
   pair's width) leaves room for it: 12rem plus 1rem from the viewport edge and 1.5rem from the reading
-  region. This width decides the first paint; StudyCompanion then sizes it to the margin it measures
-  (--cfm-rail-w) and stands it down (data-blocked) where something else, like the Notebook panel, takes the
-  room. Wherever the rail does not show, the compact Contents buttons do.
+  region. This width (--cfm-rail-width, on .page) decides the first paint; ContentsNav then sizes it to the
+  margin it measures (--cfm-rail-w, set on .page) and stands it down (data-blocked) where something else, like
+  the Notebook panel, takes the room. Wherever the rail does not show, the compact Contents buttons do.
 */
 .contentsRail {
-  --cfm-rail-content: var(--cfm-pair);
   position: fixed;
   top: calc(var(--header-height) + 1rem);
   bottom: 1rem;
@@ -679,7 +767,7 @@
   z-index: 6;
   display: none;
   flex-direction: column;
-  width: var(--cfm-rail-w, clamp(12rem, calc(50vw - var(--cfm-rail-content) / 2 - 3rem), 17rem));
+  width: var(--cfm-rail-width);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.25rem 0.5rem 1rem 0;
@@ -693,6 +781,20 @@
 
   .page:has(> .companion[data-mode="columns"]):has(> .contentsRail:not([data-blocked])) .contentsOpener {
     display: none;
+  }
+
+  /*
+    With the rail showing, the page starts at the rail's right edge (plus the app's usual left gutter) and runs
+    to the app's right gutter (or the Notebook panel's reservation), so the column centers in the room the
+    rail leaves rather than in the whole viewport. The rail's size never depends on this offset (ContentsNav
+    measures the page-centered position), so nothing feeds back. The offset never squeezes the page below
+    the pair's width: where the room is short it just shifts less, so the column's width and text never
+    change, only its position.
+  */
+  .page:has(> .companion[data-mode="columns"]):has(> .contentsRail:not([data-blocked])) {
+    width: auto;
+    margin-right: 0;
+    margin-left: max(0px, min(calc(1rem + var(--cfm-rail-width)), calc(100% - var(--cfm-pair))));
   }
 }
 

@@ -24,7 +24,10 @@ type Props = {
   subscribe: (notify: () => void) => () => void;
   /** The contents entry the reader is in now, read from the live page; null above the first one. */
   getActive: () => string | null;
-  /** Leftmost edge (viewport px) of the centered reading region the rail must stay clear of. */
+  /**
+   * Left edge (viewport px) of the reading region as centered in the page, the rail must stay clear of. Never
+   * where the region sits beside the rail, which depends on the rail's own width.
+   */
   contentLeft: () => number;
   /** Changes whenever the reading region changes width (the companion's mode). */
   layoutKey: string;
@@ -173,8 +176,9 @@ function ContentsList({ variant, toc, active, currentChapter, toggled, onToggle,
 
 /**
  * The guide's contents, outside the reading region. Wide screens: a rail fixed in the page's left margin,
- * which costs the reading region no width and never moves it. Otherwise: a modal drawer opened from a
- * compact Contents button (native <dialog>: Escape closes it, focus stays inside, and returns to the button).
+ * which costs the reading region no width; the region centers in the room to its right. Otherwise: a modal
+ * drawer opened from a compact Contents button (native <dialog>: Escape closes it, focus stays inside, and
+ * returns to the button).
  */
 export default function ContentsNav({ toc, handle, subscribe, getActive, contentLeft, layoutKey, onNavigate }: Props) {
   const active = useSyncExternalStore(subscribe, getActive, () => null);
@@ -217,7 +221,8 @@ export default function ContentsNav({ toc, handle, subscribe, getActive, content
   );
 
   // Rail: size it to the margin it actually has, and stand it down (the Contents buttons show instead) where
-  // that is too narrow, e.g. with the Notebook panel open. The CSS has already decided the first paint.
+  // that is too narrow, e.g. with the Notebook panel open. The CSS has already decided the first paint. The
+  // width goes on the page, which centers the reading region beside the rail by the same value.
   useEffect(() => {
     const rail = railRef.current;
     const page = rail?.parentElement;
@@ -230,7 +235,7 @@ export default function ContentsNav({ toc, handle, subscribe, getActive, content
         rail.dataset.blocked = "true";
       } else {
         delete rail.dataset.blocked;
-        rail.style.setProperty("--cfm-rail-w", `${Math.min(RAIL_MAX, Math.floor(available))}px`);
+        page.style.setProperty("--cfm-rail-w", `${Math.min(RAIL_MAX, Math.floor(available))}px`);
       }
       // A drawer left open while the window widened into the rail layout is no longer needed.
       const dialog = dialogRef.current;
