@@ -11,7 +11,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "test:cfm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/comeFollowMe.test.mjs src/lib/cfm/cfmGuide.test.mjs src/features/comeFollowMe/scrollSync.test.mjs src/features/comeFollowMe/readerDock.test.mjs src/features/comeFollowMe/scriptureAnnotations.test.mjs src/features/annotations/verseAnnotations.test.mjs",
+    "test:cfm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/comeFollowMe.test.mjs src/lib/cfm/cfmGuide.test.mjs src/features/comeFollowMe/scrollSync.test.mjs src/features/comeFollowMe/readerDock.test.mjs src/features/comeFollowMe/scriptureAnnotations.test.mjs src/features/annotations/verseAnnotations.test.mjs src/features/comeFollowMe/guideAnchors.test.mjs",
     "cfm:check": "node scripts/cfm-content.mjs check",
     "test:ai-insights":"node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
     "batch:insights:prepare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/prepareChapterInsightsBatch.mjs --skip-ref bookofmormon:1nephi:1 --canary-ref bookofmormon:1nephi:2",

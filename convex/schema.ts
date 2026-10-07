@@ -270,6 +270,30 @@ export default defineSchema({
     .index("by_chapter_verse", ["volume", "book", "chapter", "verse"])
     .index("by_user_verse", ["clerkId", "volume", "book", "chapter", "verse"]),
 
+  // A private highlight on a span of a Come, Follow Me guide's prose (see convex/annotationRules.ts for the
+  // anchor). Separate from verseAnnotations: guide text is not a verse.
+  guideHighlights: defineTable({
+    clerkId: v.string(),
+    guide: v.string(),
+    part: v.union(v.literal("introduction"), v.literal("reader")),
+    startBlock: v.string(),
+    startOffset: v.number(),
+    endBlock: v.string(),
+    endOffset: v.number(),
+    exact: v.string(),
+    prefix: v.string(),
+    suffix: v.string(),
+    highlightColor: v.union(
+      v.literal("yellow"),
+      v.literal("blue"),
+      v.literal("green"),
+      v.literal("pink"),
+      v.literal("purple")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user_guide", ["clerkId", "guide"]),
+
   chapterReads: defineTable({
     clerkId: v.string(),
     volume: v.string(),

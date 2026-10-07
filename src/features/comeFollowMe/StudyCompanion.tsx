@@ -43,6 +43,7 @@ import {
 } from "./scrollSync";
 import { isDocked, paneScrolling, paneTakesWheel, redockScroll, trailingPull } from "./readerDock";
 import ContentsNav, { ContentsOpener, type ContentsHandle } from "./ContentsNav";
+import { useGuideHighlights } from "./useGuideHighlights";
 import { useScriptureAnnotations } from "./useScriptureAnnotations";
 import styles from "./studyCompanion.module.css";
 
@@ -61,6 +62,8 @@ type Props = {
   passages: GuidePassage[];
   book: { label: string; slug: string; volume: string };
   chapters: CompanionChapter[];
+  /** The guide's week start (its route key), which identifies the guide for the reader's guide highlights. */
+  weekStart: string;
   /**
    * The page footer. It normally follows the companion; in the phone reader it closes the guide side
    * instead, so nothing trails the docked reader on the page.
@@ -220,7 +223,7 @@ function focusWithoutScrolling(element: HTMLElement | null) {
   element.focus({ preventScroll: true });
 }
 
-export default function StudyCompanion({ introductionHtml, readerHtml, toc, passages, book, chapters, footer }: Props) {
+export default function StudyCompanion({ introductionHtml, readerHtml, toc, passages, book, chapters, weekStart, footer }: Props) {
   const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
   const passageLabels = useMemo(() => new Map(passages.map((passage) => [passage.id, passage.label])), [passages]);
   const passagesByStart = useMemo(() => {
@@ -295,6 +298,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   /** Every contents entry, in document order (introduction, then the reader). */
   const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
   const annotations = useScriptureAnnotations(book, chapterNumbers, scriptureDocRef);
+  const guideHighlights = useGuideHighlights(weekStart, introRef, guideRef);
 
   useEffect(() => {
     const pendingMove = heading;
@@ -1169,6 +1173,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
         onNavigate={navigateToSection}
       />
       {annotations.layer}
+      {guideHighlights.layer}
       {introductionHtml ? (
         <div className={styles.introduction}>
           <ContentsOpener onOpen={openContents} />
