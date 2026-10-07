@@ -181,7 +181,7 @@
 /*
   StudyCompanion measures the live page and overrides these on the element: --cfm-chrome-top (the sticky
   app header's height, 0 where it is hidden), --cfm-toolbar-h (the toolbar row's real height, 0 where it is
-  empty), --cfm-vh (the viewport height) and --cfm-bottom-clear (how much of the viewport the fixed bottom
+  empty; on desktop it covers the guide column only), --cfm-vh (the viewport height) and --cfm-bottom-clear (how much of the viewport the fixed bottom
   navigation covers). The values here are only the first paint's fallbacks.
 */
 .companion {
@@ -219,11 +219,13 @@
 }
 
 /*
-  The reader's sticky toolbar row. It holds only what the reader needs at its top: on phones the pager (see
-  below); on desktop the compact Contents button, and only where the contents rail does not show. With the
-  rail showing it is empty and zero-height. It is transparent, like the app header above it: on desktop it is
-  only as wide as its button, which carries its own small background. StudyCompanion measures its real
-  height (including zero) for the scripture column's top, docking, and landings.
+  The reader's sticky toolbar row. It holds only what the reader needs at its top: on phones the pager row
+  across the whole strip (see below); on desktop the compact Contents button, at the top of the guide
+  column only, and only where the contents rail does not show (with the rail showing it is empty and
+  zero-height). The scripture column beside it therefore starts, and docks, level with the guide column's
+  top. It is transparent, like the app header above it: on desktop it is only as wide as its button, which
+  carries its own small background. StudyCompanion measures its real height (including zero) for the
+  guide's landings and reading top.
 */
 .toolbar {
   position: sticky;
@@ -233,6 +235,10 @@
   align-self: flex-start;
   align-items: center;
   gap: 0.75rem;
+}
+
+.companion[data-mode="columns"] .toolbar {
+  width: fit-content;
 }
 
 .companion[data-mode="columns"] .toolbar > .contentsOpener {
@@ -271,10 +277,12 @@
 */
 @media (min-width: 900px) {
   /*
-    Both columns start this far below the measured chrome (LANDING_GAP in StudyCompanion), so the first
-    chapter heading, and anything a navigation lands on, sits clear of the app header and toolbar row.
+    The two columns' outer tops are level (the guide column's starts with its toolbar row, zero-height where
+    empty). Inside them, the guide's text and the scripture's text each start this far down (LANDING_GAP in
+    StudyCompanion), so the first chapter headings, and anything a navigation lands on, sit clear of the app
+    header and of the guide's toolbar row.
   */
-  .companion[data-mode="columns"] .guidePanel {
+  .companion[data-mode="columns"] .guidePanel > .guide {
     padding-top: 0.75rem;
   }
 
@@ -286,15 +294,15 @@
   }
 
   /*
-    The scripture column fills exactly the viewport under the header and the toolbar row (zero-height
-    where empty) once it sticks, so its own scroller never runs under the transparent header. Its scroll
-    chains to the page at either end (no overscroll containment), so scrolling back past its top simply
-    carries on up the page.
+    The scripture column fills exactly the viewport under the measured app header once it sticks (the
+    guide's toolbar row is beside it, not above it), so its own scroller never runs under the transparent
+    header. Its scroll chains to the page at either end (no overscroll containment), so scrolling back past
+    its top simply carries on up the page.
   */
   .companion[data-mode="columns"] .scripturePanel {
     position: sticky;
-    top: calc(var(--cfm-chrome-top) + var(--cfm-toolbar-h));
-    height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top) - var(--cfm-toolbar-h));
+    top: var(--cfm-chrome-top);
+    height: calc(var(--cfm-vh, 100vh) - var(--cfm-chrome-top));
     overflow-y: auto;
     scrollbar-gutter: stable;
     /* No fade at its top edge; the top padding matches the guide's. */

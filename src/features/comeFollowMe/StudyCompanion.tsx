@@ -309,8 +309,8 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
 
   /**
    * Where the guide scrolls in the current layout: its own side of the strip on phones, else the page, under
-   * the app header and the reader's toolbar row, both measured live (the row is zero-height wherever it has
-   * nothing to show).
+   * the app header and the guide column's own toolbar row, both measured live (the row is zero-height
+   * wherever it has nothing to show). The scripture column has no toolbar row: it measures its own pane.
    */
   const guideBox = useCallback((): ScrollBox => {
     if (mode === "strip" && guidePanelRef.current) return elementBox(guidePanelRef.current);
@@ -600,8 +600,10 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     /** The last evaluated dock state, and whether a viewport resize must restore it. */
     let docked = false;
     let redockAfterResize = false;
+    // Phones dock the whole reader (pager row first); desktop docks the scripture column, which sticks right
+    // under the app header: the desktop toolbar row is in the guide column only, so it adds nothing here.
     const readerElement = () => (mode === "strip" ? companion : scripturePanel);
-    const dockLine = () => (mode === "strip" ? chromeTop : chromeTop + toolbarHeight);
+    const dockLine = () => chromeTop;
     // A viewport change (URL bar, rotation, on-screen keyboard closing) resizes the reader only after the
     // browser has already clamped the page to the old, shorter document, which can leave a docked reader
     // stranded part-way down. Remember that it was docked, so the next measurement can put it back.
@@ -1044,6 +1046,49 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   const highlighted = (chapter: number, verse: number) =>
     active != null && active.chapter === chapter && active.first != null && verse >= active.first && verse <= (active.last ?? active.first);
 
+  // The reader's sticky toolbar row. Phones: the pager row across the top of the whole strip. Desktop: only
+  // the compact Contents button, at the top of the guide column alone (hidden, and zero-height, where the
+  // contents rail shows), so the scripture column beside it starts and docks level with the guide column.
+  const toolbar = (
+    <div ref={toolbarRef} className={styles.toolbar}>
+      <ContentsOpener onOpen={openContents} />
+      {mode === "strip" ? (
+        <div className={styles.pager} role="group" aria-label="Study guide and scripture">
+          <button
+            id="cfm-show-guide"
+            type="button"
+            className={styles.pagerButton}
+            aria-controls="cfm-panel-guide"
+            aria-pressed={side === "guide"}
+            onClick={() => revealSide("guide")}
+            onKeyDown={onPagerKeyDown}
+          >
+            <span aria-hidden="true">‹ </span>Guide
+          </button>
+          <span className={styles.pagerDots} aria-hidden="true">
+            <span data-on={side === "guide" ? "true" : undefined} />
+            <span data-on={side === "scripture" ? "true" : undefined} />
+          </span>
+          <button
+            id="cfm-show-scripture"
+            type="button"
+            className={styles.pagerButton}
+            aria-controls="cfm-panel-scripture"
+            aria-pressed={side === "scripture"}
+            onClick={() => revealSide("scripture")}
+            onKeyDown={onPagerKeyDown}
+          >
+            {label}
+            <span aria-hidden="true"> ›</span>
+          </button>
+          <span className={styles.srOnly} aria-live="polite">
+            {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <>
       <ContentsNav
@@ -1062,46 +1107,11 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
         </div>
       ) : null}
       <div ref={companionRef} className={styles.companion} data-mode={mode}>
-        <div ref={toolbarRef} className={styles.toolbar}>
-          <ContentsOpener onOpen={openContents} />
-          {mode === "strip" ? (
-            <div className={styles.pager} role="group" aria-label="Study guide and scripture">
-              <button
-                id="cfm-show-guide"
-                type="button"
-                className={styles.pagerButton}
-                aria-controls="cfm-panel-guide"
-                aria-pressed={side === "guide"}
-                onClick={() => revealSide("guide")}
-                onKeyDown={onPagerKeyDown}
-              >
-                <span aria-hidden="true">‹ </span>Guide
-              </button>
-              <span className={styles.pagerDots} aria-hidden="true">
-                <span data-on={side === "guide" ? "true" : undefined} />
-                <span data-on={side === "scripture" ? "true" : undefined} />
-              </span>
-              <button
-                id="cfm-show-scripture"
-                type="button"
-                className={styles.pagerButton}
-                aria-controls="cfm-panel-scripture"
-                aria-pressed={side === "scripture"}
-                onClick={() => revealSide("scripture")}
-                onKeyDown={onPagerKeyDown}
-              >
-                {label}
-                <span aria-hidden="true"> ›</span>
-              </button>
-              <span className={styles.srOnly} aria-live="polite">
-                {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
-              </span>
-            </div>
-          ) : null}
-        </div>
+        {mode === "strip" ? toolbar : null}
 
         <div ref={stripRef} className={styles.layout} onScroll={onStripScroll}>
           <section ref={guidePanelRef} id="cfm-panel-guide" aria-label="Study guide" className={styles.guidePanel} inert={guideHidden}>
+            {mode === "columns" ? toolbar : null}
             <div ref={guideRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={guideHtml} />
             {mode === "strip" ? footer : null}
           </section>
