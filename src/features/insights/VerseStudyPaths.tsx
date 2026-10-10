@@ -77,10 +77,12 @@ export function VerseStudyPathMarker({
       aria-label={`${open ? "Hide" : "Explore"} study path for verse ${verse}`}
       aria-expanded={open}
       title="A study path is available"
-      className={`simple-hide inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
+      // A quiet hint beside the verse: ink-soft and unfilled until hovered, rubric and ringed while its path is
+      // open. The icon keeps 3:1 on the paper in both themes; the outline focus ring also shows in forced colors.
+      className={`simple-hide inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent-rubric)] ${
         open
-          ? "bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
-          : "bg-[color:var(--accent-primary)] text-[#17161a] hover:shadow-[var(--surface-shadow-soft)]"
+          ? "border-[color:var(--accent-rubric)] bg-[color:var(--surface-card-soft)] text-[color:var(--accent-rubric)] forced-colors:border-[color:Highlight]"
+          : "border-transparent bg-transparent text-[color:var(--foreground-soft)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)]"
       }`}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {

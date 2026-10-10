@@ -463,7 +463,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     [book.label, book.slug, passageLabels]
   );
 
-  /** Note which segment the guide is in, for the pager label and the verse highlight. */
+  /** Note which segment the guide is in, for the pager label and the active verses' side line. */
   const noteSegment = useCallback((list: Segment<SegmentMeta>[], guideY: number) => {
     const index = segmentAt(list, guideY);
     if (index === segmentIndexRef.current) return;
@@ -560,7 +560,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     scrollTo(guide, "guide", guide.offsetOf(el) - LANDING_GAP);
     reverseRef.current = null;
     handoffRef.current = { scripture: scripture.top() };
-    // The pager label and verse highlight name the section landed on (1px inside it, past any rounding).
+    // The pager label and the side line name the section landed on (1px inside it, past any rounding).
     noteSegment(segments(guide, scripture), guide.offsetOf(el) + 1);
   }, [mode, scriptureBox, scriptureLineOf, chapters, book.slug, passages, guideBox, scrollTo, noteSegment, segments]);
 
@@ -1328,6 +1328,9 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
                         id={scriptureVerseId(book.slug, entry.chapter, verse.verse)}
                         value={verse.verse}
                         data-active={highlighted(entry.chapter, verse.verse) ? "true" : undefined}
+                        // The passage the guide is on is the reader's place, as in the contents (not a selection):
+                        // its first verse marks where that range starts, so only one verse is ever current.
+                        aria-current={highlighted(entry.chapter, verse.verse) && verse.verse === active?.first ? "location" : undefined}
                         {...annotations.verseAttributes(entry.chapter, verse.verse)}
                       >
                         {/* The verse number doubles as the verse's annotate button (same box, same text). */}
