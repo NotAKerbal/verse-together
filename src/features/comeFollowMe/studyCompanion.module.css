@@ -409,6 +409,14 @@
     scroll-snap-stop: always;
     padding: 1.25rem 0.35rem calc(2.5rem + var(--cfm-bottom-clear));
   }
+
+  /*
+    The verses bleed 0.5rem into their side's left padding (for the annotation mark and highlight tint), and
+    the passage line sits just outside them; this much padding keeps both inside the side's clipping edge.
+  */
+  .companion[data-mode="strip"] .scripturePanel {
+    padding-left: 0.875rem;
+  }
 }
 
 .pager {
@@ -526,9 +534,10 @@
 }
 
 .verses {
+  --cfm-verse-gap: 0.7rem;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--cfm-verse-gap);
   font-family: var(--cfm-serif);
   font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.15rem);
   line-height: 1.68;
@@ -537,19 +546,18 @@
 }
 
 .verses li {
+  position: relative;
   scroll-margin-top: 1rem;
   margin-inline: -0.5rem;
   padding: 0.1rem 0.5rem;
   border-radius: 3px;
   text-wrap: pretty;
-  transition: background-color 200ms ease;
 }
 
 /*
-  The reader's own annotations (useScriptureAnnotations), color only like the passage mark below, so the
-  layout never shifts: a highlight tints the verse (a background image, so it layers over the passage
-  mark rather than replacing it), and any annotation, note or highlight, marks the verse's left edge
-  inside its existing padding.
+  The reader's own annotations (useScriptureAnnotations), color only like the passage line below, so the
+  layout never shifts: a highlight tints the verse (a background image), and any annotation, note or
+  highlight, marks the verse's left edge inside its existing padding.
 */
 .verses li[data-annotated] {
   box-shadow: inset 3px 0 0 var(--cfm-annotation-mark, var(--cfm-rubric-line));
@@ -584,13 +592,35 @@
   --cfm-annotation-mark: rgb(167 139 250 / 0.9);
 }
 
-/* The passage the guide is on (or a link pointed to). Color only, so the layout never shifts. */
-.verses li[data-active="true"] {
-  background-color: var(--footnote-highlight);
+/*
+  The passage the guide is on (or a link pointed to): a thin neutral line just outside the verses' left
+  edge, clear of the annotation mark inside it, and no tint, so the reader's own highlights are the only
+  color on the text. Every verse carries the line, faded out, so turning it on or off never moves anything.
+  It is a border, not a background, so it stays drawn in forced colors; its ink meets 3:1 on the paper in
+  both themes. It runs across the gap between consecutive verses, so a range reads as one line.
+*/
+.verses li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -0.3125rem;
+  border-left: 2px solid var(--cfm-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.verses li[data-active="true"]::before {
+  opacity: 1;
+}
+
+.verses li[data-active="true"] + li[data-active="true"]::before {
+  top: calc(-1 * var(--cfm-verse-gap));
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .verses li {
+  .verses li::before {
     transition: none;
   }
 }
