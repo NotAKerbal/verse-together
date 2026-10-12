@@ -15,10 +15,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const sha256 = (file) => createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex");
 
 // Pinned from the verified source bundle (NotAKerbal/isaac-stuff-homepage@52975b1c4b78c34a1c0d7af365422455b71148e4).
+// Isaiah 58–66 guide and updated manifest from NotAKerbal/isaac-stuff-homepage@d7dd5c3edf5dc620d07de41909fd8eac563a32ef.
 const SOURCE_FILES = {
   "content/cfm/2026-09-28-isaiah-40-49.md": ["714cfbaa5b5bc1c55a938d530b077f8008f0f886c455e6aee2156c51c04e5604", 75234],
   "content/cfm/2026-10-05-isaiah-50-57.md": ["b94def284cb09ac079a1831a30aa83a0ec45832efb8c9483e9a910f187ac10e5", 145604],
-  "content/cfm/guides.json": ["b00dfb351b8634bd2ddd19c982be0238fe8943ea5de426a5e0151e0c0f6aeacb", 882],
+  "content/cfm/2026-10-12-isaiah-58-66.md": ["3b961a70aa9deb9af3f04ae266193ad5af0f3062e426932acf44bd48ea1f2c5d", 74659],
+  "content/cfm/guides.json": ["6334aaf4be77c77bf9245acf90ef6a88fa1f3802c2492726ce448ed3bd46cecf", 1520],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
@@ -190,7 +192,7 @@ test("the guide splits into introduction and reader at its first chapter section
 });
 
 test("a guide with no chapter of its own range keeps everything in the reader", () => {
-  const guide = { ...guides[0] };
+  const guide = { ...guides.find((entry) => entry.slug === "2026-10-05-isaiah-50-57") };
   const parsedOnly = parseGuide(guide, "# Title\n\nPreamble.\n\n## About\n\nText.\n\n## Isaiah 61\n\nOutside the range.\n");
   assert.equal(parsedOnly.introductionHtml, "");
   assert.equal(parsedOnly.readerHtml, parsedOnly.html);
