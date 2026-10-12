@@ -52,6 +52,9 @@ import {
 } from "./scrollSync";
 import { isDocked, paneScrolling, paneTakesWheel, redockScroll, trailingPull } from "./readerDock";
 import ContentsNav, { ContentsOpener, type ContentsHandle } from "./ContentsNav";
+// Explicit extensions: the dialog and its pure helpers differ only in case.
+import { usePassagePreview } from "./PassagePreview.tsx";
+import { passageFromLink, type PassageTarget } from "./passagePreview.ts";
 import { useGuideHighlights } from "./useGuideHighlights";
 import { useScriptureAnnotations } from "./useScriptureAnnotations";
 import styles from "./studyCompanion.module.css";
@@ -61,12 +64,15 @@ export type CompanionChapter = { chapter: number; verses: Array<{ verse: number;
 type Props = {
   /**
    * Guide HTML from the parser (escaped source text, safe links, and page-added art/sources only), split at
-   * the guide's first chapter section. The introduction is read on its own, as ordinary page content, in
-   * every layout; the reader HTML (every chapter, then the closing synthesis and sources) is the guide
-   * side of the paired reader.
+   * the guide's first chapter section and after its last. The introduction is read on its own, as ordinary
+   * page content, in every layout; the reader HTML (every chapter, and any section between them) is the
+   * guide side of the paired reader; the closing HTML (synthesis, study plans, sources) follows the reader,
+   * never beside the scripture: below the paired columns on desktop, and on phones as the end of the
+   * guide side, where the pager and the swipe to the scripture stand down while it is read.
    */
   introductionHtml: string;
   readerHtml: string;
+  closingHtml: string;
   toc: TocItem[];
   passages: GuidePassage[];
   book: { label: string; slug: string; volume: string };
@@ -74,8 +80,8 @@ type Props = {
   /** The guide's week start (its route key), which identifies the guide for the reader's guide highlights. */
   weekStart: string;
   /**
-   * The page footer. It normally follows the companion; in the phone reader it closes the guide side
-   * instead, so nothing trails the docked reader on the page.
+   * The page footer. It normally follows the closing sections below the companion; in the phone reader it
+   * closes the guide side instead, so nothing trails the docked reader on the page.
    */
   footer?: ReactNode;
 };
@@ -89,10 +95,10 @@ type Mode = "columns" | "strip";
 type SegmentMeta = { target: ScriptureTarget; label: string };
 
 /**
- * A reading position inside the guide that survives a layout change: a top-level block of the introduction
- * or of the reader's guide, and how far into it.
+ * A reading position inside the guide that survives a layout change: a top-level block of the introduction,
+ * of the reader's guide, or of the closing sections, and how far into it.
  */
-type GuideAnchor = { part: "introduction" | "reader"; index: number; ratio: number };
+type GuideAnchor = { part: "introduction" | "reader" | "closing"; index: number; ratio: number };
 
 /** Work to do once the DOM reflects a state change, in this order. */
 type Pending = {
@@ -245,7 +251,17 @@ function focusWithoutScrolling(element: HTMLElement | null) {
   element.focus({ preventScroll: true });
 }
 
-export default function StudyCompanion({ introductionHtml, readerHtml, toc, passages, book, chapters, weekStart, footer }: Props) {
+export default function StudyCompanion({
+  introductionHtml,
+  readerHtml,
+  closingHtml,
+  toc,
+  passages,
+  book,
+  chapters,
+  weekStart,
+  footer,
+}: Props) {
   const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
   const passageLabels = useMemo(() => new Map(passages.map((passage) => [passage.id, passage.label])), [passages]);
   const passagesByStart = useMemo(() => {
@@ -289,6 +305,8 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   const stripRef = useRef<HTMLDivElement>(null);
   const guidePanelRef = useRef<HTMLElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
+  /** The closing sections' prose: after the companion on desktop, at the end of the guide side on phones. */
+  const closingRef = useRef<HTMLDivElement>(null);
   const scriptureRef = useRef<HTMLElement>(null);
   const scriptureDocRef = useRef<HTMLDivElement>(null);
   const backToGuideRef = useRef<HTMLButtonElement>(null);
@@ -321,10 +339,14 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
   const settledDesktopRef = useRef<boolean | null>(null);
   const introHtml = useMemo(() => ({ __html: introductionHtml }), [introductionHtml]);
   const guideHtml = useMemo(() => ({ __html: readerHtml }), [readerHtml]);
-  /** Every contents entry, in document order (introduction, then the reader). */
+  const closingDoc = useMemo(() => ({ __html: closingHtml }), [closingHtml]);
+  /** Every contents entry, in document order (introduction, the reader, then the closing sections). */
   const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
   const annotations = useScriptureAnnotations(book, chapterNumbers, scriptureDocRef);
-  const guideHighlights = useGuideHighlights(weekStart, introRef, guideRef);
+  // The closing sections were the end of the reader's guide before they moved out of it; their highlights
+  // are still the reader's, read across both as one text.
+  const highlightReader = useMemo(() => [guideRef, closingRef], []);
+  const guideHighlights = useGuideHighlights(weekStart, introRef, highlightReader, mode);
 
   useEffect(() => {
     const pendingMove = heading;
@@ -574,10 +596,22 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
       const found = blockAt(guideBlocks(intro), page, pageLine);
       return found && { part: "introduction", ...found };
     }
+    // Past the reader, on desktop, the closing sections are page content too.
+    const closing = closingRef.current;
+    const closingInGuide = !!closing && !!guidePanelRef.current?.contains(closing);
+    if (closing && !closingInGuide && pageLine >= page.offsetOf(closing)) {
+      const found = blockAt(guideBlocks(closing), page, pageLine);
+      return found && { part: "closing", ...found };
+    }
     const root = guideRef.current;
     if (!root) return null;
     const guide = guideBox();
-    const found = blockAt(guideBlocks(root), guide, guide.top() + guide.height() * READING_LINE);
+    const line = guide.top() + guide.height() * READING_LINE;
+    if (closing && closingInGuide && line >= guide.offsetOf(closing)) {
+      const found = blockAt(guideBlocks(closing), guide, line);
+      return found && { part: "closing", ...found };
+    }
+    const found = blockAt(guideBlocks(root), guide, line);
     return found && { part: "reader", ...found };
   }, [guideBox]);
 
@@ -593,12 +627,14 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
 
   /**
    * The contents entry the reader is in: the last heading (or lead) that has passed SECTION_LINE below the
-   * measured chrome. The introduction is measured against the page; the reader's guide against its own
-   * column on phones, and only once the reader has reached the top there.
+   * measured chrome. The introduction (and on desktop the closing sections) is measured against the page;
+   * the reader's guide against its own column on phones, and only once the reader has reached the top there.
    */
   const locateSection = useCallback((): string | null => {
     const companion = companionRef.current;
     const intro = introRef.current;
+    const closing = closingRef.current;
+    const closingOnPage = !!closing && !guidePanelRef.current?.contains(closing);
     if (!companion) return null;
     const pageLine = headerBottom() + SECTION_LINE;
     let readerLine = pageLine + (toolbarRef.current?.offsetHeight ?? 0);
@@ -613,7 +649,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     for (const id of tocIds) {
       const element = document.getElementById(id);
       if (!element) continue;
-      const line = intro?.contains(element) ? pageLine : readerLine;
+      const line = intro?.contains(element) || (closingOnPage && closing?.contains(element)) ? pageLine : readerLine;
       if (element.getBoundingClientRect().top <= line) found = id;
       else break;
     }
@@ -883,13 +919,15 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     }
     if (pending.guideAnchor) {
       const { part, index, ratio } = pending.guideAnchor;
-      const intro = part === "introduction";
-      const box = intro ? pageBox() : guide;
-      const scope = intro ? introRef.current : root;
+      const closing = closingRef.current;
+      // The introduction, and on desktop the closing sections, scroll with the page; the rest with the guide.
+      const onPage = part === "introduction" || (part === "closing" && !!closing && !guidePanelRef.current?.contains(closing));
+      const box = onPage ? pageBox() : guide;
+      const scope = part === "introduction" ? introRef.current : part === "closing" ? closing : root;
       const block = scope ? guideBlocks(scope)[index] : undefined;
       if (block) {
         const y = box.offsetOf(block) + ratio * block.getBoundingClientRect().height - box.height() * READING_LINE;
-        if (intro) scrollPage(y);
+        if (onPage) scrollPage(y);
         else scrollTo(guide, "guide", y);
       }
     }
@@ -1082,6 +1120,39 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     };
   }, [mode]);
 
+  // Phones: the closing sections end the guide side, but nothing is paired with them. Once they reach the
+  // side's reading line, the pager and the swipe to the scripture stand down (data-closing, see the CSS), and
+  // come back as soon as the reader scrolls up into the last chapter again.
+  useEffect(() => {
+    const companion = companionRef.current;
+    const panel = guidePanelRef.current;
+    const closing = closingRef.current;
+    if (!companion) return;
+    if (mode !== "strip" || side !== "guide" || !panel || !closing || !panel.contains(closing)) {
+      delete companion.dataset.closing;
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const line = panel.getBoundingClientRect().top + panel.clientHeight * READING_LINE;
+      if (closing.getBoundingClientRect().top <= line) companion.dataset.closing = "true";
+      else delete companion.dataset.closing;
+    };
+    const queue = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    update();
+    panel.addEventListener("scroll", queue, { passive: true });
+    window.addEventListener("resize", queue);
+    return () => {
+      panel.removeEventListener("scroll", queue);
+      window.removeEventListener("resize", queue);
+      if (frame) window.cancelAnimationFrame(frame);
+      delete companion.dataset.closing;
+    };
+  }, [mode, side]);
+
   const showScripture = useCallback(
     (
       raw: ScriptureTarget,
@@ -1121,16 +1192,22 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
       const element = document.getElementById(id);
       if (!element) return;
       const strip = !matches(DESKTOP_QUERY);
-      if (introRef.current?.contains(element)) {
-        // The introduction is page content: scroll the page to it, below the app header. The reader is left
-        // as it is (on phones its strip goes back to the guide side, ready for the next visit).
+      // Decided by the viewport, not by where the closing sections are rendered right now: on a phone's first
+      // render after hydration they are still below the companion, and move into the guide side before the
+      // scheduled landing runs.
+      const inClosing = !!closingRef.current?.contains(element);
+      if (introRef.current?.contains(element) || (inClosing && !strip)) {
+        // The introduction, and on desktop the closing sections, are page content: scroll the page to them,
+        // below the app header. The reader is left as it is (on phones its strip goes back to the guide side,
+        // ready for the next visit).
         if (options.updateHash) window.history.replaceState(null, "", `#${id}`);
         if (strip) revealSide("guide", true);
         scrollPage(pageBox().offsetOf(element) - LANDING_GAP);
         if (options.focus || (strip && !options.initial)) focusWithoutScrolling(element);
         return;
       }
-      if (!guideRef.current?.contains(element)) return;
+      // On phones the closing sections end the guide side, and are reached like the commentary before them.
+      if (!guideRef.current?.contains(element) && !inClosing) return;
       const target = targetFromGuideElement(element);
       if (target) setActive(target);
       if (options.updateHash) window.history.replaceState(null, "", `#${id}`);
@@ -1147,6 +1224,32 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
 
   /** A contents entry: the introduction scrolls the page; the reader lands on it below the toolbar. */
   const navigateToSection = useCallback((id: string) => showGuide(id, { updateHash: true, focus: true }), [showGuide]);
+
+  // Scripture previews. This week's chapters are already here; a preview of one of them can also be shown in
+  // the paired scripture, as a click on the reference used to do.
+  const previewLocal = useMemo(() => ({ volume: book.volume, book: book.slug, chapters }), [book.volume, book.slug, chapters]);
+  const besideGuide = useCallback(
+    (target: PassageTarget) => target.volume === book.volume && target.book === book.slug && chapterNumbers.includes(target.chapter),
+    [book.volume, book.slug, chapterNumbers]
+  );
+  const showBesideGuide = useCallback(
+    (target: PassageTarget, opener: HTMLElement | null) => {
+      const region = [introRef.current, guideRef.current, closingRef.current].find((root) => !!opener && !!root?.contains(opener));
+      showScripture(
+        { chapter: target.chapter, first: target.first, last: target.last },
+        {
+          updateHash: true,
+          fromGuide: region && opener ? nearestGuideAnchor(region, opener) : null,
+          // From outside the reader's guide, the guide comes along to the passage's commentary.
+          follow: region !== guideRef.current,
+        }
+      );
+    },
+    [showScripture]
+  );
+  // scrollPage takes the page box's own offset, which is window.scrollY (the header only narrows its height),
+  // so the raw position the preview recorded goes back unchanged, as a move the scroll sync expects.
+  const preview = usePassagePreview({ local: previewLocal, besideGuide, showBesideGuide, restoreScroll: scrollPage });
   const openContents = useCallback((opener: HTMLElement) => contentsRef.current?.open(opener), []);
 
   // Deep links: `#scripture-isaiah-53-v4` shows the scripture there; any commentary id scrolls the guide.
@@ -1194,20 +1297,32 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     setSide(settled);
   };
 
-  // Scripture references in the introduction or the reader's guide open the local scripture.
+  // Scripture references in the guide. The paired reader's own anchors to this week's scripture (its chapter
+  // headings, passage headings, and leads, all `#scripture-…`) open it in the scripture pane, as before. Every
+  // other scripture reference, and in the closing sections (which nothing is beside) those anchors too, opens
+  // a preview of its verses over the guide. External citations and anything else are ordinary links.
   const onGuideClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = (event.target as Element).closest("a");
     const root = event.currentTarget;
     if (!link || !root.contains(link)) return;
-    const target = localScriptureTarget(link.getAttribute("href"), book, chapterNumbers);
-    if (!target) return;
+    const href = link.getAttribute("href");
+    if (root !== closingRef.current && href?.startsWith("#")) {
+      const target = localScriptureTarget(href, book, chapterNumbers);
+      if (target) {
+        event.preventDefault();
+        showScripture(target, {
+          updateHash: true,
+          fromGuide: nearestGuideAnchor(root, link),
+          follow: root === introRef.current,
+        });
+        return;
+      }
+    }
+    const passage = passageFromLink(href, link.getAttribute("data-last"), book);
+    if (!passage) return;
     event.preventDefault();
-    showScripture(target, {
-      updateHash: true,
-      fromGuide: nearestGuideAnchor(root, link),
-      follow: root === introRef.current,
-    });
+    preview.open(passage, link);
   };
 
   // The pager's way from the scripture back to the guide opens the guide just as a swipe does.
@@ -1273,6 +1388,21 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
     </div>
   );
 
+  // The closing sections: below the paired columns on desktop, with their own Contents button as the
+  // introduction has (the reader's scrolls away with the columns); at the end of the guide side on phones,
+  // under the reader's own toolbar.
+  const closingSections = closingHtml ? (
+    <div className={styles.closing}>
+      {mode !== "strip" ? <ContentsOpener onOpen={openContents} /> : null}
+      <div
+        ref={closingRef}
+        className={`${styles.guide} ${styles.closingGuide}`}
+        onClick={onGuideClick}
+        dangerouslySetInnerHTML={closingDoc}
+      />
+    </div>
+  ) : null;
+
   return (
     <>
       <ContentsNav
@@ -1286,6 +1416,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
       />
       {annotations.layer}
       {guideHighlights.layer}
+      {preview.layer}
       {introductionHtml ? (
         <div className={styles.introduction}>
           <ContentsOpener onOpen={openContents} />
@@ -1299,6 +1430,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
           <section ref={guidePanelRef} id="cfm-panel-guide" aria-label="Study guide" className={styles.guidePanel} inert={guideHidden}>
             {mode === "columns" ? toolbar : null}
             <div ref={guideRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={guideHtml} />
+            {mode === "strip" ? closingSections : null}
             {mode === "strip" ? footer : null}
           </section>
 
@@ -1366,8 +1498,13 @@ export default function StudyCompanion({ introductionHtml, readerHtml, toc, pass
             </div>
           </section>
         </div>
-        {mode !== "strip" ? footer : null}
       </div>
+      {mode !== "strip" ? (
+        <div className={styles.afterReader}>
+          {closingSections}
+          {footer}
+        </div>
+      ) : null}
     </>
   );
 }

@@ -7,8 +7,9 @@
 // - Passage references inside the guide's own chapter range link to the paired scripture pane
 //   (`#scripture-isaiah-50-v1-3`) instead of an external page, and are returned as `passages`.
 // - The document title is returned so the page can render it as the h1.
-// - The rendered guide is also returned in two parts, split at its first chapter section: the
-//   introduction (read on its own) and the chapter-by-chapter reader (paired with the scripture).
+// - The rendered guide is also returned in three parts, split at its first and after its last chapter
+//   section: the introduction and the closing sections (each read on its own) around the
+//   chapter-by-chapter reader (paired with the scripture).
 // Every source paragraph, list, table, blockquote, heading, and link is still rendered.
 
 import fs from "node:fs";
@@ -21,10 +22,11 @@ import {
   findBook,
   markPlainTokens,
   matchLocalLead,
-  referenceUrl,
+  passageAttributes,
+  referencePassage,
   renderTextToken,
   scriptureLink,
-  scriptureUrl,
+  scripturePassage,
 } from "./cfmScriptures.mjs";
 
 export type Guide = {
@@ -39,13 +41,17 @@ export type Guide = {
   sha256: string;
 };
 export type TocVerse = { id: string; ref: string; short: string; text: string };
+export type GuidePartName = "introduction" | "reader" | "closing";
 export type TocItem = {
   id: string;
   text: string;
   depth: number;
   kind: "chapter" | "section" | "sources";
-  /** "introduction" for sections before the guide's first chapter section; "reader" from it on. */
-  part: "introduction" | "reader";
+  /**
+   * "introduction" for sections before the guide's first chapter section, "reader" from it through its last
+   * chapter section (with any section between chapters), and "closing" for every section after that.
+   */
+  part: GuidePartName;
   book?: string;
   number?: string;
   subtitle?: string;
@@ -69,15 +75,20 @@ export type GuidePassage = {
 export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number };
 export type ParsedGuide = {
   title: string;
-  /** The complete guide in source order: exactly `introductionHtml + readerHtml`. */
+  /** The complete guide in source order: exactly `introductionHtml + readerHtml + closingHtml`. */
   html: string;
   /**
    * The preamble and every section before the first chapter section of the guide's own range (front
    * matter, orientation). Empty when the guide has no such chapter section.
    */
   introductionHtml: string;
-  /** From the first chapter section on: every chapter, then whatever follows them (synthesis, sources). */
+  /**
+   * From the first chapter section of the guide's own range through its last: every chapter, and any
+   * section the source places between two of them. The whole guide when it has no such chapter section.
+   */
   readerHtml: string;
+  /** Every section after the last chapter section (synthesis, study plans, sources); empty when none follows. */
+  closingHtml: string;
   toc: TocItem[];
   passages: GuidePassage[];
   range: GuideRange | null;
@@ -318,8 +329,8 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
               attrs = passageAttrs(passage);
               refHtml = localLink(anchor, shown[1], chapter, first, last);
             } else {
-              const url = referenceUrl(verse[1]);
-              refHtml = url ? scriptureLink(url, shown[1]) : shown[1];
+              const passage = referencePassage(verse[1]);
+              refHtml = passage ? scriptureLink(passage, shown[1]) : shown[1];
             }
             inner = `<span class="cfm-vref">${refHtml}</span><span class="cfm-sr"> — </span><span class="cfm-vtitle">${shown[2]}</span>`;
             toc[toc.length - 1]?.verses.push({ id, ref: verse[1], short: verse[1].replace(/^.*? (?=\d{1,3}:)/, ""), text: verse[2] });
@@ -346,15 +357,15 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
           const first = Number(local.first);
           const last = Number(local.last ?? local.first);
           const anchor = localTarget(context.book, chapter, first, last);
-          const url = anchor ? null : scriptureUrl(context.book, local.chapter, local.first, local.last);
-          // The text renderer may already have linked the lead ref to its passage page; either way the
-          // lead's own ref becomes one link, to the local pane when the verses are in this guide's range.
+          const linkTo = anchor ? null : scripturePassage(context.book, local.chapter, local.first, local.last);
+          // The text renderer may already have linked the lead ref to its passage; either way the lead's own
+          // ref becomes one link, to the local pane when the verses are in this guide's range.
           const linked = new RegExp(
-            String.raw`^<strong><a class="cfm-scripture" data-cfm-scripture href="[^"]*">${local.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</a>`
+            String.raw`^<strong><a class="cfm-scripture" data-cfm-scripture href="[^"]*"(?: data-last="\d+")?>${local.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</a>`
           ).exec(inner);
           const leadLength = linked ? linked[0].length : inner.startsWith(`<strong>${local.text}`) ? 8 + local.text.length : 0;
-          if ((anchor || url) && leadLength) {
-            const link = anchor ? localLink(anchor, local.text, chapter, first, last) : scriptureLink(url, local.text);
+          if ((anchor || linkTo) && leadLength) {
+            const link = anchor ? localLink(anchor, local.text, chapter, first, last) : scriptureLink(linkTo, local.text);
             inner = `<strong>${link}${inner.slice(leadLength)}`;
           }
           if (anchor) {
@@ -394,7 +405,14 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
   // A verse subsection is a verse h3 ("Isaiah 50:1–3 — …") or a close-reading lead ("**40:1–2, …**"),
   // running until the next heading or lead. Its Sources panel lists the primary passage plus only
   // the links that actually appear inside that subsection.
-  type Primary = { label: string; url: string | null; book: string; chapter: string; first: number; last: number };
+  type Primary = {
+    label: string;
+    link: ReturnType<typeof scripturePassage>;
+    book: string;
+    chapter: string;
+    first: number;
+    last: number;
+  };
   const primaryFor = (token: Token): Primary | null => {
     if (token.type === "heading" && token.depth === 3) {
       const m = VERSE.exec(String(token.text).replace(/[*_]/g, ""));
@@ -403,7 +421,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
       const r = / (\d{1,3}):(\d{1,3})[ab]?(?:[–-](\d{1,3})[ab]?)?$/.exec(m[1]);
       return {
         label: m[1],
-        url: referenceUrl(m[1]),
+        link: referencePassage(m[1]),
         book: m[1].slice(0, m[1].lastIndexOf(" ")),
         chapter: r?.[1] ?? "",
         first: Number(r?.[2] ?? 0),
@@ -415,7 +433,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
       return local
         ? {
             label: `${context.book} ${local.text}`,
-            url: scriptureUrl(context.book, local.chapter, local.first, local.last),
+            link: scripturePassage(context.book, local.chapter, local.first, local.last),
             book: context.book,
             chapter: local.chapter,
             first: Number(local.first),
@@ -445,10 +463,10 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
       const href = safeHref(token.href);
       if (href && !cited.has(href)) cited.set(href, String(token.text).replace(/[*_]/g, ""));
     });
-    if (!primary.url && cited.size === 0) return "";
+    if (!primary.link && cited.size === 0) return "";
     const items = [
-      primary.url
-        ? `<li><a href="${escapeHtml(primary.url)}">${escapeHtml(primary.label)}</a> <span>(scripture text)</span></li>`
+      primary.link
+        ? `<li><a${passageAttributes(primary.link)}>${escapeHtml(primary.label)}</a> <span>(scripture text)</span></li>`
         : "",
       ...Array.from(cited).map(
         ([href, text]) =>
@@ -493,14 +511,10 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     return html;
   };
   const [preamble, ...sections] = groups;
-  // The paired reader starts at the first chapter section of the guide's own range (a section the parser
-  // has already identified as chapter N of this guide's book); everything before it is introduction, and
-  // everything from it on, including the closing synthesis and sources, is the reader.
-  let introductionHtml = preamble.some((token) => token.type !== "space")
+  const preambleHtml = preamble.some((token) => token.type !== "space")
     ? `<div class="cfm-preamble">\n${render(preamble)}</div>\n`
     : "";
-  let readerHtml = "";
-  let reading = false;
+  const rendered: Array<{ html: string; item: TocItem; paired: boolean }> = [];
   for (const group of sections) {
     const first = toc.length;
     const head = group[0] as Tokens.Heading;
@@ -510,21 +524,52 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     const item = toc[first];
     const chapterAttr =
       context && localTarget(context.book, Number(context.chapter)) ? ` data-chapter="${context.chapter}"` : "";
-    const section = `<section class="cfm-section" data-kind="${item.kind}"${chapterAttr} aria-labelledby="${item.id}">\n${content}</section>\n`;
-    if (chapterAttr) reading = true;
-    if (reading) {
-      readerHtml += section;
-    } else {
-      item.part = "introduction";
-      introductionHtml += section;
-    }
+    rendered.push({
+      html: `<section class="cfm-section" data-kind="${item.kind}"${chapterAttr} aria-labelledby="${item.id}">\n${content}</section>\n`,
+      item,
+      paired: chapterAttr !== "",
+    });
   }
-  if (!reading) {
+  // The paired reader runs from the first chapter section of the guide's own range (a section the parser has
+  // already identified as chapter N of this guide's book) through the last one, so a section the source puts
+  // between two chapters keeps its place among them. Everything before it is introduction, and everything
+  // after the last chapter (synthesis, study plans, sources) is closing: neither is paired with the scripture.
+  const firstPaired = rendered.findIndex((section) => section.paired);
+  let lastPaired = -1;
+  rendered.forEach((section, index) => {
+    if (section.paired) lastPaired = index;
+  });
+  const join = (from: number, to: number, part: GuidePartName) =>
+    rendered
+      .slice(from, to)
+      .map((section) => {
+        section.item.part = part;
+        return section.html;
+      })
+      .join("");
+  let introductionHtml: string;
+  let readerHtml: string;
+  let closingHtml: string;
+  if (firstPaired < 0) {
     // No chapter of the range to pair with: the whole guide stays in the reader, as one document.
-    readerHtml = introductionHtml;
     introductionHtml = "";
-    for (const item of toc) item.part = "reader";
+    readerHtml = preambleHtml + join(0, rendered.length, "reader");
+    closingHtml = "";
+  } else {
+    introductionHtml = preambleHtml + join(0, firstPaired, "introduction");
+    readerHtml = join(firstPaired, lastPaired + 1, "reader");
+    closingHtml = join(lastPaired + 1, rendered.length, "closing");
   }
-  const html = introductionHtml + readerHtml;
-  return { title, html, introductionHtml, readerHtml, toc, passages, range, words: markdown.split(/\s+/).length };
+  const html = introductionHtml + readerHtml + closingHtml;
+  return {
+    title,
+    html,
+    introductionHtml,
+    readerHtml,
+    closingHtml,
+    toc,
+    passages,
+    range,
+    words: markdown.split(/\s+/).length,
+  };
 }

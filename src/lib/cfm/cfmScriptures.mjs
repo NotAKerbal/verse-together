@@ -2,8 +2,9 @@
 // Render-time only: source Markdown is never modified.
 //
 // Adapted from lib/cfm-scriptures.mjs in NotAKerbal/isaac-stuff-homepage at
-// 52975b1c4b78c34a1c0d7af365422455b71148e4. The only change: passage URLs are site-relative, since
-// this module now runs inside VerseTogether itself.
+// 52975b1c4b78c34a1c0d7af365422455b71148e4. Changes: passage links are site-relative, since this module now
+// runs inside VerseTogether itself, and they point at the full chapter in the reader (`/browse/…#v-N`, the
+// range's last verse in `data-last`) rather than a share page; the study companion previews them in place.
 
 // [volume path, url abbreviation, chapter (D&C: section) count, names...]. Names are matched case-sensitively.
 const CANON = [
@@ -31,10 +32,12 @@ const CANON = [
   ['dc-testament', 'dc', 138, 'Doctrine and Covenants', 'D&C'],
 ]
 const BOOKS = new Map()
+const SLUGS = new Map()
 for (const [volume, abbr, chapters, ...names] of CANON) {
   // VerseTogether slug: first canonical name, lowercase, spaces removed ("1 Samuel" -> "1samuel").
   const book = { volume, abbr, chapters, slug: names[0].toLowerCase().replace(/\s+/g, '') }
   for (const name of names) BOOKS.set(name, { ...book, name })
+  SLUGS.set(book.slug, { ...book, name: names[0] })
 }
 const MAX_VERSE = 199
 
@@ -61,30 +64,38 @@ const CONTINUES = /^(?:[;,]\s*|\s+and\s+|,\s+and\s+)$/
 
 export function findBook(name) { return BOOKS.get(name) }
 
+/** A book by its VerseTogether slug ("isaiah", "doctrineandcovenants"), named by its first canonical name. */
+export function findBookBySlug(slug) { return SLUGS.get(slug) }
+
 const SITE = ''
 const VOLUMES = { ot: 'oldtestament', nt: 'newtestament', bofm: 'bookofmormon', 'dc-testament': 'dnc' }
 
-export function scriptureUrl(bookName, chapter, first, last) {
+/**
+ * A reference's link: the full chapter in the reader (`/browse/<volume>/<book>/<chapter>`), at its first
+ * verse (`#v-N`, which the reader scrolls to) when it names verses, and the range's last verse when it
+ * names more than one. Null for anything that is not a real chapter and verse range.
+ */
+export function scripturePassage(bookName, chapter, first, last) {
   const book = BOOKS.get(bookName)
   const ch = Number(chapter)
   if (!book || !Number.isInteger(ch) || ch < 1 || ch > book.chapters) return null
-  const path = `${VOLUMES[book.volume]}/${book.slug}/${ch}`
-  if (first == null) return `${SITE}/browse/${path}`
+  const path = `${SITE}/browse/${VOLUMES[book.volume]}/${book.slug}/${ch}`
+  if (first == null) return { href: path }
   const a = Number(first)
   const b = last == null ? a : Number(last)
   const verse = n => Number.isInteger(n) && n >= 1 && n <= MAX_VERSE
   if (!verse(a) || !verse(b) || b < a) return null
-  return `${SITE}/share/${path}/${b > a ? `${a}-${b}` : a}`
+  return b > a ? { href: `${path}#v-${a}`, last: b } : { href: `${path}#v-${a}` }
 }
 
 function fromMatch(m) {
   const [, book, chapter, first, last] = m
   if (first == null && NEEDS_VERSE.has(BOOKS.get(book)?.name)) return null
-  return scriptureUrl(book, chapter, first, last)
+  return scripturePassage(book, chapter, first, last)
 }
 
-/** URL for a whole string that is exactly one reference, e.g. "Isaiah 50:1–3". */
-export function referenceUrl(text) {
+/** The passage link for a whole string that is exactly one reference, e.g. "Isaiah 50:1–3". */
+export function referencePassage(text) {
   const m = REF_EXACT.exec(text)
   return m ? fromMatch(m) : null
 }
@@ -103,8 +114,13 @@ export function escapeHtml(text) {
     .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
-export function scriptureLink(url, html) {
-  return `<a class="cfm-scripture" data-cfm-scripture href="${escapeHtml(url)}">${html}</a>`
+/** ` href="…"` and, for a range, ` data-last="…"`: a passage link's attributes. */
+export function passageAttributes(passage) {
+  return ` href="${escapeHtml(passage.href)}"${passage.last != null ? ` data-last="${passage.last}"` : ''}`
+}
+
+export function scriptureLink(passage, html) {
+  return `<a class="cfm-scripture" data-cfm-scripture${passageAttributes(passage)}>${html}</a>`
 }
 
 /**
@@ -118,7 +134,7 @@ export function linkifyText(text, contextBook) {
   for (const m of text.matchAll(NAMED_SPAN)) {
     const end = m.index + m[0].length
     const exact = /[\w:]/.test(text[end] ?? '') ? null : REF_EXACT.exec(m[0])
-    spans.push({ start: m.index, end, book: BOOKS.get(m[0].match(new RegExp(`^(?:${NAMES})`))[0]), url: exact ? fromMatch(exact) : null })
+    spans.push({ start: m.index, end, book: BOOKS.get(m[0].match(new RegExp(`^(?:${NAMES})`))[0]), passage: exact ? fromMatch(exact) : null })
   }
   const context = contextBook ? BOOKS.get(contextBook) : null
   if (context) {
@@ -132,15 +148,15 @@ export function linkifyText(text, contextBook) {
       const foreign = continues && prev.foreign
       prev = { end: m.index + m[0].length, foreign }
       if (foreign) continue
-      spans.push({ start: m.index, end: m.index + m[0].length, url: scriptureUrl(contextBook, m[1], m[2], m[3]) })
+      spans.push({ start: m.index, end: m.index + m[0].length, passage: scripturePassage(contextBook, m[1], m[2], m[3]) })
     }
     spans.sort((a, b) => a.start - b.start)
   }
   let out = ''
   let last = 0
   for (const span of spans) {
-    if (!span.url) continue
-    out += escapeHtml(text.slice(last, span.start)) + scriptureLink(span.url, escapeHtml(text.slice(span.start, span.end)))
+    if (!span.passage) continue
+    out += escapeHtml(text.slice(last, span.start)) + scriptureLink(span.passage, escapeHtml(text.slice(span.start, span.end)))
     last = span.end
   }
   return out + escapeHtml(text.slice(last))

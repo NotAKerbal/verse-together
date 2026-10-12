@@ -20,9 +20,41 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/*
+  The app icon, in its two approved designs (the exact exports in public/brand/icons/{light,dark}), chosen the
+  way the site chooses its theme (see the script below): dark when the system prefers dark, light otherwise.
+  Every light link comes first, so a browser that ignores `media` on icon links takes the light design, and
+  /favicon.ico (public/favicon.ico) is the light one for anything that asks for it directly. There are no
+  file-based icons in src/app: Next always puts an app/favicon.ico first, with no `media`, ahead of these.
+*/
+const ICON_THEMES = [
+  { theme: "light", media: "(prefers-color-scheme: light)" },
+  { theme: "dark", media: "(prefers-color-scheme: dark)" },
+] as const;
+
+const icons: Metadata["icons"] = {
+  icon: ICON_THEMES.flatMap(({ theme, media }) => [
+    { url: `/brand/icons/${theme}/favicon.ico`, sizes: "16x16 32x32 48x48", type: "image/x-icon", media },
+    ...[16, 32, 48].map((size) => ({
+      url: `/brand/icons/${theme}/favicon-${size}.png`,
+      sizes: `${size}x${size}`,
+      type: "image/png",
+      media,
+    })),
+    { url: `/brand/icons/${theme}/icon-192.png`, sizes: "192x192", type: "image/png", media },
+  ]),
+  apple: ICON_THEMES.map(({ theme, media }) => ({
+    url: `/brand/icons/${theme}/apple-icon.png`,
+    sizes: "180x180",
+    type: "image/png",
+    media,
+  })),
+};
+
 export const metadata: Metadata = {
   title: "Verse Together",
   description: "Share verses, bear testimony, and learn together.",
+  icons,
 };
 
 function HeaderFallback() {

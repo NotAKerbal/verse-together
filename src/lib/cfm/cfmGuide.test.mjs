@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Marked } from "marked";
 import { MOBILE_SIDE_ORDER, sideAtScroll } from "../../features/comeFollowMe/companionPanes.ts";
+import { chapterHref, passageFromLink } from "../../features/comeFollowMe/passagePreview.ts";
 import { targetStart } from "../../features/comeFollowMe/scrollSync.ts";
 import { decodeFragment, localScriptureTarget, normalizeTarget, parseScriptureAnchor, passagesOverlapping, scriptureAnchor } from "./cfmAnchors.ts";
 import { parseGuide, readGuide, readGuides, safeHref } from "./cfmGuide.ts";
@@ -29,6 +30,7 @@ const guides = readGuides(root);
 const parsed = new Map(guides.map((guide) => [guide.slug, readGuide(guide, root)]));
 const early = parsed.get("2026-09-28-isaiah-40-49");
 const late = parsed.get("2026-10-05-isaiah-50-57");
+const latest = parsed.get("2026-10-12-isaiah-58-66");
 
 function decode(text) {
   return text
@@ -130,74 +132,182 @@ test("introductions and source lists are kept as their own sections", () => {
   assert.equal(late.toc.filter((item) => item.kind === "chapter").length, 8);
 });
 
-test("the guide splits into introduction and reader at its first chapter section, losing and repeating nothing", () => {
+test("every guide splits into introduction, reader, and closing sections, losing and repeating nothing", () => {
   const ids = (html) => Array.from(html.matchAll(/ id="([^"]+)"/g), (match) => match[1]);
-  for (const guide of [early, late]) {
+  const sections = (html) => (html.match(/<section class="cfm-section"/g) ?? []).length;
+  const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
+  const opens = (guide, chapter, item) =>
+    `<section class="cfm-section" data-kind="chapter" data-chapter="${chapter}" aria-labelledby="${item.id}">`;
+  assert.equal(parsed.size, 3);
+  for (const guide of parsed.values()) {
     const name = guide.title;
-    // The complete guide, in source order, is exactly the two parts back to back.
-    assert.equal(guide.html, guide.introductionHtml + guide.readerHtml, name);
-    assert.ok(guide.introductionHtml.length > 1000, `${name}: introduction`);
-    // The reader opens on the first chapter of the guide's own range, as parsed (not a string search).
-    const firstChapter = guide.toc.find((item) => item.kind === "chapter");
+    const parts = { introduction: guide.introductionHtml, reader: guide.readerHtml, closing: guide.closingHtml };
+    // The complete guide, in source order, is exactly the three parts back to back.
+    assert.equal(guide.html, parts.introduction + parts.reader + parts.closing, name);
+    assert.ok(parts.introduction.length > 1000, `${name}: introduction`);
+    assert.ok(parts.closing.length > 1000, `${name}: closing`);
+    // The reader runs from the first chapter of the guide's own range to its last, as parsed (not a string search).
+    const chapters = guide.toc.filter((item) => item.kind === "chapter");
+    const firstChapter = chapters[0];
+    const lastChapter = chapters[chapters.length - 1];
     assert.equal(Number(firstChapter.number), guide.range.first, name);
+    assert.equal(Number(lastChapter.number), guide.range.last, name);
+    assert.ok(parts.reader.startsWith(opens(guide, guide.range.first, firstChapter)), `${name}: reader starts at ${guide.range.first}`);
     assert.ok(
-      guide.readerHtml.startsWith(
-        `<section class="cfm-section" data-kind="chapter" data-chapter="${guide.range.first}" aria-labelledby="${firstChapter.id}">`
-      ),
-      `${name}: reader starts at chapter ${guide.range.first}`
+      parts.reader.startsWith(opens(guide, guide.range.last, lastChapter), parts.reader.lastIndexOf('<section class="cfm-section"')),
+      `${name}: reader ends with ${guide.range.last}`
     );
-    // No chapter section, passage, or verse anchor is in the introduction.
-    assert.ok(!/data-chapter="\d+" aria-labelledby/.test(guide.introductionHtml), `${name}: chapter in introduction`);
-    assert.ok(!guide.introductionHtml.includes("data-cfm-passage"), `${name}: passage in introduction`);
-    for (const passage of guide.passages) assert.ok(guide.readerHtml.includes(` id="${passage.id}"`), passage.id);
-    // Nothing appears twice: every anchor is unique across both parts, and in exactly one of them.
+    // No chapter section, passage, or verse anchor is outside the reader.
+    for (const outside of [parts.introduction, parts.closing]) {
+      assert.ok(!/data-chapter="\d+" aria-labelledby/.test(outside), `${name}: chapter outside the reader`);
+      assert.ok(!outside.includes("data-cfm-passage"), `${name}: passage outside the reader`);
+    }
+    for (const passage of guide.passages) assert.ok(parts.reader.includes(` id="${passage.id}"`), passage.id);
+    // Nothing appears twice: every anchor is unique, and in exactly one part.
     const all = ids(guide.html);
     assert.equal(new Set(all).size, all.length, `${name}: duplicate anchors`);
-    const intro = new Set(ids(guide.introductionHtml));
-    for (const id of ids(guide.readerHtml)) assert.ok(!intro.has(id), `${name}: ${id} in both parts`);
-    // Each part is whole sections (or the preamble), so neither cuts a section in two.
-    const sections = (html) => (html.match(/<section class="cfm-section"/g) ?? []).length;
-    const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
-    assert.equal(sections(guide.introductionHtml), closes(guide.introductionHtml), name);
-    assert.equal(sections(guide.readerHtml), closes(guide.readerHtml), name);
-    // The contents follow the same split, in document order.
-    const parts = guide.toc.map((item) => item.part);
-    const firstReader = parts.indexOf("reader");
-    assert.ok(firstReader > 0 && parts.slice(0, firstReader).every((part) => part === "introduction"), name);
-    assert.ok(parts.slice(firstReader).every((part) => part === "reader"), name);
-    assert.equal(guide.toc[firstReader], firstChapter, name);
-    for (const item of guide.toc) {
-      const home = item.part === "introduction" ? guide.introductionHtml : guide.readerHtml;
-      assert.ok(home.includes(` id="${item.id}"`), `${name}: ${item.id} in its part`);
-    }
+    const homes = Object.values(parts).map((html) => new Set(ids(html)));
+    for (const id of all) assert.equal(homes.filter((home) => home.has(id)).length, 1, `${name}: ${id}`);
+    // Each part is whole sections (or the preamble), so none cuts a section in two.
+    for (const html of Object.values(parts)) assert.equal(sections(html), closes(html), name);
+    // The contents follow the same split, in document order, and each entry is in its own part.
+    const rank = { introduction: 0, reader: 1, closing: 2 };
+    const order = guide.toc.map((item) => rank[item.part]);
+    assert.ok(order.every((value, index) => index === 0 || order[index - 1] <= value), `${name}: contents order`);
+    assert.equal(guide.toc.find((item) => item.part === "reader"), firstChapter, name);
+    assert.equal(guide.toc.findLast((item) => item.part === "reader"), lastChapter, name);
+    for (const item of guide.toc) assert.ok(parts[item.part].includes(` id="${item.id}"`), `${name}: ${item.id} in its part`);
   }
-  // Front matter and orientation come first; synthesis and source notes stay after the chapters.
+  // Front matter and orientation come first; synthesis, study plans, and sources come after the chapters.
   const sectionsOf = (guide, part) => guide.toc.filter((item) => item.part === part && item.kind !== "chapter").map((item) => item.text);
   assert.deepEqual(sectionsOf(early, "introduction"), ["How to use this guide", "Historical orientation"]);
-  assert.deepEqual(sectionsOf(early, "reader"), ["Synthesis", "Source notes"]);
+  assert.deepEqual(sectionsOf(early, "reader"), []);
+  assert.deepEqual(sectionsOf(early, "closing"), ["Synthesis", "Source notes"]);
   assert.deepEqual(sectionsOf(late, "introduction"), [
     "Come, Follow Me study guide: Isaiah 50–57, October 5–11, 2026",
     "Historical and literary orientation",
   ]);
-  assert.deepEqual(sectionsOf(late, "reader"), ["Synthesis", "Source method and bibliography note"]);
-  // The older guide's untitled preamble is introduction too.
+  assert.deepEqual(sectionsOf(late, "reader"), []);
+  assert.deepEqual(sectionsOf(late, "closing"), ["Synthesis", "Source method and bibliography note"]);
+  // October 12: Isaiah 58 through 66 are the reader; the study plan and sources after Isaiah 66 are closing.
+  assert.deepEqual(sectionsOf(latest, "introduction"), ["Introduction and Historical Context", "Significant Points for This Week"]);
+  assert.deepEqual(
+    latest.toc.filter((item) => item.part === "reader").map((item) => item.number),
+    ["58", "59", "60", "61", "62", "63", "64", "65", "66"]
+  );
+  assert.deepEqual(sectionsOf(latest, "closing"), ["Study Plan and Teaching Discussion", "Sources and Access Notes"]);
+  assert.deepEqual(
+    latest.toc.filter((item) => item.part === "closing").map((item) => item.kind),
+    ["section", "sources"]
+  );
+  // The untitled preambles are introduction too.
   assert.ok(early.introductionHtml.startsWith('<div class="cfm-preamble">'));
   assert.ok(early.introductionHtml.includes("Come, Follow Me, September 28–October 4, 2026"));
-  assert.ok(!early.readerHtml.includes("cfm-preamble"));
+  assert.ok(latest.introductionHtml.startsWith('<div class="cfm-preamble">'));
+  for (const guide of parsed.values()) {
+    assert.ok(!guide.readerHtml.includes("cfm-preamble") && !guide.closingHtml.includes("cfm-preamble"), guide.title);
+  }
   // Anchors are unchanged by the split.
   assert.ok(early.introductionHtml.includes('<h2 id="historical-orientation">'));
   assert.ok(late.introductionHtml.includes('<h2 id="historical-and-literary-orientation">'));
   assert.ok(early.readerHtml.includes('<p id="cfm-v-40-9-11" class="cfm-lead"'));
   assert.ok(late.readerHtml.includes('<h3 id="isaiah-53-4-the-great-reversal"'));
+  assert.ok(early.closingHtml.startsWith('<section class="cfm-section" data-kind="section" aria-labelledby="synthesis">\n<h2 id="synthesis">'));
+  assert.ok(latest.closingHtml.startsWith('<section class="cfm-section" data-kind="section" aria-labelledby="study-plan-and-teaching-discussion">'));
+  assert.ok(latest.closingHtml.includes('<section class="cfm-section" data-kind="sources" aria-labelledby="sources-and-access-notes">'));
+  assert.ok(latest.readerHtml.includes('<h2 id="isaiah-66-all-flesh-shall-come-to-worship" class="cfm-h-chapter">'));
+});
+
+test("a section between two chapters keeps its place in the reader; everything after the last chapter is closing", () => {
+  const guide = { ...guides.find((entry) => entry.slug === "2026-10-05-isaiah-50-57") };
+  const blocks = ["Preamble.", "Before.", "First chapter.", "Between chapters.", "Second chapter.", "After.", "Outside the range.", "Last."];
+  const markdown = [
+    "# Title",
+    blocks[0],
+    `## About\n\n${blocks[1]}`,
+    `## Isaiah 50\n\n${blocks[2]}`,
+    `## Interlude\n\n${blocks[3]}`,
+    `## Isaiah 51\n\n${blocks[4]}`,
+    `## Synthesis\n\n${blocks[5]}`,
+    `## Isaiah 61\n\n${blocks[6]}`,
+    `## Sources\n\n${blocks[7]}`,
+  ].join("\n\n");
+  const result = parseGuide(guide, `${markdown}\n`);
+  assert.deepEqual(
+    result.toc.map((item) => `${item.part}:${item.text}`),
+    [
+      "introduction:About",
+      "reader:Isaiah 50",
+      "reader:Interlude",
+      "reader:Isaiah 51",
+      "closing:Synthesis",
+      "closing:Isaiah 61",
+      "closing:Sources",
+    ]
+  );
+  assert.equal(result.html, result.introductionHtml + result.readerHtml + result.closingHtml);
+  // Every block once, in source order, in the part it belongs to.
+  let at = -1;
+  for (const block of blocks) {
+    const found = result.html.indexOf(block);
+    assert.ok(found > at && result.html.indexOf(block, found + 1) < 0, block);
+    at = found;
+  }
+  const homes = [result.introductionHtml, result.introductionHtml, result.readerHtml, result.readerHtml, result.readerHtml];
+  homes.push(result.closingHtml, result.closingHtml, result.closingHtml);
+  blocks.forEach((block, index) => assert.ok(homes[index].includes(block), block));
+  // A chapter outside the week's range is not paired with the scripture, wherever it falls.
+  assert.ok(result.closingHtml.includes('<section class="cfm-section" data-kind="chapter" aria-labelledby="isaiah-61">'));
 });
 
 test("a guide with no chapter of its own range keeps everything in the reader", () => {
   const guide = { ...guides.find((entry) => entry.slug === "2026-10-05-isaiah-50-57") };
   const parsedOnly = parseGuide(guide, "# Title\n\nPreamble.\n\n## About\n\nText.\n\n## Isaiah 61\n\nOutside the range.\n");
   assert.equal(parsedOnly.introductionHtml, "");
+  assert.equal(parsedOnly.closingHtml, "");
   assert.equal(parsedOnly.readerHtml, parsedOnly.html);
   assert.ok(parsedOnly.html.includes("Preamble.") && parsedOnly.html.includes("Outside the range."));
   assert.ok(parsedOnly.toc.every((item) => item.part === "reader"));
+});
+
+test("every scripture link the guides write is a passage the preview reads, at the full chapter", () => {
+  const book = { slug: "isaiah", volume: "oldtestament" };
+  let checked = 0;
+  for (const guide of parsed.values()) {
+    for (const [, attributes] of guide.html.matchAll(/<a ([^>]*)>/g)) {
+      const href = /href="([^"]*)"/.exec(attributes)?.[1];
+      // In-page anchors and external citations are not site paths.
+      if (!href?.startsWith("/")) continue;
+      const last = /data-last="([^"]*)"/.exec(attributes)?.[1] ?? null;
+      assert.match(href, /^\/browse\/[a-z]+\/[a-z0-9]+\/\d+(?:#v-\d+)?$/, `${guide.title}: ${href}`);
+      const target = passageFromLink(href, last, book);
+      assert.ok(target, `${guide.title}: ${href} ${last}`);
+      assert.equal(chapterHref(target), href);
+      if (last != null) assert.ok(target.last > target.first, `${href} ${last}`);
+      checked += 1;
+    }
+    assert.ok(!guide.html.includes('href="/share/'), `${guide.title}: share page link`);
+  }
+  assert.ok(checked > 100, `only ${checked} scripture links checked`);
+  // The October 12 closing sections: a Gospel, Doctrine and Covenants, and one of the week's own chapters.
+  assert.ok(
+    latest.closingHtml.includes('<a class="cfm-scripture" data-cfm-scripture href="/browse/newtestament/luke/4#v-16" data-last="21">Luke 4:16–21</a>')
+  );
+  assert.ok(latest.closingHtml.includes('href="/browse/dnc/doctrineandcovenants/19#v-16" data-last="19">Doctrine and Covenants 19:16–19</a>'));
+  assert.ok(latest.closingHtml.includes('href="/browse/oldtestament/isaiah/61#v-1" data-last="3">Isaiah 61:1–3</a>'));
+  assert.deepEqual(passageFromLink("/browse/dnc/doctrineandcovenants/19#v-16", "19", book), {
+    volume: "doctrineandcovenants",
+    book: "doctrineandcovenants",
+    label: "Doctrine and Covenants",
+    chapter: 19,
+    first: 16,
+    last: 19,
+  });
+  // A passage's own Sources panel links its scripture text the same way.
+  assert.match(
+    latest.readerHtml,
+    /<details class="cfm-sources" data-cfm-added="sources"><summary>Sources<\/summary><ul><li><a href="\/browse\/oldtestament\/isaiah\/58#v-1" data-last="2">Isaiah 58:1–2<\/a> <span>\(scripture text\)<\/span><\/li>/
+  );
 });
 
 test("both contents formats nest verses under their chapter, in reading order", () => {
@@ -285,7 +395,8 @@ test("cross references outside the week stay ordinary links", () => {
   // Isaiah 61:7 is cited from the 40–49 guide; it is not one of the week's chapters.
   assert.match(early.html, /href="https:\/\/www\.churchofjesuschrist\.org\/study\/scriptures\/ot\/isa\/61\?lang=eng"/);
   assert.ok(!early.html.includes("#scripture-isaiah-61"));
-  assert.ok(early.html.includes('href="/share/newtestament/john/10/11"') || early.html.includes('href="/browse/newtestament/john/10"'));
+  // Other passages link to their full chapter in the reader, at the verse (the guide previews them first).
+  assert.ok(early.html.includes('<a class="cfm-scripture" data-cfm-scripture href="/browse/newtestament/john/10#v-11">John 10:11</a>'));
   const book = { slug: "isaiah", volume: "oldtestament" };
   const chapters = [40, 41, 42, 43, 44, 45, 46, 47, 48, 49];
   assert.deepEqual(localScriptureTarget("/share/oldtestament/isaiah/44/28", book, chapters), { chapter: 44, first: 28, last: 28 });
