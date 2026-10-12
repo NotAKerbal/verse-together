@@ -3,7 +3,7 @@
 // PassagePreview.tsx does the loading, the dialog, and the history calls.
 
 import { decodeFragment, parseScriptureAnchor } from "../../lib/cfm/cfmAnchors.ts";
-import { findBookBySlug } from "../../lib/cfm/cfmScriptures.mjs";
+import { exactReference, findBookBySlug, findChurchBook } from "../../lib/cfm/cfmScriptures.mjs";
 import { normalizeScriptureVolume, toScriptureVolumeUrlSlug } from "../../lib/scriptureVolumes.ts";
 
 /** A chapter of the local scripture, optionally narrowed to a verse range. */
@@ -21,26 +21,19 @@ export type PassageTarget = {
 
 export type PassageVerse = { verse: number; text: string };
 
-// The scripture volumes the guide parser links into (cfmScriptures.mjs), by their canonical ids.
-const VOLUMES: Record<string, string> = {
-  ot: "oldtestament",
-  nt: "newtestament",
-  bofm: "bookofmormon",
-  "dc-testament": "doctrineandcovenants",
-};
 const MAX_VERSE = 199;
 
 const isVerse = (value: number) => Number.isInteger(value) && value >= 1 && value <= MAX_VERSE;
 
 /**
- * A validated target: the book must exist in that volume, the chapter in that book, and a verse range must
- * run forward. Null for anything else; nothing is clamped or guessed.
+ * A validated target: the book must exist in that volume of the shared canon (cfmScriptures.mjs), the chapter
+ * in that book, and a verse range must run forward. Null for anything else; nothing is clamped or guessed.
  */
 export function passageTarget(volume: string, book: string, chapter: number, first?: number, last?: number): PassageTarget | null {
   const found = findBookBySlug(book);
   if (!found) return null;
-  const canonical = VOLUMES[found.volume];
-  if (!canonical || normalizeScriptureVolume(volume) !== canonical) return null;
+  const canonical = found.canonicalVolume;
+  if (normalizeScriptureVolume(volume) !== canonical) return null;
   if (!Number.isInteger(chapter) || chapter < 1 || chapter > found.chapters) return null;
   const target: PassageTarget = { volume: canonical, book: found.slug, label: found.name, chapter };
   if (first == null) return last == null ? target : null;
@@ -52,21 +45,123 @@ export function passageTarget(volume: string, book: string, chapter: number, fir
 const BROWSE = /^\/browse\/([a-z]+)\/([a-z0-9]+)\/(\d{1,3})(?:#v-(\d{1,3}))?$/;
 const SHARE = /^\/share\/([a-z]+)\/([a-z0-9]+)\/(\d{1,3})\/(\d{1,3})(?:-(\d{1,3}))?$/;
 
+type VerseRange = { first: number; last: number };
+
+// Gospel Library scripture URLs, read from the href exactly as written: never resolved or normalized, so
+// dot segments, encoded separators, user info, ports, other schemes, and lookalike hosts simply don't match.
+const CHURCH_HOSTS = new Set(["www.churchofjesuschrist.org", "churchofjesuschrist.org"]);
+const N = "[1-9]\\d{0,2}";
+// https://<host>/study/scriptures/<volume>/<book>/<chapter>[.<verse>[-<verse>]][?<query>][#<fragment>]
+const CHURCH = new RegExp(
+  `^https://([a-z.]+)/study/scriptures/([a-z]+(?:-[a-z]+)*)/([a-z0-9]+(?:-[a-z0-9]+)*)/(${N})(?:\\.(${N})(?:-(${N}))?)?(?:\\?([^#]*))?(?:#(.*))?$`
+);
+// Verse selectors: `id=p3` or `id=p3-p7` in the query, `#p3` as the fragment.
+const CHURCH_ID = new RegExp(`^p(${N})(?:-p(${N}))?$`);
+const CHURCH_ANCHOR = new RegExp(`^p(${N})$`);
+
 /**
- * The passage a guide link points to, from the link forms the guide itself writes and nothing else:
+ * What a link's text says it is: whitespace collapsed, and one trailing parenthetical note without numbers set
+ * aside ("Isaiah 58 (KJV)" is Isaiah 58; "Isaiah 1:1 (Isaiah 2:3)" stays as written). See exactReference: text
+ * that begins as a reference must be exactly one.
+ */
+function labelReference(label: string) {
+  const text = label.replace(/\s+/g, " ").trim();
+  const noted = /^(.*\S) \([^()\d]*\)$/.exec(text);
+  return exactReference(noted ? noted[1] : text);
+}
+
+const verseRange = (first: string, last?: string): VerseRange | null => {
+  const range = { first: Number(first), last: Number(last ?? first) };
+  return range.last >= range.first ? range : null;
+};
+const sameRange = (a: VerseRange, b: VerseRange) => a.first === b.first && a.last === b.last;
+
+/**
+ * The query of a Gospel Library scripture URL: only `lang=eng` (the scripture here is the English text) and
+ * `id`, each at most once. Anything else, an empty query included, is not a URL this reads: null.
+ */
+function churchQuery(query: string | undefined): { id?: string } | null {
+  if (query == null) return {};
+  const found: { lang?: string; id?: string } = {};
+  for (const part of query.split("&")) {
+    const pair = /^(lang|id)=([^=]*)$/.exec(part);
+    if (!pair) return null;
+    const key = pair[1] as "lang" | "id";
+    if (found[key] != null) return null;
+    found[key] = pair[2];
+  }
+  if (found.lang != null && found.lang !== "eng") return null;
+  return { id: found.id };
+}
+
+/**
+ * The passage a Gospel Library scripture link names, or null. The URL decides the book and chapter. Its verse
+ * selectors (`.<verse>[-<verse>]` after the chapter, `id=p<verse>[-p<verse>]`, `#p<verse>`) must agree with
+ * each other; `#p<verse>` alone selects that verse. The link's text narrows a chapter to verses only when it is
+ * exactly a valid reference to that same book and chapter ("Isaiah 1:1" on …/ot/isa/1); it must then agree with
+ * any selector too. Text that begins as a reference must be exactly one (see labelReference), so text naming
+ * another chapter, more or other than one same-chapter range ("Isaiah 1–2", "Isaiah 1:1,3"), an invalid
+ * reference, or selectors that disagree leave the link as it is. Text that is no reference keeps the URL's scope.
+ */
+function churchPassage(href: string, label: string | null): PassageTarget | null {
+  const m = CHURCH.exec(href);
+  if (!m || !CHURCH_HOSTS.has(m[1])) return null;
+  const book = findChurchBook(m[2], m[3]);
+  if (!book) return null;
+  const chapter = Number(m[4]);
+  const query = churchQuery(m[7]);
+  if (!query) return null;
+  let inPath: VerseRange | null = null;
+  if (m[5] != null) {
+    inPath = verseRange(m[5], m[6]);
+    if (!inPath) return null;
+  }
+  let inId: VerseRange | null = null;
+  if (query.id != null) {
+    const id = CHURCH_ID.exec(query.id);
+    inId = id ? verseRange(id[1], id[2]) : null;
+    if (!inId) return null;
+  }
+  let anchor: number | null = null;
+  if (m[8] != null) {
+    const fragment = CHURCH_ANCHOR.exec(m[8]);
+    if (!fragment) return null;
+    anchor = Number(fragment[1]);
+  }
+  if (inPath && inId && !sameRange(inPath, inId)) return null;
+  const explicit = inPath ?? inId;
+  if (explicit && anchor != null && anchor !== explicit.first) return null;
+  let selection: VerseRange | null = explicit ?? (anchor != null ? { first: anchor, last: anchor } : null);
+  const named = label == null ? null : labelReference(label);
+  if (named) {
+    if (!named.valid || named.book.slug !== book.slug || named.chapter !== chapter) return null;
+    if (named.first != null) {
+      const fromLabel = { first: named.first, last: named.last ?? named.first };
+      if (explicit ? !sameRange(explicit, fromLabel) : anchor != null && anchor !== fromLabel.first) return null;
+      selection = fromLabel;
+    }
+  }
+  return passageTarget(book.canonicalVolume, book.slug, chapter, selection?.first, selection?.last);
+}
+
+/**
+ * The passage a guide link points to, from these link forms and nothing else:
  * - `/browse/<volume>/<book>/<chapter>`, optionally `#v-<first>`, with a range's last verse in `data-last`
  *   (`rangeEnd`), as cfmScriptures.mjs writes every reference;
  * - the older `/share/<volume>/<book>/<chapter>/<first>[-<last>]` form;
- * - a scripture-pane anchor of the guide's own book (`#scripture-isaiah-58-v3-5`).
- * External citations, other site paths, query strings, and malformed ranges are not passages.
+ * - a scripture-pane anchor of the guide's own book (`#scripture-isaiah-58-v3-5`);
+ * - a Gospel Library scripture URL, as the guides cite them (see churchPassage); `label` is the link's text.
+ * Other citations, other site paths, query strings, and malformed ranges are not passages.
  */
 export function passageFromLink(
   href: string | null,
   rangeEnd: string | null,
-  guideBook?: { slug: string; volume: string }
+  guideBook?: { slug: string; volume: string },
+  label: string | null = null
 ): PassageTarget | null {
   if (!href) return null;
   if (rangeEnd != null && !/^\d{1,3}$/.test(rangeEnd)) return null;
+  if (href.startsWith("https:")) return rangeEnd == null ? churchPassage(href, label) : null;
   const end = rangeEnd != null ? Number(rangeEnd) : undefined;
   if (href.startsWith("#")) {
     if (!guideBook || end != null) return null;

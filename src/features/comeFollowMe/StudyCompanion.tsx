@@ -1299,8 +1299,10 @@ export default function StudyCompanion({
 
   // Scripture references in the guide. The paired reader's own anchors to this week's scripture (its chapter
   // headings, passage headings, and leads, all `#scripture-…`) open it in the scripture pane, as before. Every
-  // other scripture reference, and in the closing sections (which nothing is beside) those anchors too, opens
-  // a preview of its verses over the guide. External citations and anything else are ordinary links.
+  // other scripture reference, in or outside this week's chapters, opens a preview of its verses over the guide:
+  // the guide's own reference links, Gospel Library scripture citations (narrowed by their text where it names
+  // the verses; see passageFromLink), and in the closing sections (which nothing is beside) those anchors too.
+  // Other citations and anything else are ordinary links.
   const onGuideClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = (event.target as Element).closest("a");
@@ -1319,7 +1321,7 @@ export default function StudyCompanion({
         return;
       }
     }
-    const passage = passageFromLink(href, link.getAttribute("data-last"), book);
+    const passage = passageFromLink(href, link.getAttribute("data-last"), book, link.textContent);
     if (!passage) return;
     event.preventDefault();
     preview.open(passage, link);

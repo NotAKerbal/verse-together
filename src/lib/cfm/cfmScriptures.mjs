@@ -6,7 +6,9 @@
 // runs inside VerseTogether itself, and they point at the full chapter in the reader (`/browse/…#v-N`, the
 // range's last verse in `data-last`) rather than a share page; the study companion previews them in place.
 
-// [volume path, url abbreviation, chapter (D&C: section) count, names...]. Names are matched case-sensitively.
+// The shared canon: [Gospel Library volume path, Gospel Library book abbreviation, chapter (D&C: section) count,
+// names...]. The first name is the book's canonical name; every name is matched case-sensitively. A Gospel
+// Library scripture URL is /study/scriptures/<volume path>/<abbreviation>/<chapter>.
 const CANON = [
   ['ot', 'gen', 50, 'Genesis'], ['ot', 'ex', 40, 'Exodus'], ['ot', 'lev', 27, 'Leviticus'], ['ot', 'num', 36, 'Numbers'],
   ['ot', 'deut', 34, 'Deuteronomy'], ['ot', 'josh', 24, 'Joshua'], ['ot', 'judg', 21, 'Judges'], ['ot', 'ruth', 4, 'Ruth'],
@@ -30,21 +32,45 @@ const CANON = [
   ['bofm', 'alma', 63, 'Alma'], ['bofm', 'hel', 16, 'Helaman'], ['bofm', '3-ne', 30, '3 Nephi'], ['bofm', '4-ne', 1, '4 Nephi'],
   ['bofm', 'morm', 9, 'Mormon'], ['bofm', 'ether', 15, 'Ether'], ['bofm', 'moro', 10, 'Moroni'],
   ['dc-testament', 'dc', 138, 'Doctrine and Covenants', 'D&C'],
+  // The local Pearl of Great Price names the two Joseph Smith books with "--" (public/scripture-data/pearl.json).
+  ['pgp', 'moses', 8, 'Moses'], ['pgp', 'abr', 5, 'Abraham'],
+  ['pgp', 'js-m', 1, 'Joseph Smith—Matthew', 'Joseph Smith–Matthew', 'Joseph Smith-Matthew', 'Joseph Smith--Matthew'],
+  ['pgp', 'js-h', 1, 'Joseph Smith—History', 'Joseph Smith–History', 'Joseph Smith-History', 'Joseph Smith--History'],
+  ['pgp', 'a-of-f', 1, 'Articles of Faith'],
 ]
+// Gospel Library volume path -> VerseTogether's canonical volume id (the local data and its API) and the
+// volume's slug in reader URLs (/browse/<path>/…).
+const VOLUMES = {
+  ot: { id: 'oldtestament', path: 'oldtestament' },
+  nt: { id: 'newtestament', path: 'newtestament' },
+  bofm: { id: 'bookofmormon', path: 'bookofmormon' },
+  'dc-testament': { id: 'doctrineandcovenants', path: 'dnc' },
+  pgp: { id: 'pearl', path: 'pearl' },
+}
+
+/**
+ * @typedef {{ volume: string, abbr: string, chapters: number, slug: string, canonicalVolume: string, name: string }} CanonBook
+ */
+/** @type {Map<string, CanonBook>} */
 const BOOKS = new Map()
+/** @type {Map<string, CanonBook>} */
 const SLUGS = new Map()
+/** @type {Map<string, CanonBook>} */
+const CHURCH = new Map()
 for (const [volume, abbr, chapters, ...names] of CANON) {
-  // VerseTogether slug: first canonical name, lowercase, spaces removed ("1 Samuel" -> "1samuel").
-  const book = { volume, abbr, chapters, slug: names[0].toLowerCase().replace(/\s+/g, '') }
+  // VerseTogether slug: first canonical name, lowercase, letters and digits only ("1 Samuel" -> "1samuel",
+  // "Joseph Smith—History" -> "josephsmithhistory"), as the local data names its books.
+  const book = { volume, abbr, chapters, slug: names[0].toLowerCase().replace(/[^a-z0-9]/g, ''), canonicalVolume: VOLUMES[volume].id }
   for (const name of names) BOOKS.set(name, { ...book, name })
   SLUGS.set(book.slug, { ...book, name: names[0] })
+  CHURCH.set(`${volume}/${abbr}`, { ...book, name: names[0] })
 }
 const MAX_VERSE = 199
 
 // Names that are also common words or personal names: link only with an explicit chapter:verse.
 const NEEDS_VERSE = new Set(['Numbers', 'Judges', 'Ruth', 'Ezra', 'Job', 'Daniel', 'Joel', 'Amos', 'Jonah', 'Micah',
   'Mark', 'John', 'Acts', 'James', 'Jude', 'Titus', 'Jacob', 'Enos', 'Jarom', 'Omni', 'Mosiah', 'Alma', 'Helaman',
-  'Mormon', 'Ether', 'Moroni'])
+  'Mormon', 'Ether', 'Moroni', 'Moses', 'Abraham'])
 
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const NAMES = [...BOOKS.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join('|')
@@ -67,8 +93,50 @@ export function findBook(name) { return BOOKS.get(name) }
 /** A book by its VerseTogether slug ("isaiah", "doctrineandcovenants"), named by its first canonical name. */
 export function findBookBySlug(slug) { return SLUGS.get(slug) }
 
+/**
+ * A book by its Gospel Library volume path and abbreviation ("pgp", "moses"; "dc-testament", "dc"), named by
+ * its first canonical name. Only the exact pair from the canon is a book.
+ * @param {string} volume
+ * @param {string} abbr
+ * @returns {CanonBook | undefined}
+ */
+export function findChurchBook(volume, abbr) {
+  return CHURCH.get(`${volume}/${abbr}`)
+}
+
+// One named reference: a book name, a chapter, and optionally a verse or same-chapter verse range (halves
+// included, so they can be refused rather than misread).
+const REF_SHAPE = new RegExp(String.raw`^(${NAMES}) (\d+)(?::(\d+)([ab])?(?:[–-](\d+)([ab])?)?)?$`)
+// Text that begins as a named reference: a book name, a space, and a digit. Whatever follows, it claims to be a
+// reference, so it is one exactly or it is not a valid one.
+const REF_START = new RegExp(String.raw`^(?:${NAMES}) \d`)
+const NUMBER = /^[1-9]\d{0,2}$/
+
+/**
+ * Text that is exactly one reference ("Isaiah 1:1", "Luke 4:16–21", "Moses 7", "D&C 19:16-19"): its book,
+ * chapter, and verse range. `valid: false` for text that begins as a reference but is not exactly one real
+ * single-chapter reference: a chapter the book doesn't have, half verses, a backward range, a zero, a range
+ * across chapters ("Isaiah 1:1–2:3") or of chapters ("Isaiah 1–2"), separate verses ("Isaiah 1:1,3"), an
+ * unfinished range ("Isaiah 1:1–"), more than one reference, or anything else after it. Null for text that
+ * does not begin as a reference at all ("Read the chapter", "Isaiah's call", "22:5").
+ * @param {string} text
+ * @returns {null | { valid: false } | { valid: true, book: CanonBook, chapter: number, first?: number, last?: number }}
+ */
+export function exactReference(text) {
+  const m = REF_SHAPE.exec(text)
+  if (!m) return REF_START.test(text) ? { valid: false } : null
+  const [, name, chapter, first, firstHalf, last, lastHalf] = m
+  const book = SLUGS.get(BOOKS.get(name).slug)
+  if (!NUMBER.test(chapter) || Number(chapter) > book.chapters || firstHalf || lastHalf) return { valid: false }
+  if (first == null) return { valid: true, book, chapter: Number(chapter) }
+  if (!NUMBER.test(first) || (last != null && !NUMBER.test(last))) return { valid: false }
+  const a = Number(first)
+  const b = last == null ? a : Number(last)
+  if (b < a || b > MAX_VERSE) return { valid: false }
+  return { valid: true, book, chapter: Number(chapter), first: a, last: b }
+}
+
 const SITE = ''
-const VOLUMES = { ot: 'oldtestament', nt: 'newtestament', bofm: 'bookofmormon', 'dc-testament': 'dnc' }
 
 /**
  * A reference's link: the full chapter in the reader (`/browse/<volume>/<book>/<chapter>`), at its first
@@ -79,7 +147,7 @@ export function scripturePassage(bookName, chapter, first, last) {
   const book = BOOKS.get(bookName)
   const ch = Number(chapter)
   if (!book || !Number.isInteger(ch) || ch < 1 || ch > book.chapters) return null
-  const path = `${SITE}/browse/${VOLUMES[book.volume]}/${book.slug}/${ch}`
+  const path = `${SITE}/browse/${VOLUMES[book.volume].path}/${book.slug}/${ch}`
   if (first == null) return { href: path }
   const a = Number(first)
   const b = last == null ? a : Number(last)

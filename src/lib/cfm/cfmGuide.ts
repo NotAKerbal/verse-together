@@ -107,13 +107,6 @@ const SOURCES = /\b(?:sources?|bibliograph\w*|works cited|references)\b/i;
 // Single-chapter verse refs with optional a/b half-verse suffixes; "52:13–53:12" does not match.
 const VERSE_RANGE = /^(?:(.+) )?(\d{1,3}):(\d{1,3})[ab]?(?:[–-](\d{1,3})[ab]?)?$/;
 
-const VOLUME_IDS: Record<string, string> = {
-  ot: "oldtestament",
-  nt: "newtestament",
-  bofm: "bookofmormon",
-  "dc-testament": "doctrineandcovenants",
-};
-
 /** "Isaiah 50–57" → the guide's own book and chapter span, when the book is known. */
 export function guideRange(scripture: string): GuideRange | null {
   const match = /^(.+?) (\d{1,3})(?:[–-](\d{1,3}))?$/.exec(scripture);
@@ -121,7 +114,7 @@ export function guideRange(scripture: string): GuideRange | null {
   if (!match || !book) return null;
   const first = Number(match[2]);
   const last = Number(match[3] ?? match[2]);
-  return { book: match[1], slug: book.slug, volume: VOLUME_IDS[book.volume] ?? book.volume, first, last };
+  return { book: match[1], slug: book.slug, volume: book.canonicalVolume, first, last };
 }
 
 /** Only absolute public http(s) URLs, site-relative paths, and in-page anchors. */

@@ -260,6 +260,82 @@ test("a section between two chapters keeps its place in the reader; everything a
   assert.ok(result.closingHtml.includes('<section class="cfm-section" data-kind="chapter" aria-labelledby="isaiah-61">'));
 });
 
+test("the guides' Gospel Library scripture citations preview their passages; other citations stay links", () => {
+  const book = { slug: "isaiah", volume: "oldtestament" };
+  // Every external link as rendered: its href and its visible text (what the click handler reads).
+  const links = (html) =>
+    Array.from(html.matchAll(/<a href="(https?:[^"]*)"[^>]*>([\s\S]*?)<\/a>/g), ([, href, inner]) => ({
+      href: decode(href),
+      label: decode(inner.replace(/<[^>]+>/g, "")),
+    }));
+  // The October 12 introduction's own citations, outside the week's chapters: chapter-only URLs whose text
+  // names the verse.
+  const intro = links(latest.introductionHtml);
+  const isa = intro.find((link) => link.label === "Isaiah 1:1");
+  assert.equal(isa.href, "https://www.churchofjesuschrist.org/study/scriptures/ot/isa/1?lang=eng");
+  assert.deepEqual(passageFromLink(isa.href, null, book, isa.label), {
+    volume: "oldtestament",
+    book: "isaiah",
+    label: "Isaiah",
+    chapter: 1,
+    first: 1,
+    last: 1,
+  });
+  const moses = intro.find((link) => link.label === "Moses 7:18");
+  assert.equal(moses.href, "https://www.churchofjesuschrist.org/study/scriptures/pgp/moses/7?lang=eng");
+  const mosesTarget = passageFromLink(moses.href, null, book, moses.label);
+  assert.deepEqual(mosesTarget, { volume: "pearl", book: "moses", label: "Moses", chapter: 7, first: 18, last: 18 });
+  assert.equal(chapterHref(mosesTarget), "/browse/pearl/moses/7#v-18");
+  // The Bible Dictionary entry beside Isaiah 1:1 is not scripture.
+  const dictionary = intro.find((link) => link.href.includes("/study/scriptures/bd/"));
+  assert.equal(dictionary.label, "Bible Dictionary entry on Isaiah");
+  assert.equal(passageFromLink(dictionary.href, null, book, dictionary.label), null);
+  // Every scripture citation in every guide previews: narrowed where its text is exactly its verses, the whole
+  // chapter where its text is that chapter or no reference ("Isaiah 58 (KJV)", "59", a bare URL). The one
+  // exception is a chapter range on a single chapter's link ("1 Nephi 20–21"), which stays the link it was
+  // rather than showing part of what it names. Every other citation stays a link.
+  let narrowed = 0;
+  let whole = 0;
+  let ordinary = 0;
+  let ranges = 0;
+  const scripture = /^https:\/\/www\.churchofjesuschrist\.org\/study\/scriptures\/(?:ot|nt|bofm|dc-testament|pgp)\//;
+  for (const guide of parsed.values()) {
+    for (const { href, label } of links(guide.html)) {
+      const target = passageFromLink(href, null, book, label);
+      if (!scripture.test(href)) {
+        assert.equal(target, null, `${guide.title}: ${label} ${href}`);
+        ordinary += 1;
+      } else if (label === "1 Nephi 20–21") {
+        assert.equal(href, "https://www.churchofjesuschrist.org/study/scriptures/bofm/1-ne/20?lang=eng");
+        assert.equal(target, null, `${guide.title}: ${label}`);
+        ranges += 1;
+      } else {
+        assert.ok(target, `${guide.title}: ${label} ${href}`);
+        if (target.first != null) narrowed += 1;
+        else whole += 1;
+      }
+    }
+  }
+  assert.ok(narrowed > 50 && whole > 20 && ordinary > 20, `${narrowed} narrowed, ${whole} whole, ${ordinary} ordinary`);
+  assert.ok(ranges >= 2, `${ranges} chapter-range citations`);
+  // Out-of-lesson citations from the October 12 guide, in the New Testament, Doctrine and Covenants, and Book of Mormon.
+  const cited = (label) => {
+    const link = links(latest.html).find((entry) => entry.label === label);
+    return passageFromLink(link.href, null, book, link.label);
+  };
+  assert.deepEqual(cited("Luke 4:16–21"), { volume: "newtestament", book: "luke", label: "Luke", chapter: 4, first: 16, last: 21 });
+  assert.deepEqual(cited("Doctrine and Covenants 19:16–19"), {
+    volume: "doctrineandcovenants",
+    book: "doctrineandcovenants",
+    label: "Doctrine and Covenants",
+    chapter: 19,
+    first: 16,
+    last: 19,
+  });
+  assert.deepEqual(cited("Mosiah 3:7"), { volume: "bookofmormon", book: "mosiah", label: "Mosiah", chapter: 3, first: 7, last: 7 });
+  assert.deepEqual(cited("2 Kings 25"), { volume: "oldtestament", book: "2kings", label: "2 Kings", chapter: 25 });
+});
+
 test("a guide with no chapter of its own range keeps everything in the reader", () => {
   const guide = { ...guides.find((entry) => entry.slug === "2026-10-05-isaiah-50-57") };
   const parsedOnly = parseGuide(guide, "# Title\n\nPreamble.\n\n## About\n\nText.\n\n## Isaiah 61\n\nOutside the range.\n");
