@@ -89,15 +89,12 @@ type ListProps = {
 };
 
 function ContentsList({ variant, toc, active, currentChapter, toggled, onToggle, onLink }: ListProps) {
-  const lastChapter = toc.reduce((last, item, index) => (item.kind === "chapter" ? index : last), -1);
+  const reader = toc.filter((item) => item.part === "reader");
   const groups = [
     { key: "introduction", label: "Introduction", items: toc.filter((item) => item.part === "introduction") },
-    {
-      key: "chapters",
-      label: "Chapter by chapter",
-      items: toc.filter((item, index) => item.part === "reader" && index <= lastChapter),
-    },
-    { key: "closing", label: "After the chapters", items: toc.filter((item, index) => item.part === "reader" && index > lastChapter) },
+    // A guide with no chapter of its own to pair with keeps everything in the reader (see parseGuide).
+    { key: "chapters", label: reader.some((item) => item.kind === "chapter") ? "Chapter by chapter" : "Guide", items: reader },
+    { key: "closing", label: "After the chapters", items: toc.filter((item) => item.part === "closing") },
   ].filter((group) => group.items.length > 0);
 
   const link = (id: string, children: ReactNode, className?: string) => (

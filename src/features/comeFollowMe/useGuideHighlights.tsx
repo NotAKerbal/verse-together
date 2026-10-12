@@ -20,13 +20,18 @@ import {
 import styles from "./studyCompanion.module.css";
 
 /*
-  Study-guide highlights: select any of the guide's prose (the introduction or the reader's guide side) and
-  highlight exactly that text. They are painted with the CSS Custom Highlight API, which colors DOM ranges
-  without touching the guide's markup: its text nodes, links, ids, and every measured position stay exactly
-  as they are. Browsers without that API read the guide as before and are told highlights can't show.
+  Study-guide highlights: select any of the guide's prose (the introduction, the reader's guide side, or the
+  closing sections) and highlight exactly that text. They are painted with the CSS Custom Highlight API, which
+  colors DOM ranges without touching the guide's markup: its text nodes, links, ids, and every measured
+  position stay exactly as they are. Browsers without that API read the guide as before and are told
+  highlights can't show.
+
+  A part can be rendered in more than one element: the closing sections were once the end of the reader's
+  guide, and are still the "reader" part, read as one text after it. So highlights saved before they moved
+  out of it (and new ones in them) keep the same anchors.
 */
 
-type Roots = Record<GuidePart, RefObject<HTMLElement | null>>;
+type Roots = Record<GuidePart, ReadonlyArray<RefObject<HTMLElement | null>>>;
 type Status = "loading" | "ready" | "unavailable";
 
 const PARTS: readonly GuidePart[] = ["introduction", "reader"];
@@ -63,47 +68,88 @@ function installHighlightStyles() {
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 }
 
-type DomIndex = TextIndex & { nodes: Text[]; starts: number[]; lengths: number[] };
+type DomIndex = TextIndex & {
+  nodes: Text[];
+  starts: number[];
+  lengths: number[];
+  /** Which of `roots` holds each text node. */
+  rootOf: number[];
+  roots: HTMLElement[];
+  /** Text offset where each root begins. */
+  rootStarts: number[];
+};
 
-/** The part's text and block anchors (see guideAnchors), with the text nodes that hold it. */
-function buildIndex(root: HTMLElement): DomIndex {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+/** The live elements a part is rendered in, in reading order. */
+function partRoots(roots: Roots, part: GuidePart): HTMLElement[] {
+  return roots[part].map((ref) => ref.current).filter((root): root is HTMLElement => root != null);
+}
+
+/**
+ * The part's text and block anchors (see guideAnchors), with the text nodes that hold it: its elements' text
+ * in reading order, one after the other.
+ */
+function buildIndex(roots: HTMLElement[]): DomIndex {
   const parts: string[] = [];
   const nodes: Text[] = [];
   const starts: number[] = [];
   const lengths: number[] = [];
+  const rootOf: number[] = [];
+  const rootStarts: number[] = [];
   const anchors: Array<{ id: string; start: number }> = [];
   let length = 0;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (node instanceof Text) {
-      nodes.push(node);
-      starts.push(length);
-      lengths.push(node.data.length);
-      parts.push(node.data);
-      length += node.data.length;
-    } else if (node instanceof Element && isUsableBlockId(node.id)) {
-      anchors.push({ id: node.id, start: length });
+  roots.forEach((root, rootIndex) => {
+    rootStarts.push(length);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node instanceof Text) {
+        nodes.push(node);
+        starts.push(length);
+        lengths.push(node.data.length);
+        rootOf.push(rootIndex);
+        parts.push(node.data);
+        length += node.data.length;
+      } else if (node instanceof Element && isUsableBlockId(node.id)) {
+        anchors.push({ id: node.id, start: length });
+      }
     }
-  }
-  return { text: parts.join(""), anchors, nodes, starts, lengths };
+  });
+  return { text: parts.join(""), anchors, nodes, starts, lengths, rootOf, roots, rootStarts };
 }
 
-/** A boundary point's text offset in its part (Range.toString counts text nodes exactly as buildIndex does). */
-function positionIn(root: HTMLElement, node: Node, offset: number): number {
+/**
+ * A boundary point's text offset in its part (Range.toString counts text nodes exactly as buildIndex does),
+ * or null when the point is in none of the part's elements.
+ */
+function positionIn(index: DomIndex, node: Node, offset: number): number | null {
+  const at = index.roots.findIndex((root) => root.contains(node));
+  if (at < 0) return null;
   const range = document.createRange();
-  range.setStart(root, 0);
+  range.setStart(index.roots[at], 0);
   range.setEnd(node, offset);
-  return range.toString().length;
+  return index.rootStarts[at] + range.toString().length;
 }
 
-function rangeFor(index: DomIndex, start: number, end: number): Range | null {
+/**
+ * DOM ranges for a span of the part's text: one per element it runs through, so a span that crosses from one
+ * element into the next never paints whatever the page has between them.
+ */
+function rangesFor(index: DomIndex, start: number, end: number): Range[] {
   const from = locate(index.starts, index.lengths, start, "start");
   const to = locate(index.starts, index.lengths, end, "end");
-  if (!from || !to) return null;
-  const range = document.createRange();
-  range.setStart(index.nodes[from.node], from.offset);
-  range.setEnd(index.nodes[to.node], to.offset);
-  return range;
+  if (!from || !to || to.node < from.node) return [];
+  const ranges: Range[] = [];
+  let first = from.node;
+  let firstOffset = from.offset;
+  for (let node = from.node; node <= to.node; node += 1) {
+    if (node < to.node && index.rootOf[node + 1] === index.rootOf[node]) continue;
+    const range = document.createRange();
+    range.setStart(index.nodes[first], firstOffset);
+    range.setEnd(index.nodes[node], node === to.node ? to.offset : index.lengths[node]);
+    ranges.push(range);
+    first = node + 1;
+    firstOffset = 0;
+  }
+  return ranges;
 }
 
 function intersects(a: Range, b: Range) {
@@ -114,8 +160,8 @@ function intersects(a: Range, b: Range) {
   }
 }
 
-/** A painted highlight: its row and where it is in the guide now. */
-type Painted = { row: GuideHighlight; range: Range };
+/** A painted highlight: its row and where it is in the guide now (one range per element it runs through). */
+type Painted = { row: GuideHighlight; ranges: Range[] };
 
 type Chip = { top: number; right: number; part: GuidePart; editId: string | null };
 
@@ -156,8 +202,10 @@ function GuideSelectionButton({
       frame = 0;
       const selection = document.getSelection();
       const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
-      // Only a selection wholly inside one part of the guide: not across into the scripture or the page.
-      const part = range ? PARTS.find((name) => roots[name].current?.contains(range.commonAncestorContainer)) : undefined;
+      // Only a selection wholly inside one element of the guide: not across into the scripture or the page.
+      const part = range
+        ? PARTS.find((name) => roots[name].some((ref) => ref.current?.contains(range.commonAncestorContainer)))
+        : undefined;
       if (!range || !part || !range.toString().trim()) {
         hide();
         return;
@@ -171,7 +219,9 @@ function GuideSelectionButton({
       window.clearTimeout(hideTimer);
       hideTimer = 0;
       rangeRef.current = range.cloneRange();
-      const editId = painted.current.find((item) => item.row.part === part && intersects(range, item.range))?.row.id ?? null;
+      const editId =
+        painted.current.find((item) => item.row.part === part && item.ranges.some((area) => intersects(range, area)))?.row.id ??
+        null;
       // Below the selection's end, else above its start; right-aligned to its end and kept on screen.
       const below = last.bottom + CHIP_GAP;
       const top =
@@ -229,12 +279,19 @@ type Editing =
   | { kind: "edit"; row: GuideHighlight };
 
 /**
- * The viewer's private highlights in a guide's prose (`guide` is the guide's week start). Returns the layer
- * to render once on the page: the selection's Highlight button, or the highlight dialog.
+ * The viewer's private highlights in a guide's prose (`guide` is the guide's week start). `reader` lists the
+ * elements the reader part is rendered in, in reading order; `layoutKey` changes whenever any of them may be
+ * rendered anew elsewhere (the closing sections move between layouts). Returns the layer to render once on
+ * the page: the selection's Highlight button, or the highlight dialog.
  */
-export function useGuideHighlights(guide: string, introduction: RefObject<HTMLElement | null>, reader: RefObject<HTMLElement | null>) {
+export function useGuideHighlights(
+  guide: string,
+  introduction: RefObject<HTMLElement | null>,
+  reader: ReadonlyArray<RefObject<HTMLElement | null>>,
+  layoutKey: string
+) {
   const { user, promptSignIn } = useAuth();
-  const roots = useMemo<Roots>(() => ({ introduction, reader }), [introduction, reader]);
+  const roots = useMemo<Roots>(() => ({ introduction: [introduction], reader }), [introduction, reader]);
   // useQueries rather than useQuery: a backend that doesn't have this query yet answers with an Error
   // instead of throwing, and the guide reads on without highlights.
   const queries = useMemo(() => ({ highlights: { query: api.annotations.getGuideHighlights, args: { guide } } }), [guide]);
@@ -264,16 +321,16 @@ export function useGuideHighlights(guide: string, introduction: RefObject<HTMLEl
       const ranges = new Map<HighlightColor, Range[]>(COLORS.map((color) => [color, []]));
       const next: Painted[] = [];
       for (const part of PARTS) {
-        const root = roots[part].current;
+        const elements = partRoots(roots, part);
         const own = rows.filter((row) => row.part === part);
-        if (!root || own.length === 0) continue;
-        const index = buildIndex(root);
+        if (elements.length === 0 || own.length === 0) continue;
+        const index = buildIndex(elements);
         for (const row of own) {
           const at = resolveAnchor(index, row);
-          const range = at && rangeFor(index, at.start, at.end);
-          if (!range) continue;
-          ranges.get(row.highlightColor)?.push(range);
-          next.push({ row, range });
+          const areas = at ? rangesFor(index, at.start, at.end) : [];
+          if (areas.length === 0) continue;
+          ranges.get(row.highlightColor)?.push(...areas);
+          next.push({ row, ranges: areas });
         }
       }
       for (const color of COLORS) {
@@ -289,8 +346,7 @@ export function useGuideHighlights(guide: string, introduction: RefObject<HTMLEl
     paint();
     const observer = new MutationObserver(schedule);
     for (const part of PARTS) {
-      const root = roots[part].current;
-      if (root) observer.observe(root, { childList: true, subtree: true, characterData: true });
+      for (const root of partRoots(roots, part)) observer.observe(root, { childList: true, subtree: true, characterData: true });
     }
     return () => {
       observer.disconnect();
@@ -298,7 +354,7 @@ export function useGuideHighlights(guide: string, introduction: RefObject<HTMLEl
       for (const color of COLORS) CSS.highlights.delete(highlightName(color));
       painted.current = [];
     };
-  }, [rows, roots]);
+  }, [rows, roots, layoutKey]);
 
   const open = ({ part, range, editId }: { part: GuidePart; range: Range; editId: string | null }) => {
     const row = editId ? rows.find((item) => item.id === editId) : undefined;
@@ -306,21 +362,22 @@ export function useGuideHighlights(guide: string, introduction: RefObject<HTMLEl
       setEditing({ kind: "edit", row });
       return;
     }
-    const root = roots[part].current;
-    if (!root || !root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
-    const index = buildIndex(root);
-    const described = describeSpan(
-      index,
-      positionIn(root, range.startContainer, range.startOffset),
-      positionIn(root, range.endContainer, range.endOffset)
-    );
-    setEditing({ kind: "create", part, described });
+    const elements = partRoots(roots, part);
+    // The selection is inside one of the part's elements (see GuideSelectionButton).
+    if (!elements.some((root) => root.contains(range.startContainer) && root.contains(range.endContainer))) return;
+    const index = buildIndex(elements);
+    const start = positionIn(index, range.startContainer, range.startOffset);
+    const end = positionIn(index, range.endContainer, range.endOffset);
+    if (start == null || end == null) return;
+    setEditing({ kind: "create", part, described: describeSpan(index, start, end) });
   };
 
   /** After a save or removal the selection has done its job; clear it so the highlight shows. */
   const clearSelection = () => {
     const selection = document.getSelection();
-    if (selection && PARTS.some((part) => roots[part].current?.contains(selection.anchorNode))) selection.removeAllRanges();
+    if (selection && PARTS.some((part) => partRoots(roots, part).some((root) => root.contains(selection.anchorNode)))) {
+      selection.removeAllRanges();
+    }
   };
 
   let layer: ReactNode;
