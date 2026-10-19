@@ -106,7 +106,8 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
   const { range } = parsed;
 
   const chapters: CompanionChapter[] = [];
-  for (let chapter = range.first; chapter <= range.last; chapter += 1) {
+  // Only the week's own chapters ("Jeremiah 1–3; 7; …" skips 4–6); other chapters stay preview links.
+  for (const chapter of range.chapters) {
     const data = await getLocalLdsChapter(range.volume, range.slug, chapter);
     if (!data) throw new Error(`Come, Follow Me: missing ${range.book} ${chapter}`);
     chapters.push({ chapter, verses: data.verses });

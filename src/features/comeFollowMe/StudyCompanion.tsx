@@ -1439,7 +1439,7 @@ export default function StudyCompanion({
           <section
             ref={scriptureRef}
             id="cfm-panel-scripture"
-            aria-label={`Scripture: ${book.label} ${firstChapter}–${lastChapter}`}
+            aria-label={`Scripture: ${book.label} ${chapterNumbers.length === lastChapter - firstChapter + 1 ? `${firstChapter}–${lastChapter}` : chapterNumbers.join(", ")}`}
             className={styles.scripturePanel}
             inert={scriptureHidden}
           >

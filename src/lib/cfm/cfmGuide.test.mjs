@@ -9,7 +9,7 @@ import { MOBILE_SIDE_ORDER, sideAtScroll } from "../../features/comeFollowMe/com
 import { chapterHref, passageFromLink } from "../../features/comeFollowMe/passagePreview.ts";
 import { targetStart } from "../../features/comeFollowMe/scrollSync.ts";
 import { decodeFragment, localScriptureTarget, normalizeTarget, parseScriptureAnchor, passagesOverlapping, scriptureAnchor } from "./cfmAnchors.ts";
-import { parseGuide, readGuide, readGuides, safeHref } from "./cfmGuide.ts";
+import { guideRange, parseGuide, readGuide, readGuides, safeHref } from "./cfmGuide.ts";
 import { COME_FOLLOW_ME_WEEKS, getComeFollowMeWeekByStart } from "../comeFollowMe.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -17,11 +17,13 @@ const sha256 = (file) => createHash("sha256").update(fs.readFileSync(path.join(r
 
 // Pinned from the verified source bundle (NotAKerbal/isaac-stuff-homepage@52975b1c4b78c34a1c0d7af365422455b71148e4).
 // Isaiah 58–66 guide and updated manifest from NotAKerbal/isaac-stuff-homepage@d7dd5c3edf5dc620d07de41909fd8eac563a32ef.
+// Jeremiah guide (October 19) and the manifest as imported with it, matching its isaacstuff publication.
 const SOURCE_FILES = {
   "content/cfm/2026-09-28-isaiah-40-49.md": ["714cfbaa5b5bc1c55a938d530b077f8008f0f886c455e6aee2156c51c04e5604", 75234],
   "content/cfm/2026-10-05-isaiah-50-57.md": ["b94def284cb09ac079a1831a30aa83a0ec45832efb8c9483e9a910f187ac10e5", 145604],
   "content/cfm/2026-10-12-isaiah-58-66.md": ["3b961a70aa9deb9af3f04ae266193ad5af0f3062e426932acf44bd48ea1f2c5d", 74659],
-  "content/cfm/guides.json": ["6334aaf4be77c77bf9245acf90ef6a88fa1f3802c2492726ce448ed3bd46cecf", 1520],
+  "content/cfm/2026-10-19-jeremiah-1-3-7-16-18-20.md": ["e2a55290b045c2786a64daed1bcbbed822d734e16997b636cbcfa78e293b5880", 85627],
+  "content/cfm/guides.json": ["eb1fca8ffd92ca6ab2e00eabbbc21b0dab7eca6245629858da5ed4e637e35fda", 2108],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
@@ -31,6 +33,7 @@ const parsed = new Map(guides.map((guide) => [guide.slug, readGuide(guide, root)
 const early = parsed.get("2026-09-28-isaiah-40-49");
 const late = parsed.get("2026-10-05-isaiah-50-57");
 const latest = parsed.get("2026-10-12-isaiah-58-66");
+const jeremiah = parsed.get("2026-10-19-jeremiah-1-3-7-16-18-20");
 
 function decode(text) {
   return text
@@ -138,7 +141,7 @@ test("every guide splits into introduction, reader, and closing sections, losing
   const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
   const opens = (guide, chapter, item) =>
     `<section class="cfm-section" data-kind="chapter" data-chapter="${chapter}" aria-labelledby="${item.id}">`;
-  assert.equal(parsed.size, 3);
+  assert.equal(parsed.size, 4);
   for (const guide of parsed.values()) {
     const name = guide.title;
     const parts = { introduction: guide.introductionHtml, reader: guide.readerHtml, closing: guide.closingHtml };
@@ -629,4 +632,74 @@ test("each guide belongs to the schedule week whose start it links from", () => 
   }
   assert.equal(getComeFollowMeWeekByStart("2026-10-06"), null);
   assert.equal(new Set(COME_FOLLOW_ME_WEEKS.map((week) => week.start)).size, COME_FOLLOW_ME_WEEKS.length);
+});
+
+test("a same-book guide with skipped chapters pairs exactly its own chapters", () => {
+  // Contiguous ranges in every standard work still parse; ";" continues the same book in ascending order.
+  assert.deepEqual(guideRange("Isaiah 50–57"), {
+    book: "Isaiah",
+    slug: "isaiah",
+    volume: "oldtestament",
+    first: 50,
+    last: 57,
+    chapters: [50, 51, 52, 53, 54, 55, 56, 57],
+  });
+  assert.deepEqual(guideRange("Moses 7").chapters, [7]);
+  assert.deepEqual(guideRange("1 Nephi 20–21").chapters, [20, 21]);
+  assert.equal(guideRange("Doctrine and Covenants 19").volume, "doctrineandcovenants");
+  const range = guideRange("Jeremiah 1–3; 7; 16–18; 20");
+  assert.deepEqual([range.book, range.slug, range.volume, range.first, range.last], ["Jeremiah", "jeremiah", "oldtestament", 1, 20]);
+  assert.deepEqual(range.chapters, [1, 2, 3, 7, 16, 17, 18, 20]);
+  // Malformed, backward, overlapping, out-of-bounds, and mixed-book metadata is refused, never misread.
+  for (const bad of [
+    "Isaiah 57–50", "Isaiah 0", "Isaiah 67", "Jeremiah 50–53", "Jeremiah 1–3; 2", "Jeremiah 7; 3", "Jeremiah 1;",
+    "Jeremiah 1; ; 3", "Jeremiah 31–33; Lamentations 1", "Jeremiah 1–3; 7a", "Jeremiah", "Nobook 1", "Isaiah 1:1",
+  ]) {
+    assert.equal(guideRange(bad), null, bad);
+  }
+
+  // The imported guide pairs exactly its eight chapters, in order.
+  const jeremiahChapters = [1, 2, 3, 7, 16, 17, 18, 20];
+  assert.deepEqual(jeremiah.range.chapters, jeremiahChapters);
+  const paired = Array.from(
+    jeremiah.html.matchAll(/<section class="cfm-section" data-kind="chapter" data-chapter="(\d+)"/g),
+    (match) => Number(match[1])
+  );
+  assert.deepEqual(paired, jeremiahChapters);
+  // Local pane links target only those chapters; references to skipped chapters (4–6, 8–15, 19) stay ordinary.
+  const local = new Set(Array.from(jeremiah.html.matchAll(/href="#scripture-jeremiah-(\d+)/g), (match) => Number(match[1])));
+  assert.deepEqual([...local].sort((a, b) => a - b), jeremiahChapters);
+  assert.ok(!jeremiah.html.includes("#scripture-jeremiah-19"));
+
+  // 84 passage groups covering every one of the 204 verses in the local scripture data.
+  assert.equal(jeremiah.passages.length, 84);
+  const bundle = JSON.parse(fs.readFileSync(path.join(root, "public/scripture-data/oldtestament.json"), "utf8"));
+  const book = bundle.books.find((entry) => entry.title === "Jeremiah");
+  const counts = jeremiahChapters.map((chapter) => book.chapters.find((entry) => entry.chapter === chapter).verses.length);
+  assert.deepEqual(counts, [19, 37, 25, 34, 21, 27, 23, 18]);
+  assert.equal(counts.reduce((sum, count) => sum + count, 0), 204);
+  const covered = new Set();
+  for (const passage of jeremiah.passages) {
+    assert.ok(jeremiahChapters.includes(passage.chapter), passage.id);
+    const count = counts[jeremiahChapters.indexOf(passage.chapter)];
+    assert.ok(passage.first >= 1 && passage.last >= passage.first && passage.last <= count, passage.id);
+    for (let verse = passage.first; verse <= passage.last; verse += 1) covered.add(`${passage.chapter}:${verse}`);
+  }
+  assert.equal(covered.size, 204);
+
+  // A skipped chapter between two paired ones stays in the reader, unpaired, with ordinary preview links.
+  const guide = { ...guides.find((entry) => entry.slug === "2026-10-19-jeremiah-1-3-7-16-18-20") };
+  const result = parseGuide(
+    guide,
+    "# Title\n\n## About\n\nIntro.\n\n## Jeremiah 18\n\n### Jeremiah 18:1–4 — Potter\n\nA.\n\n## Jeremiah 19\n\n### Jeremiah 19:1–2 — Flask\n\nB.\n\n## Jeremiah 20\n\nC.\n\n## Sources\n\nD.\n"
+  );
+  assert.deepEqual(
+    result.toc.map((item) => `${item.part}:${item.text}`),
+    ["introduction:About", "reader:Jeremiah 18", "reader:Jeremiah 19", "reader:Jeremiah 20", "closing:Sources"]
+  );
+  assert.deepEqual(result.passages.map((passage) => [passage.chapter, passage.first, passage.last]), [[18, 1, 4]]);
+  assert.ok(result.readerHtml.includes('<section class="cfm-section" data-kind="chapter" aria-labelledby="jeremiah-19">'));
+  assert.ok(result.readerHtml.includes('<a class="cfm-scripture" data-cfm-scripture href="/browse/oldtestament/jeremiah/19#v-1" data-last="2">'));
+  assert.ok(!result.html.includes("#scripture-jeremiah-19"));
+  assert.ok(result.html.includes('href="#scripture-jeremiah-20"'));
 });

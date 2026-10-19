@@ -72,7 +72,8 @@ export type GuidePassage = {
   /** "a" when the passage stops halfway through `last` ("11–13a"). */
   lastHalf?: VerseHalf;
 };
-export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number };
+/** The guide's book; `first`/`last` bound its chapters, and `chapters` lists exactly the ones it covers. */
+export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number; chapters: number[] };
 export type ParsedGuide = {
   title: string;
   /** The complete guide in source order: exactly `introductionHtml + readerHtml + closingHtml`. */
@@ -107,14 +108,26 @@ const SOURCES = /\b(?:sources?|bibliograph\w*|works cited|references)\b/i;
 // Single-chapter verse refs with optional a/b half-verse suffixes; "52:13–53:12" does not match.
 const VERSE_RANGE = /^(?:(.+) )?(\d{1,3}):(\d{1,3})[ab]?(?:[–-](\d{1,3})[ab]?)?$/;
 
-/** "Isaiah 50–57" → the guide's own book and chapter span, when the book is known. */
+/**
+ * "Isaiah 50–57" or "Jeremiah 1–3; 7; 16–18; 20" → the guide's own book and chapters, when the book is known.
+ * Parts after ";" continue the same book, in ascending order within the book's chapters; anything else
+ * (another book, a backward or overlapping range, a chapter the book lacks) is null.
+ */
 export function guideRange(scripture: string): GuideRange | null {
-  const match = /^(.+?) (\d{1,3})(?:[–-](\d{1,3}))?$/.exec(scripture);
+  const [head, ...rest] = scripture.split(";").map((part) => part.trim());
+  const match = /^(.+?) (\d{1,3}(?:[–-]\d{1,3})?)$/.exec(head);
   const book = match ? findBook(match[1]) : null;
   if (!match || !book) return null;
-  const first = Number(match[2]);
-  const last = Number(match[3] ?? match[2]);
-  return { book: match[1], slug: book.slug, volume: book.canonicalVolume, first, last };
+  const chapters: number[] = [];
+  for (const span of [match[2], ...rest]) {
+    const part = /^(\d{1,3})(?:[–-](\d{1,3}))?$/.exec(span);
+    if (!part) return null;
+    const from = Number(part[1]);
+    const to = Number(part[2] ?? part[1]);
+    if (from < 1 || to < from || to > book.chapters || from <= (chapters[chapters.length - 1] ?? 0)) return null;
+    for (let chapter = from; chapter <= to; chapter += 1) chapters.push(chapter);
+  }
+  return { book: match[1], slug: book.slug, volume: book.canonicalVolume, first: chapters[0], last: chapters[chapters.length - 1], chapters };
 }
 
 /** Only absolute public http(s) URLs, site-relative paths, and in-page anchors. */
@@ -244,7 +257,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
 
   /** In-page anchor into the scripture pane, when the reference is inside this guide's chapters. */
   const localTarget = (book: string, chapter: number, first?: number, last?: number) => {
-    if (!range || book !== range.book || chapter < range.first || chapter > range.last) return null;
+    if (!range || book !== range.book || !range.chapters.includes(chapter)) return null;
     return scriptureAnchor(range.slug, chapter, first, last);
   };
   const localLink = (anchor: string, html: string, chapter: number, first?: number, last?: number) =>
