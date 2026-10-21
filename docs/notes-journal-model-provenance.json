@@ -1,0 +1,66 @@
+[
+  {
+    "phase": "backend",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "editor-nav",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "backend-fix",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "ui",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "ui-fix",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "final-fix",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "mobile-heading-fix",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "legacy-reading-preservation",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  }
+]

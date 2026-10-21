@@ -13,7 +13,7 @@
     "lint": "eslint",
     "test:cfm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/comeFollowMe.test.mjs src/lib/cfm/cfmGuide.test.mjs src/features/comeFollowMe/scrollSync.test.mjs src/features/comeFollowMe/readerDock.test.mjs src/features/comeFollowMe/scriptureAnnotations.test.mjs src/features/annotations/verseAnnotations.test.mjs src/features/comeFollowMe/guideAnchors.test.mjs src/features/comeFollowMe/companionPanes.test.mjs src/features/comeFollowMe/passagePreview.test.mjs",
     "cfm:check": "node scripts/cfm-content.mjs check",
-    "test:ai-insights":"node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
+    "test:ai-insights": "node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
     "batch:insights:prepare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/prepareChapterInsightsBatch.mjs --skip-ref bookofmormon:1nephi:1 --canary-ref bookofmormon:1nephi:2",
     "batch:insights:submit": "node --env-file-if-exists=.env.local scripts/submitChapterInsightsBatch.mjs",
     "batch:insights:process": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/processChapterInsightsBatch.mjs",
@@ -22,10 +22,16 @@
     "generate:scriptures": "node scripts/generateScriptureData.mjs",
     "icons:export": "node scripts/export-icons.mjs",
     "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy"
+    "convex:deploy": "convex deploy",
+    "test:notes": "vitest run",
+    "qa:notes": "vite --config vite.qa.config.mjs --open /qa/notes/index.html"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.37.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@fortawesome/react-fontawesome": "^3.3.0",
@@ -33,17 +39,22 @@
     "marked": "^17.0.6",
     "next": "^16.1.6",
     "react": "^19.1.4",
-    "react-dom": "^19.1.4"
+    "react-dom": "^19.1.4",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "convex-test": "^0.0.41",
     "eslint": "^9",
     "eslint-config-next": "^16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.12"
   }
 }

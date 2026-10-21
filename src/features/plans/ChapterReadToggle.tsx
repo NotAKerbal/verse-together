@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { useEffect, useRef, useState } from "react";
+import { localDateKey, newRequestId } from "@/features/notes/journal";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import { useBookProgress, useReadingProgressActions } from "./useReadingProgress";
 
 type Props = {
@@ -11,19 +12,24 @@ type Props = {
 };
 
 export default function ChapterReadToggle({ volume, book, chapter }: Props) {
-  const { user } = useAuth();
+  const { user, ready } = useConvexSignedIn();
   const progress = useBookProgress(volume, book);
   const { markChapterRead, unmarkChapterRead, setLastPosition } = useReadingProgressActions();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const userId = user?.id ?? null;
+  // One id per completion attempt: a retry after an error reuses it so the server logs the reading once.
+  const markRequestRef = useRef<{ requestId: string; journalDate: string } | null>(null);
+  useEffect(() => {
+    markRequestRef.current = null;
+  }, [userId, volume, book, chapter]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !ready) return;
     setLastPosition({ volume, book, chapter }).catch(() => {
       // Position tracking is best-effort; the reader should never surface this.
     });
-  }, [userId, volume, book, chapter, setLastPosition]);
+  }, [userId, ready, volume, book, chapter, setLastPosition]);
 
   if (!user) return null;
 
@@ -38,7 +44,10 @@ export default function ChapterReadToggle({ volume, book, chapter }: Props) {
       if (isRead) {
         await unmarkChapterRead({ volume, book, chapter });
       } else {
-        await markChapterRead({ volume, book, chapter });
+        const attempt = markRequestRef.current ?? { requestId: newRequestId(), journalDate: localDateKey() };
+        markRequestRef.current = attempt;
+        await markChapterRead({ volume, book, chapter }, attempt);
+        markRequestRef.current = null;
       }
     } catch {
       setError("Couldn't save that. Try again in a moment.");

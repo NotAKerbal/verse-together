@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import StudyCompanion, { type CompanionChapter } from "@/features/comeFollowMe/StudyCompanion";
+import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
+import ReadingLogButton from "@/features/notes/ReadingLogButton";
 import styles from "@/features/comeFollowMe/studyCompanion.module.css";
 import { getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
 import { readGuide, readGuides, readingTime, type Guide } from "@/lib/cfm/cfmGuide";
@@ -135,6 +137,35 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         </p>
       </header>
 
+      <NoteSourceRegistrar
+        kind="guide"
+        label={`${guide.scripture}: ${parsed.title}`}
+        href={`/come-follow-me/${week.start}`}
+      />
+      <div className="mb-4 flex justify-start">
+        <ReadingLogButton
+          options={[
+            {
+              source: {
+                kind: "guide",
+                label: `${guide.scripture}: ${parsed.title}`,
+                href: `/come-follow-me/${week.start}`,
+              },
+            },
+            ...chapters.map((item) => ({
+              source: {
+                kind: "scripture" as const,
+                label: `${range.book} ${item.chapter}`,
+                href: getChapterHref({ volume: range.volume, book: range.slug, chapter: item.chapter }),
+                volume: range.volume,
+                book: range.slug,
+                chapter: item.chapter,
+              },
+              verseCount: item.verses.length,
+            })),
+          ]}
+        />
+      </div>
       <StudyCompanion
         introductionHtml={parsed.introductionHtml}
         readerHtml={parsed.readerHtml}

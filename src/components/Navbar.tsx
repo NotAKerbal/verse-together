@@ -24,7 +24,7 @@ export default function Navbar() {
   const navIcons = {
     Browse: faCompass,
     Notes: faLightbulb,
-    Plans: faListCheck,
+    "Come Follow Me": faListCheck,
   } as const;
 
   useEffect(() => {

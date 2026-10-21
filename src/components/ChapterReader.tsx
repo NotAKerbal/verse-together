@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from "./VerseActionBar";
@@ -23,6 +23,9 @@ import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToAc
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
+import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
+import ReadingLogButton, { type ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import {
@@ -464,6 +467,7 @@ export default function ChapterReader({
   compareChapters?: CompareChapter[];
 }) {
   const { user, getToken, promptSignIn } = useAuth();
+  const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
   const annotationsApi = (api as any).annotations;
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
@@ -524,7 +528,7 @@ export default function ChapterReader({
   );
   const myInsightRefs = useQuery(
     api.insights.listMyScriptureRefsForChapter,
-    user ? { volume, book, chapter } : "skip"
+    convexReady ? { volume, book, chapter } : "skip"
   ) as VerseInsightRef[] | undefined;
   const insightRefsByVerse = useMemo(
     () => groupVerseInsightRefsByVerse(myInsightRefs ?? []),
@@ -821,6 +825,16 @@ export default function ChapterReader({
     return normalizeSelectionText(selectedVerses.map((verse) => verse.text).join(" ")) === normalizeSelectionText(selectedText);
   }, [selectedText, selectedVerses]);
   const hasActiveNote = !!activeDraftId;
+  const pathname = usePathname();
+  const readingLogOptions = useMemo<ReadingLogOption[]>(
+    () => [
+      {
+        source: { kind: "scripture", label: reference, href: pathname, volume, book, chapter },
+        verseCount: verses.length,
+      },
+    ],
+    [reference, pathname, volume, book, chapter, verses.length]
+  );
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
     (compareChapters ?? []).forEach((chapterData) => {
@@ -1477,6 +1491,13 @@ export default function ChapterReader({
                     </div>
                   </div>
                 </div>
+                <ReadingLogButton
+                  variant="compact"
+                  label="Log"
+                  ariaLabel={`Log reading of ${reference}`}
+                  followLocation
+                  options={readingLogOptions}
+                />
                 <button
                   type="button"
                   aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
@@ -1706,6 +1727,7 @@ export default function ChapterReader({
             })}
           </ol>
           <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
+          <NoteSourceRegistrar kind="scripture" label={reference} volume={volume} book={book} chapter={chapter} />
           <nav className="simple-only reader-simple-nav" aria-label="Chapter navigation">
             {prevHref ? <Link href={prevHref}>&larr; Previous</Link> : <span />}
             {nextHref ? <Link href={nextHref}>Next &rarr;</Link> : <span />}
