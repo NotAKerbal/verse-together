@@ -21,13 +21,22 @@ Implementation uses the existing authenticated Claude account with exact model `
 
 ## Verification
 
-- `npm run test:notes`: 20 tests pass across persistence/authorization, legacy/publication compatibility, reading history, heading syntax, dates, and the serialized save outbox.
+- `npm run test:notes`: 24 tests pass across persistence/authorization, legacy/publication compatibility, reading history, heading syntax, dates, and the serialized save outbox.
 - `npx tsc --noEmit`: passes.
 - Targeted ESLint for all new Notes modules and the modified provider/sidebar/progress components: passes without warnings. The old FlatCompat configuration was replaced with Next 16's flat exports so lint can run. Full-repository lint still reports legacy violations in existing backend/reader code; this branch does not broadly disable rules.
 - `npm run test:cfm`: all 9 suite files pass. `npm run cfm:check`: all four content guides verify. `npm run test:ai-insights`: both existing helper suites pass without any model calls.
 - `npm run build`: passes using a syntactically valid synthetic Clerk public key and a loopback Convex URL, without a real backend connection. Production credentials were not loaded or copied.
 - Browser component QA covers desktop and phone calendar/day selection, empty-day behavior, opening notes, live heading markers, inline hashtags, editing/autosave, source links, reading submission and persistent mobile navigation. See `qa/notes/README.md` for the separate fixture harness.
 
-Authenticated browser-to-development-Convex verification is pending: no development Clerk/Convex environment configuration was present in this isolated checkout. The additive backend schema/functions still need an approved development deployment before that verification. No production migration, backend deployment, live-site deployment or merge was performed.
+Authenticated browser-to-development-Convex verification remains pending. On October 23 the additive backend was deployed successfully to the existing development deployment `fabulous-dogfish-606`, after checking the target and comparing existing function/schema metadata. Production (`lovable-seal-140`), security/access configuration, master and the live site were unchanged. Google OAuth was denied by automatic browser approval review because no specific account was authorized; real browser create/save/reload/edit and reading-log tests have not run. Human sign-in or specific account authorization is needed. This is an unresolved verification blocker, not an end-to-end success claim.
+
+## Development backend
+
+- Current development target: `dev:fabulous-dogfish-606` (`https://fabulous-dogfish-606.convex.cloud`), which the d325f68 preview uses. Production (`lovable-seal-140`) is out of scope.
+- Setup: be logged in with the installed Convex CLI (no deploy key), then run `npm run deploy:notes:development`. The script refuses a set `CONVEX_DEPLOY_KEY` or any non-matching `CONVEX_DEPLOYMENT`/`NEXT_PUBLIC_CONVEX_URL`, checks the target via read-only `convex function-spec`, then pushes with `--typecheck enable` and runs a signed-out `readingProgress:getMyProgressForBook` query. It never uses `convex deploy` or `--prod`.
+- `convex/tsconfig.json` was added because the previous push attempt exited before deploying when no Convex typecheck config was found.
+- Status: the backend deployment has not yet succeeded and end-to-end tests have not been run. The signed-out `/notes` page renders. Authenticated browser verification is PENDING: automated browser review denied the Google sign-in because no specific Google account had been authorized for it.
 
 Unsaved Markdown stays in a per-user in-memory outbox while navigating within the app. Failures retain the text and offer retry/copy; conflicts require an explicit choice. Closing/reloading with unsaved text raises the browser's normal unsaved-changes prompt. This is not an offline durable storage promise.
+
+The deployment command now has four negative guard tests that reject production URL/deployment overrides, deploy keys and self-hosted targets before invoking the CLI. Both the root and Convex-specific TypeScript checks pass. Actual unsigned development query responses changed from missing-function errors before deployment to expected `Unauthorized` for the journal and an empty signed-out reading history afterward. The authenticated crash itself has not been reproduced in this environment.

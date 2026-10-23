@@ -62,5 +62,21 @@
     "canonicalModels": [
       "claude-opus-5-5"
     ]
+  },
+  {
+    "phase": "development-deploy-config",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
+  },
+  {
+    "phase": "development-target-guard-review-fix",
+    "completed": true,
+    "isError": false,
+    "canonicalModels": [
+      "claude-opus-5-5"
+    ]
   }
 ]

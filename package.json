@@ -23,6 +23,7 @@
     "icons:export": "node scripts/export-icons.mjs",
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
+    "deploy:notes:development": "node scripts/deploy-notes-development.mjs",
     "test:notes": "vitest run",
     "qa:notes": "vite --config vite.qa.config.mjs --open /qa/notes/index.html"
   },
