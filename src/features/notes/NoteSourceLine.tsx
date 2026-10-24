@@ -33,7 +33,7 @@ export function NoteSourceLine({
           <span>from</span>
           <Link
             href={source.href}
-            className={`${raiseLink ? "relative z-[1] " : ""}inline-flex items-center gap-1 font-semibold text-[color:var(--ink)] underline decoration-[color:var(--rule-strong)] underline-offset-2 hover:decoration-[color:var(--accent-rubric)]`}
+            className={`${raiseLink ? "relative z-[1] " : ""}inline-flex min-w-0 items-center gap-1 font-semibold wrap-anywhere text-[color:var(--ink)] underline decoration-[color:var(--rule-strong)] underline-offset-2 hover:decoration-[color:var(--accent-rubric)]`}
             title={`${sourceKindLabel(source)}: ${source.label}`}
           >
             <FontAwesomeIcon

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import JournalWorkspace, { type JournalWorkspaceProps } from "../src/features/notes/JournalWorkspace";
-import type { JournalEntry, JournalNoteEntry } from "../src/features/notes/journal";
+import { formatDayHeading, formatShortDayHeading, type JournalEntry, type JournalNoteEntry } from "../src/features/notes/journal";
 import {
   nextJournalView,
   resolveJournalView,
@@ -248,9 +248,25 @@ describe("Leaving an open note", () => {
     expect(back).toBeGreaterThan(-1);
     const heading = open.indexOf("<h2", back);
     expect(open.slice(back, heading)).toMatch(/^aria-label="Back to calendar"[^>]*>[\s\S]*<\/button>$/);
-    expect(open.slice(heading)).toMatch(/^<h2[^>]*><time dateTime="2026-10-21">/);
+    expect(open.slice(heading)).toMatch(/^<h2[^>]*><time dateTime="2026-10-21"/);
 
     expect(render("desktop", { stage: "day", date: today, noteId: null })).not.toContain("Back to calendar");
+  });
+
+  test("the desktop rail abbreviates the day on screen but keeps the full date as its name, with Today", () => {
+    const heading = render("desktop", { stage: "note", date: today, noteId: "a" }).match(/<h2\b[^>]*>[\s\S]*?<\/h2>/)![0];
+    const full = formatDayHeading(today);
+    const short = formatShortDayHeading(today);
+    expect(short.length).toBeLessThan(full.length);
+    expect(heading).toContain(`<span aria-hidden="true">${short}</span>`);
+    expect(heading).toContain(`<span class="sr-only">${full}</span>`);
+    expect(heading).toContain(`title="${full}"`);
+    expect(heading).toContain(">Today</span>");
+
+    const otherDay = render("desktop", { stage: "note", date: "2026-10-18", noteId: "c" }).match(/<h2\b[^>]*>[\s\S]*?<\/h2>/)![0];
+    expect(otherDay).not.toContain("Today");
+    // The main chooser has the room for the full date.
+    expect(render("desktop", { stage: "day", date: today, noteId: null })).toContain(`<time dateTime="${today}">${full}</time>`);
   });
 
   test("phone keeps its back-to-the-day control in the top bar", () => {

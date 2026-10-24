@@ -12,17 +12,22 @@ import "../../src/app/globals.css";
 // Synthetic fixtures only. ?active=none starts with no active note (as if not arriving from the reader's sidebar).
 const source={kind:"scripture" as const,label:"1 Nephi 2:3–5",href:"/browse/bookofmormon/1-nephi/2#v-3",volume:"bookofmormon",book:"1-nephi",chapter:2,verseStart:3,verseEnd:5};
 const guide={kind:"guide" as const,label:"Come, Follow Me: October 19–25",href:"/come-follow-me/2026-10-19"};
+const longGuide={kind:"guide" as const,label:"Come, Follow Me: October 19–25 — 1 Nephi 1–5: “I Will Go and Do” (synthetic long source label)",href:"/come-follow-me/2026-10-19"};
 const initial:JournalNoteDocument={id:"qa-note",title:"A willingness to listen",status:"draft",markdown_body:"# A willingness to listen\n\nI can begin before I feel ready.\n\n## What I want to remember\n\n- Notice the invitation to act.\n- Return to the promise in the passage.\n\nA thought about #faith.\n",markdown_revision:0,markdown_canonical:true,journal_date:"2026-10-21",source,created_at:"2026-10-21T10:15:00Z",updated_at:"2026-10-21T10:15:00Z"};
 const fixtures:JournalNoteDocument[]=[initial,
  {...initial,id:"qa-note-2",title:"Questions for family study",markdown_body:"# Questions for family study\n\n- What did Lehi's family leave behind?\n- What would we leave?\n",journal_date:"2026-10-21",source:guide,created_at:"2026-10-21T19:40:00Z",updated_at:"2026-10-21T19:40:00Z"},
  {...initial,id:"qa-note-3",title:"Shared with the class",status:"published",markdown_body:"# Shared with the class\n\nA published note is read-only here.\n",journal_date:"2026-10-21",source:null,created_at:"2026-10-21T21:05:00Z",updated_at:"2026-10-21T21:05:00Z"},
+ // Long title, excerpt and source, like a real rail card that was squeezed (excerpts run to 220 characters).
+ {...initial,id:"qa-note-long",title:"[QA TEST 2026-10-21] Notes after a long synthetic study session that keep going well past one line",markdown_body:"# [QA TEST 2026-10-21] Notes after a long synthetic study session that keep going well past one line\n\nSynthetic QA text. Save and reload round one stays exactly as typed, including #faith. Edited after a reload: revision two is saved. This sentence only exists to run past two lines in the rail and the chooser.\n",journal_date:"2026-10-21",source:longGuide,created_at:"2026-10-21T22:10:00Z",updated_at:"2026-10-21T22:10:00Z"},
+ {...initial,id:"qa-note-word",title:"Synthetic-unbroken-QA-title-word-Supercalifragilisticexpialidocious-Antidisestablishmentarianism",markdown_body:"# Synthetic-unbroken-QA-title-word-Supercalifragilisticexpialidocious-Antidisestablishmentarianism\n\nhttps://example.invalid/a-synthetic-unbroken-url-like-excerpt-token-that-should-break-instead-of-overflowing-the-card\n",journal_date:"2026-10-21",source:null,created_at:"2026-10-21T22:30:00Z",updated_at:"2026-10-21T22:30:00Z"},
  {...initial,id:"qa-note-4",title:"Sunday thoughts",markdown_body:"# Sunday thoughts\n\nA quiet morning.\n",journal_date:"2026-10-18",source:null,created_at:"2026-10-18T09:00:00Z",updated_at:"2026-10-18T09:00:00Z"},
 ];
 const fixedEntries:JournalEntry[]=[
  {kind:"reading",id:"qa-reading",journal_date:"2026-10-21",source,reader_label:"QA user",read_at:"2026-10-21T10:00:00Z"},
  {kind:"verse_annotation",id:"qa-annotation",title:null,body:"An older verse note, shown read-only.",journal_date:"2026-10-20",source,highlight_color:null,read_only:true,author_label:"QA user",created_at:"2026-10-20T08:30:00Z",updated_at:"2026-10-20T08:30:00Z"},
 ];
-function excerptOf(markdown:string){return markdown.split("\n").slice(1).join(" ").replace(/[#*-]/g,"").trim().slice(0,120)||null;}
+// Roughly the server's markdownExcerpt: up to 220 characters, then an ellipsis.
+function excerptOf(markdown:string){const rest=markdown.split("\n").slice(1).join(" ").replace(/[#*-]/g,"").replace(/\s+/g," ").trim();return rest.length>220?`${rest.slice(0,220).trimEnd()}...`:rest||null;}
 function QaApp(){
  const [readings,setReadings]=useState<JournalEntry[]>([]);const [docs,setDocs]=useState(fixtures);
  // Stands in for the provider's active note: the only note whose document is "loaded".

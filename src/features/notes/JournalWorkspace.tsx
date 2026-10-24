@@ -14,6 +14,7 @@ import {
   entryTime,
   formatDayHeading,
   formatMonthHeading,
+  formatShortDayHeading,
   isSafeSourceHref,
   monthGrid,
   monthKeyOf,
@@ -281,13 +282,14 @@ function EntryRow({
       >
         <FontAwesomeIcon icon={faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
+          {/* line-clamp sets its own display, so no display utility sits beside it. */}
           <span
-            className={`block truncate font-display font-extrabold tracking-[-0.02em] ${prominent ? "text-[1.12rem]" : "text-[1rem]"}`}
+            className={`line-clamp-2 font-display leading-snug font-extrabold tracking-[-0.02em] wrap-anywhere ${prominent ? "text-[1.12rem]" : "text-[1rem]"}`}
           >
             {entry.title || "Untitled note"}
           </span>
           {entry.excerpt ? (
-            <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-[color:var(--foreground-muted)]">{entry.excerpt}</span>
+            <span className="mt-0.5 line-clamp-2 text-xs leading-5 wrap-anywhere text-[color:var(--foreground-muted)]">{entry.excerpt}</span>
           ) : null}
         </span>
         {entry.status !== "draft" ? (
@@ -390,9 +392,9 @@ export default function JournalWorkspace({
   );
   const dayHasNotes = dayEntries.some((entry) => entry.kind === "note");
   const dayName = formatDayHeading(selectedDate);
+  const isToday = selectedDate === today;
 
-  const todayTag =
-    selectedDate === today ? <span className="ml-2 text-sm font-bold text-[color:var(--accent-rubric)]">Today</span> : null;
+  const todayTag = isToday ? <span className="ml-2 text-sm font-bold text-[color:var(--accent-rubric)]">Today</span> : null;
 
   const dayButtons = (
     <div className="flex flex-wrap items-center gap-2">
@@ -540,7 +542,7 @@ export default function JournalWorkspace({
         {title}
         {headerAccessory}
       </div>
-      <div className="grid min-h-0 gap-5 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem] lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid min-h-0 gap-5 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem] lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[24rem_minmax(0,1fr)]">
         <aside className="min-h-0 space-y-4 lg:overflow-y-auto lg:pr-1">
           {noteOpen ? (
             <section aria-label={`Entries for ${dayName}`} className="space-y-3">
@@ -556,9 +558,14 @@ export default function JournalWorkspace({
                   >
                     <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
-                  <h2 className="min-w-0 font-display text-lg font-extrabold tracking-[-0.02em]">
-                    <time dateTime={selectedDate}>{dayName}</time>
-                    {todayTag}
+                  {/* The rail is narrow, so the date is abbreviated on screen; its accessible name stays the full date.
+                      The date and "Today" each stay whole and wrap as units rather than stranding the year. */}
+                  <h2 className="flex min-w-0 flex-wrap items-baseline gap-x-2 font-display text-lg font-extrabold tracking-[-0.02em]">
+                    <time dateTime={selectedDate} title={dayName} className="whitespace-nowrap">
+                      <span aria-hidden="true">{formatShortDayHeading(selectedDate)}</span>
+                      <span className="sr-only">{dayName}</span>
+                    </time>
+                    {isToday ? <span className="text-sm font-bold text-[color:var(--accent-rubric)]">Today</span> : null}
                   </h2>
                 </div>
                 {dayButtons}
