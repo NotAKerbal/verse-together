@@ -256,16 +256,19 @@ function EntryRow({
   }
 
   return (
+    // The whole card reacts to its button, not to the source link below it, which navigates on its own.
     <li
-      className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] ${padding} ${
-        selected ? "bg-[color:var(--accent-note)] shadow-[var(--surface-shadow-soft)]" : "bg-[color:var(--surface-card)]"
+      className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] transition-[background-color,border-color,box-shadow] has-[button:focus-visible]:border-[color:var(--accent-secondary)] ${padding} ${
+        selected
+          ? "bg-[color:var(--accent-note)] shadow-[var(--surface-shadow-soft)]"
+          : "bg-[color:var(--surface-card)] has-[button:hover]:bg-[color:var(--surface-button-hover)] has-[button:hover]:shadow-[var(--surface-shadow-lift)]"
       }`}
     >
       <button
         type="button"
         onClick={() => onOpenNote(entry.id, entry.journal_date)}
         aria-current={selected ? "true" : undefined}
-        className="flex w-full items-start gap-2 rounded-[0.6rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+        className="flex w-full cursor-pointer items-start gap-2 rounded-[0.6rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
       >
         <FontAwesomeIcon icon={faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
@@ -520,8 +523,8 @@ export default function JournalWorkspace({
     );
   }
 
-  // Layout B: the month in the left rail; the main area holds the open note or the selected day's chooser.
-  // With a note open the rail also lists its day, to switch notes without closing.
+  // Layout B: the month in the left rail; the main area holds the selected day's chooser.
+  // With a note open the rail collapses to its day's list, to switch notes without closing; closing restores the month.
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
@@ -530,15 +533,6 @@ export default function JournalWorkspace({
       </div>
       <div className="grid min-h-0 gap-5 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem] lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="min-h-0 space-y-4 lg:overflow-y-auto lg:pr-1">
-          <MonthCalendar
-            month={month}
-            onMonth={setMonth}
-            countsByDay={countsByDay}
-            today={today}
-            selectedDate={selectedDate}
-            onSelectDate={onSelectDate}
-            compact
-          />
           {noteOpen ? (
             <section aria-label={`Entries for ${dayName}`} className="space-y-3">
               <div className="space-y-2">
@@ -551,7 +545,17 @@ export default function JournalWorkspace({
               {dayError}
               {dayBody(false)}
             </section>
-          ) : null}
+          ) : (
+            <MonthCalendar
+              month={month}
+              onMonth={setMonth}
+              countsByDay={countsByDay}
+              today={today}
+              selectedDate={selectedDate}
+              onSelectDate={onSelectDate}
+              compact
+            />
+          )}
         </aside>
         {noteOpen ? (
           openNoteSection("min-h-[24rem] overflow-y-auto p-5 lg:min-h-0")

@@ -165,12 +165,21 @@ describe("Notes workspace stages", () => {
     expect(html).not.toContain("EDITOR-PANE");
   });
 
-  test("desktop with an open note shows the editor beside the calendar and the day's list for switching", () => {
-    const html = render("desktop", { stage: "note", date: today, noteId: "a" });
+  test("desktop with an open note collapses the month to the day's list beside the editor; closing restores it", () => {
+    const open: JournalView = { stage: "note", date: today, noteId: "a" };
+    const html = render("desktop", open);
     expect(html).toContain("EDITOR-PANE");
-    expect(html).toContain('aria-label="Calendar"');
+    expect(html).not.toContain('aria-label="Calendar"');
+    expect(html).toContain(`aria-label="Entries for`);
     expect(html).not.toContain("Select a note");
     expect(countOf(html, "Evening question")).toBe(1);
+
+    const closed = render("desktop", nextJournalView(open, { type: "closeNote" }));
+    expect(closed).toContain('aria-label="Calendar"');
+    expect(closed).toContain("October 2026");
+    expect(closed).toContain(">Select a note</h2>");
+    expect(closed).toContain(`dateTime="${today}"`);
+    expect(closed).not.toContain("EDITOR-PANE");
   });
 
   test("a day without notes invites starting one instead of asking to select", () => {
