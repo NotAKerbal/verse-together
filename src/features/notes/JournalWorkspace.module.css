@@ -9,7 +9,8 @@
   gap: 1.25rem;
 }
 
-/* The chooser's card is its own layer so it can fade while the list keeps moving; it is decoration only. */
+/* The chooser's card is a layer behind its scrolling list, decoration only; it keeps its shape and padding in both
+   places, so it reads as the same panel moving. */
 .chooser {
   position: relative;
 }
@@ -24,7 +25,7 @@
   position: relative;
   min-height: 24rem;
   overflow-y: auto;
-  /* The header and padding reflow as the panel moves; don't let the browser scroll the list to "keep its place"
+  /* The header and width reflow as the panel moves; don't let the browser scroll the list to "keep its place"
      meanwhile. The component starts the list at its top on each move. */
   overflow-anchor: none;
   /* p-5 inside the card's 1px border, as the card had before. */
@@ -40,13 +41,8 @@
   display: none;
 }
 
-.stage[data-note-open] .chooserCard {
-  opacity: 0;
-}
-
 .stage[data-note-open] .chooserScroll {
   min-height: 0;
-  padding: 0;
 }
 
 @media (min-width: 64rem) {
@@ -89,14 +85,9 @@
       right var(--notes-motion);
   }
 
-  .chooserCard {
-    transition: opacity var(--notes-motion);
-  }
-
   .chooserScroll {
     height: 100%;
     min-height: 0;
-    transition: padding var(--notes-motion);
   }
 
   .note {
@@ -127,10 +118,6 @@
     right: calc(100% - var(--notes-rail));
   }
 
-  .stage[data-note-open] .chooserScroll {
-    padding: 0 0.25rem 0 0;
-  }
-
   .stage:not([data-note-open]) .note {
     display: flex;
     opacity: 0;
@@ -153,8 +140,6 @@
 @media (prefers-reduced-motion: reduce) {
   .calendar,
   .chooser,
-  .chooserCard,
-  .chooserScroll,
   .note {
     transition: none !important;
   }

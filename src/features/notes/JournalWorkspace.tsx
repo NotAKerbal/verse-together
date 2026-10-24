@@ -217,7 +217,7 @@ function EntryRow({
   entry: JournalEntry;
   selected: boolean;
   onOpenNote: (noteId: string, journalDate: string) => void;
-  /** The main-area chooser's larger cards, as opposed to the desktop rail's compact list. */
+  /** The chooser's larger cards, which every list uses today; false gives a compact list. */
   prominent: boolean;
 }) {
   const padding = prominent ? "px-4 py-3" : "px-3 py-2.5";
@@ -616,7 +616,7 @@ export default function JournalWorkspace({
               {dayButtons}
             </div>
             {dayError}
-            {dayBody(!noteOpen)}
+            {dayBody(true)}
           </div>
         </section>
         <section
