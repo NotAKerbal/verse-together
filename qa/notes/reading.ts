@@ -1,0 +1,3 @@
+import type {NoteSource} from "../../src/features/notes/journal";
+const requests=new Map<string,string>();
+export function useReadingProgressActions(){return {logReading:async(input:{source:NoteSource;journalDate:string;requestId:string})=>{const existing=requests.get(input.requestId);if(existing)return{id:existing,duplicate:true};await new Promise(r=>setTimeout(r,150));const id=`qa-reading-${Date.now()}`;requests.set(input.requestId,id);window.dispatchEvent(new CustomEvent("qa-reading",{detail:{id,kind:"reading",source:input.source,journal_date:input.journalDate,read_at:new Date().toISOString(),reader_label:"QA user"}}));return{id,duplicate:false};}};}

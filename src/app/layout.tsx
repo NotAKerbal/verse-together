@@ -57,10 +57,6 @@ export const metadata: Metadata = {
   icons,
 };
 
-function HeaderFallback() {
-  return <div className="app-header hidden h-[4.75rem] w-full sm:block" aria-hidden="true" />;
-}
-
 function MobileNavFallback() {
   return <div className="simple-hide h-[5.5rem] sm:hidden" aria-hidden="true" />;
 }
@@ -90,7 +86,7 @@ export default function RootLayout({
             <Suspense fallback={null}>
               <AppPreloader />
             </Suspense>
-            <Suspense fallback={<HeaderFallback />}>
+            <Suspense fallback={null}>
               <Navbar />
             </Suspense>
             <AppMain>{children}</AppMain>

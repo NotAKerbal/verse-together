@@ -19,9 +19,19 @@ export type ChapterResponse = {
   }>;
 };
 
-type ChapterFetchOptions = {
+export type LocalChapterLoader = (
+  volumeId: string,
+  bookId: string,
+  chapterNumber: number
+) => Promise<ChapterResponse | null>;
+
+export type ChapterFetchOptions = {
   translation?: string;
-  baseUrl?: string;
+  /**
+   * Reads the bundled LDS text. Server callers pass getLocalLdsChapter (see scriptureChapters.server.ts) so a
+   * bundled chapter never needs an HTTP round trip; in the browser the IndexedDB/bundle copy is the default.
+   */
+  loadLocalChapter?: LocalChapterLoader;
 };
 
 const BASE_URL = "https://openscriptureapi.org/api/scriptures/v1/lds/en";
@@ -80,42 +90,38 @@ export type BookResponse = {
   }>;
 };
 
-function resolveInternalUrl(pathname: string, baseUrl?: string): string | null {
-  if (typeof window !== "undefined") return pathname;
-  if (!baseUrl) return null;
-  return new URL(pathname, baseUrl).toString();
+/** True when a Bible chapter is requested in a translation other than the bundled LDS text. */
+export function isTranslationOverlayRequest(volumeId: string, translation?: string): boolean {
+  return (
+    isBibleVolume(volumeId) &&
+    !!translation &&
+    normalizeBibleTranslationId(translation).trim().toLowerCase() !== "lds"
+  );
 }
 
-async function fetchLocalLdsChapter(
+async function readBrowserLocalChapter(
   volumeId: string,
   bookId: string,
-  chapterNumber: number,
-  baseUrl?: string
+  chapterNumber: number
 ): Promise<ChapterResponse | null> {
-  if (typeof window !== "undefined") {
-    try {
-      const { readBrowserScriptureChapter } = await import("@/lib/browserScriptureStorage");
-      const local = await readBrowserScriptureChapter(volumeId, bookId, chapterNumber);
-      if (local) {
-        return {
-          reference: local.reference,
-          translation: isBibleVolume(volumeId) ? "lds" : undefined,
-          verses: local.verses,
-        };
-      }
-    } catch {
-      // Fall back to API fetch below.
+  try {
+    const { readBrowserScriptureChapter } = await import("@/lib/browserScriptureStorage");
+    const local = await readBrowserScriptureChapter(volumeId, bookId, chapterNumber);
+    if (local) {
+      return {
+        reference: local.reference,
+        translation: isBibleVolume(volumeId) ? "lds" : undefined,
+        verses: local.verses,
+      };
     }
+  } catch {
+    // Fall back to the bundled-chapter API below.
   }
 
-  const url = resolveInternalUrl(
-    `/api/scriptures/lds-chapter?volume=${encodeURIComponent(volumeId)}&book=${encodeURIComponent(bookId)}&chapter=${encodeURIComponent(String(chapterNumber))}`,
-    baseUrl
-  );
-  if (!url) return null;
-
   try {
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(
+      `/api/scriptures/lds-chapter?volume=${encodeURIComponent(volumeId)}&book=${encodeURIComponent(bookId)}&chapter=${encodeURIComponent(String(chapterNumber))}`
+    );
     if (!res.ok) return null;
     const raw = (await res.json()) as ChapterResponse;
     if (!Array.isArray(raw?.verses) || raw.verses.length === 0) return null;
@@ -123,6 +129,27 @@ async function fetchLocalLdsChapter(
   } catch {
     return null;
   }
+}
+
+async function fetchLocalLdsChapter(
+  volumeId: string,
+  bookId: string,
+  chapterNumber: number,
+  loadLocalChapter?: LocalChapterLoader
+): Promise<ChapterResponse | null> {
+  if (loadLocalChapter) {
+    try {
+      const local = await loadLocalChapter(volumeId, bookId, chapterNumber);
+      return local && local.verses.length > 0 ? local : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof window !== "undefined") {
+    return readBrowserLocalChapter(volumeId, bookId, chapterNumber);
+  }
+  // A server caller without a loader has no local copy; it must not call its own API over HTTP.
+  return null;
 }
 
 export async function fetchBook(volumeId: string, bookId: string): Promise<BookResponse> {
@@ -247,21 +274,26 @@ async function fetchChapterUncached(
   volumeId: string,
   bookId: string,
   chapterNumber: string | number,
-  options?: ChapterFetchOptions
+  options?: ChapterFetchOptions & { skipLocal?: boolean }
 ): Promise<ChapterResponse> {
   const chapter = Number(chapterNumber);
   if (!Number.isFinite(chapter) || chapter <= 0) {
     throw new Error("Invalid chapter");
   }
   const preferredTranslation = normalizeBibleTranslationId(options?.translation);
-  const localLdsChapter = await fetchLocalLdsChapter(volumeId, bookId, chapter, options?.baseUrl);
-  const wantsBibleOverlay =
-    isBibleVolume(volumeId) &&
-    !!options?.translation &&
-    preferredTranslation.trim().toLowerCase() !== "lds";
+  const wantsBibleOverlay = isTranslationOverlayRequest(volumeId, options?.translation);
+  // The bundled LDS text is read at most once, and for an overlay only when the overlay itself fails.
+  let localPromise: Promise<ChapterResponse | null> | null = null;
+  const readLocal = () => {
+    localPromise ??= options?.skipLocal
+      ? Promise.resolve(null)
+      : fetchLocalLdsChapter(volumeId, bookId, chapter, options?.loadLocalChapter);
+    return localPromise;
+  };
 
-  if (localLdsChapter && !wantsBibleOverlay) {
-    return localLdsChapter;
+  if (!wantsBibleOverlay) {
+    const localLdsChapter = await readLocal();
+    if (localLdsChapter) return localLdsChapter;
   }
 
   if (wantsBibleOverlay) {
@@ -274,6 +306,7 @@ async function fetchChapterUncached(
           verses: bibleData.verses,
         };
       } catch {
+        const localLdsChapter = await readLocal();
         if (localLdsChapter) return localLdsChapter;
       }
     }
@@ -285,6 +318,7 @@ async function fetchChapterUncached(
         verses: helloaoData.verses,
       };
     } catch {
+      const localLdsChapter = await readLocal();
       if (localLdsChapter) return localLdsChapter;
       const bibleData = await fetchBibleApiChapter(bookId, chapter, "kjv");
       return {
@@ -325,6 +359,7 @@ async function fetchChapterUncached(
         verses: helloaoData.verses,
       };
     } catch {
+      const localLdsChapter = await readLocal();
       if (localLdsChapter) return localLdsChapter;
       const bibleData = await fetchBibleApiChapter(bookId, chapter, "kjv");
       return {
@@ -360,13 +395,20 @@ async function fetchWithCache(
   volumeId: string,
   bookId: string,
   chapterNumber: string | number,
-  prefetchNeighbors: boolean,
   options?: ChapterFetchOptions
 ): Promise<ChapterResponse> {
   const chapter = Number(chapterNumber);
   if (!Number.isFinite(chapter) || chapter <= 0) {
     throw new Error("Invalid chapter");
   }
+  const wantsBibleOverlay = isTranslationOverlayRequest(volumeId, options?.translation);
+
+  // Local first: a bundled LDS chapter is returned without touching the Convex cache or any upstream API.
+  if (!wantsBibleOverlay) {
+    const local = await fetchLocalLdsChapter(volumeId, bookId, chapter, options?.loadLocalChapter);
+    if (local) return local;
+  }
+
   const requestedTranslation =
     isBibleVolume(volumeId) && options?.translation
       ? normalizeBibleTranslationId(options.translation)
@@ -387,35 +429,18 @@ async function fetchWithCache(
     // Fallback to upstream fetch below.
   }
 
-  const fresh = await fetchChapterUncached(volumeId, bookId, chapter, options);
+  const fresh = await fetchChapterUncached(volumeId, bookId, chapter, {
+    ...options,
+    // The base request already looked for a local copy above.
+    skipLocal: !wantsBibleOverlay,
+  });
   const actualCacheVolume =
     requestedTranslation && fresh.translation?.toLowerCase() === requestedTranslation.toLowerCase()
       ? cacheVolume
       : volumeId;
-  void cacheVerseChapter(actualCacheVolume, bookId, chapter, fresh);
-
-  if (prefetchNeighbors) {
-    const neighborChapters = [chapter - 1, chapter + 1].filter((n) => n > 0);
-    for (const neighbor of neighborChapters) {
-      void (async () => {
-        try {
-          const hit = await convexQuery<{ reference: string; verses: ChapterResponse["verses"] } | null>(
-            "cache:getChapterBundle",
-            { volume: cacheVolume, book: bookId, chapter: neighbor }
-          );
-          if (!hit) {
-            const neighborData = await fetchChapterUncached(volumeId, bookId, neighbor, options);
-            const neighborCacheVolume =
-              requestedTranslation && neighborData.translation?.toLowerCase() === requestedTranslation.toLowerCase()
-                ? cacheVolume
-                : volumeId;
-            await cacheVerseChapter(neighborCacheVolume, bookId, neighbor, neighborData);
-          }
-        } catch {
-          // Prefetch is best-effort.
-        }
-      })();
-    }
+  // An overlay that fell back to another text is not cached: under the base key it would shadow the LDS text.
+  if (!wantsBibleOverlay || actualCacheVolume === cacheVolume) {
+    void cacheVerseChapter(actualCacheVolume, bookId, chapter, fresh);
   }
   return fresh;
 }
@@ -426,7 +451,7 @@ export async function fetchChapter(
   chapterNumber: string | number,
   options?: ChapterFetchOptions
 ): Promise<ChapterResponse> {
-  return await fetchWithCache(volumeId, bookId, chapterNumber, true, options);
+  return await fetchWithCache(volumeId, bookId, chapterNumber, options);
 }
 
 

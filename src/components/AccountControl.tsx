@@ -2,14 +2,26 @@
 
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUser } from "@fortawesome/free-solid-svg-icons";
+import { useSyncExternalStore } from "react";
+
+type AccountVariant = "header" | "page" | "dock";
+
+// Clerk may finish loading before a streamed header hydrates. Keep its first render
+// identical to the server's placeholder, then show the live account state.
+const subscribeToHydration = () => () => {};
+const clientHydrationSnapshot = () => true;
+const serverHydrationSnapshot = () => false;
 
 type Props = {
   /**
    * "header": the compact control in the desktop app header.
    * "page": the phone control at the top right of a page (Notes, Plans). The desktop header already
    * carries the account from 640px up, so this one shows only below that.
+   * "dock": the icon-only account control in the floating desktop navigation.
    */
-  variant?: "header" | "page";
+  variant?: AccountVariant;
 };
 
 const SIGN_IN_HEADER_CLASS =
@@ -36,22 +48,45 @@ const PAGE_USER_BUTTON_ELEMENTS = {
   },
 };
 
-function AccountControlInner({ variant }: { variant: "header" | "page" }) {
+function AccountControlInner({ variant }: { variant: AccountVariant }) {
   const { user, loading } = useAuth();
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientHydrationSnapshot, serverHydrationSnapshot);
 
   // Until Clerk knows who this is, hold the space quietly rather than offering a false Sign in.
-  if (loading) {
+  if (!hydrated || loading) {
     return (
       <span
         aria-hidden="true"
         className={`inline-block shrink-0 rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] ${
-          variant === "page" ? "h-11 w-11" : "h-10 w-10"
+          variant === "dock" ? "desktop-nav-account-placeholder" : variant === "header" ? "h-10 w-10" : "h-11 w-11"
         }`}
       />
     );
   }
 
   if (user) {
+    if (variant === "dock") {
+      return (
+        <UserButton
+          appearance={{
+            elements: {
+              userButtonTrigger: {
+                width: "var(--desktop-nav-control-size)",
+                height: "var(--desktop-nav-control-size)",
+                justifyContent: "center",
+                borderRadius: "999px",
+                background: "var(--surface-card-soft)",
+              },
+              userButtonAvatarBox: {
+                width: "calc(var(--desktop-nav-control-size) - 0.75rem)",
+                height: "calc(var(--desktop-nav-control-size) - 0.75rem)",
+              },
+            },
+          }}
+          afterSignOutUrl="/"
+        />
+      );
+    }
     return variant === "page" ? (
       <span className="inline-flex shrink-0">
         <UserButton appearance={{ elements: PAGE_USER_BUTTON_ELEMENTS }} afterSignOutUrl="/" />
@@ -72,8 +107,13 @@ function AccountControlInner({ variant }: { variant: "header" | "page" }) {
 
   return (
     <SignInButton mode="modal">
-      <button type="button" className={variant === "page" ? SIGN_IN_PAGE_CLASS : SIGN_IN_HEADER_CLASS}>
-        Sign in
+      <button
+        type="button"
+        className={variant === "dock" ? "desktop-nav-account-control" : variant === "page" ? SIGN_IN_PAGE_CLASS : SIGN_IN_HEADER_CLASS}
+        aria-label={variant === "dock" ? "Sign in" : undefined}
+        title={variant === "dock" ? "Sign in" : undefined}
+      >
+        {variant === "dock" ? <FontAwesomeIcon icon={faUser} className="h-4 w-4" aria-hidden="true" /> : "Sign in"}
       </button>
     </SignInButton>
   );
@@ -88,5 +128,5 @@ export default function AccountControl({ variant = "header" }: Props) {
       </div>
     );
   }
-  return <AccountControlInner variant="header" />;
+  return <AccountControlInner variant={variant} />;
 }

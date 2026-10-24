@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as annotationRules from "../annotationRules.js";
 import type * as annotations from "../annotations.js";
 import type * as cache from "../cache.js";
 import type * as chapterInsights from "../chapterInsights.js";
@@ -17,6 +18,7 @@ import type * as feedEpisodes from "../feedEpisodes.js";
 import type * as feedback from "../feedback.js";
 import type * as insights from "../insights.js";
 import type * as noteFolders from "../noteFolders.js";
+import type * as noteJournal from "../noteJournal.js";
 import type * as preferences from "../preferences.js";
 import type * as readingPlans from "../readingPlans.js";
 import type * as readingProgress from "../readingProgress.js";
@@ -32,6 +34,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  annotationRules: typeof annotationRules;
   annotations: typeof annotations;
   cache: typeof cache;
   chapterInsights: typeof chapterInsights;
@@ -41,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   feedback: typeof feedback;
   insights: typeof insights;
   noteFolders: typeof noteFolders;
+  noteJournal: typeof noteJournal;
   preferences: typeof preferences;
   readingPlans: typeof readingPlans;
   readingProgress: typeof readingProgress;

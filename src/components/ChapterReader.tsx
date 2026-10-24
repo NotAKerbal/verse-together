@@ -1,32 +1,45 @@
 "use client";
 
-import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
+import { faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
-import ScriptureQuickNav from "./ScriptureQuickNav";
-import { useReaderHeaderSlot } from "./ReaderHeaderSlot";
+import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
+import {
+  ChapterHeader,
+  ChapterSimpleNav,
+  ChapterTextBoundary,
+  ChapterTextPending,
+  READER_HEADER_BUTTON_CLASS,
+  chapterLogOptions,
+} from "./ChapterReaderChrome";
 import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
 import type { Footnote } from "@/lib/openscripture";
-import { fetchChapter } from "@/lib/openscripture";
+import { loadChapter } from "@/lib/chapterClient";
+import { runIdleQueue } from "@/lib/chapterRequestCache";
+import { scheduleIdleTask } from "@/lib/idle";
+import { scriptureCatalog } from "@/lib/scriptureCatalog";
+import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
+import { useComparisonChapters } from "./useComparisonChapters";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
-import { getDefaultPreferences, loadPreferences, savePreferences } from "@/lib/preferences";
+import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
-import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
+import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
+import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
+import type { ChapterChrome } from "@/lib/browseRoutes";
 import {
   groupChapterStudyPathsByVerse,
   type ChapterInsightResult,
@@ -40,7 +53,10 @@ import { annotationHighlightClass, highlightOf, type VerseAnnotation } from "@/f
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
-type CompareChapter = { translation: string; verses: Verse[] };
+/** A chapter's text, as the server reads it (streamed to the reader after its page). */
+export type ChapterContent = { reference: string; translation?: string; verses: Verse[] };
+const NO_OVERLAYS: string[] = [];
+const NO_VERSES: Verse[] = [];
 type SelectedVerse = { verse: number; text: string };
 type ChapterSelectionState = {
   selectedText: string;
@@ -438,34 +454,102 @@ function renderInlineDiff(
   });
 }
 
-export default function ChapterReader({
-  volume,
-  book,
-  chapter,
-  verses,
-  reference,
-  translationControls,
-  prevHref,
-  nextHref,
-  primaryTranslation,
-  translationNotices,
-  compareChapters,
+function parseBrowseHref(
+  href: string | undefined
+): { volume: string; book: string; chapter: number; translation?: string } | null {
+  if (!href) return null;
+  const [pathname, query = ""] = href.split("?");
+  const clean = pathname.split("#")[0];
+  const parts = clean.split("/").filter(Boolean);
+  const params = new URLSearchParams(query);
+  const translation = params.get("translation") ?? undefined;
+  // expect: ["browse", volume, book, chapter]
+  if (parts.length >= 4 && parts[0] === "browse") {
+    const vol = decodeURIComponent(parts[1] || "");
+    const b = decodeURIComponent(parts[2] || "");
+    const chStr = decodeURIComponent(parts[3] || "");
+    const ch = Number(chStr);
+    if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch, translation };
+  }
+  return null;
+}
+
+/** The reference a chapter link points at ("Alma 32"), from the catalog, for the swipe preview. */
+function describeBrowseHref(href: string | undefined): { reference: string } | null {
+  const info = parseBrowseHref(href);
+  if (!info) return null;
+  const entry = scriptureCatalog.getBook(normalizeScriptureVolume(info.volume), info.book);
+  return { reference: `${entry?.label ?? info.book} ${info.chapter}` };
+}
+
+/**
+ * The chapter's text, once it arrives. It suspends on the streamed promise (so a direct load still server-renders
+ * the verses inside the page), hands the text to the reader, and fades in. The reader keys it by chapter, so only a
+ * new chapter fades: reader settings, verse jumps, comparisons arriving late, and a translation change on the same
+ * chapter all update it in place. The fade is CSS only (none with reduced motion) and never holds the text back.
+ */
+function ChapterText({
+  content,
+  onReady,
+  children,
 }: {
-  volume: string;
-  book: string;
-  chapter: number;
-  verses: Verse[];
-  reference: string;
-  translationControls?: ReactNode;
-  prevHref?: string;
-  nextHref?: string;
-  primaryTranslation?: string;
-  translationNotices?: string[];
-  compareChapters?: CompareChapter[];
+  content: Promise<ChapterContent>;
+  onReady: (content: ChapterContent) => void;
+  children: (verses: Verse[]) => ReactNode;
 }) {
+  const resolved = use(content);
+  // Done once it has played, so showing this page again (e.g. after an abandoned navigation) doesn't replay it.
+  const [entering, setEntering] = useState(true);
+  useLayoutEffect(() => {
+    onReady(resolved);
+  }, [resolved, onReady]);
+  return (
+    <div
+      className={entering ? "chapter-text-enter" : undefined}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget) setEntering(false);
+      }}
+    >
+      {children(resolved.verses)}
+    </div>
+  );
+}
+
+export default function ChapterReader({
+  chrome,
+  content: contentPromise,
+  translationControls,
+  primaryTranslation: primaryTranslationProp,
+  overlayTranslations = NO_OVERLAYS,
+}: {
+  /** The page around the text: known from the URL, so it renders before the text arrives. */
+  chrome: ChapterChrome;
+  /** The chapter's text, streamed after the page; the text area stays empty until it resolves. */
+  content: Promise<ChapterContent>;
+  translationControls?: ReactNode;
+  primaryTranslation?: string;
+  /** Bible translations to compare against the primary text; loaded here, after the primary text renders. */
+  overlayTranslations?: string[];
+}) {
+  const { volumeSlug: volume, book, chapter, breadcrumbs, prevHref, nextHref } = chrome;
+  // The text, once ChapterText has it; null while it is on its way.
+  const [content, setContent] = useState<ChapterContent | null>(null);
+  const textReady = content !== null;
+  const verses = content?.verses ?? NO_VERSES;
+  const reference = (!chrome.catalogued && content?.reference) || chrome.reference;
+  const primaryTranslation = primaryTranslationProp ?? content?.translation;
+  const pageCovered = usePageCoveredByChapterNavigation();
+  const { compareChapters, translationNotices, pendingTranslations } = useComparisonChapters(
+    volume,
+    book,
+    chapter,
+    // Comparisons wait for the primary text, so they never compete with it.
+    textReady ? overlayTranslations : NO_OVERLAYS
+  );
+  const overlayList = overlayTranslations.join(",");
   const { user, getToken, promptSignIn } = useAuth();
+  const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
-  useTrackLastPosition(volume, book, chapter);
   const annotationsApi = (api as any).annotations;
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
     volume,
@@ -476,6 +560,7 @@ export default function ChapterReader({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
   const router = useRouter();
+  const navigateToChapter = useChapterNavigation();
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number | null>(null);
@@ -492,8 +577,6 @@ export default function ChapterReader({
   const [animTargetX, setAnimTargetX] = useState<number | null>(null);
   const navHrefRef = useRef<string | null>(null);
   const leavingRef = useRef(false);
-  const [prevPreview, setPrevPreview] = useState<null | { reference: string; preview: string }>(null);
-  const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
   const [isPointerSelecting, setIsPointerSelecting] = useState(false);
@@ -503,16 +586,16 @@ export default function ChapterReader({
   const [chapterStudyPaths, setChapterStudyPaths] = useState<ChapterStudyPath[]>([]);
   const [openInsightVerse, setOpenInsightVerse] = useState<number | null>(null);
   const [customMobileSelectionSupported, setCustomMobileSelectionSupported] = useState(false);
-  const [simpleMode, setSimpleMode] = useSimpleMode();
+  const [simpleMode] = useSimpleMode();
   const customMobileSelectionEnabled = customMobileSelectionSupported && !simpleMode;
   const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = openCitations || openExplorer;
+  const [showTapHint, setShowTapHint] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
-  const readerHeaderSlot = useReaderHeaderSlot();
   const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
   const studyPathsByVerse = useMemo(
@@ -525,83 +608,35 @@ export default function ChapterReader({
   );
   const myInsightRefs = useQuery(
     api.insights.listMyScriptureRefsForChapter,
-    user ? { volume, book, chapter } : "skip"
+    convexReady ? { volume, book, chapter } : "skip"
   ) as VerseInsightRef[] | undefined;
   const insightRefsByVerse = useMemo(
     () => groupVerseInsightRefsByVerse(myInsightRefs ?? []),
     [myInsightRefs]
   );
 
-  function parseBrowseHref(
-    href: string | undefined
-  ): { volume: string; book: string; chapter: number; translation?: string } | null {
-    if (!href) return null;
-    const [pathname, query = ""] = href.split("?");
-    const clean = pathname.split("#")[0];
-    const parts = clean.split("/").filter(Boolean);
-    const params = new URLSearchParams(query);
-    const translation = params.get("translation") ?? undefined;
-    // expect: ["browse", volume, book, chapter]
-    if (parts.length >= 4 && parts[0] === "browse") {
-      const vol = decodeURIComponent(parts[1] || "");
-      const b = decodeURIComponent(parts[2] || "");
-      const chStr = decodeURIComponent(parts[3] || "");
-      const ch = Number(chStr);
-      if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch, translation };
-    }
-    return null;
-  }
+  // Swipe previews only show the neighbouring chapter's reference, which the catalog already knows.
+  const prevPreview = useMemo(() => describeBrowseHref(prevHref), [prevHref]);
+  const nextPreview = useMemo(() => describeBrowseHref(nextHref), [nextHref]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function prefetch() {
-      const nextInfo = parseBrowseHref(nextHref);
-      const prevInfo = parseBrowseHref(prevHref);
-      try {
-        if (nextInfo) {
-          const chap = await fetchChapter(nextInfo.volume, nextInfo.book, nextInfo.chapter, {
-            translation: nextInfo.translation,
-          });
-          if (!cancelled) {
-            const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
-            setNextPreview({ reference: chap.reference, preview: text });
-          }
-        } else {
-          setNextPreview(null);
-        }
-      } catch {
-        if (!cancelled) setNextPreview(null);
-      }
-      try {
-        if (prevInfo) {
-          const chap = await fetchChapter(prevInfo.volume, prevInfo.book, prevInfo.chapter, {
-            translation: prevInfo.translation,
-          });
-          if (!cancelled) {
-            const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
-            setPrevPreview({ reference: chap.reference, preview: text });
-          }
-        } else {
-          setPrevPreview(null);
-        }
-      } catch {
-        if (!cancelled) setPrevPreview(null);
-      }
+    // Warm the likely next steps one at a time while idle, most likely first; leaving the chapter cancels the rest.
+    // Not before this chapter's text is in, so they never compete with it.
+    if (!textReady) return;
+    const next = nextHref;
+    const prev = prevHref;
+    const nextInfo = parseBrowseHref(next);
+    const tasks: Array<() => unknown> = [];
+    if (next) tasks.push(() => router.prefetch(next));
+    if (nextInfo && overlayList) {
+      // The next chapter's comparison texts, through the same cache the overlay loader reads after navigating.
+      overlayList.split(",").forEach((translation) => {
+        tasks.push(() => loadChapter({ volume: nextInfo.volume, book: nextInfo.book, chapter: nextInfo.chapter, translation }));
+      });
     }
-    prefetch();
-    return () => {
-      cancelled = true;
-    };
-  }, [nextHref, prevHref]);
-
-  useEffect(() => {
-    if (nextHref) {
-      router.prefetch(nextHref);
-    }
-    if (prevHref) {
-      router.prefetch(prevHref);
-    }
-  }, [nextHref, prevHref, router]);
+    if (prev) tasks.push(() => router.prefetch(prev));
+    return runIdleQueue(tasks, scheduleIdleTask);
+  }, [textReady, nextHref, prevHref, overlayList, router]);
 
   useEffect(() => {
     let alive = true;
@@ -617,10 +652,16 @@ export default function ChapterReader({
   }, [user?.id, getToken]);
 
   useEffect(() => {
-    void ensureBrowserScriptureStorage();
-  }, []);
+    // The offline install reads every volume; keep it out of the way of the chapter that is opening.
+    if (!textReady) return;
+    return scheduleIdleTask(() => {
+      void ensureBrowserScriptureStorage();
+    });
+  }, [textReady]);
 
   useEffect(() => {
+    // After the text, like the other extras, so it never competes with it.
+    if (!textReady) return;
     const controller = new AbortController();
     setChapterStudyPaths([]);
     setOpenInsightVerse(null);
@@ -647,7 +688,7 @@ export default function ChapterReader({
       });
 
     return () => controller.abort();
-  }, [volume, book, chapter, user?.id]);
+  }, [textReady, volume, book, chapter, user?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -796,6 +837,18 @@ export default function ChapterReader({
     }
   }
 
+  useEffect(() => {
+    // Show one-time hint on first use, once there is text to select
+    if (!textReady) return;
+    try {
+      if (!hasSeenTapToActionsHint()) {
+        setShowTapHint(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, [textReady]);
+
   const selectedText = selectionState?.selectedText ?? "";
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
@@ -811,9 +864,15 @@ export default function ChapterReader({
     return normalizeSelectionText(selectedVerses.map((verse) => verse.text).join(" ")) === normalizeSelectionText(selectedText);
   }, [selectedText, selectedVerses]);
   const hasActiveNote = !!activeDraftId;
+  const pathname = usePathname();
+  const readingLogOptions = useMemo<ReadingLogOption[]>(
+    () => chapterLogOptions({ volumeSlug: volume, book, chapter }, reference, pathname, textReady ? verses.length : undefined),
+    [reference, pathname, volume, book, chapter, textReady, verses.length]
+  );
+  const quickNavVerses = useMemo(() => verses.map((item) => ({ verse: item.verse, text: item.text })), [verses]);
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
-    (compareChapters ?? []).forEach((chapterData) => {
+    compareChapters.forEach((chapterData) => {
       if (!chapterData.translation) return;
       const byVerse = new Map<number, string>();
       chapterData.verses.forEach((item) => {
@@ -948,6 +1007,10 @@ export default function ChapterReader({
         ) {
           return prev;
         }
+        if (nextSelectionState && showTapHint) {
+          try { setSeenTapToActionsHint(); } catch {}
+          setShowTapHint(false);
+        }
         return nextSelectionState;
       });
     }
@@ -961,7 +1024,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [customMobileSelectionEnabled, verses]);
+  }, [customMobileSelectionEnabled, showTapHint, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1102,8 +1165,10 @@ export default function ChapterReader({
       if (!hashMatch) return;
       const verse = Number(hashMatch[1]);
       if (!Number.isFinite(verse) || verse <= 0) return;
-      const target = document.getElementById(`v-${verse}`);
-      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Before the text arrives there is nothing to jump to; this runs again when it does.
+      const target = verseListRef.current?.querySelector<HTMLElement>(`[id="v-${verse}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
       markJumpVerse(verse);
     }
 
@@ -1124,7 +1189,7 @@ export default function ChapterReader({
         window.clearTimeout(jumpHighlightTimeout.current);
       }
     };
-  }, []);
+  }, [textReady]);
 
   // first/last verse values not currently used
 
@@ -1160,6 +1225,10 @@ export default function ChapterReader({
       customSelectionActiveRef.current = true;
       setIsCustomTouchSelecting(true);
       if (!applyCustomWordRange(nextWordRange, { haptic: false })) return;
+      if (showTapHint) {
+        try { setSeenTapToActionsHint(); } catch {}
+        setShowTapHint(false);
+      }
       setOpenCitations(false);
       setOpenExplorer(false);
       window.getSelection?.()?.removeAllRanges();
@@ -1274,7 +1343,7 @@ export default function ChapterReader({
       const href = navHrefRef.current;
       navHrefRef.current = null;
       leavingRef.current = false;
-      router.push(href);
+      navigateToChapter(href);
       return;
     }
     setAnimTargetX(null);
@@ -1350,103 +1419,6 @@ export default function ChapterReader({
     setOpenExplorer(true);
   }
 
-  // One toolbar, placed once: in the app header's right side wherever it is shown, else at the top of the column (phones).
-  const readerToolbar = (
-    <div className="reader-toolbar simple-hide">
-      <ScriptureQuickNav
-        currentVolume={volume}
-        currentBook={book}
-        verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
-        align="right"
-        className="reader-toolbar-quicknav"
-        buttonClassName="reader-toolbar-button"
-      />
-      <h1 className="flex min-w-0 text-sm">
-        <Link
-          href={`/browse/${volume}/${book}`}
-          aria-label={`${reference}, choose chapter`}
-          title={`Choose chapter (currently ${reference})`}
-          className="reader-toolbar-button reader-toolbar-title"
-        >
-          <span className="min-w-0 truncate">{reference}</span>
-        </Link>
-      </h1>
-      <button
-        type="button"
-        aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
-        title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
-        aria-pressed={simpleMode}
-        onClick={() => setSimpleMode(!simpleMode)}
-        className="reader-toolbar-button"
-      >
-        <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
-      </button>
-      <div ref={settingsAnchorRef} className="relative shrink-0">
-        <button
-          aria-label="Reader settings"
-          title="Reader settings"
-          aria-expanded={settingsOpen}
-          aria-haspopup="dialog"
-          onClick={() => setSettingsOpen((open) => !open)}
-          className="group reader-toolbar-button"
-        >
-          <FontAwesomeIcon
-            icon={faGear}
-            aria-hidden="true"
-            className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
-          />
-        </button>
-        <ReaderSettings
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          prefs={prefs}
-          translationControls={translationControls}
-          chapterProgressControl={<ChapterReadToggle volume={volume} book={book} chapter={chapter} />}
-          anchorRef={settingsAnchorRef}
-          onChange={(next) => {
-            setPrefs(next);
-            void (async () => {
-              const token = user ? await getToken({ template: "convex" }) : null;
-              await savePreferences(user?.id ?? null, next, token);
-            })();
-          }}
-        />
-      </div>
-    </div>
-  );
-  const hasTranslationNotices = !!translationNotices && translationNotices.length > 0;
-  // The comparison key and translation notices travel with the toolbar, right-aligned beneath it.
-  const readerHeaderNotes =
-    hasCompareSelections || hasTranslationNotices ? (
-      <div className="reader-header-notes simple-hide flex flex-col items-end gap-1.5">
-        {hasCompareSelections ? (
-          <div className="reader-toolbar-note text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
-            <span className="text-foreground/45">Key:</span>
-            <span
-              className="text-amber-700 dark:text-amber-300"
-              title={translationNameById.get(primaryTranslation ?? "") ?? primaryTranslationLabel}
-            >
-              {primaryTranslationLabel}
-            </span>
-            <span className="text-foreground/35">/</span>
-            {compareLegend.map((item, idx) => (
-              <span key={`legend-${item.translationId}`} className={item.colorClass} title={item.title}>
-                {idx > 0 ? ", " : ""}
-                {item.label}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {hasTranslationNotices ? (
-          <div className="reader-toolbar-note text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
-            {translationNotices.map((notice) => (
-              <div key={notice}>{notice}</div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    ) : null;
-
   return (
     <section
       className="space-y-4 pb-20"
@@ -1492,7 +1464,7 @@ export default function ChapterReader({
         }`}
       >
         <aside
-          className="simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.25rem)] max-h-[calc(100vh-var(--header-height)-1.25rem)] overflow-y-auto pr-1 space-y-3"
+          className="simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] max-h-[calc(100vh-var(--header-height)-1rem)] overflow-y-auto pr-1 space-y-3"
         >
           {openCitations && selectedBounds ? (
             <CitationsSidebarPanel
@@ -1530,180 +1502,255 @@ export default function ChapterReader({
                 : undefined
             }
           >
-          {readerHeaderSlot.slot ? null : (
-            <header
-              className={`simple-hide sticky top-2 z-20 flex flex-col items-end gap-1.5 transition-all ${
-                isAtTop ? "py-0" : "py-1"
-              } ${readerHeaderSlot.resolved ? "" : "sm:hidden"}`}
-            >
-              <div className="max-w-full">{readerToolbar}</div>
-              {readerHeaderNotes}
-            </header>
-          )}
+          <ChapterHeader
+            volume={volume}
+            book={book}
+            reference={reference}
+            breadcrumbs={breadcrumbs}
+            verses={quickNavVerses}
+            logOptions={readingLogOptions}
+            logReady={textReady}
+            atTop={isAtTop}
+            settings={
+              <div ref={settingsAnchorRef} className="relative shrink-0">
+                <button
+                  aria-label="Reader settings"
+                  title="Reader settings"
+                  aria-expanded={settingsOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => setSettingsOpen((open) => !open)}
+                  className={`group ${READER_HEADER_BUTTON_CLASS}`}
+                >
+                  <FontAwesomeIcon
+                    icon={faGear}
+                    aria-hidden="true"
+                    className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
+                  />
+                </button>
+                <ReaderSettings
+                  open={settingsOpen}
+                  onClose={() => setSettingsOpen(false)}
+                  prefs={prefs}
+                  translationControls={translationControls}
+                  anchorRef={settingsAnchorRef}
+                  onChange={(next) => {
+                    setPrefs(next);
+                    void (async () => {
+                      const token = user ? await getToken({ template: "convex" }) : null;
+                      await savePreferences(user?.id ?? null, next, token);
+                    })();
+                  }}
+                />
+              </div>
+            }
+          >
+            {hasCompareSelections ? (
+              <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
+                <span className="text-foreground/45">Key:</span>
+                <span
+                  className="text-amber-700 dark:text-amber-300"
+                  title={translationNameById.get(primaryTranslation ?? "") ?? primaryTranslationLabel}
+                >
+                  {primaryTranslationLabel}
+                </span>
+                <span className="text-foreground/35">/</span>
+                {compareLegend.map((item, idx) => (
+                  <span key={`legend-${item.translationId}`} className={item.colorClass} title={item.title}>
+                    {idx > 0 ? ", " : ""}
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {pendingTranslations.length > 0 ? (
+              <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+                Loading {pendingTranslations.map((id) => id.toUpperCase()).join(", ")} for comparison…
+              </div>
+            ) : null}
+            {translationNotices.length > 0 ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+                {translationNotices.map((notice) => (
+                  <div key={notice}>{notice}</div>
+                ))}
+              </div>
+            ) : null}
+          </ChapterHeader>
 
           <h1 className="simple-only reader-simple-title">{reference}</h1>
 
-          <ol
-            ref={verseListRef}
-            onContextMenu={(event) => {
-              if (customMobileSelectionEnabled) {
-                event.preventDefault();
-              }
-            }}
-            onPointerDown={(event) => {
-              const target = event.target as HTMLElement | null;
-              if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
-              if (target.closest("button, a, input, textarea, select, [role='button']")) return;
-              setIsPointerSelecting(true);
-            }}
-            className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
-            style={{ fontSize: `${prefs.fontScale}rem` }}
-          >
-            {verses.map((v) => {
-              const isJumpHighlighted = jumpHighlightVerse === v.verse;
-              const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
-              const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
-              const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
-              const isInsightOpen = openStudyPaths.some((path) => path.verse_numbers.includes(v.verse));
-              const verseComparisons = Array.from(compareByTranslation.entries())
-                .map(([translationId, byVerse]) => {
-                  const text = byVerse.get(v.verse);
-                  if (typeof text !== "string") return null;
-                  const hasDifference = normalizeCompareText(text) !== normalizeCompareText(v.text);
-                  if (!hasDifference) return null;
-                  const legend = compareLegend.find((item) => item.translationId === translationId);
-                  return {
-                    key: translationId,
-                    label: legend?.label ?? formatTranslationShortLabel(translationId),
-                    compareText: text,
-                    compareColorClass: legend?.colorClass ?? compareColorClasses[0],
-                  };
-                })
-                .filter(
-                  (item): item is { key: string; label: string; compareText: string; compareColorClass: string } =>
-                    item !== null
-                );
-              return (
-                <li
-                  key={v.verse}
-                  id={`v-${v.verse}`}
-                  className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
-                    isJumpHighlighted
-                      ? "bg-[color:var(--accent-sky-soft)] ring-2 ring-[color:var(--surface-border)] transition-colors duration-300"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <div
-                      className={`min-w-0 flex-1 text-left ${
-                        customMobileSelectionEnabled
-                          ? "select-none"
-                          : "select-text selection:bg-[color:var(--accent-primary)] selection:text-foreground"
-                      }`}
-                      data-verse={v.verse}
-                      data-verse-selectable="true"
-                      style={
-                        customMobileSelectionEnabled
-                          ? ({
-                              userSelect: "none",
-                              WebkitUserSelect: "none",
-                              WebkitTouchCallout: "none",
-                            } as CSSProperties)
-                          : undefined
-                      }
+          <ChapterTextBoundary resetKey={contentPromise} reference={reference}>
+            <Suspense fallback={<ChapterTextPending reference={reference} />}>
+              <ChapterText key={`${volume}/${book}/${chapter}`} content={contentPromise} onReady={setContent}>
+                {(chapterVerses) => (
+                  <>
+                    <ol
+                      ref={verseListRef}
+                      onContextMenu={(event) => {
+                        if (customMobileSelectionEnabled) {
+                          event.preventDefault();
+                        }
+                      }}
+                      onPointerDown={(event) => {
+                        const target = event.target as HTMLElement | null;
+                        if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
+                        if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+                        setIsPointerSelecting(true);
+                      }}
+                      className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
+                      style={{ fontSize: `${prefs.fontScale}rem` }}
                     >
-                      <span className="verse-badge">{v.verse}</span>
-                      {verseComparisons.length === 0 ? (
-                        <span>{renderVerseText(v)}</span>
-                      ) : prefs.comparisonView === "sideBySide" ? (
-                        <span className="mt-1 block space-y-2">
-                        {verseComparisons.map((comparison) => (
-                          <span
-                            key={`${v.verse}-${comparison.key}`}
-                            className="block rounded-md border border-[color:var(--surface-border)] p-2"
+                      {chapterVerses.map((v) => {
+                        const isJumpHighlighted = jumpHighlightVerse === v.verse;
+                        const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
+                        const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
+                        const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
+                        const isInsightOpen = openStudyPaths.some((path) => path.verse_numbers.includes(v.verse));
+                        const verseComparisons = Array.from(compareByTranslation.entries())
+                          .map(([translationId, byVerse]) => {
+                            const text = byVerse.get(v.verse);
+                            if (typeof text !== "string") return null;
+                            const hasDifference = normalizeCompareText(text) !== normalizeCompareText(v.text);
+                            if (!hasDifference) return null;
+                            const legend = compareLegend.find((item) => item.translationId === translationId);
+                            return {
+                              key: translationId,
+                              label: legend?.label ?? formatTranslationShortLabel(translationId),
+                              compareText: text,
+                              compareColorClass: legend?.colorClass ?? compareColorClasses[0],
+                            };
+                          })
+                          .filter(
+                            (item): item is { key: string; label: string; compareText: string; compareColorClass: string } =>
+                              item !== null
+                          );
+                        return (
+                          <li
+                            key={v.verse}
+                            id={`v-${v.verse}`}
+                            className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
+                              isJumpHighlighted
+                                ? "bg-[color:var(--accent-sky-soft)] ring-2 ring-[color:var(--surface-border)] transition-colors duration-300"
+                                : ""
+                            }`}
                           >
-                            <span className="grid gap-2 md:grid-cols-2">
-                              <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
-                                <span className="block text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                                  {primaryTranslationLabel}
+                            <div className="flex items-start gap-2">
+                              <div
+                                className={`min-w-0 flex-1 text-left ${
+                                  customMobileSelectionEnabled
+                                    ? "select-none"
+                                    : "select-text selection:bg-[color:var(--accent-primary)] selection:text-foreground"
+                                }`}
+                                data-verse={v.verse}
+                                data-verse-selectable="true"
+                                style={
+                                  customMobileSelectionEnabled
+                                    ? ({
+                                        userSelect: "none",
+                                        WebkitUserSelect: "none",
+                                        WebkitTouchCallout: "none",
+                                      } as CSSProperties)
+                                    : undefined
+                                }
+                              >
+                                <span className="verse-badge">{v.verse}</span>
+                                {verseComparisons.length === 0 ? (
+                                  <span>{renderVerseText(v)}</span>
+                                ) : prefs.comparisonView === "sideBySide" ? (
+                                  <span className="mt-1 block space-y-2">
+                                  {verseComparisons.map((comparison) => (
+                                    <span
+                                      key={`${v.verse}-${comparison.key}`}
+                                      className="block rounded-md border border-[color:var(--surface-border)] p-2"
+                                    >
+                                      <span className="grid gap-2 md:grid-cols-2">
+                                        <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
+                                          <span className="block text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                                            {primaryTranslationLabel}
+                                          </span>
+                                          <span className="mt-0.5 block text-sm leading-6">{renderVerseText(v)}</span>
+                                        </span>
+                                        <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
+                                          <span className={`block text-[10px] uppercase tracking-wide ${comparison.compareColorClass}`}>
+                                            {comparison.label}
+                                          </span>
+                                          <span className="mt-0.5 block text-sm leading-6">{comparison.compareText}</span>
+                                        </span>
+                                      </span>
+                                    </span>
+                                  ))}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm leading-6">
+                                  {verseComparisons.map((comparison, index) => (
+                                    <span key={`${v.verse}-${comparison.key}`} className="inline">
+                                      {index > 0 ? <span className="mx-2 text-foreground/35">|</span> : null}
+                                      {renderInlineDiff(
+                                        v.text,
+                                        comparison.compareText,
+                                        "text-amber-700 dark:text-amber-300",
+                                        comparison.compareColorClass
+                                      )}
+                                    </span>
+                                  ))}
+                                  </span>
+                                )}
+                              </div>
+                              {verseStudyPaths.length > 0 ? (
+                                <VerseStudyPathMarker
+                                  verse={v.verse}
+                                  open={isInsightOpen}
+                                  onToggle={() => {
+                                    if (isInsightOpen) {
+                                      setOpenInsightVerse(null);
+                                      return;
+                                    }
+                                    setOpenInsightVerse(v.verse);
+                                  }}
+                                />
+                              ) : null}
+                              {verseInsightRefs.length > 0 ? (
+                                <span className="contents simple-hide">
+                                <VerseInsightMarker
+                                  verse={v.verse}
+                                  insights={verseInsightRefs}
+                                  onOpen={async (draftId) => {
+                                    if (draftId !== activeDraftId) await switchDraft(draftId);
+                                    openBuilder();
+                                  }}
+                                />
                                 </span>
-                                <span className="mt-0.5 block text-sm leading-6">{renderVerseText(v)}</span>
-                              </span>
-                              <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
-                                <span className={`block text-[10px] uppercase tracking-wide ${comparison.compareColorClass}`}>
-                                  {comparison.label}
-                                </span>
-                                <span className="mt-0.5 block text-sm leading-6">{comparison.compareText}</span>
-                              </span>
-                            </span>
-                          </span>
-                        ))}
-                        </span>
-                      ) : (
-                        <span className="text-sm leading-6">
-                        {verseComparisons.map((comparison, index) => (
-                          <span key={`${v.verse}-${comparison.key}`} className="inline">
-                            {index > 0 ? <span className="mx-2 text-foreground/35">|</span> : null}
-                            {renderInlineDiff(
-                              v.text,
-                              comparison.compareText,
-                              "text-amber-700 dark:text-amber-300",
-                              comparison.compareColorClass
-                            )}
-                          </span>
-                        ))}
-                        </span>
-                      )}
-                    </div>
-                    {verseStudyPaths.length > 0 ? (
-                      <VerseStudyPathMarker
-                        verse={v.verse}
-                        open={isInsightOpen}
-                        onToggle={() => {
-                          if (isInsightOpen) {
-                            setOpenInsightVerse(null);
-                            return;
-                          }
-                          setOpenInsightVerse(v.verse);
-                        }}
-                      />
-                    ) : null}
-                    {verseInsightRefs.length > 0 ? (
-                      <span className="contents simple-hide">
-                      <VerseInsightMarker
-                        verse={v.verse}
-                        insights={verseInsightRefs}
-                        onOpen={async (draftId) => {
-                          if (draftId !== activeDraftId) await switchDraft(draftId);
-                          openBuilder();
-                        }}
-                      />
-                      </span>
-                    ) : null}
-                  </div>
-                  {myVerseAnnotation ? (
-                    <div
-                      className={`simple-hide mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
-                        highlightOf(myVerseAnnotation)
-                      )}`}
-                    >
-                      {/* A highlight with no note shows its color without an empty note body. */}
-                      <div className="text-[11px] uppercase tracking-wide text-foreground/60">
-                        {myVerseAnnotation.body ? "Your annotation" : "Your highlight"}
-                      </div>
-                      {myVerseAnnotation.body ? (
-                        <div className="mt-1 whitespace-pre-wrap">{myVerseAnnotation.body}</div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-          <nav className="simple-only reader-simple-nav" aria-label="Chapter navigation">
-            {prevHref ? <Link href={prevHref}>&larr; Previous</Link> : <span />}
-            {nextHref ? <Link href={nextHref}>Next &rarr;</Link> : <span />}
-          </nav>
+                              ) : null}
+                            </div>
+                            {myVerseAnnotation ? (
+                              <div
+                                className={`simple-hide mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
+                                  highlightOf(myVerseAnnotation)
+                                )}`}
+                              >
+                                {/* A highlight with no note shows its color without an empty note body. */}
+                                <div className="text-[11px] uppercase tracking-wide text-foreground/60">
+                                  {myVerseAnnotation.body ? "Your annotation" : "Your highlight"}
+                                </div>
+                                {myVerseAnnotation.body ? (
+                                  <div className="mt-1 whitespace-pre-wrap">{myVerseAnnotation.body}</div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
+                  </>
+                )}
+              </ChapterText>
+            </Suspense>
+          </ChapterTextBoundary>
+          {/* Only a page showing its text is the notebook's source, and not while another chapter covers it. */}
+          {textReady && !pageCovered ? (
+            <NoteSourceRegistrar kind="scripture" label={reference} volume={volume} book={book} chapter={chapter} />
+          ) : null}
+          <ChapterSimpleNav prevHref={prevHref} nextHref={nextHref} />
           </div>
         </div>
       </div>
@@ -1810,6 +1857,39 @@ export default function ChapterReader({
         />
       ) : null}
 
+      {/* One-time onboarding tooltip */}
+      {showTapHint && !overlayOpen && !hasSelection ? (
+        <div
+          className="simple-hide fixed inset-x-0 z-40 pointer-events-none"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
+        >
+          <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
+            <div
+              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-[color:var(--surface-border)] bg-background/90 px-3 py-2 shadow"
+              style={{ maxWidth: "28rem" }}
+              role="dialog"
+              aria-live="polite"
+            >
+              <div className="text-sm flex items-start gap-3">
+                <div className="text-lg select-none" aria-hidden>Tip</div>
+                <div className="flex-1">
+                  Select passage text to see note, citation, and word study actions.
+                </div>
+                <button
+                  onClick={() => {
+                    try { setSeenTapToActionsHint(); } catch {}
+                    setShowTapHint(false);
+                  }}
+                  className="ml-2 text-sm px-2 py-1 rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {openCitations && selectedBounds ? (
         <div className="lg:hidden">
           <CitationsModal
@@ -1851,15 +1931,6 @@ export default function ChapterReader({
         shareLinkNotice={shareLinkNotice}
       />
       )}
-      {readerHeaderSlot.slot
-        ? createPortal(
-            <>
-              {readerToolbar}
-              {readerHeaderNotes}
-            </>,
-            readerHeaderSlot.slot,
-          )
-        : null}
     </section>
   );
 }
