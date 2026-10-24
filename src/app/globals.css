@@ -265,31 +265,60 @@ mark {
 }
 
 /*
-  Chapter reader on wide screens: the reader portals its toolbar into the header's slot
-  (src/components/ReaderHeaderSlot.tsx). The app controls pack to the left, the reader pill
-  sits on the right, and the header stays put so the reader controls remain in reach.
+  Chapter reader wherever the app header is shown (sm and up): the reader portals its toolbar and
+  notes into the header's slot (src/components/ReaderHeaderSlot.tsx). The slot dissolves into the
+  header grid so the reader pill lines up with the app pills on the left, the comparison key and
+  translation notices sit right-aligned underneath, and the header stays put so the reader
+  controls remain in reach. Phones have no app header and keep the reader header in the column.
 */
 .reader-header-slot {
   display: none;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 640px) {
   .reader-header-slot:not(:empty) {
-    display: flex;
-    grid-column: 4;
-    justify-self: end;
-    justify-content: flex-end;
-    min-width: 0;
-    max-width: 100%;
+    display: contents;
   }
 
+  /* The header can grow a row for the reader; its transparent gaps let clicks through to the page. */
   .app-header:has(.reader-header-slot:not(:empty)) > .shell-container {
     grid-template-columns: auto auto auto minmax(0, 1fr);
+    row-gap: 0.5rem;
+    pointer-events: none;
+  }
+
+  .app-header:has(.reader-header-slot:not(:empty)) > .shell-container > * {
+    pointer-events: auto;
+  }
+
+  /* Small tablets: too narrow to share a row with the app pills, so the reader pill takes its own. */
+  .reader-header-slot > .reader-toolbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .reader-header-slot > .reader-header-notes {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: end;
+    max-width: min(100%, 40rem);
   }
 
   :root:not([data-simple="true"]) .app-header:has(.reader-header-slot:not(:empty)) {
     position: sticky;
     top: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  .reader-header-slot > .reader-toolbar {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .reader-header-slot > .reader-header-notes {
+    grid-row: 2;
   }
 }
 
@@ -346,7 +375,7 @@ mark {
   position: static;
 }
 
-/* Comparison key and translation notices, under the toolbar in the scripture column. */
+/* Comparison key and translation notices, under the toolbar (in the header, or the column on phones). */
 .reader-toolbar-note {
   max-width: 100%;
   padding: 0.35rem 0.85rem;

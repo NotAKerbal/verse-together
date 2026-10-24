@@ -2,8 +2,9 @@
 
 import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 
-// Matches the `lg` breakpoint: below it the reader keeps its toolbar in the scripture column.
-const READER_HEADER_SLOT_QUERY = "(min-width: 1024px)";
+// Matches the `sm` breakpoint, where the app header appears: below it (phones) the reader keeps its
+// header in the scripture column.
+const READER_HEADER_SLOT_QUERY = "(min-width: 640px)";
 
 /*
   The mounted slot element, tracked through its callback ref rather than looked up once, so the
@@ -39,7 +40,8 @@ const getSlot = () => slotElement;
 const getServerSlot = () => null;
 
 /**
- * The right side of the app header, where the chapter reader portals its toolbar on wide screens.
+ * The right side of the app header, where the chapter reader portals its toolbar and notes whenever
+ * the header is shown.
  * It stays hidden while empty, and the header only takes the reader layout once it is filled
  * (see `.reader-header-slot` in globals.css), so other routes are unaffected.
  */
@@ -48,10 +50,10 @@ export default function ReaderHeaderSlot() {
 }
 
 /**
- * The header slot to portal into on wide screens, or null to render in place.
- * `resolved` is false until the client knows where the toolbar goes (the viewport is narrow, or
- * the slot is mounted), so the in-place toolbar can stay hidden on wide screens until then
- * instead of flashing before it moves.
+ * The header slot to portal into when the app header is shown, or null to render in place.
+ * `resolved` is false until the client knows where the reader header goes (the viewport is phone
+ * width, or the slot is mounted), so the in-place header can stay hidden where the app header is
+ * shown until then instead of flashing before it moves.
  */
 export function useReaderHeaderSlot(): { slot: HTMLElement | null; resolved: boolean } {
   const slot = useSyncExternalStore(subscribeToSlot, getSlot, getServerSlot);

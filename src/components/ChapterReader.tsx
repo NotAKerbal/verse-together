@@ -1350,7 +1350,7 @@ export default function ChapterReader({
     setOpenExplorer(true);
   }
 
-  // One toolbar, placed once: in the app header's right side on wide screens, else at the top of the column.
+  // One toolbar, placed once: in the app header's right side wherever it is shown, else at the top of the column (phones).
   const readerToolbar = (
     <div className="reader-toolbar simple-hide">
       <ScriptureQuickNav
@@ -1415,7 +1415,37 @@ export default function ChapterReader({
     </div>
   );
   const hasTranslationNotices = !!translationNotices && translationNotices.length > 0;
-  const showInlineReaderHeader = !readerHeaderSlot.slot || hasCompareSelections || hasTranslationNotices;
+  // The comparison key and translation notices travel with the toolbar, right-aligned beneath it.
+  const readerHeaderNotes =
+    hasCompareSelections || hasTranslationNotices ? (
+      <div className="reader-header-notes simple-hide flex flex-col items-end gap-1.5">
+        {hasCompareSelections ? (
+          <div className="reader-toolbar-note text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
+            <span className="text-foreground/45">Key:</span>
+            <span
+              className="text-amber-700 dark:text-amber-300"
+              title={translationNameById.get(primaryTranslation ?? "") ?? primaryTranslationLabel}
+            >
+              {primaryTranslationLabel}
+            </span>
+            <span className="text-foreground/35">/</span>
+            {compareLegend.map((item, idx) => (
+              <span key={`legend-${item.translationId}`} className={item.colorClass} title={item.title}>
+                {idx > 0 ? ", " : ""}
+                {item.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {hasTranslationNotices ? (
+          <div className="reader-toolbar-note text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+            {translationNotices.map((notice) => (
+              <div key={notice}>{notice}</div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <section
@@ -1500,42 +1530,16 @@ export default function ChapterReader({
                 : undefined
             }
           >
-          {showInlineReaderHeader ? (
+          {readerHeaderSlot.slot ? null : (
             <header
-              className={`simple-hide sticky top-2 z-20 flex flex-col items-end gap-1.5 transition-all lg:top-[calc(var(--header-height)+0.25rem)] ${
+              className={`simple-hide sticky top-2 z-20 flex flex-col items-end gap-1.5 transition-all ${
                 isAtTop ? "py-0" : "py-1"
-              }`}
+              } ${readerHeaderSlot.resolved ? "" : "sm:hidden"}`}
             >
-              {readerHeaderSlot.slot ? null : (
-                <div className={`max-w-full ${readerHeaderSlot.resolved ? "" : "lg:hidden"}`}>{readerToolbar}</div>
-              )}
-              {hasCompareSelections ? (
-                <div className="reader-toolbar-note text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
-                  <span className="text-foreground/45">Key:</span>
-                  <span
-                    className="text-amber-700 dark:text-amber-300"
-                    title={translationNameById.get(primaryTranslation ?? "") ?? primaryTranslationLabel}
-                  >
-                    {primaryTranslationLabel}
-                  </span>
-                  <span className="text-foreground/35">/</span>
-                  {compareLegend.map((item, idx) => (
-                    <span key={`legend-${item.translationId}`} className={item.colorClass} title={item.title}>
-                      {idx > 0 ? ", " : ""}
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {hasTranslationNotices ? (
-                <div className="reader-toolbar-note text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
-                  {translationNotices.map((notice) => (
-                    <div key={notice}>{notice}</div>
-                  ))}
-                </div>
-              ) : null}
+              <div className="max-w-full">{readerToolbar}</div>
+              {readerHeaderNotes}
             </header>
-          ) : null}
+          )}
 
           <h1 className="simple-only reader-simple-title">{reference}</h1>
 
@@ -1847,7 +1851,15 @@ export default function ChapterReader({
         shareLinkNotice={shareLinkNotice}
       />
       )}
-      {readerHeaderSlot.slot ? createPortal(readerToolbar, readerHeaderSlot.slot) : null}
+      {readerHeaderSlot.slot
+        ? createPortal(
+            <>
+              {readerToolbar}
+              {readerHeaderNotes}
+            </>,
+            readerHeaderSlot.slot,
+          )
+        : null}
     </section>
   );
 }
