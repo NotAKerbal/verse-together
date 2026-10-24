@@ -1,6 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MutableRefObject,
+} from "react";
 import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
@@ -10,6 +20,8 @@ import type { InsightDraft, InsightDraftSummary, InsightVisibility } from "@/lib
 import { isSafeSourceHref, localDateKey, type JournalNoteDocument, type NoteSource } from "@/features/notes/journal";
 import { JournalOutbox, RevisionConflictError, type OutboxEntry } from "@/features/notes/journalOutbox";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import type { ReadingLogAttempt, ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import type { ChapterMarkAttempt } from "@/features/plans/ChapterReadToggle";
 
 /**
  * What the page being read says about itself. `href` defaults to the live URL (path, query and hash) at the
@@ -37,6 +49,26 @@ type DictionaryPayload = {
 
 export type NoteSaveStatus = "idle" | "saving" | "saved";
 
+/** The two views of the notes panel. "log" exists only while a chapter page is showing. */
+export type NotebookPanelView = "log" | "notes";
+
+/** The chapter a chapter page is showing, so the panel's Log view can record it. */
+export type ReaderChapter = {
+  volume: string;
+  book: string;
+  chapter: number;
+  reference: string;
+  logOptions: ReadingLogOption[];
+  /** Log offers the chapter's verses, so it waits for the text. */
+  logReady: boolean;
+};
+
+/** One chapter page's hold on the panel's Log view; see registerReaderChapter. */
+export type ReaderChapterRegistration = {
+  update: (chapter: ReaderChapter) => void;
+  unregister: () => void;
+};
+
 type InsightBuilderContextValue = {
   canUseInsights: boolean;
   /** Phone bottom sheet. */
@@ -47,6 +79,24 @@ type InsightBuilderContextValue = {
   closeBuilder: () => void;
   toggleMobileBuilder: () => void;
   togglePanel: () => void;
+  panelView: NotebookPanelView;
+  setPanelView: (view: NotebookPanelView) => void;
+  /** Expands the desktop panel on the given view. */
+  openPanel: (view: NotebookPanelView) => void;
+  /** Phone Log and Notes sheet, opened from a chapter page's Log button. */
+  isSheetOpen: boolean;
+  setSheetOpen: (open: boolean) => void;
+  /** The chapter page most recently mounted (a page opening over another wins), or null on other pages. */
+  readerChapter: ReaderChapter | null;
+  /** Called once per mounted chapter header; update it as the chapter's details change, unregister on unmount. */
+  registerReaderChapter: () => ReaderChapterRegistration;
+  /**
+   * The Log view's last unfinished log attempt. It outlives the panel (collapsing it, closing the sheet) so a
+   * retry after an unknown result reuses the request id; cleared when the account changes.
+   */
+  readerLogPendingRef: MutableRefObject<ReadingLogAttempt | null>;
+  /** The same for the Log view's mark-read toggle. */
+  readerMarkPendingRef: MutableRefObject<ChapterMarkAttempt | null>;
   /** "saving" while any note write is in flight, "saved" right after one lands. */
   saveStatus: NoteSaveStatus;
   lastSavedAt: number | null;
@@ -117,6 +167,13 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const canQuery = canUseInsights && convexReady;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [panelView, setPanelView] = useState<NotebookPanelView>("notes");
+  const [isSheetOpen, setSheetOpen] = useState(false);
+  const [readerChapter, setReaderChapter] = useState<ReaderChapter | null>(null);
+  const readerChaptersRef = useRef(new Map<number, ReaderChapter>());
+  const readerChapterTokenRef = useRef(0);
+  const readerLogPendingRef = useRef<ReadingLogAttempt | null>(null);
+  const readerMarkPendingRef = useRef<ChapterMarkAttempt | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [pendingSaves, setPendingSaves] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -158,6 +215,10 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     userIdRef.current = userId;
     saveJournalNoteRef.current = saveJournalNoteMutation;
   }, [userId, saveJournalNoteMutation]);
+  useEffect(() => {
+    readerLogPendingRef.current = null;
+    readerMarkPendingRef.current = null;
+  }, [userId]);
   const journalOutbox = useMemo(() => {
     const owner = userId;
     return new JournalOutbox(async (noteId, markdownBody, expectedRevision) => {
@@ -285,6 +346,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     if (!canUseInsights) {
       setActiveDraftId(null);
       setIsMobileOpen(false);
+      setSheetOpen(false);
       return;
     }
     if (draftRows === undefined) return;
@@ -293,14 +355,48 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     setActiveDraftId(null);
   }, [canUseInsights, draftRows, activeDraftId]);
 
+  const openPanel = useCallback((view: NotebookPanelView) => {
+    setPanelView(view);
+    setIsPanelOpen(true);
+  }, []);
+
+  // Everything that writes to or asks for a note shows the Notes view (below lg, the /notes page).
   const openBuilder = useCallback(() => {
+    setPanelView("notes");
     setIsMobileOpen(true);
     setIsPanelOpen(true);
+  }, []);
+
+  const registerReaderChapter = useCallback((): ReaderChapterRegistration => {
+    const token = ++readerChapterTokenRef.current;
+    const registered = readerChaptersRef.current;
+    const showLatest = () => {
+      let latest: ReaderChapter | null = null;
+      let latestToken = -1;
+      for (const [key, chapter] of registered) {
+        if (key > latestToken) {
+          latestToken = key;
+          latest = chapter;
+        }
+      }
+      setReaderChapter(latest);
+    };
+    return {
+      update: (chapter) => {
+        registered.set(token, chapter);
+        showLatest();
+      },
+      unregister: () => {
+        registered.delete(token);
+        showLatest();
+      },
+    };
   }, []);
 
   const closeBuilder = useCallback(() => {
     setIsMobileOpen(false);
     setIsPanelOpen(false);
+    setSheetOpen(false);
   }, []);
 
   const toggleMobileBuilder = useCallback(() => {
@@ -360,6 +456,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       );
       const id = String(created.id);
       setActiveDraftId(id);
+      setPanelView("notes");
       setIsPanelOpen(true);
       await setActiveDraftMutation({ draftId: created.id as DraftId });
       return id;
@@ -430,10 +527,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           text: text?.trim() || undefined,
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, tracked]
+    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const addQuoteBlock = useCallback(
@@ -450,10 +546,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           linkUrl: linkUrl?.trim() || undefined,
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, tracked]
+    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const appendScriptureBlock = useCallback(
@@ -472,10 +567,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           text: payload.text?.trim() || undefined,
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [appendScriptureBlockMutation, ensureActiveDraftId, tracked]
+    [appendScriptureBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const addDictionaryBlock = useCallback(
@@ -495,10 +589,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           },
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, tracked]
+    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const updateBlock = useCallback(
@@ -588,6 +681,15 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       closeBuilder,
       toggleMobileBuilder,
       togglePanel,
+      panelView,
+      setPanelView,
+      openPanel,
+      isSheetOpen,
+      setSheetOpen,
+      readerChapter,
+      registerReaderChapter,
+      readerLogPendingRef,
+      readerMarkPendingRef,
       saveStatus,
       lastSavedAt,
       drafts,
@@ -631,6 +733,15 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       closeBuilder,
       toggleMobileBuilder,
       togglePanel,
+      panelView,
+      setPanelView,
+      openPanel,
+      isSheetOpen,
+      setSheetOpen,
+      readerChapter,
+      registerReaderChapter,
+      readerLogPendingRef,
+      readerMarkPendingRef,
       saveStatus,
       lastSavedAt,
       drafts,

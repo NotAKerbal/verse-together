@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LessonCoverImage, { CoverCredit } from "@/features/comeFollowMe/LessonCoverImage";
 import { getLessonCover, type LessonCover } from "@/features/comeFollowMe/lessonCovers";
 import StudyCompanion, { type CompanionChapter } from "@/features/comeFollowMe/StudyCompanion";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
-import ReadingLogButton from "@/features/notes/ReadingLogButton";
 import styles from "@/features/comeFollowMe/studyCompanion.module.css";
 import { getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
 import { readGuide, readGuides, type Guide } from "@/lib/cfm/cfmGuide";
@@ -82,14 +80,13 @@ type HeroProps = {
   meta: string[];
   title: string;
   summary?: string;
-  actions?: ReactNode;
 };
 
 /**
  * The page head: the week's text beside its cover, which fades into the page. The cover's credit (or a
  * generated illustration's provenance) is in the footer, not here; see CoverLine.
  */
-function LessonHero({ cover, meta, title, summary, actions }: HeroProps) {
+function LessonHero({ cover, meta, title, summary }: HeroProps) {
   return (
     <header className={styles.header}>
       <BackLink />
@@ -105,7 +102,6 @@ function LessonHero({ cover, meta, title, summary, actions }: HeroProps) {
         </p>
         <h1 className={styles.title}>{title}</h1>
         {summary ? <p className={styles.summary}>{summary}</p> : null}
-        {actions ? <div className={styles.heroActions}>{actions}</div> : null}
       </div>
     </header>
   );
@@ -179,24 +175,6 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         meta={[guide.scripture, guide.dateLabel]}
         title={parsed.title}
         summary={guide.summary}
-        actions={
-          <ReadingLogButton
-            options={[
-              { source: guideSource },
-              ...chapters.map((item) => ({
-                source: {
-                  kind: "scripture" as const,
-                  label: `${range.book} ${item.chapter}`,
-                  href: getChapterHref({ volume: range.volume, book: range.slug, chapter: item.chapter }),
-                  volume: range.volume,
-                  book: range.slug,
-                  chapter: item.chapter,
-                },
-                verseCount: item.verses.length,
-              })),
-            ]}
-          />
-        }
       />
 
       <NoteSourceRegistrar kind={guideSource.kind} label={guideSource.label} href={guideSource.href} />
@@ -209,6 +187,7 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         book={{ label: range.book, slug: range.slug, volume: range.volume }}
         chapters={chapters}
         weekStart={week.start}
+        guideSource={guideSource}
         footer={
           <footer className={styles.footer}>
             <p>
