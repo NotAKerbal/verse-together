@@ -2,8 +2,9 @@
 // the views, and the view data, all from the bundled catalog. Pure, so the routing rules are testable; the
 // client selector (components/BrowseSelector.tsx) renders these views without a server round trip.
 
+import { isBibleVolume, normalizeBibleTranslationId } from "./bibleCanon.ts";
 import type { ScriptureCatalogIndex } from "./scriptureCatalogIndex.ts";
-import { normalizeScriptureVolume, toScriptureVolumeUrlSlug } from "./scriptureVolumes.ts";
+import { getScriptureVolumeLabel, normalizeScriptureVolume, toScriptureVolumeUrlSlug } from "./scriptureVolumes.ts";
 
 export type BrowseSelection =
   | { kind: "library" }
@@ -113,8 +114,9 @@ export function parseBrowseChapterHref(href: string): BrowseChapterTarget | null
 }
 
 /**
- * A navigation that should show the chapter skeleton while it loads: one to a chapter page other than the page
- * already shown. Verse jumps and query changes on the current chapter keep the page in place.
+ * A navigation that should show the destination chapter's page at once, before its route arrives: one to a
+ * chapter page other than the page already shown. Verse jumps and query changes on the current chapter keep the
+ * page in place.
  */
 export function chapterNavigationTarget(currentPathname: string, href: string): BrowseChapterTarget | null {
   const target = parseBrowseChapterHref(href);
@@ -131,17 +133,123 @@ export function describeChapterTarget(
   return `${entry?.label ?? target.book.replace(/-/g, " ")} ${target.chapter}`;
 }
 
+type ChapterQuery = {
+  translation?: string | string[] | null;
+  compare?: string | string[] | null;
+};
+
+function queryValues(value: string | string[] | null | undefined): string[] {
+  return Array.isArray(value) ? value : value ? [value] : [];
+}
+
+/**
+ * The comparison translations a chapter URL asks for (Bible volumes only): the `translation` first, then each
+ * `compare`, normalized, without the bundled "lds" text, and without repeats (ignoring case).
+ */
+export function chapterOverlayTranslations(volume: string, query: ChapterQuery): string[] {
+  if (!isBibleVolume(normalizeScriptureVolume(volume))) return [];
+  return [...queryValues(query.translation).slice(0, 1), ...queryValues(query.compare)]
+    .filter((value) => !!value)
+    .map((value) => normalizeBibleTranslationId(value))
+    .filter((id) => id.toLowerCase() !== "lds")
+    .filter((id, index, list) => list.findIndex((item) => item.toLowerCase() === id.toLowerCase()) === index);
+}
+
+/** "?translation=…&compare=…" carrying a chapter's comparison translations to the chapters next to it. */
+export function chapterQuerySuffix(overlayTranslations: string[]): string {
+  const params = new URLSearchParams();
+  if (overlayTranslations[0]) params.set("translation", overlayTranslations[0]);
+  overlayTranslations.slice(1).forEach((id) => params.append("compare", id));
+  const out = params.toString();
+  return out ? `?${out}` : "";
+}
+
+export type ChapterCrumb = { label: string; href?: string };
+
+/** Everything a chapter page shows around its text, known from the URL and the catalog before the text loads. */
+export type ChapterChrome = {
+  volume: string;
+  volumeSlug: string;
+  book: string;
+  chapter: number;
+  /** The chapter's canonical pathname, without query. */
+  pathname: string;
+  /** "Alma 32". For a bundled book this is exactly the reference its text carries. */
+  reference: string;
+  /** Whether the bundled catalog knows the book (otherwise the reference is a guess from the slug). */
+  catalogued: boolean;
+  breadcrumbs: ChapterCrumb[];
+  prevHref?: string;
+  nextHref?: string;
+};
+
+/**
+ * A chapter page's title, breadcrumbs, and Previous/Next links. The server page and the page shown while a
+ * chapter's route is on its way both build them here, so the page looks the same before and after it arrives.
+ */
+export function buildChapterChrome(
+  catalog: ScriptureCatalogIndex,
+  target: Pick<BrowseChapterTarget, "volume" | "book" | "chapter">,
+  overlayTranslations: string[] = []
+): ChapterChrome {
+  const volume = normalizeScriptureVolume(target.volume);
+  const volumeSlug = toScriptureVolumeUrlSlug(volume);
+  const { book, chapter } = target;
+  const entry = catalog.getBook(volume, book);
+  const bookHref = `/browse/${volumeSlug}/${book}`;
+  const suffix = chapterQuerySuffix(overlayTranslations);
+  const volumeLabel = getScriptureVolumeLabel(volume);
+  const bookLabel = entry?.label ?? book.replace(/-/g, " ");
+  const duplicateVolumeBook =
+    bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase() ||
+    (volume === "doctrineandcovenants" && book === "doctrineandcovenants");
+
+  return {
+    volume,
+    volumeSlug,
+    book,
+    chapter,
+    pathname: `${bookHref}/${chapter}`,
+    reference: describeChapterTarget(catalog, { volume, book, chapter }),
+    catalogued: !!entry,
+    breadcrumbs: [
+      { label: "Browse", href: "/browse" },
+      ...(duplicateVolumeBook ? [] : [{ label: volumeLabel, href: `/browse/${volumeSlug}` }]),
+      // A one-chapter book's own URL opens this chapter, so it gets no crumb of its own (the reference names it).
+      ...(entry?.chapterCount === 1 ? [] : [{ label: bookLabel, href: bookHref }]),
+      { label: `Chapter ${chapter}` },
+    ],
+    prevHref: chapter > 1 ? `${bookHref}/${chapter - 1}${suffix}` : undefined,
+    nextHref: entry && chapter >= entry.chapterCount ? undefined : `${bookHref}/${chapter + 1}${suffix}`,
+  };
+}
+
+/** The chrome of the chapter an in-app href opens (keeping its comparison translations), or null for any other href. */
+export function chapterChromeForHref(catalog: ScriptureCatalogIndex, href: string): ChapterChrome | null {
+  const target = parseBrowseChapterHref(href);
+  if (!target) return null;
+  const { searchParams } = new URL(href, "http://app.invalid");
+  const overlays = chapterOverlayTranslations(target.volume, {
+    translation: searchParams.get("translation"),
+    compare: searchParams.getAll("compare"),
+  });
+  return buildChapterChrome(catalog, target, overlays);
+}
+
 export type PendingChapterNavigation = {
   /** The page the navigation started from. */
   fromPathname: string;
+  /** The href being opened, with its query (comparison translations carry over to the shown page's links). */
+  href: string;
   target: BrowseChapterTarget;
 };
 
 /**
- * The skeleton stands in for the page only while its navigation is still in flight from the page it started on:
- * arriving, going Back/Forward, navigating elsewhere, or the navigation ending in failure all put a page back.
+ * The destination's page stands in for the current one only while its navigation is still in flight from the page
+ * it started on: arriving, going Back/Forward, navigating elsewhere, or the navigation ending in failure all put a
+ * page back.
  */
-export function isChapterSkeletonVisible(
+export function isPendingChapterVisible(
   pending: PendingChapterNavigation | null,
   state: { pathname: string; navigating: boolean }
 ): boolean {

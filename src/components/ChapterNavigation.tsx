@@ -8,16 +8,17 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useState,
   useTransition,
   type ComponentProps,
   type ReactNode,
 } from "react";
-import ChapterReaderSkeleton from "@/components/ChapterReaderSkeleton";
+import { ChapterReaderShell } from "@/components/ChapterReaderChrome";
 import {
+  chapterChromeForHref,
   chapterNavigationTarget,
-  describeChapterTarget,
-  isChapterSkeletonVisible,
+  isPendingChapterVisible,
   type PendingChapterNavigation,
 } from "@/lib/browseRoutes";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
@@ -25,18 +26,32 @@ import { scriptureCatalog } from "@/lib/scriptureCatalog";
 type NavigateOptions = { replace?: boolean; scroll?: boolean };
 
 /**
- * Starts a navigation through the Next router. A navigation to another chapter shows the reader skeleton in place
- * of the current page at once, until the chapter renders; it returns false (doing nothing) for any other href.
+ * Starts a navigation through the Next router. A navigation to another chapter shows that chapter's page (with
+ * its text area empty) in place of the current page at once, until the route commits; it returns false (doing
+ * nothing) for any other href.
  */
 type ChapterNavigate = (href: string, options?: NavigateOptions) => boolean;
 
 const ChapterNavigationContext = createContext<ChapterNavigate | null>(null);
 
+/** True inside a page that is hidden behind another chapter's page while that chapter's route is on its way. */
+const PageCoveredContext = createContext(false);
+
 /**
- * Wraps the browse pages. The router keeps the old page on screen until the next one's server render arrives;
- * this swaps it for the reader skeleton as soon as a chapter navigation starts, so feedback never waits on the
- * network. The pending state is the navigation's own transition, so when the chapter is already cached it
- * commits straight away, and Back, another navigation, or a failure all bring a page back.
+ * Whether this page is hidden behind a chapter that is opening. Such a page is still mounted (so an abandoned
+ * navigation returns to it as it was) but must not act as the current page, e.g. as the notebook's source.
+ */
+export function usePageCoveredByChapterNavigation() {
+  return useContext(PageCoveredContext);
+}
+
+/**
+ * Wraps the browse pages. The router keeps the old page on screen until the next route's response starts
+ * arriving; this swaps it for the destination chapter's page (ChapterReaderShell: its header, breadcrumbs, and
+ * links, with no text yet) as soon as a chapter navigation starts, so feedback never waits on the network. The
+ * chapter route streams its page before its text, so the router commits as soon as the response begins, and the
+ * text fades in on the real page when it arrives. The pending state is the navigation's own transition, so a
+ * cached chapter commits straight away, and Back, another navigation, or a failure all bring a page back.
  */
 export function ChapterNavigationProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -49,7 +64,7 @@ export function ChapterNavigationProvider({ children }: { children: ReactNode })
       const fromPathname = window.location.pathname;
       const target = chapterNavigationTarget(fromPathname, href);
       if (!target) return false;
-      setPending({ fromPathname, target });
+      setPending({ fromPathname, href, target });
       startTransition(() => {
         const routerOptions = { scroll: options.scroll ?? true };
         if (options.replace) router.replace(href, routerOptions);
@@ -69,25 +84,30 @@ export function ChapterNavigationProvider({ children }: { children: ReactNode })
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const visible = isChapterSkeletonVisible(pending, { pathname, navigating });
+  const visible = isPendingChapterVisible(pending, { pathname, navigating });
+  const pendingHref = pending?.href;
+  const chrome = useMemo(
+    () => (pendingHref ? chapterChromeForHref(scriptureCatalog, pendingHref) : null),
+    [pendingHref]
+  );
 
   useLayoutEffect(() => {
-    // The skeleton is the top of the next chapter; show it from the top, as the chapter will be.
+    // This is the top of the next chapter; show it from the top, as the chapter will be.
     if (visible) window.scrollTo({ top: 0 });
   }, [visible]);
 
   return (
     <ChapterNavigationContext.Provider value={navigate}>
-      {visible && pending ? (
-        <ChapterReaderSkeleton reference={describeChapterTarget(scriptureCatalog, pending.target)} />
-      ) : null}
+      {visible && chrome ? <ChapterReaderShell chrome={chrome} /> : null}
       {/* The current page stays mounted (hidden) so an abandoned navigation returns to it as it was. */}
-      <div className={visible ? "hidden" : "contents"}>{children}</div>
+      <PageCoveredContext.Provider value={visible}>
+        <div className={visible ? "hidden" : "contents"}>{children}</div>
+      </PageCoveredContext.Provider>
     </ChapterNavigationContext.Provider>
   );
 }
 
-/** Navigate to an in-app href, with the chapter skeleton when it opens another chapter. Works outside /browse too. */
+/** Navigate to an in-app href, showing another chapter's page at once when it opens one. Works outside /browse too. */
 export function useChapterNavigation() {
   const navigate = useContext(ChapterNavigationContext);
   const router = useRouter();
@@ -105,7 +125,7 @@ export function useChapterNavigation() {
 type ChapterLinkProps = Omit<ComponentProps<typeof Link>, "href"> & { href: string };
 
 /**
- * A Next link that shows the chapter skeleton while a chapter it opens loads. New-tab and modified clicks stay
+ * A Next link that shows the chapter it opens at once, before its route arrives. New-tab and modified clicks stay
  * with the browser, and anything that is not another chapter navigates exactly as a plain Link does.
  */
 export function ChapterLink({ href, onNavigate, replace, scroll, ...rest }: ChapterLinkProps) {

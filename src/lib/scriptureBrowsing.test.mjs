@@ -13,11 +13,14 @@ import {
   browseVolumeHref,
   buildBookView,
   buildLibraryVolumes,
+  buildChapterChrome,
   buildVolumeBooks,
+  chapterChromeForHref,
   chapterNavigationTarget,
+  chapterOverlayTranslations,
   describeChapterTarget,
   isBrowseSelectionHref,
-  isChapterSkeletonVisible,
+  isPendingChapterVisible,
   isPlainLeftClick,
   parseBrowseChapterHref,
   parseBrowseSelection,
@@ -349,7 +352,7 @@ test("chapter hrefs parse to their canonical chapter, ignoring query and fragmen
   assert.equal(parseBrowseChapterHref("/plans"), null);
 });
 
-test("the skeleton is for navigations to another chapter, never for verse jumps on the current one", () => {
+test("the page is shown ahead of its route only for navigations to another chapter, never for verse jumps on the current one", () => {
   const alma32 = "/browse/bookofmormon/alma/32";
   assert.equal(chapterNavigationTarget(alma32, `${alma32}#v-21`), null);
   assert.equal(chapterNavigationTarget(alma32, `${alma32}?translation=kjv`), null);
@@ -361,7 +364,7 @@ test("the skeleton is for navigations to another chapter, never for verse jumps 
   assert.equal(chapterNavigationTarget("/browse/bookofmormon/alma", "/browse/bookofmormon/alma/1").chapter, 1);
 });
 
-test("the skeleton is labelled with the chapter it stands in for", () => {
+test("a chapter ahead of its route is titled with the chapter it opens", () => {
   const label = (href) => describeChapterTarget(catalog, parseBrowseChapterHref(href));
   assert.equal(label("/browse/bookofmormon/enos/1"), "Enos 1");
   assert.equal(label("/browse/newtestament/jude/1"), "Jude 1");
@@ -371,21 +374,74 @@ test("the skeleton is labelled with the chapter it stands in for", () => {
   assert.equal(label("/browse/bookofmormon/made-up-book/2"), "made up book 2");
 });
 
-test("the skeleton shows only while its navigation is in flight from the page it started on", () => {
+test("the chapter shown ahead of its route shows only while its navigation is in flight from the page it started on", () => {
   const pending = {
     fromPathname: "/browse/bookofmormon/alma",
+    href: "/browse/bookofmormon/alma/32",
     target: parseBrowseChapterHref("/browse/bookofmormon/alma/32"),
   };
   // Started: the old page is still current while the router fetches.
-  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma", navigating: true }), true);
+  assert.equal(isPendingChapterVisible(pending, { pathname: "/browse/bookofmormon/alma", navigating: true }), true);
   // Arrived (or the route's own loading boundary took over).
-  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma/32", navigating: true }), false);
-  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma/32", navigating: false }), false);
+  assert.equal(isPendingChapterVisible(pending, { pathname: "/browse/bookofmormon/alma/32", navigating: true }), false);
+  assert.equal(isPendingChapterVisible(pending, { pathname: "/browse/bookofmormon/alma/32", navigating: false }), false);
   // Back/Forward or another navigation moved off the starting page before the chapter came.
-  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon", navigating: true }), false);
+  assert.equal(isPendingChapterVisible(pending, { pathname: "/browse/bookofmormon", navigating: true }), false);
   // The navigation ended without leaving (failed or superseded): the page comes back.
-  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma", navigating: false }), false);
-  assert.equal(isChapterSkeletonVisible(null, { pathname: "/browse/bookofmormon/alma", navigating: true }), false);
+  assert.equal(isPendingChapterVisible(pending, { pathname: "/browse/bookofmormon/alma", navigating: false }), false);
+  assert.equal(isPendingChapterVisible(null, { pathname: "/browse/bookofmormon/alma", navigating: true }), false);
+});
+
+test("a chapter's page chrome comes from the URL and catalog alone, the same before and after its text arrives", () => {
+  const alma32 = buildChapterChrome(catalog, { volume: "bookofmormon", book: "alma", chapter: 32 });
+  assert.equal(alma32.reference, "Alma 32");
+  assert.equal(alma32.pathname, "/browse/bookofmormon/alma/32");
+  assert.equal(alma32.catalogued, true);
+  assert.deepEqual(alma32.breadcrumbs, [
+    { label: "Browse", href: "/browse" },
+    { label: "Book of Mormon", href: "/browse/bookofmormon" },
+    { label: "Alma", href: "/browse/bookofmormon/alma" },
+    { label: "Chapter 32" },
+  ]);
+  assert.equal(alma32.prevHref, "/browse/bookofmormon/alma/31");
+  assert.equal(alma32.nextHref, "/browse/bookofmormon/alma/33");
+  assert.equal(buildChapterChrome(catalog, { volume: "bookofmormon", book: "alma", chapter: 1 }).prevHref, undefined);
+  assert.equal(buildChapterChrome(catalog, { volume: "bookofmormon", book: "alma", chapter: 63 }).nextHref, undefined);
+
+  // The bundled text's reference is the catalog label and chapter, so the title never changes when it arrives.
+  const enos = buildChapterChrome(catalog, { volume: "bookofmormon", book: "enos", chapter: 1 });
+  assert.equal(enos.reference, describeChapterTarget(catalog, { volume: "bookofmormon", book: "enos", chapter: 1 }));
+  // A one-chapter book has no crumb (its URL opens this chapter) and nothing either side.
+  assert.deepEqual(enos.breadcrumbs.map((crumb) => crumb.label), ["Browse", "Book of Mormon", "Chapter 1"]);
+  assert.equal(enos.prevHref, undefined);
+  assert.equal(enos.nextHref, undefined);
+
+  // D&C's one book is its volume: no repeated crumb, and the short volume slug.
+  const dc76 = buildChapterChrome(catalog, { volume: "dnc", book: "doctrineandcovenants", chapter: 76 });
+  assert.equal(dc76.volume, "doctrineandcovenants");
+  assert.deepEqual(dc76.breadcrumbs.map((crumb) => crumb.href ?? null), ["/browse", "/browse/dnc/doctrineandcovenants", null]);
+  assert.equal(dc76.nextHref, "/browse/dnc/doctrineandcovenants/77");
+
+  // A book the catalog lacks still gets a page; its reference is a guess the text may correct.
+  const unknown = buildChapterChrome(catalog, { volume: "bookofmormon", book: "made-up-book", chapter: 2 });
+  assert.equal(unknown.catalogued, false);
+  assert.equal(unknown.reference, "made up book 2");
+  assert.equal(unknown.nextHref, "/browse/bookofmormon/made-up-book/3");
+});
+
+test("comparison translations carry over to a chapter's neighbours, for the Bible only", () => {
+  assert.deepEqual(chapterOverlayTranslations("oldtestament", { translation: "KJV", compare: ["lds", "web", "kjv"] }), ["kjv", "web"]);
+  assert.deepEqual(chapterOverlayTranslations("new-testament", { translation: ["web", "asv"], compare: "kjv" }), ["web", "kjv"]);
+  assert.deepEqual(chapterOverlayTranslations("bookofmormon", { translation: "kjv" }), []);
+  assert.deepEqual(chapterOverlayTranslations("oldtestament", {}), []);
+
+  const genesis3 = chapterChromeForHref(catalog, "/browse/old-testament/genesis/3?translation=KJV&compare=web#v-2");
+  assert.equal(genesis3.pathname, "/browse/oldtestament/genesis/3");
+  assert.equal(genesis3.prevHref, "/browse/oldtestament/genesis/2?translation=kjv&compare=web");
+  assert.equal(genesis3.nextHref, "/browse/oldtestament/genesis/4?translation=kjv&compare=web");
+  assert.equal(chapterChromeForHref(catalog, "/browse/bookofmormon/alma/32?translation=kjv").nextHref, "/browse/bookofmormon/alma/33");
+  assert.equal(chapterChromeForHref(catalog, "/browse/bookofmormon/alma"), null);
+  assert.equal(chapterChromeForHref(catalog, "/plans"), null);
 });
 
 // --- Shared chapter request cache ---------------------------------------------------------------------------

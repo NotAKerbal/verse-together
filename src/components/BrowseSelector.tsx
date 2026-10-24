@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
 import { BrowseNavigationContext } from "@/components/BrowseLink";
 import { useChapterNavigation } from "@/components/ChapterNavigation";
-import ChapterReaderSkeleton from "@/components/ChapterReaderSkeleton";
+import { ChapterReaderShell } from "@/components/ChapterReaderChrome";
 import SelectionHeader from "@/components/SelectionHeader";
 import VolumeBookBrowser from "@/components/VolumeBookBrowser";
 import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
@@ -16,8 +16,7 @@ import {
   buildLibraryVolumes,
   buildVolumeBooks,
   browseSelectionHref,
-  describeChapterTarget,
-  parseBrowseChapterHref,
+  chapterChromeForHref,
   parseBrowseSelection,
   singleChapterBookHref,
   toBookView,
@@ -164,8 +163,9 @@ export default function BrowseSelector({ fallbackBook }: Props) {
   if (!selection) {
     // Not a selection URL (the router is moving on to a chapter); this view is about to unmount.
   } else if (chapterHref) {
-    const target = parseBrowseChapterHref(chapterHref);
-    content = <ChapterReaderSkeleton reference={target ? describeChapterTarget(scriptureCatalog, target) : null} />;
+    // Its chapter's page, until the navigation to it (started below) takes over.
+    const chrome = chapterChromeForHref(scriptureCatalog, chapterHref);
+    content = chrome ? <ChapterReaderShell chrome={chrome} /> : null;
   } else if (selection.kind === "library") {
     content = <LibraryView />;
   } else if (selection.kind === "volume") {

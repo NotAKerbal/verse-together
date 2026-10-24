@@ -1,14 +1,19 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import ChapterReaderSkeleton from "@/components/ChapterReaderSkeleton";
-import { describeChapterTarget, parseBrowseChapterHref } from "@/lib/browseRoutes";
+import { useParams, useSearchParams } from "next/navigation";
+import { ChapterReaderShell } from "@/components/ChapterReaderChrome";
+import { chapterChromeForHref } from "@/lib/browseRoutes";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 
-// Streamed first for a direct load or reload, and shown by any navigation the browse provider did not start,
-// while the chapter's server render is on its way.
+// The chapter's page before its route's response has arrived (e.g. a prefetched link commits straight to this):
+// the same header, breadcrumbs, and links the page will have, with the text area empty. The page itself streams
+// without waiting for the text, so this is only up until the response begins.
 export default function ChapterLoading() {
   const params = useParams<{ volume: string; book: string; chapter: string }>();
-  const target = params ? parseBrowseChapterHref(`/browse/${params.volume}/${params.book}/${params.chapter}`) : null;
-  return <ChapterReaderSkeleton reference={target ? describeChapterTarget(scriptureCatalog, target) : null} />;
+  const searchParams = useSearchParams();
+  const query = searchParams?.toString();
+  const chrome = params
+    ? chapterChromeForHref(scriptureCatalog, `/browse/${params.volume}/${params.book}/${params.chapter}${query ? `?${query}` : ""}`)
+    : null;
+  return chrome ? <ChapterReaderShell chrome={chrome} /> : null;
 }

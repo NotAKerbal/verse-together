@@ -914,6 +914,29 @@ mark {
   }
 }
 
+/*
+  A chapter's page shows at once; its text fades in when it arrives (ChapterReader's ChapterText). Opacity only,
+  so nothing moves, and no delay. With reduced motion the text simply appears.
+*/
+@keyframes chapter-text-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chapter-text-enter {
+  animation: chapter-text-in 240ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chapter-text-enter {
+    animation: none;
+  }
+}
+
 /* Pressed controls dim slightly instead of jumping like a marker sticker. */
 .tap-feedback {
   transition: opacity 100ms ease, box-shadow 100ms ease;

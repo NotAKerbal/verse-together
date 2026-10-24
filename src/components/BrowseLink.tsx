@@ -12,7 +12,7 @@ type Props = Omit<ComponentPropsWithoutRef<"a">, "href"> & { href: string };
 /**
  * A real link (it opens in a new tab, survives reload, and works before hydration). Inside the browse selector a
  * plain click on another selection view switches it client-side; a chapter (e.g. a one-chapter book's only one),
- * and anything outside the selector, goes through the Next router, with the chapter skeleton while it loads.
+ * and anything outside the selector, goes through the Next router, showing the chapter's page at once.
  */
 export default function BrowseLink({ href, onClick, children, ...rest }: Props) {
   const navigate = useContext(BrowseNavigationContext);
