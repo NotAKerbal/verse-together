@@ -11,6 +11,7 @@ import {
   faChevronLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import AccountControl from "@/components/AccountControl";
+import { AppHeaderSlot, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import LibrarySearch from "@/components/LibrarySearch";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
@@ -25,8 +26,10 @@ export default function Navbar() {
   const navRef = useRef<HTMLElement>(null);
   const navItems = primaryNavItems;
   const activeIndex = navItems.findIndex((item) => isPathActive(pathname, item.href));
-  // The Library's search sits at the header's right, outside the collapsible (clipped, inert) nav.
+  // The Library's search, and any page's header controls (AppHeaderPortal), sit at the header's right,
+  // outside the collapsible (clipped, inert) nav.
   const showLibrarySearch = pathname === "/browse";
+  const { filled: headerSlotFilled } = useAppHeaderSlot();
   const navIcons = {
     Browse: faBookOpen,
     Notes: faPencil,
@@ -75,7 +78,7 @@ export default function Navbar() {
     <header
       className="app-header"
       data-collapsed={collapsed ? "true" : "false"}
-      data-search={showLibrarySearch ? "true" : undefined}
+      data-actions={showLibrarySearch || headerSlotFilled ? "true" : undefined}
     >
       <div className="desktop-nav-bar">
         <Link href="/" className="brand-wordmark desktop-nav-brand" aria-label="Verse Together home">
@@ -132,6 +135,7 @@ export default function Navbar() {
         </button>
       </div>
       {showLibrarySearch ? <LibrarySearch variant="header" className="simple-hide app-header-search" /> : null}
+      <AppHeaderSlot className="simple-hide app-header-slot" />
     </header>
   );
 }

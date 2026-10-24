@@ -164,7 +164,10 @@ export default function BrowseSelector({ fallbackBook }: Props) {
     // After an in-place navigation, move focus to the new view's title, as a page load would reset it.
     if (!focusTitleRef.current) return;
     focusTitleRef.current = false;
-    document.querySelector<HTMLElement>("[data-browse-title]")?.focus({ preventScroll: true });
+    // A volume's or book's title is in the page and in the header (SelectionHeader); CSS shows only one.
+    const titles = Array.from(document.querySelectorAll<HTMLElement>("[data-browse-title]"));
+    const title = titles.find((element) => element.getClientRects().length > 0) ?? titles[0];
+    title?.focus({ preventScroll: true });
   }, [pathname]);
 
   let content: ReactNode = null;
