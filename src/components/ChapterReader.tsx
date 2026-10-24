@@ -15,7 +15,12 @@ import ScriptureQuickNav from "./ScriptureQuickNav";
 import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
 import type { Footnote } from "@/lib/openscripture";
-import { fetchChapter } from "@/lib/openscripture";
+import { loadChapter } from "@/lib/chapterClient";
+import { runIdleQueue } from "@/lib/chapterRequestCache";
+import { scheduleIdleTask } from "@/lib/idle";
+import { scriptureCatalog } from "@/lib/scriptureCatalog";
+import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
+import { useComparisonChapters } from "./useComparisonChapters";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
@@ -41,7 +46,7 @@ import { annotationHighlightClass, highlightOf, type VerseAnnotation } from "@/f
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
-type CompareChapter = { translation: string; verses: Verse[] };
+const NO_OVERLAYS: string[] = [];
 type SelectedVerse = { verse: number; text: string };
 type ChapterSelectionState = {
   selectedText: string;
@@ -439,6 +444,34 @@ function renderInlineDiff(
   });
 }
 
+function parseBrowseHref(
+  href: string | undefined
+): { volume: string; book: string; chapter: number; translation?: string } | null {
+  if (!href) return null;
+  const [pathname, query = ""] = href.split("?");
+  const clean = pathname.split("#")[0];
+  const parts = clean.split("/").filter(Boolean);
+  const params = new URLSearchParams(query);
+  const translation = params.get("translation") ?? undefined;
+  // expect: ["browse", volume, book, chapter]
+  if (parts.length >= 4 && parts[0] === "browse") {
+    const vol = decodeURIComponent(parts[1] || "");
+    const b = decodeURIComponent(parts[2] || "");
+    const chStr = decodeURIComponent(parts[3] || "");
+    const ch = Number(chStr);
+    if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch, translation };
+  }
+  return null;
+}
+
+/** The reference a chapter link points at ("Alma 32"), from the catalog, for the swipe preview. */
+function describeBrowseHref(href: string | undefined): { reference: string } | null {
+  const info = parseBrowseHref(href);
+  if (!info) return null;
+  const entry = scriptureCatalog.getBook(normalizeScriptureVolume(info.volume), info.book);
+  return { reference: `${entry?.label ?? info.book} ${info.chapter}` };
+}
+
 export default function ChapterReader({
   volume,
   book,
@@ -450,8 +483,7 @@ export default function ChapterReader({
   prevHref,
   nextHref,
   primaryTranslation,
-  translationNotices,
-  compareChapters,
+  overlayTranslations = NO_OVERLAYS,
 }: {
   volume: string;
   book: string;
@@ -463,9 +495,16 @@ export default function ChapterReader({
   prevHref?: string;
   nextHref?: string;
   primaryTranslation?: string;
-  translationNotices?: string[];
-  compareChapters?: CompareChapter[];
+  /** Bible translations to compare against the primary text; loaded here, after the primary text renders. */
+  overlayTranslations?: string[];
 }) {
+  const { compareChapters, translationNotices, pendingTranslations } = useComparisonChapters(
+    volume,
+    book,
+    chapter,
+    overlayTranslations
+  );
+  const overlayList = overlayTranslations.join(",");
   const { user, getToken, promptSignIn } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
@@ -495,8 +534,6 @@ export default function ChapterReader({
   const [animTargetX, setAnimTargetX] = useState<number | null>(null);
   const navHrefRef = useRef<string | null>(null);
   const leavingRef = useRef(false);
-  const [prevPreview, setPrevPreview] = useState<null | { reference: string; preview: string }>(null);
-  const [nextPreview, setNextPreview] = useState<null | { reference: string; preview: string }>(null);
   const [openCitations, setOpenCitations] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
   const [isPointerSelecting, setIsPointerSelecting] = useState(false);
@@ -535,76 +572,26 @@ export default function ChapterReader({
     [myInsightRefs]
   );
 
-  function parseBrowseHref(
-    href: string | undefined
-  ): { volume: string; book: string; chapter: number; translation?: string } | null {
-    if (!href) return null;
-    const [pathname, query = ""] = href.split("?");
-    const clean = pathname.split("#")[0];
-    const parts = clean.split("/").filter(Boolean);
-    const params = new URLSearchParams(query);
-    const translation = params.get("translation") ?? undefined;
-    // expect: ["browse", volume, book, chapter]
-    if (parts.length >= 4 && parts[0] === "browse") {
-      const vol = decodeURIComponent(parts[1] || "");
-      const b = decodeURIComponent(parts[2] || "");
-      const chStr = decodeURIComponent(parts[3] || "");
-      const ch = Number(chStr);
-      if (vol && b && Number.isFinite(ch)) return { volume: vol, book: b, chapter: ch, translation };
-    }
-    return null;
-  }
+  // Swipe previews only show the neighbouring chapter's reference, which the catalog already knows.
+  const prevPreview = useMemo(() => describeBrowseHref(prevHref), [prevHref]);
+  const nextPreview = useMemo(() => describeBrowseHref(nextHref), [nextHref]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function prefetch() {
-      const nextInfo = parseBrowseHref(nextHref);
-      const prevInfo = parseBrowseHref(prevHref);
-      try {
-        if (nextInfo) {
-          const chap = await fetchChapter(nextInfo.volume, nextInfo.book, nextInfo.chapter, {
-            translation: nextInfo.translation,
-          });
-          if (!cancelled) {
-            const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
-            setNextPreview({ reference: chap.reference, preview: text });
-          }
-        } else {
-          setNextPreview(null);
-        }
-      } catch {
-        if (!cancelled) setNextPreview(null);
-      }
-      try {
-        if (prevInfo) {
-          const chap = await fetchChapter(prevInfo.volume, prevInfo.book, prevInfo.chapter, {
-            translation: prevInfo.translation,
-          });
-          if (!cancelled) {
-            const text = chap.verses.slice(0, 3).map(v => `${v.verse}. ${v.text}`).join("\n");
-            setPrevPreview({ reference: chap.reference, preview: text });
-          }
-        } else {
-          setPrevPreview(null);
-        }
-      } catch {
-        if (!cancelled) setPrevPreview(null);
-      }
+    // Warm the likely next steps one at a time while idle, most likely first; leaving the chapter cancels the rest.
+    const next = nextHref;
+    const prev = prevHref;
+    const nextInfo = parseBrowseHref(next);
+    const tasks: Array<() => unknown> = [];
+    if (next) tasks.push(() => router.prefetch(next));
+    if (nextInfo && overlayList) {
+      // The next chapter's comparison texts, through the same cache the overlay loader reads after navigating.
+      overlayList.split(",").forEach((translation) => {
+        tasks.push(() => loadChapter({ volume: nextInfo.volume, book: nextInfo.book, chapter: nextInfo.chapter, translation }));
+      });
     }
-    prefetch();
-    return () => {
-      cancelled = true;
-    };
-  }, [nextHref, prevHref]);
-
-  useEffect(() => {
-    if (nextHref) {
-      router.prefetch(nextHref);
-    }
-    if (prevHref) {
-      router.prefetch(prevHref);
-    }
-  }, [nextHref, prevHref, router]);
+    if (prev) tasks.push(() => router.prefetch(prev));
+    return runIdleQueue(tasks, scheduleIdleTask);
+  }, [nextHref, prevHref, overlayList, router]);
 
   useEffect(() => {
     let alive = true;
@@ -620,7 +607,10 @@ export default function ChapterReader({
   }, [user?.id, getToken]);
 
   useEffect(() => {
-    void ensureBrowserScriptureStorage();
+    // The offline install reads every volume; keep it out of the way of the chapter that is opening.
+    return scheduleIdleTask(() => {
+      void ensureBrowserScriptureStorage();
+    });
   }, []);
 
   useEffect(() => {
@@ -837,7 +827,7 @@ export default function ChapterReader({
   );
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
-    (compareChapters ?? []).forEach((chapterData) => {
+    compareChapters.forEach((chapterData) => {
       if (!chapterData.translation) return;
       const byVerse = new Map<number, string>();
       chapterData.verses.forEach((item) => {
@@ -1555,7 +1545,12 @@ export default function ChapterReader({
                   ))}
                 </div>
               ) : null}
-              {translationNotices && translationNotices.length > 0 ? (
+              {pendingTranslations.length > 0 ? (
+                <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+                  Loading {pendingTranslations.map((id) => id.toUpperCase()).join(", ")} for comparison…
+                </div>
+              ) : null}
+              {translationNotices.length > 0 ? (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
                   {translationNotices.map((notice) => (
                     <div key={notice}>{notice}</div>

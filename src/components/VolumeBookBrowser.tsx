@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BrowseLink from "@/components/BrowseLink";
 import SelectionHeader from "@/components/SelectionHeader";
 import BookProgressBar from "@/features/plans/BookProgressBar";
 
@@ -9,6 +9,8 @@ export type VolumeBookBrowserItem = {
   category?: string;
   subtitle?: string | null;
   titleOfficial?: string;
+  /** Defaults to /browse/<volume>/<book>. */
+  href?: string;
 };
 
 type Props = {
@@ -57,8 +59,8 @@ export default function VolumeBookBrowser({
         <ul className="browse-grid">
           {books.map((book, index) => (
             <li key={book.id}>
-              <Link
-                href={`/browse/${volumeSlug}/${book.id}`}
+              <BrowseLink
+                href={book.href ?? `/browse/${volumeSlug}/${book.id}`}
                 className="panel-card interactive-card group flex h-full items-center gap-4 px-4 py-4"
                 data-tap
               >
@@ -86,7 +88,7 @@ export default function VolumeBookBrowser({
                 <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] text-[color:var(--foreground)] transition-transform duration-150 group-hover:translate-x-0.5">
                   <ChevronIcon />
                 </div>
-              </Link>
+              </BrowseLink>
             </li>
           ))}
         </ul>

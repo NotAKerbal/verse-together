@@ -1,10 +1,10 @@
-import { fetchChapter } from "../../../../../lib/openscripture";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import ChapterReader from "@/components/ChapterReader";
 import type { Crumb } from "@/components/Breadcrumbs";
 import BibleTranslationToolbar from "@/components/BibleTranslationToolbar";
 import { isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
+import { scriptureCatalog } from "@/lib/scriptureCatalog";
+import { fetchChapterOnServer } from "@/lib/scriptureChapters.server";
 import {
   getScriptureVolumeLabel,
   normalizeScriptureVolume,
@@ -53,35 +53,9 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         .filter((id, index, list) => list.findIndex((item) => item.toLowerCase() === id.toLowerCase()) === index)
     : [];
 
-  const headerList = await headers();
-  const baseUrl = `${headerList.get("x-forwarded-proto") ?? "http"}://${headerList.get("host")}`;
-
-  const data = await fetchChapter(canonicalVolume, book, chapter, { baseUrl });
-  const compareResults = await Promise.allSettled(
-    overlayTranslations.map((translationId) =>
-      fetchChapter(canonicalVolume, book, chapter, { translation: translationId, baseUrl })
-    )
-  );
-  const compareData: Awaited<ReturnType<typeof fetchChapter>>[] = [];
-  const translationNotices: string[] = [];
-  compareResults.forEach((result, index) => {
-    const requested = overlayTranslations[index];
-    if (result.status === "fulfilled") {
-      const actual = (result.value.translation ?? "").toLowerCase();
-      if (requested && actual && actual !== requested.toLowerCase()) {
-        translationNotices.push(
-          `Overlay translation "${requested.toUpperCase()}" was unavailable, showing "${actual.toUpperCase()}" instead.`
-        );
-      }
-      compareData.push(result.value);
-      return;
-    }
-    if (requested) {
-      translationNotices.push(
-        `Could not load overlay translation "${requested.toUpperCase()}".`
-      );
-    }
-  });
+  // Only the primary text is awaited here; comparison translations load in the reader once this has rendered,
+  // so a slow or failing translation API never holds up the chapter.
+  const data = await fetchChapterOnServer(canonicalVolume, book, chapter);
   const querySuffix = bibleMode
     ? (() => {
         const params = new URLSearchParams();
@@ -95,7 +69,11 @@ export default async function ChapterPage({ params, searchParams }: Params) {
   const currentChapter = Number(chapter);
   const prevHref =
     currentChapter > 1 ? `/browse/${volumeSlug}/${book}/${currentChapter - 1}${querySuffix}` : undefined;
-  const nextHref = `/browse/${volumeSlug}/${book}/${currentChapter + 1}${querySuffix}`;
+  const catalogBook = scriptureCatalog.getBook(canonicalVolume, book);
+  const nextHref =
+    catalogBook && currentChapter >= catalogBook.chapterCount
+      ? undefined
+      : `/browse/${volumeSlug}/${book}/${currentChapter + 1}${querySuffix}`;
   const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
   const bookTitle = (data.reference || "").replace(/\s+\d+$/, "");
   const bookLabel = bookTitle || book.replace(/-/g, " ");
@@ -142,11 +120,7 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         prevHref={prevHref}
         nextHref={nextHref}
         primaryTranslation={bibleMode ? "lds" : data.translation}
-        translationNotices={translationNotices}
-        compareChapters={compareData.map((item) => ({
-          translation: item.translation ?? "",
-          verses: item.verses,
-        }))}
+        overlayTranslations={overlayTranslations}
       />
     </article>
   );
