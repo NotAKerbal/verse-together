@@ -1,5 +1,4 @@
 import BrowseLink from "./BrowseLink";
-import LibrarySearch from "./LibrarySearch";
 import ScriptureQuickNav from "./ScriptureQuickNav";
 
 type Props = {
@@ -7,11 +6,6 @@ type Props = {
   backHref?: string;
   currentVolume?: string;
   currentBook?: string;
-  /**
-   * Replace quick navigation with the Library's inline search box, which both jumps to references
-   * and searches all scriptures (phones have no other way to /search).
-   */
-  showLibrarySearch?: boolean;
 };
 
 function BackIcon() {
@@ -36,7 +30,6 @@ export default function SelectionHeader({
   backHref,
   currentVolume,
   currentBook,
-  showLibrarySearch = false,
 }: Props) {
   return (
     <div className="browse-hero">
@@ -57,18 +50,14 @@ export default function SelectionHeader({
             {title}
           </h1>
         </div>
-        {showLibrarySearch ? (
-          <LibrarySearch className="simple-hide max-w-[22rem] flex-1" />
-        ) : (
-          <div className="flex shrink-0 items-center gap-2">
-            <ScriptureQuickNav
-              currentVolume={currentVolume}
-              currentBook={currentBook}
-              align="right"
-              buttonClassName="simple-hide browse-header-button h-9 w-9 rounded-xl"
-            />
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <ScriptureQuickNav
+            currentVolume={currentVolume}
+            currentBook={currentBook}
+            align="right"
+            buttonClassName="simple-hide browse-header-button h-9 w-9 rounded-xl"
+          />
+        </div>
       </div>
     </div>
   );

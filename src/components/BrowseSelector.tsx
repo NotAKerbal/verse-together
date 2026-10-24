@@ -6,6 +6,7 @@ import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
 import { BrowseNavigationContext } from "@/components/BrowseLink";
 import { useChapterNavigation } from "@/components/ChapterNavigation";
 import { ChapterReaderShell } from "@/components/ChapterReaderChrome";
+import LibrarySearch from "@/components/LibrarySearch";
 import SelectionHeader from "@/components/SelectionHeader";
 import VolumeBookBrowser from "@/components/VolumeBookBrowser";
 import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
@@ -40,7 +41,14 @@ const LIBRARY_VOLUMES = buildLibraryVolumes(scriptureCatalog);
 function LibraryView() {
   return (
     <section className="page-shell browse-shell">
-      <SelectionHeader title="Library" showLibrarySearch />
+      {/* Focus target after an in-place selection change, like SelectionHeader's title. */}
+      <h1 className="sr-only" tabIndex={-1} data-browse-title>
+        Browse scriptures
+      </h1>
+      {/* Wider screens show this search in the app header (Navbar); phones and narrow windows keep it here. */}
+      <div className="simple-hide browse-hero browse-search-fallback flex justify-end">
+        <LibrarySearch className="max-w-[22rem] flex-1" />
+      </div>
       {/* One grid: study cards first (hidden in simple mode), then the volumes. Continue Reading
           renders nothing without a saved position, so it never leaves a gap. */}
       <ul className="browse-grid browse-library">

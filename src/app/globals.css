@@ -258,6 +258,52 @@ mark {
   max-width: min(var(--shell-max-width), calc(100% - 2 * var(--shell-gutter)));
 }
 
+/* /browse: the header spans the shell so the Library search sits at its right; the gap between
+   the nav pill and the search lets clicks through to the page. */
+.app-header[data-search="true"] {
+  right: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.app-header[data-search="true"] > * {
+  pointer-events: auto;
+}
+
+.app-header[data-search="true"] .desktop-nav-bar {
+  flex-shrink: 0;
+}
+
+/* Full 22rem when there is room; narrower desktops shrink the search, never the nav. */
+.app-header-search {
+  display: none;
+  flex: 0 1 22rem;
+}
+
+/* Header search shares the floating nav pill's chrome: 3rem tall, pill corners, card surface. */
+.library-search-pill {
+  height: 3rem;
+  padding: 0 1.125rem 0 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.library-search-pill:focus-within {
+  border-color: var(--accent-rubric-line);
+  box-shadow: var(--surface-shadow-soft), 0 0 0 3px color-mix(in srgb, var(--accent-rubric) 14%, transparent);
+}
+
+.library-search-menu {
+  border-radius: 1.25rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-lift);
+}
+
 .desktop-nav-bar {
   display: flex;
   align-items: center;
@@ -458,6 +504,21 @@ mark {
 
   .app-main[data-fixed="true"] {
     padding-top: calc(var(--header-height) + 0.75rem);
+  }
+}
+
+/* Below this the header has no room for the search, so /browse keeps it in the page instead. */
+@media (min-width: 768px) {
+  .app-header[data-search="true"] {
+    display: flex;
+  }
+
+  .app-header-search {
+    display: block;
+  }
+
+  .browse-search-fallback {
+    display: none;
   }
 }
 
