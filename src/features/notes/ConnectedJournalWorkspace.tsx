@@ -4,6 +4,7 @@
 // the presentational JournalWorkspace. Notes are created and opened through InsightBuilderProvider so the
 // reader's sidebar and this page always agree on which note is current. Which day and note are in view is
 // this page's own state (journalView.ts): closing a note only clears the view, and nothing reactive reopens one.
+// An opened note also takes one browser history entry (useJournalHistory), so Back closes it and Forward reopens it.
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
@@ -31,6 +32,7 @@ import {
 } from "./journalView";
 import { useBelowLg } from "./useBelowLg";
 import { useConvexSignedIn } from "./useConvexSignedIn";
+import { useJournalHistory } from "./useJournalHistory";
 
 const MAX_LOG_CHOICES = 8;
 
@@ -61,8 +63,19 @@ export default function ConnectedJournalWorkspace() {
     [viewState, today, activeDraftId, activeNoteDate]
   );
   const selectedDate = view.date;
+
+  // Back or Forward onto a note's entry: open it in the provider too, if it is still this person's note.
+  // Otherwise nothing is switched and the view falls back to that day's chooser (resolveJournalView).
+  const selectFromHistory = useCallback(
+    (noteId: string) => {
+      if (noteId === activeDraftId || !drafts.some((draft) => draft.id === noteId)) return;
+      void switchDraft(noteId);
+    },
+    [activeDraftId, drafts, switchDraft]
+  );
+  const go = useJournalHistory(view, { enabled: ready && !isLoading, show: setViewState, select: selectFromHistory });
   // Every action starts from the view on screen, so arriving and then acting never depends on stale state.
-  const act = useCallback((action: JournalViewAction) => setViewState(nextJournalView(view, action)), [view]);
+  const act = useCallback((action: JournalViewAction) => go((current) => nextJournalView(current, action)), [go]);
 
   // The server's label for the signed-in user, as it appears on their own notes; else their account name.
   const viewerLabel = useMemo(() => {
@@ -120,14 +133,14 @@ export default function ConnectedJournalWorkspace() {
         // Written on the Notes page itself, so there is no reading source to claim.
         const noteId = await createJournalNote({ journalDate, source: null });
         // The new note becomes the provider's active note; show it, whatever is in view by now.
-        if (noteId) setViewState({ stage: "note", date: journalDate, noteId });
+        if (noteId) go({ stage: "note", date: journalDate, noteId });
       } catch (error) {
         setCreateError(error instanceof Error && error.message ? error.message : "The note could not be created.");
       } finally {
         setCreating(false);
       }
     },
-    [createJournalNote]
+    [createJournalNote, go]
   );
 
   if (loading) {

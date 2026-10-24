@@ -6,6 +6,7 @@ import ReadingLogButton from "../../src/features/notes/ReadingLogButton";
 import JournalNoteEditor from "../../src/features/notes/JournalNoteEditor";
 import {JournalOutbox} from "../../src/features/notes/journalOutbox";
 import {nextJournalView,resolveJournalView,type JournalViewAction,type JournalViewState} from "../../src/features/notes/journalView";
+import {useJournalHistory} from "../../src/features/notes/useJournalHistory";
 import {QaContext} from "./provider";
 import type {JournalEntry,JournalNoteDocument} from "../../src/features/notes/journal";
 import "../../src/app/globals.css";
@@ -40,9 +41,11 @@ function QaApp(){
  useEffect(()=>{const f=(event:Event)=>setReadings(rows=>[...rows,(event as CustomEvent<JournalEntry>).detail]);addEventListener("qa-reading",f);return()=>removeEventListener("qa-reading",f);},[]);
  const activeDoc=docs.find(d=>d.id===active)??null;
  const view=resolveJournalView(viewState,{today:"2026-10-21",activeNoteId:active,activeNoteDate:activeDoc?.journal_date??null});
- const act=(action:JournalViewAction)=>setViewState(nextJournalView(view,action));
+ // The page's own history hook: Back and Forward reopen and close notes here exactly as on /notes.
+ const go=useJournalHistory(view,{enabled:true,show:setViewState,select:id=>{if(id!==active&&docs.some(d=>d.id===id))setActive(id);}});
+ const act=(action:JournalViewAction)=>go(current=>nextJournalView(current,action));
  const note=view.noteId!==null&&activeDoc?.id===view.noteId?activeDoc:null;
- function create(date:string){const next={...initial,id:`qa-${Date.now()}`,title:"Untitled note",markdown_body:"",journal_date:date,source:null,created_at:new Date().toISOString()};setDocs(d=>[...d,next]);setActive(next.id);setViewState({stage:"note",date,noteId:next.id});}
+ function create(date:string){const next={...initial,id:`qa-${Date.now()}`,title:"Untitled note",markdown_body:"",journal_date:date,source:null,created_at:new Date().toISOString()};setDocs(d=>[...d,next]);setActive(next.id);go({stage:"note",date,noteId:next.id});}
  return <QaContext.Provider value={{journalOutbox:outbox}}><div className="app-shell min-h-screen"><header className="app-header hidden sm:block"><div className="shell-container flex items-center justify-between py-4"><span className="brand-wordmark brand-pill text-2xl">Verse<span>Together</span></span><nav className="segmented-control"><Link className="segmented-control-button" href="/browse">Browse</Link><Link className="segmented-control-button" data-active="true" href="/notes">Notes</Link><Link className="segmented-control-button" href="/come-follow-me">Come Follow Me</Link></nav><span className="pill-tag">QA user</span></div></header><main className="mx-auto max-w-[1440px] px-4 pt-3 pb-32 sm:px-8 sm:pt-4 lg:pb-4"><p className="mb-2 text-xs opacity-60">Component QA · synthetic fixtures · no backend connection</p><JournalWorkspace layout={layout} status="ready" entries={entries} today="2026-10-21" stage={view.stage} selectedDate={view.date} onSelectDate={date=>act({type:"selectDate",date})} selectedKey={view.noteId!==null?`note:${view.noteId}`:null} onOpenNote={(noteId,date)=>{act({type:"openNote",noteId,date});setActive(noteId);}} onCloseNote={()=>act({type:"closeNote"})} onShowCalendar={()=>act({type:"showCalendar"})} onNewNote={create} dayActions={<ReadingLogButton key={view.date} options={[{source,verseCount:24}]} defaultDate={view.date} onLogged={date=>act({type:"selectDate",date})}/>} notePane={note?<JournalNoteEditor key={note.id} note={note} authorLabel="QA user" showDate={false} onClose={()=>act({type:"closeNote"})}/>:undefined}/></main><nav className="fixed bottom-3 inset-x-4 z-40 grid grid-cols-3 rounded-full border-2 p-2 shadow-lg sm:hidden" style={{background:"var(--mobile-nav-shell)",borderColor:"var(--surface-border)"}}><Link className="p-3 text-center" href="/browse">Browse</Link><Link className="p-3 text-center" href="/come-follow-me">CFM</Link><Link className="rounded-full p-3 text-center" style={{background:"var(--mobile-nav-active)",color:"var(--mobile-nav-active-text)"}} href="/notes">Notes</Link></nav></div></QaContext.Provider>;
 }
 createRoot(document.getElementById("root")!).render(<StrictMode><QaApp/></StrictMode>);
