@@ -69,7 +69,6 @@
     left: 0;
     width: var(--notes-rail);
     overflow-y: auto;
-    padding-right: 0.25rem;
     transition:
       opacity var(--notes-motion),
       transform var(--notes-motion),

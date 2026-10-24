@@ -49,7 +49,7 @@ export type JournalWorkspaceProps = {
   createError?: string | null;
   /** The open note's editor, shown while stage is "note"; it must belong to selectedDate. */
   notePane?: ReactNode;
-  /** Page-level controls shown beside the title (the account control). */
+  /** Phone page-level controls at the top right (the account control). Desktop leaves the account to the app header. */
   headerAccessory?: ReactNode;
   /** Extra actions beside "New note" for the selected day (the reading-log control). */
   dayActions?: ReactNode;
@@ -154,7 +154,8 @@ function MonthCalendar({
 }) {
   const cells = monthGrid(month);
   return (
-    <section aria-label="Calendar" className="space-y-1.5">
+    // A card like the chooser's and the note's (the phone's is p-4, as its note is), sized to the month.
+    <section aria-label="Calendar" className={`panel-card space-y-1.5 rounded-[20px] ${compact ? "p-5" : "p-4"}`}>
       <div className="flex items-center gap-1.5">
         <h2 className="min-w-0 flex-1 font-display text-lg font-extrabold tracking-[-0.02em]" aria-live="polite">
           {formatMonthHeading(month)}
@@ -501,16 +502,10 @@ export default function JournalWorkspace({
     </section>
   );
 
+  // The app header already names the page, so this heading is for screen readers only. It is still where focus
+  // lands on returning to the phone calendar.
   const title = (
-    <h1
-      className={
-        isPhone && stage !== "calendar"
-          ? "sr-only"
-          : "min-w-0 px-1 font-display text-[1.6rem] font-extrabold tracking-[-0.03em] focus:outline-none"
-      }
-      ref={isPhone && stage === "calendar" ? setFocusTarget : undefined}
-      tabIndex={-1}
-    >
+    <h1 className="sr-only" ref={isPhone && stage === "calendar" ? setFocusTarget : undefined} tabIndex={-1}>
       Notes
     </h1>
   );
@@ -524,11 +519,13 @@ export default function JournalWorkspace({
     ) : null;
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex min-h-10 items-center justify-between gap-3">
-          {title}
-          {back}
-          {headerAccessory}
-        </div>
+        {title}
+        {back || headerAccessory ? (
+          <div className={`flex items-center gap-3 ${back ? "min-h-10 justify-between" : "justify-end sm:hidden"}`}>
+            {back}
+            {headerAccessory}
+          </div>
+        ) : null}
         {noteOpen ? (
           openNoteSection("min-h-[60dvh] p-4")
         ) : stage === "day" ? (
@@ -559,14 +556,11 @@ export default function JournalWorkspace({
   // that same chooser (one element, so its controls and scroll survive) into the rail, to switch notes without
   // closing; closing moves it back and restores the month. Whatever is out of view is inert.
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        {title}
-        {headerAccessory}
-      </div>
+    <div>
+      {title}
       <div
         data-note-open={noteOpen ? "" : undefined}
-        className={`${styles.stage} min-h-0 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem]`}
+        className={`${styles.stage} min-h-0 lg:h-[calc(100dvh-var(--header-height)-3.1rem)] lg:min-h-[30rem]`}
       >
         <div className={styles.calendar} inert={noteOpen}>
           <MonthCalendar
