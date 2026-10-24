@@ -20,14 +20,7 @@ const TEXT_WIDTH_OPTIONS: ReadonlyArray<{ value: ReaderTextWidth; label: string 
   { value: "full", label: "Full" },
 ];
 
-export default function ReaderSettings({
-  open,
-  onClose,
-  prefs,
-  onChange,
-  translationControls,
-  anchorRef,
-}: Props) {
+export default function ReaderSettings({ open, onClose, prefs, onChange, translationControls, anchorRef }: Props) {
   const [local, setLocal] = useState<ReaderPreferences>(prefs);
   const [simpleMode, setSimpleMode] = useSimpleMode();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -75,7 +68,7 @@ export default function ReaderSettings({
   return (
     <div
       ref={panelRef}
-      className="absolute right-0 top-full z-40 mt-3 w-[min(calc(100vw_-_4rem),24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-[color:var(--surface-border)] bg-background shadow-xl border-[color:var(--surface-border)]"
+      className="absolute right-0 top-full z-40 mt-3 w-[min(92vw,24rem)] max-h-[min(70vh,32rem)] overflow-hidden rounded-lg border border-[color:var(--surface-border)] bg-background shadow-xl border-[color:var(--surface-border)]"
     >
         <div className="max-h-[min(70vh,32rem)] overflow-y-auto p-3 text-sm space-y-4">
           <div className="flex items-center justify-between gap-3 border-b border-[color:var(--surface-border)] pb-3">

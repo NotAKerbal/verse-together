@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import {
+  buildScriptureCatalog,
+  buildScriptureCatalogFromDirectory,
+  serializeScriptureCatalog,
+} from "./scriptureCatalog.mjs";
 
 const DEFAULT_DB_PATH = path.join(
   process.cwd(),
@@ -11,6 +16,8 @@ const DEFAULT_DB_PATH = path.join(
   "lds-scriptures-sqlite.db"
 );
 const DEFAULT_OUTPUT_DIR = path.join(process.cwd(), "public", "scripture-data");
+// Small navigation catalog, imported by app code (browse, quick nav, server lookups) instead of the verse bundles.
+const DEFAULT_CATALOG_PATH = path.join(process.cwd(), "src", "lib", "generated", "scriptureCatalog.json");
 const DATASET_VERSION = "lds-scriptures-2020.12.08";
 
 const VOLUME_SLUG_BY_SOURCE = {
@@ -22,7 +29,12 @@ const VOLUME_SLUG_BY_SOURCE = {
 };
 
 function parseArgs(argv) {
-  const args = { source: DEFAULT_DB_PATH, outDir: DEFAULT_OUTPUT_DIR };
+  const args = {
+    source: DEFAULT_DB_PATH,
+    outDir: DEFAULT_OUTPUT_DIR,
+    catalogOut: DEFAULT_CATALOG_PATH,
+    catalogOnly: false,
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if ((token === "--source" || token === "-s") && argv[index + 1]) {
@@ -33,6 +45,15 @@ function parseArgs(argv) {
     if ((token === "--out-dir" || token === "-o") && argv[index + 1]) {
       args.outDir = path.resolve(argv[index + 1]);
       index += 1;
+      continue;
+    }
+    if (token === "--catalog-out" && argv[index + 1]) {
+      args.catalogOut = path.resolve(argv[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (token === "--catalog-only") {
+      args.catalogOnly = true;
       continue;
     }
   }
@@ -362,7 +383,12 @@ function assembleData(source) {
   return { manifest, volumeFiles };
 }
 
-function writeOutput(outDir, manifest, volumeFiles) {
+function writeCatalog(catalogOut, catalog) {
+  mkdirSync(path.dirname(catalogOut), { recursive: true });
+  writeFileSync(catalogOut, serializeScriptureCatalog(catalog));
+}
+
+function writeOutput(outDir, manifest, volumeFiles, catalogOut) {
   mkdirSync(outDir, { recursive: true });
 
   writeFileSync(path.join(outDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -370,19 +396,34 @@ function writeOutput(outDir, manifest, volumeFiles) {
   for (const volumeFile of volumeFiles) {
     writeFileSync(path.join(outDir, volumeFile.fileName), JSON.stringify(volumeFile.payload));
   }
+
+  writeCatalog(
+    catalogOut,
+    buildScriptureCatalog({
+      version: manifest.version,
+      volumeBundles: volumeFiles.map((volumeFile) => volumeFile.payload),
+    })
+  );
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.catalogOnly) {
+    // Rebuild only the navigation catalog from the bundles already in --out-dir.
+    writeCatalog(args.catalogOut, buildScriptureCatalogFromDirectory(args.outDir));
+    console.log(`Wrote scripture catalog to ${path.relative(process.cwd(), args.catalogOut)}.`);
+    return;
+  }
   const source = loadSourceArtifact(args.source);
   const { manifest, volumeFiles } = assembleData(source);
-  writeOutput(args.outDir, manifest, volumeFiles);
+  writeOutput(args.outDir, manifest, volumeFiles, args.catalogOut);
 
   const volumeSummary = manifest.volumes
     .map((volume) => `${volume.volume}:${volume.bookCount}b/${volume.chapterCount}c/${volume.verseCount}v`)
     .join(", ");
 
   console.log(`Wrote ${manifest.volumes.length} scripture volumes to ${path.relative(process.cwd(), args.outDir)}.`);
+  console.log(`Wrote scripture catalog to ${path.relative(process.cwd(), args.catalogOut)}.`);
   console.log(volumeSummary);
 }
 

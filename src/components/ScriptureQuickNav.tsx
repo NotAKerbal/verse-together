@@ -4,8 +4,9 @@ import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useChapterNavigation } from "@/components/ChapterNavigation";
 import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
-import { readStorageJson, writeStorageJson } from "@/lib/clientStorage";
+import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 
 type VerseItem = { verse: number; text: string };
@@ -24,16 +25,10 @@ function isReferenceLike(value: string): boolean {
   return /\d/.test(value);
 }
 
-const verseLengthMemoryCache = new Map<string, number[]>();
-
 function parseBrowseLocation(pathname: string): { volume?: string; book?: string } {
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] !== "browse") return {};
   return { volume: parts[1], book: parts[2] };
-}
-
-function makeCacheKey(volume: string, book: string): string {
-  return `quick-nav-meta:${volume}:${book}`;
 }
 
 export default function ScriptureQuickNav({
@@ -47,14 +42,19 @@ export default function ScriptureQuickNav({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [chapterVerseCounts, setChapterVerseCounts] = useState<number[] | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
+  const navigateToChapter = useChapterNavigation();
   const pathname = usePathname();
   const locationData = useMemo(() => parseBrowseLocation(pathname), [pathname]);
   const activeVolume = normalizeScriptureVolume(currentVolume ?? locationData.volume ?? "");
   const activeBook = currentBook ?? locationData.book;
+  // Verse counts come from the bundled catalog, so filtering never waits on the network.
+  const chapterVerseCounts = useMemo(
+    () => (activeVolume && activeBook ? scriptureCatalog.getBook(activeVolume, activeBook)?.verseCounts ?? null : null),
+    [activeVolume, activeBook]
+  );
 
   const quickSuggestions = useMemo(() => getQuickNavSuggestions(query, 14), [query]);
   const filteredSuggestions = useMemo(() => {
@@ -83,50 +83,6 @@ export default function ScriptureQuickNav({
   }, [open]);
 
   useEffect(() => {
-    if (!activeVolume || !activeBook) return;
-    const volumeForFetch = activeVolume;
-    const bookForFetch = activeBook;
-    const key = makeCacheKey(volumeForFetch, bookForFetch);
-    const inMemory = verseLengthMemoryCache.get(key);
-    if (inMemory && inMemory.length > 0) {
-      setChapterVerseCounts(inMemory);
-      return;
-    }
-    const cached = readStorageJson<{ expiresAt?: number; verseCounts?: number[] }>("local", key);
-    if ((cached?.expiresAt ?? 0) > Date.now() && Array.isArray(cached?.verseCounts)) {
-      verseLengthMemoryCache.set(key, cached.verseCounts);
-      setChapterVerseCounts(cached.verseCounts);
-      return;
-    }
-
-    let cancelled = false;
-    async function fetchChapterMeta() {
-      try {
-        const res = await fetch(
-          `/api/tools/quick-nav?volume=${encodeURIComponent(volumeForFetch)}&book=${encodeURIComponent(bookForFetch)}`,
-          { cache: "force-cache" }
-        );
-        if (!res.ok) return;
-        const payload = (await res.json()) as { verseCounts?: number[] };
-        if (!Array.isArray(payload.verseCounts)) return;
-        if (cancelled) return;
-        verseLengthMemoryCache.set(key, payload.verseCounts);
-        setChapterVerseCounts(payload.verseCounts);
-        writeStorageJson("local", key, {
-          expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 14,
-          verseCounts: payload.verseCounts,
-        });
-      } catch {
-        // Best effort cache fill only.
-      }
-    }
-    void fetchChapterMeta();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeVolume, activeBook]);
-
-  useEffect(() => {
     function onDocClick(event: MouseEvent) {
       if (!wrapperRef.current) return;
       if (!wrapperRef.current.contains(event.target as Node)) {
@@ -153,7 +109,7 @@ export default function ScriptureQuickNav({
       nextUrl.searchParams.set("translation", currentTranslation);
       compare.forEach((value) => nextUrl.searchParams.append("compare", value));
     }
-    router.push(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    navigateToChapter(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     setOpen(false);
     setQuery("");
   }

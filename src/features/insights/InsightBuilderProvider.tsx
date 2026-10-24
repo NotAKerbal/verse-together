@@ -1,10 +1,33 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MutableRefObject,
+} from "react";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "@/lib/auth";
 import type { InsightDraft, InsightDraftSummary, InsightVisibility } from "@/lib/appData";
+import { isSafeSourceHref, localDateKey, type JournalNoteDocument, type NoteSource } from "@/features/notes/journal";
+import { JournalOutbox, RevisionConflictError, type OutboxEntry } from "@/features/notes/journalOutbox";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import type { ReadingLogAttempt, ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import type { ChapterMarkAttempt } from "@/features/plans/ChapterReadToggle";
+
+/**
+ * What the page being read says about itself. `href` defaults to the live URL (path, query and hash) at the
+ * moment a note is created, so a note made mid-chapter links back to where the reader actually was.
+ */
+export type RegisteredNoteSource = Omit<NoteSource, "href"> & { href?: string };
 
 type ScripturePayload = {
   volume: string;
@@ -26,15 +49,24 @@ type DictionaryPayload = {
 
 export type NoteSaveStatus = "idle" | "saving" | "saved";
 
-/** The two views of the notebook panel. "log" exists only while a chapter reader is mounted. */
+/** The two views of the notes panel. "log" exists only while a chapter page is showing. */
 export type NotebookPanelView = "log" | "notes";
 
-/** The chapter the reader is showing, so the panel's Log view can record it. */
+/** The chapter a chapter page is showing, so the panel's Log view can record it. */
 export type ReaderChapter = {
   volume: string;
   book: string;
   chapter: number;
   reference: string;
+  logOptions: ReadingLogOption[];
+  /** Log offers the chapter's verses, so it waits for the text. */
+  logReady: boolean;
+};
+
+/** One chapter page's hold on the panel's Log view; see registerReaderChapter. */
+export type ReaderChapterRegistration = {
+  update: (chapter: ReaderChapter) => void;
+  unregister: () => void;
 };
 
 type InsightBuilderContextValue = {
@@ -49,11 +81,22 @@ type InsightBuilderContextValue = {
   togglePanel: () => void;
   panelView: NotebookPanelView;
   setPanelView: (view: NotebookPanelView) => void;
-  /** Opens the panel (phone sheet and desktop panel) on the given view. */
+  /** Expands the desktop panel on the given view. */
   openPanel: (view: NotebookPanelView) => void;
+  /** Phone Log and Notes sheet, opened from a chapter page's Log button. */
+  isSheetOpen: boolean;
+  setSheetOpen: (open: boolean) => void;
+  /** The chapter page most recently mounted (a page opening over another wins), or null on other pages. */
   readerChapter: ReaderChapter | null;
-  /** Called by the chapter reader while mounted; returns the cleanup that unregisters it. */
-  registerReaderChapter: (chapter: ReaderChapter) => () => void;
+  /** Called once per mounted chapter header; update it as the chapter's details change, unregister on unmount. */
+  registerReaderChapter: () => ReaderChapterRegistration;
+  /**
+   * The Log view's last unfinished log attempt. It outlives the panel (collapsing it, closing the sheet) so a
+   * retry after an unknown result reuses the request id; cleared when the account changes.
+   */
+  readerLogPendingRef: MutableRefObject<ReadingLogAttempt | null>;
+  /** The same for the Log view's mark-read toggle. */
+  readerMarkPendingRef: MutableRefObject<ChapterMarkAttempt | null>;
   /** "saving" while any note write is in flight, "saved" right after one lands. */
   saveStatus: NoteSaveStatus;
   lastSavedAt: number | null;
@@ -93,19 +136,44 @@ type InsightBuilderContextValue = {
   removeBlock: (blockId: string) => Promise<void>;
   reorderBlocks: (fromIndex: number, toIndex: number) => Promise<void>;
   publishDraft: (title?: string, summary?: string) => Promise<void>;
+  /** Closes the phone flag only; the desktop panel keeps its own state. */
+  dismissMobile: () => void;
+  /** The active note's Markdown fields, as getDraft returns them (projected Markdown for older notes). */
+  activeNote: JournalNoteDocument | null;
+  /** The source the current reader or guide page registered, or null on other pages. */
+  currentSource: RegisteredNoteSource | null;
+  registerNoteSource: (source: RegisteredNoteSource) => () => void;
+  /** The current source with its live href, ready to store; null when there is none or it isn't storable. */
+  captureCurrentSource: () => NoteSource | null;
+  /** A new private Markdown note. `source: null` makes a personal note even on a reader page. */
+  createJournalNote: (options?: { journalDate?: string; source?: NoteSource | null }) => Promise<string | null>;
+  /** Per-user pending text and save state for Markdown notes. */
+  journalOutbox: JournalOutbox;
 };
 
 const InsightBuilderContext = createContext<InsightBuilderContextValue | null>(null);
 const ACTIVE_DRAFT_STORAGE_PREFIX = "vt_reader_active_draft_v1";
 const PANEL_OPEN_STORAGE_PREFIX = "vt_notebook_panel_open_v1";
+const NO_DRAFTS: InsightDraftSummary[] = [];
+
+type DraftId = Id<"insightDrafts">;
+type BlockId = Id<"insightDraftBlocks">;
 
 export function InsightBuilderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { ready: convexReady } = useConvexSignedIn();
   const canUseInsights = !!user;
+  // Per-user queries wait until Convex has the session token, not just Clerk.
+  const canQuery = canUseInsights && convexReady;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelView, setPanelView] = useState<NotebookPanelView>("notes");
+  const [isSheetOpen, setSheetOpen] = useState(false);
   const [readerChapter, setReaderChapter] = useState<ReaderChapter | null>(null);
+  const readerChaptersRef = useRef(new Map<number, ReaderChapter>());
+  const readerChapterTokenRef = useRef(0);
+  const readerLogPendingRef = useRef<ReadingLogAttempt | null>(null);
+  const readerMarkPendingRef = useRef<ChapterMarkAttempt | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [pendingSaves, setPendingSaves] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -117,15 +185,14 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const hasRestoredActiveDraftRef = useRef(false);
   const hasRestoredPanelRef = useRef(false);
 
-  const draftRows = useQuery(api.insights.listMyDrafts, canUseInsights ? {} : "skip") as
+  const draftRows = useQuery(api.insights.listMyDrafts, canQuery ? {} : "skip") as
     | InsightDraftSummary[]
     | undefined;
   const activeDraft = useQuery(
     api.insights.getDraft,
-    canUseInsights && activeDraftId ? ({ draftId: activeDraftId as any }) : "skip"
+    canQuery && activeDraftId ? ({ draftId: activeDraftId as DraftId }) : "skip"
   ) as InsightDraft | undefined;
 
-  const createDraftMutation = useMutation(api.insights.createDraft);
   const setActiveDraftMutation = useMutation(api.insights.setActiveDraft);
   const renameDraftMutation = useMutation(api.insights.renameDraft);
   const saveDraftSettingsMutation = useMutation(api.insights.saveDraftSettings);
@@ -136,8 +203,87 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const removeBlockMutation = useMutation(api.insights.removeBlock);
   const reorderBlocksMutation = useMutation(api.insights.reorderBlocks);
   const publishDraftMutation = useMutation(api.insights.publishDraft);
+  const createJournalNoteMutation = useMutation(api.insights.createJournalNote);
+  const saveJournalNoteMutation = useMutation(api.insights.saveJournalNote);
 
-  const drafts = draftRows ?? [];
+  // Saves go through a ref so the outbox, created once per user, always uses the current mutation and
+  // refuses to save on behalf of someone who has since signed out or switched accounts.
+  const userId = user?.id ?? null;
+  const userIdRef = useRef(userId);
+  const saveJournalNoteRef = useRef(saveJournalNoteMutation);
+  useEffect(() => {
+    userIdRef.current = userId;
+    saveJournalNoteRef.current = saveJournalNoteMutation;
+  }, [userId, saveJournalNoteMutation]);
+  useEffect(() => {
+    readerLogPendingRef.current = null;
+    readerMarkPendingRef.current = null;
+  }, [userId]);
+  const journalOutbox = useMemo(() => {
+    const owner = userId;
+    return new JournalOutbox(async (noteId, markdownBody, expectedRevision) => {
+      if (!owner || userIdRef.current !== owner) throw new Error("You were signed out before this note was saved.");
+      try {
+        const result = await saveJournalNoteRef.current({ draftId: noteId as DraftId, markdownBody, expectedRevision });
+        return { markdownRevision: result.markdownRevision };
+      } catch (error) {
+        const data = error instanceof ConvexError ? (error.data as { code?: string; currentRevision?: number }) : null;
+        if (data?.code === "REVISION_CONFLICT") {
+          throw new RevisionConflictError(typeof data.currentRevision === "number" ? data.currentRevision : null);
+        }
+        throw error;
+      }
+    });
+  }, [userId]);
+
+  // Unsaved note text lives only in this tab, so leaving with some still pending asks first.
+  useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (!journalOutbox.hasUnsaved()) return;
+      journalOutbox.flushAll();
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [journalOutbox]);
+
+  const [currentSource, setCurrentSource] = useState<RegisteredNoteSource | null>(null);
+  const sourceTokenRef = useRef(0);
+  const currentSourceRef = useRef<RegisteredNoteSource | null>(null);
+  useEffect(() => {
+    currentSourceRef.current = currentSource;
+  }, [currentSource]);
+
+  const registerNoteSource = useCallback((source: RegisteredNoteSource) => {
+    const token = ++sourceTokenRef.current;
+    setCurrentSource(source);
+    return () => {
+      // A newer page may already have registered; only the latest registration clears.
+      if (sourceTokenRef.current === token) setCurrentSource(null);
+    };
+  }, []);
+
+  const captureCurrentSource = useCallback((): NoteSource | null => {
+    const registered = currentSourceRef.current;
+    if (!registered) return null;
+    let href = registered.href;
+    if (typeof window !== "undefined") {
+      const { pathname, search, hash } = window.location;
+      if (!href || href.split(/[?#]/)[0] === pathname) href = `${pathname}${search}${hash}`;
+    }
+    const label = registered.label.trim().slice(0, 200);
+    if (!href || !isSafeSourceHref(href) || !label) return null;
+    const source: NoteSource = { kind: registered.kind, label, href };
+    if (registered.volume) source.volume = registered.volume;
+    if (registered.book) source.book = registered.book;
+    if (registered.chapter !== undefined) source.chapter = registered.chapter;
+    if (registered.verseStart !== undefined) source.verseStart = registered.verseStart;
+    if (registered.verseEnd !== undefined) source.verseEnd = registered.verseEnd;
+    return source;
+  }, []);
+
+  const drafts = draftRows ?? NO_DRAFTS;
   const isLoading = canUseInsights && (draftRows === undefined || (activeDraftId !== null && activeDraft === undefined));
 
   useEffect(() => {
@@ -200,6 +346,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     if (!canUseInsights) {
       setActiveDraftId(null);
       setIsMobileOpen(false);
+      setSheetOpen(false);
       return;
     }
     if (draftRows === undefined) return;
@@ -210,21 +357,46 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const openPanel = useCallback((view: NotebookPanelView) => {
     setPanelView(view);
+    setIsPanelOpen(true);
+  }, []);
+
+  // Everything that writes to or asks for a note shows the Notes view (below lg, the /notes page).
+  const openBuilder = useCallback(() => {
+    setPanelView("notes");
     setIsMobileOpen(true);
     setIsPanelOpen(true);
   }, []);
 
-  // Everything that writes to or asks for a note shows the Notes view.
-  const openBuilder = useCallback(() => openPanel("notes"), [openPanel]);
-
-  const registerReaderChapter = useCallback((chapter: ReaderChapter) => {
-    setReaderChapter(chapter);
-    return () => setReaderChapter((current) => (current === chapter ? null : current));
+  const registerReaderChapter = useCallback((): ReaderChapterRegistration => {
+    const token = ++readerChapterTokenRef.current;
+    const registered = readerChaptersRef.current;
+    const showLatest = () => {
+      let latest: ReaderChapter | null = null;
+      let latestToken = -1;
+      for (const [key, chapter] of registered) {
+        if (key > latestToken) {
+          latestToken = key;
+          latest = chapter;
+        }
+      }
+      setReaderChapter(latest);
+    };
+    return {
+      update: (chapter) => {
+        registered.set(token, chapter);
+        showLatest();
+      },
+      unregister: () => {
+        registered.delete(token);
+        showLatest();
+      },
+    };
   }, []);
 
   const closeBuilder = useCallback(() => {
     setIsMobileOpen(false);
     setIsPanelOpen(false);
+    setSheetOpen(false);
   }, []);
 
   const toggleMobileBuilder = useCallback(() => {
@@ -234,6 +406,29 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const togglePanel = useCallback(() => {
     setIsPanelOpen((prev) => !prev);
   }, []);
+
+  const dismissMobile = useCallback(() => {
+    setIsMobileOpen(false);
+  }, []);
+
+  const activeNote = useMemo<JournalNoteDocument | null>(() => {
+    if (!activeDraft) return null;
+    const draft = activeDraft as InsightDraft & Partial<JournalNoteDocument>;
+    // An older backend without Markdown fields leaves the note unavailable to the Markdown editor.
+    if (typeof draft.markdown_body !== "string" || typeof draft.markdown_revision !== "number") return null;
+    return {
+      id: draft.id,
+      title: draft.title,
+      status: draft.status,
+      markdown_body: draft.markdown_body,
+      markdown_revision: draft.markdown_revision,
+      markdown_canonical: draft.markdown_canonical ?? false,
+      journal_date: draft.journal_date ?? draft.created_at.slice(0, 10),
+      source: draft.source ?? null,
+      created_at: draft.created_at,
+      updated_at: draft.updated_at,
+    };
+  }, [activeDraft]);
 
   // Every write to a note passes through here so the UI can show one honest
   // "Saving... / Saved just now" line instead of per-field spinners.
@@ -249,30 +444,41 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   }, []);
   const saveStatus: NoteSaveStatus = pendingSaves > 0 ? "saving" : lastSavedAt ? "saved" : "idle";
 
-  const createDraft = useCallback(
-    async (title?: string) => {
+  const createJournalNote = useCallback(
+    async (options?: { journalDate?: string; source?: NoteSource | null }) => {
       if (!canUseInsights) return null;
-      const created = await tracked(createDraftMutation({ title: title?.trim() || undefined }));
+      const source = options?.source === undefined ? captureCurrentSource() : options.source;
+      const created = await tracked(
+        createJournalNoteMutation({
+          journalDate: options?.journalDate ?? localDateKey(),
+          source: source ?? undefined,
+        })
+      );
       const id = String(created.id);
       setActiveDraftId(id);
       setPanelView("notes");
       setIsPanelOpen(true);
-      await setActiveDraftMutation({ draftId: created.id as any });
+      await setActiveDraftMutation({ draftId: created.id as DraftId });
       return id;
     },
-    [canUseInsights, createDraftMutation, setActiveDraftMutation, tracked]
+    [canUseInsights, captureCurrentSource, createJournalNoteMutation, setActiveDraftMutation, tracked]
   );
+
+  // Kept for every existing caller (reader, dictionary, notebook). New notes are Markdown journal notes for
+  // today, tied to the page they were started from; the title comes from the note's first line, so the
+  // old title argument no longer applies.
+  const createDraft = useCallback(async () => createJournalNote(), [createJournalNote]);
 
   const ensureActiveDraftId = useCallback(async () => {
     if (activeDraftId) return activeDraftId;
-    const createdId = await createDraft("New note");
+    const createdId = await createDraft();
     return createdId;
   }, [activeDraftId, createDraft]);
 
   const switchDraft = useCallback(
     async (draftId: string) => {
       setActiveDraftId(draftId);
-      await setActiveDraftMutation({ draftId: draftId as any });
+      await setActiveDraftMutation({ draftId: draftId as DraftId });
     },
     [setActiveDraftMutation]
   );
@@ -283,14 +489,14 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const renameDraft = useCallback(
     async (draftId: string, title: string) => {
-      await tracked(renameDraftMutation({ draftId: draftId as any, title }));
+      await tracked(renameDraftMutation({ draftId: draftId as DraftId, title }));
     },
     [renameDraftMutation, tracked]
   );
 
   const deleteDraft = useCallback(
     async (draftId: string) => {
-      await tracked(deleteDraftMutation({ draftId: draftId as any }));
+      await tracked(deleteDraftMutation({ draftId: draftId as DraftId }));
       if (activeDraftId === draftId) setActiveDraftId(null);
     },
     [deleteDraftMutation, activeDraftId, tracked]
@@ -300,7 +506,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     async (payload: { draftId: string; title?: string; tags?: string[]; visibility?: InsightVisibility }) => {
       await tracked(
         saveDraftSettingsMutation({
-          draftId: payload.draftId as any,
+          draftId: payload.draftId as DraftId,
           title: payload.title?.trim() || undefined,
           tags: payload.tags?.map((tag) => tag.trim()).filter(Boolean) ?? undefined,
           visibility: payload.visibility,
@@ -316,7 +522,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (!draftId) return;
       await tracked(
         addBlockMutation({
-          draftId: draftId as any,
+          draftId: draftId as DraftId,
           type: "text",
           text: text?.trim() || undefined,
         })
@@ -332,7 +538,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (!draftId) return;
       await tracked(
         addBlockMutation({
-          draftId: draftId as any,
+          draftId: draftId as DraftId,
           type: "quote",
           text: text?.trim() || undefined,
           highlightText: options?.highlightText?.trim() || undefined,
@@ -351,7 +557,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (!draftId) return;
       await tracked(
         appendScriptureBlockMutation({
-          draftId: draftId as any,
+          draftId: draftId as DraftId,
           volume: payload.volume,
           book: payload.book,
           chapter: payload.chapter,
@@ -372,7 +578,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (!draftId) return;
       await tracked(
         addBlockMutation({
-          draftId: draftId as any,
+          draftId: draftId as DraftId,
           type: "dictionary",
           text: payload.entryText?.trim() || undefined,
           dictionaryMeta: {
@@ -406,7 +612,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     ) => {
       await tracked(
         updateBlockMutation({
-          blockId: blockId as any,
+          blockId: blockId as BlockId,
           text: patch.text?.trim() || undefined,
           highlightText: patch.highlightText?.trim() || undefined,
           highlightWordIndices: patch.highlightWordIndices,
@@ -427,7 +633,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const removeBlock = useCallback(
     async (blockId: string) => {
-      await tracked(removeBlockMutation({ blockId: blockId as any }));
+      await tracked(removeBlockMutation({ blockId: blockId as BlockId }));
     },
     [removeBlockMutation, tracked]
   );
@@ -442,8 +648,8 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       ordered.splice(toIndex, 0, moved);
       await tracked(
         reorderBlocksMutation({
-          draftId: activeDraft.id as any,
-          blockIds: ordered.map((b) => b.id as any),
+          draftId: activeDraft.id as DraftId,
+          blockIds: ordered.map((b) => b.id as BlockId),
         })
       );
     },
@@ -455,7 +661,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       if (!activeDraftId) return;
       await tracked(
         publishDraftMutation({
-          draftId: activeDraftId as any,
+          draftId: activeDraftId as DraftId,
           title: title?.trim() || undefined,
           summary: summary?.trim() || undefined,
         })
@@ -478,8 +684,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       panelView,
       setPanelView,
       openPanel,
+      isSheetOpen,
+      setSheetOpen,
       readerChapter,
       registerReaderChapter,
+      readerLogPendingRef,
+      readerMarkPendingRef,
       saveStatus,
       lastSavedAt,
       drafts,
@@ -500,8 +710,22 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       removeBlock,
       reorderBlocks,
       publishDraft,
+      dismissMobile,
+      activeNote,
+      currentSource,
+      registerNoteSource,
+      captureCurrentSource,
+      createJournalNote,
+      journalOutbox,
     }),
     [
+      dismissMobile,
+      activeNote,
+      currentSource,
+      registerNoteSource,
+      captureCurrentSource,
+      createJournalNote,
+      journalOutbox,
       canUseInsights,
       isMobileOpen,
       isPanelOpen,
@@ -512,8 +736,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       panelView,
       setPanelView,
       openPanel,
+      isSheetOpen,
+      setSheetOpen,
       readerChapter,
       registerReaderChapter,
+      readerLogPendingRef,
+      readerMarkPendingRef,
       saveStatus,
       lastSavedAt,
       drafts,
@@ -544,4 +772,10 @@ export function useInsightBuilder() {
   const ctx = useContext(InsightBuilderContext);
   if (!ctx) throw new Error("useInsightBuilder must be used within InsightBuilderProvider");
   return ctx;
+}
+
+/** The pending text and save state for one note; re-renders only the caller when the outbox changes. */
+export function useNoteOutboxEntry(outbox: JournalOutbox, noteId: string | null): OutboxEntry | undefined {
+  const snapshot = useSyncExternalStore(outbox.subscribe, outbox.getSnapshot, outbox.getSnapshot);
+  return noteId ? snapshot.get(noteId) : undefined;
 }

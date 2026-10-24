@@ -45,7 +45,9 @@
   --shell-max-width: 1180px;
   --shell-max-width-wide: 1400px;
   --shell-gutter: clamp(1rem, 2.6vw, 2rem);
-  --header-height: 4.75rem;
+  /* Bottom edge of the floating desktop navigation: 1rem inset + 3rem bar. */
+  --header-height: 4rem;
+  --desktop-nav-control-size: 2.25rem;
   --input-surface: #fffdf9;
   --mobile-nav-shell: #fbf9f4;
   --mobile-nav-ring: #d9d1c1;
@@ -248,124 +250,627 @@ mark {
 }
 
 .app-header {
-  position: sticky;
-  top: 0;
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
   z-index: 30;
-  background: transparent;
+  max-width: min(var(--shell-max-width), calc(100% - 2 * var(--shell-gutter)));
+}
+
+/* Browse pages: the header spans the shell so page controls (the Library search, a volume's or book's
+   navigation) sit at its right; the gap between them and the nav pill lets clicks through to the page. */
+.app-header[data-actions="true"] {
+  right: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   pointer-events: none;
 }
 
-.app-header > * {
+.app-header[data-actions="true"] > * {
   pointer-events: auto;
 }
 
-.app-header-scroll {
-  position: relative;
-  top: auto;
+.app-header[data-actions="true"] .desktop-nav-bar {
+  flex-shrink: 0;
 }
 
-/*
-  Chapter reader on wide screens: the reader portals its toolbar into the header's slot
-  (src/components/ReaderHeaderSlot.tsx). The app controls pack to the left, the reader pill
-  sits on the right, and the header stays put so the reader controls remain in reach.
-*/
-.reader-header-slot {
+/* Full 22rem when there is room; narrower desktops shrink the search, never the nav. */
+.app-header-search {
   display: none;
+  flex: 0 1 22rem;
 }
 
-@media (min-width: 1024px) {
-  .reader-header-slot:not(:empty) {
-    display: flex;
-    grid-column: 4;
-    justify-self: end;
-    justify-content: flex-end;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .app-header:has(.reader-header-slot:not(:empty)) > .shell-container {
-    grid-template-columns: auto auto auto minmax(0, 1fr);
-  }
-
-  :root:not([data-simple="true"]) .app-header:has(.reader-header-slot:not(:empty)) {
-    position: sticky;
-    top: 0;
-  }
-}
-
-/* The reader's toolbar: a pill shaped like the header's segmented control. */
-.reader-toolbar {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
+/* Filled by AppHeaderPortal (e.g. SelectionHeader); like the search, it shrinks before the nav does. */
+.app-header-slot {
+  display: none;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
-  padding: 0.2rem;
+}
+
+/* A volume's or book's back link, title, and search, in the nav pill's chrome; the search panel is placed against it. */
+.app-header-selection {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  height: 3rem;
+  padding: 0.3125rem 0.375rem 0.3125rem 1.125rem;
   border: 1px solid var(--surface-border);
   border-radius: 999px;
   background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
 }
 
-.reader-toolbar .reader-toolbar-button {
+.app-header-selection[data-back="true"] {
+  padding-left: 0.375rem;
+}
+
+.app-header-selection-title {
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 0.25rem;
+  font-family: var(--font-serif-text);
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browse-selection-header .app-header-selection-title {
+  flex: 1;
+}
+
+.app-header-selection-button {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
   border: 0;
-  border-radius: 999px;
+  border-radius: 50%;
   background: transparent;
   color: var(--foreground);
   transition: background-color 120ms ease, color 120ms ease;
 }
 
-.reader-toolbar .reader-toolbar-button:hover {
+.app-header-selection-button:hover {
+  border: 0;
   background: var(--surface-button-hover);
 }
 
-.reader-toolbar .reader-toolbar-button:focus-visible {
+.app-header-selection-button:focus-visible {
   outline: 2px solid var(--accent-rubric);
-  outline-offset: -2px;
+  outline-offset: 3px;
+  box-shadow: none;
 }
 
-.reader-toolbar .reader-toolbar-log {
-  gap: 0.4rem;
-  width: auto;
-  padding-inline: 0.75rem;
-  font-size: 0.875rem;
+/* Header search shares the floating nav pill's chrome: 3rem tall, pill corners, card surface. */
+.library-search-pill {
+  height: 3rem;
+  padding: 0 1.125rem 0 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.library-search-pill:focus-within {
+  border-color: var(--accent-rubric-line);
+  box-shadow: var(--surface-shadow-soft), 0 0 0 3px color-mix(in srgb, var(--accent-rubric) 14%, transparent);
+}
+
+.library-search-menu {
+  border-radius: 1.25rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-lift);
+}
+
+.desktop-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: max-content;
+  max-width: 100%;
+  min-height: 3rem;
+  padding: 0.3125rem 0.375rem 0.3125rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.desktop-nav-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  opacity: 1;
+  visibility: visible;
+  transition: grid-template-columns 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease, visibility 0s linear;
+}
+
+.desktop-nav-items {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.desktop-nav-brand {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 1.25rem;
+}
+
+.desktop-nav-links {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: 0.75rem;
+  gap: 0.375rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--surface-border);
+}
+
+.desktop-nav-indicator {
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  width: calc(var(--desktop-nav-control-size) + 0.375rem + var(--active-label-width, 0px));
+  height: var(--desktop-nav-control-size);
+  border-radius: 0.7rem;
+  background: var(--surface-button-active);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(var(--active-index, 0) * (var(--desktop-nav-control-size) + 0.375rem)));
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1), width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 120ms ease;
+}
+
+.desktop-nav-links[data-has-active="true"][data-measured="true"] .desktop-nav-indicator {
+  opacity: 1;
+}
+
+.desktop-nav-link,
+.desktop-nav-account-control,
+.desktop-nav-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+  border-radius: 50%;
+  color: var(--foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.desktop-nav-link {
+  position: relative;
+  width: var(--desktop-nav-control-size);
+  min-width: var(--desktop-nav-control-size);
+  gap: 0;
+  padding-inline: 0.5rem;
+  border-radius: 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+}
+
+.desktop-nav-link > svg {
+  flex-shrink: 0;
+}
+
+.desktop-nav-label {
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
+}
+
+.desktop-nav-label-text {
+  display: inline-block;
+}
+
+.desktop-nav-link:hover,
+.desktop-nav-toggle:hover {
+  background: var(--surface-button-hover);
+}
+
+.desktop-nav-link[data-active="true"] {
+  width: calc(var(--desktop-nav-control-size) + 0.375rem + var(--nav-label-width, 0px));
+  background: transparent;
+  color: var(--surface-button-active-text);
+}
+
+.desktop-nav-link[data-active="true"] .desktop-nav-label {
+  max-width: var(--nav-label-width, 0px);
+  margin-left: 0.375rem;
+  opacity: 1;
+}
+
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-link,
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-label,
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-indicator {
+  transition: none;
+}
+
+.desktop-nav-account {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--surface-border);
+}
+
+.desktop-nav-account-control {
+  background: var(--surface-card-soft);
+}
+
+.desktop-nav-account-control:hover {
+  background: var(--surface-button-hover);
+}
+
+.desktop-nav-toggle {
+  width: 2rem;
+  height: var(--desktop-nav-control-size);
+  margin-left: 0.25rem;
+  gap: 0.5rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
-.reader-toolbar .reader-toolbar-log[aria-expanded="true"] {
+.desktop-nav-toggle-icon {
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.desktop-nav-bar a:focus-visible,
+.desktop-nav-bar button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+}
+
+.app-header[data-collapsed="true"] .desktop-nav-content {
+  grid-template-columns: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition-delay: 0s, 0s, 280ms;
+}
+
+.app-header[data-collapsed="true"] .desktop-nav-toggle-icon {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-nav-content,
+  .desktop-nav-toggle-icon,
+  .desktop-nav-indicator,
+  .desktop-nav-link,
+  .desktop-nav-label {
+    transition: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .app-header {
+    display: block;
+  }
+
+  /* The bar floats independently; only the page's initial content needs clearance. */
+  .app-main {
+    padding-top: calc(var(--header-height) + 1rem);
+  }
+
+  .app-main[data-fixed="true"] {
+    padding-top: calc(var(--header-height) + 0.75rem);
+  }
+}
+
+/* Below this the header has no room for page controls, so browse pages keep them in the page instead. */
+@media (min-width: 768px) {
+  .app-header[data-actions="true"] {
+    display: flex;
+  }
+
+  .app-header-search,
+  .app-header-slot:not(:empty) {
+    display: block;
+  }
+
+  .browse-search-fallback {
+    display: none;
+  }
+
+  /* Set only once the header slot is mounted; simple mode hides the slot and keeps the page's copy. */
+  :root:not([data-simple="true"]) .browse-header-fallback {
+    display: none;
+  }
+}
+
+.desktop-nav-account-placeholder {
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+}
+
+/*
+  The chapter header (ChapterHeader in src/components/ChapterReaderChrome.tsx): one pill, shaped like the floating
+  navigation's, holding search, the chapter's trail, Log, simple mode and settings. On wide screens it is drawn in
+  the app header's slot (src/components/ReaderHeaderSlot.tsx) to the right of the navigation, with the comparison key
+  and notices right-aligned beneath it; narrower screens keep it at the top of the page.
+*/
+.reader-header-slot {
+  display: none;
+}
+
+/* Like browse pages' header controls ([data-actions]): the header spans the shell, and its gaps let clicks through
+   to the page. */
+:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) {
+  display: flex;
+  right: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) > .desktop-nav-bar {
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+/* A chapter's header replaces a browse page's controls there (e.g. while a chapter opens over /browse or a book
+   page), so the app header never shows two sets of page controls. */
+:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) > :is(.app-header-search, .app-header-slot) {
+  display: none;
+}
+
+/* The navigation never shrinks; the trail in the reader pill gives way first. */
+:root:not([data-simple="true"]) .reader-header-slot:not(:empty) {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.reader-header-slot > * {
+  pointer-events: auto;
+}
+
+.reader-header-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+}
+
+@media (min-width: 640px) {
+  .reader-header-inline {
+    align-items: flex-end;
+  }
+}
+
+/* Until it is known whether the header moves into the app header, it stays out of view where it would
+   (READER_HEADER_DOCK_QUERY in src/components/ReaderHeaderSlot.tsx). */
+@media (min-width: 900px) {
+  .reader-header-inline[data-dock-pending="true"] {
+    display: none;
+  }
+}
+
+.reader-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 3rem;
+  padding: 0.3125rem 0.375rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.reader-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.reader-toolbar-nav {
+  flex: 1 1 auto;
+}
+
+.reader-toolbar-actions {
+  flex-shrink: 0;
+  padding-left: 0.375rem;
+  border-left: 1px solid var(--surface-border);
+}
+
+.reader-toolbar-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.reader-toolbar-button:hover:not(:disabled),
+.reader-toolbar-button[aria-expanded="true"] {
+  background: var(--surface-button-hover);
+}
+
+.reader-toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.reader-toolbar-log {
+  width: auto;
+  padding-inline: 0.75rem;
+  border-radius: 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* Log opens the shared Log and Notes panel; it stays pressed while the panel shows Log. */
+.reader-toolbar-log[aria-expanded="true"] {
   background: var(--surface-button-active);
   color: var(--surface-button-active-text);
 }
 
-.reader-toolbar .reader-toolbar-title {
-  flex-shrink: 1;
-  justify-content: flex-start;
-  width: auto;
+.reader-toolbar a:focus-visible,
+.reader-toolbar button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 2px;
+}
+
+.reader-toolbar-crumbs {
   min-width: 0;
-  max-width: 100%;
-  padding-inline: 0.85rem;
+}
+
+.reader-toolbar-crumbs ol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.reader-toolbar-crumbs li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.reader-toolbar-crumbs li:not(:last-child) {
+  flex-shrink: 4;
+}
+
+.reader-toolbar-crumbs li:not(:last-child)::after {
+  content: "/";
+  padding-inline: 0.125rem;
+  color: var(--foreground-soft);
+}
+
+.reader-toolbar-crumb {
+  display: block;
+  min-width: 0;
+  padding: 0.375rem 0.5rem;
+  overflow: hidden;
+  border-radius: 0.7rem;
+  color: var(--foreground-muted);
+  text-overflow: ellipsis;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+a.reader-toolbar-crumb:hover {
+  background: var(--surface-button-hover);
+  color: var(--foreground);
+}
+
+.reader-toolbar-crumb[aria-current="page"] {
+  color: var(--foreground);
   font-weight: 600;
 }
 
-/* Quick nav anchors its panel to the whole pill so it opens right-aligned and on screen. */
-.reader-toolbar .reader-toolbar-quicknav {
-  position: static;
+/* Phones keep just the chapter in the trail. */
+@media (max-width: 639px) {
+  .reader-toolbar-crumbs li:not(:last-child) {
+    display: none;
+  }
 }
 
-/* Comparison key and translation notices, under the toolbar in the scripture column. */
-.reader-toolbar-note {
+/* The search panel is placed against the pill, so it lines up with the pill's right edge. */
+.reader-search {
+  display: contents;
+}
+
+.reader-search-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 40;
+  width: min(22rem, calc(100vw - 2 * var(--shell-gutter)));
+}
+
+/* Comparison key, loading status and notices, right-aligned under the pill. */
+.reader-header-notes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.375rem;
+  max-width: 100%;
+}
+
+.reader-header-notes > * {
   max-width: 100%;
   padding: 0.35rem 0.85rem;
   border: 1px solid var(--surface-border);
   border-radius: 1rem;
   background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.reader-header-notes > .reader-header-notice {
+  border-color: rgb(245 158 11 / 0.3);
+}
+
+@media (max-width: 639px) {
+  .reader-header-inline .reader-header-notes {
+    align-items: stretch;
+  }
+
+  .reader-header-inline {
+    top: max(1rem, env(safe-area-inset-top));
+    z-index: 30;
+  }
+
+  .reader-toolbar-button {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+  }
+
+  .reader-toolbar-button > svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .reader-toolbar-log {
+    padding-inline: 0;
+  }
+
+  .reader-toolbar-log-label {
+    display: none;
+  }
+
+  .reader-toolbar-crumb {
+    min-height: 2.75rem;
+    padding-inline: 0.25rem;
+    line-height: 2rem;
+    border-radius: 999px;
+  }
 }
 
 .brand-wordmark {
@@ -481,6 +986,31 @@ mark {
   padding: 0.3rem 0.25rem 0.6rem;
 }
 
+@media (max-width: 639.98px) {
+  .browse-search-fallback,
+  .browse-selection-header {
+    position: sticky;
+    top: max(1rem, env(safe-area-inset-top));
+    z-index: 30;
+  }
+
+  .browse-selection-header .app-header-selection {
+    width: 100%;
+    height: auto;
+    min-height: 3.5rem;
+  }
+
+  .browse-selection-header .app-header-selection-button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .browse-selection-header .app-header-selection-button > svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
 .browse-title {
   font-family: var(--font-serif-text);
   font-size: 1.3rem;
@@ -502,6 +1032,62 @@ mark {
 .browse-grid {
   display: grid;
   gap: 0.9rem;
+}
+
+/* Library landing cards: every card in the grid shares one size, padding, and border, and lies flat. */
+.browse-card {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 9rem;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding: 1.25rem;
+  color: var(--foreground);
+}
+
+.browse-card-title {
+  font-size: 1.6rem;
+  overflow-wrap: break-word;
+}
+
+/* Art sits on the right and fades out to the left, so the text column reads over the plain card. */
+.browse-card-media {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 46%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to left, #000 45%, transparent);
+  mask-image: linear-gradient(to left, #000 45%, transparent);
+}
+
+[data-theme="dark"] .browse-card-media {
+  opacity: 0.85;
+}
+
+/* The text column may overlap the art's faded left edge, never its opaque right side. */
+.browse-card[data-media="true"] {
+  min-height: 9.75rem;
+}
+
+.browse-card[data-media="true"] .browse-card-text {
+  max-width: 62%;
+}
+
+.browse-card[data-media="true"] .browse-card-title {
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.35rem);
+}
+
+/* A last card alone on a two-column row takes the whole row. Simple mode hides the study cards,
+   which still count as children, so there the last of the five volumes always stands alone. */
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .browse-library > li:last-child:nth-child(odd),
+  :root[data-simple="true"] .browse-library > li:last-child {
+    grid-column: span 2;
+  }
 }
 
 .browse-summary-card {
@@ -661,6 +1247,59 @@ mark {
   color: var(--surface-button-active-text);
 }
 
+/* Match the floating desktop header while keeping the phone dock at the bottom. */
+.mobile-nav-control {
+  padding: 0.3125rem;
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.mobile-nav-control .mobile-nav-button {
+  flex: 1 1 0;
+  min-width: 3rem;
+  min-height: 3rem;
+  gap: 0;
+  padding-inline: 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: flex-grow 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+}
+
+.mobile-nav-button > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.mobile-nav-label {
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
+}
+
+.mobile-nav-control .mobile-nav-button[data-active="true"] {
+  flex-grow: 3;
+}
+
+.mobile-nav-button[data-active="true"] .mobile-nav-label {
+  max-width: 10rem;
+  margin-left: 0.375rem;
+  opacity: 1;
+}
+
+.mobile-nav-button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-control .mobile-nav-button,
+  .mobile-nav-label {
+    transition: none;
+  }
+}
+
 .sticky-note {
   position: relative;
   border: 1px solid var(--surface-border);
@@ -757,6 +1396,29 @@ mark {
 @media (max-width: 640px) {
   .reader-column[data-text-width="full"] {
     padding-inline: 0;
+  }
+}
+
+/*
+  A chapter's page shows at once; its text fades in when it arrives (ChapterReader's ChapterText). Opacity only,
+  so nothing moves, and no delay. With reduced motion the text simply appears.
+*/
+@keyframes chapter-text-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chapter-text-enter {
+  animation: chapter-text-in 240ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chapter-text-enter {
+    animation: none;
   }
 }
 
@@ -974,6 +1636,23 @@ mark {
 /* Phones: the wordmark header is the way home once the bottom nav is hidden. */
 :root[data-simple="true"] .app-header {
   display: block;
+  position: relative;
+  inset: auto;
+  width: max-content;
+  margin: 1.25rem 0 0 var(--shell-gutter);
+}
+
+:root[data-simple="true"] .app-header .desktop-nav-content {
+  display: none;
+}
+
+:root[data-simple="true"] .app-header .desktop-nav-bar {
+  min-height: 2.75rem;
+  padding: 0.55rem 1.05rem;
+}
+
+:root[data-simple="true"] .desktop-nav-brand {
+  font-size: 1.5rem;
 }
 
 /* The insight side panel is hidden, so the reader no longer reserves room for it. */

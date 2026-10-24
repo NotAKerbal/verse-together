@@ -1,7 +1,7 @@
 export const primaryNavItems = [
   { href: "/browse", label: "Browse" },
   { href: "/notes", label: "Notes" },
-  { href: "/plans", label: "Plans" },
+  { href: "/come-follow-me", label: "Come Follow Me" },
 ] as const;
 
 export function isPathActive(pathname: string, href: string) {

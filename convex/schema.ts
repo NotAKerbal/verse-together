@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { noteSourceValidator } from "./noteJournal";
 
 const scriptureResourceCoverage = v.object({
   book: v.string(),
@@ -130,6 +131,16 @@ export default defineSchema({
       )
     ),
     tags: v.optional(v.array(v.string())),
+    // Canonical Markdown body. Absent on older notes, whose ordered blocks are projected to Markdown until
+    // the first explicit save; once present, the blocks are only a retained snapshot.
+    markdownBody: v.optional(v.string()),
+    // Bumped on every content change; saves must name the revision they edited.
+    markdownRevision: v.optional(v.number()),
+    // YYYY-MM-DD the note belongs to in the journal.
+    journalDate: v.optional(v.string()),
+    source: v.optional(noteSourceValidator),
+    // Reserved for a future generated summary heading. Nothing writes it yet.
+    summaryHeading: v.optional(v.object({ text: v.string(), updatedAt: v.number() })),
     createdAt: v.number(),
     updatedAt: v.number(),
     lastActiveAt: v.number(),
@@ -184,6 +195,11 @@ export default defineSchema({
       )
     ),
     tags: v.optional(v.array(v.string())),
+    // Copied from a Markdown-backed draft at publish time; the block rows stay as the old snapshot.
+    markdownBody: v.optional(v.string()),
+    markdownRevision: v.optional(v.number()),
+    journalDate: v.optional(v.string()),
+    source: v.optional(noteSourceValidator),
     blockCount: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -305,6 +321,21 @@ export default defineSchema({
     .index("by_user_volume", ["clerkId", "volume"])
     .index("by_user_book", ["clerkId", "volume", "book"])
     .index("by_user_chapter", ["clerkId", "volume", "book", "chapter"]),
+
+  // Append-only reading history. chapterReads keeps only the latest completion per chapter.
+  readingLogs: defineTable({
+    clerkId: v.string(),
+    source: noteSourceValidator,
+    journalDate: v.string(),
+    readAt: v.number(),
+    createdAt: v.number(),
+    // Client-generated, so a retried request finds its earlier entry instead of adding another.
+    requestId: v.string(),
+    // "chapter_mark": logged by markChapterRead; "manual": logReading (never marks a chapter complete).
+    origin: v.union(v.literal("chapter_mark"), v.literal("manual")),
+  })
+    .index("by_clerk_day", ["clerkId", "journalDate"])
+    .index("by_clerk_request", ["clerkId", "requestId"]),
 
   lastReadingPositions: defineTable({
     clerkId: v.string(),
