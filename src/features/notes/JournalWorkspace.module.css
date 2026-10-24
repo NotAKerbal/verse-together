@@ -1,0 +1,161 @@
+/* Desktop Notes motion: one chooser panel that glides from the main area into the left rail when a note opens,
+   and back when it closes. The month fades out from under it and the note's card fades in from the right.
+   Everything is a CSS transition between two attribute states, so a reversal mid-flight starts from where the
+   panel is, nothing waits on a timer, and without motion (reduced motion, or no transitions) the two states
+   simply swap. Below lg the same markup stacks, as the page did before the experiment. */
+
+.stage {
+  display: grid;
+  gap: 1.25rem;
+}
+
+/* The chooser's card is its own layer so it can fade while the list keeps moving; it is decoration only. */
+.chooser {
+  position: relative;
+}
+
+.chooserCard {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.chooserScroll {
+  position: relative;
+  min-height: 24rem;
+  overflow-y: auto;
+  /* The header and padding reflow as the panel moves; don't let the browser scroll the list to "keep its place"
+     meanwhile. The component starts the list at its top on each move. */
+  overflow-anchor: none;
+  /* p-5 inside the card's 1px border, as the card had before. */
+  padding: calc(1.25rem + 1px);
+}
+
+.note {
+  min-height: 24rem;
+}
+
+.stage[data-note-open] .calendar,
+.stage:not([data-note-open]) .note {
+  display: none;
+}
+
+.stage[data-note-open] .chooserCard {
+  opacity: 0;
+}
+
+.stage[data-note-open] .chooserScroll {
+  min-height: 0;
+  padding: 0;
+}
+
+@media (min-width: 64rem) {
+  .stage {
+    --notes-rail: 22rem;
+    --notes-gap: 1.25rem;
+    --notes-duration: 280ms;
+    --notes-motion: var(--notes-duration) cubic-bezier(0.2, 0, 0, 1);
+    display: block;
+    position: relative;
+    /* Panels entering or leaving may sit a little past the edges; never let them widen the page. */
+    overflow-x: clip;
+  }
+
+  .calendar,
+  .chooser,
+  .note {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+  }
+
+  .calendar {
+    left: 0;
+    width: var(--notes-rail);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    transition:
+      opacity var(--notes-motion),
+      transform var(--notes-motion),
+      visibility 0s;
+  }
+
+  .chooser {
+    z-index: 1;
+    left: calc(var(--notes-rail) + var(--notes-gap));
+    right: 0;
+    transition:
+      left var(--notes-motion),
+      right var(--notes-motion);
+  }
+
+  .chooserCard {
+    transition: opacity var(--notes-motion);
+  }
+
+  .chooserScroll {
+    height: 100%;
+    min-height: 0;
+    transition: padding var(--notes-motion);
+  }
+
+  .note {
+    left: calc(var(--notes-rail) + var(--notes-gap));
+    right: 0;
+    min-height: 0;
+    transition:
+      opacity var(--notes-motion),
+      transform var(--notes-motion),
+      visibility 0s;
+  }
+
+  /* Open: the chooser becomes the rail, the month steps back out of sight, the note takes the main area. */
+  .stage[data-note-open] .calendar {
+    display: block;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-0.75rem);
+    /* Hidden only once it has faded; shown again at once on the way back. */
+    transition:
+      opacity var(--notes-motion),
+      transform var(--notes-motion),
+      visibility 0s linear var(--notes-duration);
+  }
+
+  .stage[data-note-open] .chooser {
+    left: 0;
+    right: calc(100% - var(--notes-rail));
+  }
+
+  .stage[data-note-open] .chooserScroll {
+    padding: 0 0.25rem 0 0;
+  }
+
+  .stage:not([data-note-open]) .note {
+    display: flex;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(1.5rem);
+    transition:
+      opacity var(--notes-motion),
+      transform var(--notes-motion),
+      visibility 0s linear var(--notes-duration);
+  }
+}
+
+@media (min-width: 80rem) {
+  .stage {
+    --notes-rail: 24rem;
+  }
+}
+
+/* No motion: the two states swap at once (important, to outrank the state rules' own transitions). */
+@media (prefers-reduced-motion: reduce) {
+  .calendar,
+  .chooser,
+  .chooserCard,
+  .chooserScroll,
+  .note {
+    transition: none !important;
+  }
+}

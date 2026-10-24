@@ -3,9 +3,10 @@
 // Layout B of the Notes journal, purely presentational: every piece of data and every action arrives as a
 // prop, so it renders the same under the app's connected adapter or a QA harness. It invents nothing; a day
 // without entries is shown as empty. On a phone the calendar, a day's entries and the open note are separate
-// screens (stages); on desktop the calendar stays beside a main area showing the open note or the day's chooser.
+// screens (stages); on desktop the calendar stays beside a main area showing the day's chooser, and opening a
+// note moves that same chooser into the calendar's place (JournalWorkspace.module.css animates the move).
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBook, faChevronLeft, faChevronRight, faLightbulb, faPlus } from "@fortawesome/free-solid-svg-icons";
@@ -23,6 +24,7 @@ import {
 } from "./journal";
 import type { JournalStage } from "./journalView";
 import { NoteSourceLine } from "./NoteSourceLine";
+import styles from "./JournalWorkspace.module.css";
 
 export type JournalWorkspaceProps = {
   layout: "desktop" | "phone";
@@ -320,19 +322,28 @@ function BackButton({ label, onBack }: { label: string; onBack: () => void }) {
 }
 
 /**
- * Moves focus to the new stage's landmark when a stage change took focus away with it (the control that was
- * pressed is gone), and on a phone starts the new screen at its top. Focus that survived is left alone.
+ * Moves focus to the new stage's landmark when a stage change took focus away with it: the control that was
+ * pressed is gone, now inert (desktop keeps the month and the note's panel mounted), or sits in `moved`, the
+ * desktop chooser that changes place rather than unmounting. On a phone it also starts the new screen at its
+ * top. Focus elsewhere that survived is left alone.
  */
-function useStageFocus(stageKey: string, scrollToTop: boolean, target: RefObject<HTMLElement | null>) {
+function useStageFocus(
+  stageKey: string,
+  scrollToTop: boolean,
+  target: RefObject<HTMLElement | null>,
+  moved: RefObject<HTMLElement | null>
+) {
   const shownKey = useRef(stageKey);
   useEffect(() => {
     if (shownKey.current === stageKey) return;
     shownKey.current = stageKey;
     if (scrollToTop) window.scrollTo({ top: 0 });
     const focused = document.activeElement;
-    if (focused && focused !== document.body) return;
+    const stranded =
+      !focused || focused === document.body || focused.closest("[inert]") !== null || moved.current?.contains(focused);
+    if (!stranded) return;
     target.current?.focus({ preventScroll: true });
-  }, [stageKey, scrollToTop, target]);
+  }, [stageKey, scrollToTop, target, moved]);
 }
 
 export default function JournalWorkspace({
@@ -368,9 +379,17 @@ export default function JournalWorkspace({
   const setFocusTarget = useCallback((element: HTMLElement | null) => {
     focusTarget.current = element;
   }, []);
+  const chooserRegion = useRef<HTMLElement | null>(null);
+  const chooserScroll = useRef<HTMLDivElement | null>(null);
   const chooserHeadingId = useId();
   // Desktop shows the same chooser for "calendar" and "day", so only opening or closing a note changes it.
-  useStageFocus(isPhone ? stage : noteOpen ? "note" : "chooser", isPhone, focusTarget);
+  useStageFocus(isPhone ? stage : noteOpen ? "note" : "chooser", isPhone, focusTarget, chooserRegion);
+  // The desktop chooser outlives opening and closing a note, and so would its scroll: focusing a card low in the
+  // list can scroll it into view first, leaving the rail's back button and date above sight. Start each place at its
+  // top, as when each had its own list; before paint, so the moved chooser never shows the old position.
+  useLayoutEffect(() => {
+    if (chooserScroll.current) chooserScroll.current.scrollTop = 0;
+  }, [noteOpen]);
 
   const countsByDay = useMemo(() => {
     const map = new Map<string, DayCounts>();
@@ -454,26 +473,21 @@ export default function JournalWorkspace({
   }
 
   // The selected day's entries as the main content: where a closed note leaves you, on a phone or desktop.
-  const chooser = (
-    <section aria-labelledby={chooserHeadingId} className="space-y-3">
-      <div className="space-y-2">
-        <h2
-          id={chooserHeadingId}
-          ref={setFocusTarget}
-          tabIndex={-1}
-          className="font-display text-xl font-extrabold tracking-[-0.02em] focus:outline-none"
-        >
-          {status === "loading" || dayHasNotes ? "Select a note" : "Start a note"}
-        </h2>
-        <p className="text-sm font-semibold text-[color:var(--foreground-muted)]">
-          <time dateTime={selectedDate}>{dayName}</time>
-          {todayTag}
-        </p>
-        {dayButtons}
-      </div>
-      {dayError}
-      {dayBody(true)}
-    </section>
+  const chooserHeader = (
+    <>
+      <h2
+        id={chooserHeadingId}
+        ref={setFocusTarget}
+        tabIndex={-1}
+        className="font-display text-xl font-extrabold tracking-[-0.02em] focus:outline-none"
+      >
+        {status === "loading" || dayHasNotes ? "Select a note" : "Start a note"}
+      </h2>
+      <p className="text-sm font-semibold text-[color:var(--foreground-muted)]">
+        <time dateTime={selectedDate}>{dayName}</time>
+        {todayTag}
+      </p>
+    </>
   );
 
   const openNoteSection = (className: string) => (
@@ -518,7 +532,14 @@ export default function JournalWorkspace({
         {noteOpen ? (
           openNoteSection("min-h-[60dvh] p-4")
         ) : stage === "day" ? (
-          chooser
+          <section aria-labelledby={chooserHeadingId} className="space-y-3">
+            <div className="space-y-2">
+              {chooserHeader}
+              {dayButtons}
+            </div>
+            {dayError}
+            {dayBody(true)}
+          </section>
         ) : (
           <MonthCalendar
             month={month}
@@ -534,19 +555,40 @@ export default function JournalWorkspace({
     );
   }
 
-  // Layout B: the month in the left rail; the main area holds the selected day's chooser.
-  // With a note open the rail collapses to its day's list, to switch notes without closing; closing restores the month.
+  // Layout B: the month in the left rail; the main area holds the selected day's chooser. Opening a note moves
+  // that same chooser (one element, so its controls and scroll survive) into the rail, to switch notes without
+  // closing; closing moves it back and restores the month. Whatever is out of view is inert.
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         {title}
         {headerAccessory}
       </div>
-      <div className="grid min-h-0 gap-5 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem] lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[24rem_minmax(0,1fr)]">
-        <aside className="min-h-0 space-y-4 lg:overflow-y-auto lg:pr-1">
-          {noteOpen ? (
-            <section aria-label={`Entries for ${dayName}`} className="space-y-3">
-              <div className="space-y-2">
+      <div
+        data-note-open={noteOpen ? "" : undefined}
+        className={`${styles.stage} min-h-0 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem]`}
+      >
+        <div className={styles.calendar} inert={noteOpen}>
+          <MonthCalendar
+            month={month}
+            onMonth={setMonth}
+            countsByDay={countsByDay}
+            today={today}
+            selectedDate={selectedDate}
+            onSelectDate={onSelectDate}
+            compact
+          />
+        </div>
+        <section
+          ref={chooserRegion}
+          aria-labelledby={noteOpen ? undefined : chooserHeadingId}
+          aria-label={noteOpen ? `Entries for ${dayName}` : undefined}
+          className={styles.chooser}
+        >
+          <div aria-hidden="true" className={`panel-card rounded-[20px] ${styles.chooserCard}`} />
+          <div ref={chooserScroll} className={`space-y-3 ${styles.chooserScroll}`}>
+            <div className="space-y-2">
+              {noteOpen ? (
                 <div className="flex items-center gap-2">
                   {/* Same as the note's X: back to the month and this day's chooser. */}
                   <button
@@ -568,28 +610,24 @@ export default function JournalWorkspace({
                     {isToday ? <span className="text-sm font-bold text-[color:var(--accent-rubric)]">Today</span> : null}
                   </h2>
                 </div>
-                {dayButtons}
-              </div>
-              {dayError}
-              {dayBody(false)}
-            </section>
-          ) : (
-            <MonthCalendar
-              month={month}
-              onMonth={setMonth}
-              countsByDay={countsByDay}
-              today={today}
-              selectedDate={selectedDate}
-              onSelectDate={onSelectDate}
-              compact
-            />
-          )}
-        </aside>
-        {noteOpen ? (
-          openNoteSection("min-h-[24rem] overflow-y-auto p-5 lg:min-h-0")
-        ) : (
-          <div className="panel-card min-h-[24rem] overflow-y-auto rounded-[20px] p-5 lg:min-h-0">{chooser}</div>
-        )}
+              ) : (
+                chooserHeader
+              )}
+              {dayButtons}
+            </div>
+            {dayError}
+            {dayBody(!noteOpen)}
+          </div>
+        </section>
+        <section
+          aria-label="Open note"
+          ref={noteOpen ? setFocusTarget : undefined}
+          tabIndex={-1}
+          inert={!noteOpen}
+          className={`panel-card flex flex-col overflow-y-auto rounded-[20px] p-5 focus:outline-none ${styles.note}`}
+        >
+          {noteOpen ? notePane : null}
+        </section>
       </div>
     </div>
   );

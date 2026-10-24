@@ -114,7 +114,7 @@ const entries: JournalEntry[] = [
 
 const noop = () => {};
 
-function render(layout: JournalWorkspaceProps["layout"], view: JournalView) {
+function render(layout: JournalWorkspaceProps["layout"], view: JournalView, overrides: Partial<JournalWorkspaceProps> = {}) {
   const props: JournalWorkspaceProps = {
     layout,
     status: "ready",
@@ -129,11 +129,17 @@ function render(layout: JournalWorkspaceProps["layout"], view: JournalView) {
     onShowCalendar: noop,
     onNewNote: noop,
     notePane: view.noteId ? createElement("p", null, "EDITOR-PANE") : undefined,
+    ...overrides,
   };
   return renderToStaticMarkup(createElement(JournalWorkspace, props));
 }
 
 const countOf = (html: string, text: string) => html.split(text).length - 1;
+/** The opening tag of the element whose markup starts right before `marker` (its parent, for a child's tag). */
+const tagBefore = (html: string, marker: string) => {
+  const end = html.indexOf(marker);
+  return html.slice(html.lastIndexOf("<", end - 1), end);
+};
 
 describe("Notes workspace stages", () => {
   test("phone calendar stage shows only the month: no day list, no editor, no week/month toggle", () => {
@@ -173,21 +179,30 @@ describe("Notes workspace stages", () => {
     expect(html).not.toContain("EDITOR-PANE");
   });
 
-  test("desktop with an open note collapses the month to the day's list beside the editor; closing restores it", () => {
+  test("desktop with an open note moves the day's list beside the editor and puts the month out of reach; closing restores it", () => {
     const open: JournalView = { stage: "note", date: today, noteId: "a" };
     const html = render("desktop", open);
     expect(html).toContain("EDITOR-PANE");
-    expect(html).not.toContain('aria-label="Calendar"');
+    expect(tagBefore(html, "<p>EDITOR-PANE")).not.toContain("inert");
+    // The month stays mounted (its month and day survive) but is inert until the note closes.
+    expect(tagBefore(html, '<section aria-label="Calendar"')).toContain('inert=""');
     expect(html).toContain(`aria-label="Entries for`);
     expect(html).not.toContain("Select a note");
     expect(countOf(html, "Evening question")).toBe(1);
 
     const closed = render("desktop", nextJournalView(open, { type: "closeNote" }));
-    expect(closed).toContain('aria-label="Calendar"');
+    expect(tagBefore(closed, '<section aria-label="Calendar"')).not.toContain("inert");
     expect(closed).toContain("October 2026");
     expect(closed).toContain(">Select a note</h2>");
     expect(closed).toContain(`dateTime="${today}"`);
     expect(closed).not.toContain("EDITOR-PANE");
+    expect(countOf(closed, "Evening question")).toBe(1);
+  });
+
+  test("desktop never mounts a note pane while no note is open, even if one is passed, and its empty panel is inert", () => {
+    const html = render("desktop", { stage: "day", date: today, noteId: null }, { notePane: createElement("p", null, "EDITOR-PANE") });
+    expect(html).not.toContain("EDITOR-PANE");
+    expect(html).toMatch(/<section aria-label="Open note"[^>]*inert=""[^>]*><\/section>/);
   });
 
   test("a day without notes invites starting one instead of asking to select", () => {
@@ -254,7 +269,8 @@ describe("Leaving an open note", () => {
   });
 
   test("the desktop rail abbreviates the day on screen but keeps the full date as its name, with Today", () => {
-    const heading = render("desktop", { stage: "note", date: today, noteId: "a" }).match(/<h2\b[^>]*>[\s\S]*?<\/h2>/)![0];
+    const railHeading = (html: string) => html.slice(html.indexOf('aria-label="Entries for')).match(/<h2\b[^>]*>[\s\S]*?<\/h2>/)![0];
+    const heading = railHeading(render("desktop", { stage: "note", date: today, noteId: "a" }));
     const full = formatDayHeading(today);
     const short = formatShortDayHeading(today);
     expect(short.length).toBeLessThan(full.length);
@@ -263,7 +279,7 @@ describe("Leaving an open note", () => {
     expect(heading).toContain(`title="${full}"`);
     expect(heading).toContain(">Today</span>");
 
-    const otherDay = render("desktop", { stage: "note", date: "2026-10-18", noteId: "c" }).match(/<h2\b[^>]*>[\s\S]*?<\/h2>/)![0];
+    const otherDay = railHeading(render("desktop", { stage: "note", date: "2026-10-18", noteId: "c" }));
     expect(otherDay).not.toContain("Today");
     // The main chooser has the room for the full date.
     expect(render("desktop", { stage: "day", date: today, noteId: null })).toContain(`<time dateTime="${today}">${full}</time>`);
