@@ -16,8 +16,13 @@ function FeaturedLesson({ lesson }: { lesson: Lesson }) {
   const ranges = week ? weekReading(week) : [];
   // Only a published guide gets a link here; a week without one is just its reading.
   const guideHref = guide ? lesson.href : null;
+  // With a guide, the title link stretches over the whole card (see .featuredLink); the chapter chips and
+  // credit link sit above it, so the card never nests links.
   return (
-    <article className={styles.featured} aria-labelledby={titleId}>
+    <article
+      className={guideHref ? `${styles.featured} ${styles.featuredLinked}` : styles.featured}
+      aria-labelledby={titleId}
+    >
       <figure className={styles.featuredMedia}>
         <LessonCoverImage cover={cover} className={styles.featuredImage} priority />
         {cover.kind === "painting" ? (
@@ -32,7 +37,13 @@ function FeaturedLesson({ lesson }: { lesson: Lesson }) {
           <span>{lesson.dateLabel}</span>
         </p>
         <h3 id={titleId} className={styles.featuredTitle}>
-          {guideHref ? <Link href={guideHref}>{lesson.title}</Link> : lesson.title}
+          {guideHref ? (
+            <Link href={guideHref} className={styles.featuredLink}>
+              {lesson.title}
+            </Link>
+          ) : (
+            lesson.title
+          )}
         </h3>
         {guide ? (
           <>

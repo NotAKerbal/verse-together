@@ -183,6 +183,48 @@
   text-underline-offset: 0.18em;
 }
 
+/*
+  With a guide, the whole card is the title link: its ::after covers the card, so the cover, background,
+  and summary all open the guide natively (keyboard, middle- and modifier-clicks included). The other
+  links are lifted above that layer and stay their own targets. Without a guide nothing is stretched.
+*/
+.featuredLinked {
+  position: relative;
+  isolation: isolate;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.featuredLinked:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--surface-shadow-lift);
+}
+
+.featuredLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.featuredLinked .reading a,
+.featuredLinked .mediaCredit a,
+.featuredLinked .actions a {
+  position: relative;
+  z-index: 2;
+}
+
+/* Keyboard focus rings the whole card, since that is the target; the title's own ring is the fallback. */
+.featuredLinked:has(.featuredLink:focus-visible) {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+}
+
+@supports selector(:has(*)) {
+  .overview .featuredLink:focus-visible {
+    outline: none;
+  }
+}
+
 .scripture {
   font-size: 0.8125rem;
   font-weight: 600;
