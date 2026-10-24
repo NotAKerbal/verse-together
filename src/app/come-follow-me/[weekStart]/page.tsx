@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LessonCoverImage, { CoverCredit } from "@/features/comeFollowMe/LessonCoverImage";
-import { getLessonCover } from "@/features/comeFollowMe/lessonCovers";
+import { getLessonCover, type LessonCover } from "@/features/comeFollowMe/lessonCovers";
 import StudyCompanion, { type CompanionChapter } from "@/features/comeFollowMe/StudyCompanion";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import ReadingLogButton from "@/features/notes/ReadingLogButton";
 import styles from "@/features/comeFollowMe/studyCompanion.module.css";
 import { getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
-import { readGuide, readGuides, readingTime, type Guide } from "@/lib/cfm/cfmGuide";
+import { readGuide, readGuides, type Guide } from "@/lib/cfm/cfmGuide";
 import {
   COME_FOLLOW_ME_WEEKS,
   formatWeekRange,
@@ -75,34 +76,56 @@ function BackLink() {
   );
 }
 
-/** The week's cover beside the page head (below it on phones), with its credit or provenance. */
-function HeaderCover({ weekStart }: { weekStart: string }) {
-  const cover = getLessonCover(weekStart);
+type HeroProps = {
+  cover: LessonCover;
+  /** The quiet line above the title: the week's reading and dates. */
+  meta: string[];
+  title: string;
+  summary?: string;
+  actions?: ReactNode;
+};
+
+/**
+ * The page head: the week's text beside its cover, which fades into the page. The cover's credit (or a
+ * generated illustration's provenance) is in the footer, not here; see CoverLine.
+ */
+function LessonHero({ cover, meta, title, summary, actions }: HeroProps) {
   return (
-    <figure className={styles.headerCover}>
-      <LessonCoverImage cover={cover} className={styles.headerCoverImage} priority />
-      <figcaption>
-        <CoverCredit cover={cover} />
-      </figcaption>
-    </figure>
+    <header className={styles.header}>
+      <BackLink />
+      {/* Never wider than the source, so small paintings are not upscaled. */}
+      <div className={styles.heroArt} style={{ maxWidth: cover.width }}>
+        <LessonCoverImage cover={cover} className={styles.heroImage} priority />
+      </div>
+      <div className={styles.heroText}>
+        <p className={styles.eyebrow}>
+          {meta.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </p>
+        <h1 className={styles.title}>{title}</h1>
+        {summary ? <p className={styles.summary}>{summary}</p> : null}
+        {actions ? <div className={styles.heroActions}>{actions}</div> : null}
+      </div>
+    </header>
+  );
+}
+
+/** The cover's full credit, for the footer. */
+function CoverLine({ cover }: { cover: LessonCover }) {
+  return (
+    <p>
+      Cover: <CoverCredit cover={cover} />
+    </p>
   );
 }
 
 function NoGuide({ week }: { week: ComeFollowMeWeek }) {
   const ranges = week.refs.length > 0 ? week.refs : week.suggestion ? [week.suggestion.ref] : [];
+  const cover = getLessonCover(week.start);
   return (
     <section className={`page-shell ${styles.page}`}>
-      <header className={`${styles.header} ${styles.headerWithCover}`}>
-        <div className={styles.headerText}>
-          <BackLink />
-          <p className={styles.eyebrow}>
-            <span>Come, Follow Me</span>
-            <span>{formatWeekRange(week)}</span>
-          </p>
-          <h1 className={styles.title}>{week.block}</h1>
-        </div>
-        <HeaderCover weekStart={week.start} />
-      </header>
+      <LessonHero cover={cover} meta={["Come, Follow Me", formatWeekRange(week)]} title={week.block} />
       <div className={styles.noGuide}>
         <p>There is no study guide for this week yet. You can still read the assigned scripture.</p>
         <ul>
@@ -116,7 +139,10 @@ function NoGuide({ week }: { week: ComeFollowMeWeek }) {
           ))}
         </ul>
       </div>
-      <WeekNav week={week} />
+      <footer className={styles.footer}>
+        <CoverLine cover={cover} />
+        <WeekNav week={week} />
+      </footer>
     </section>
   );
 }
@@ -139,58 +165,41 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
     chapters.push({ chapter, verses: data.verses });
   }
 
+  const cover = getLessonCover(week.start);
+  const guideSource = {
+    kind: "guide" as const,
+    label: `${guide.scripture}: ${parsed.title}`,
+    href: `/come-follow-me/${week.start}`,
+  };
+
   return (
     <section className={`page-shell-wide ${styles.page}`}>
-      <header className={`${styles.header} ${styles.headerWithCover}`}>
-        <div className={styles.headerText}>
-          <BackLink />
-          <p className={styles.eyebrow}>
-            <span>{guide.scripture}</span>
-            <span>Come, Follow Me</span>
-            <span>{guide.dateLabel}</span>
-          </p>
-          <h1 className={styles.title}>{parsed.title}</h1>
-          <p className={styles.summary}>{guide.summary}</p>
-          <p className={styles.byline}>
-            <span>Guide by {guide.author}</span>
-            <span aria-hidden="true">·</span>
-            <span className={styles.attribution}>{ATTRIBUTION}</span>
-            <span aria-hidden="true">·</span>
-            <span>{readingTime(parsed.words)}</span>
-          </p>
-        </div>
-        <HeaderCover weekStart={week.start} />
-      </header>
-
-      <NoteSourceRegistrar
-        kind="guide"
-        label={`${guide.scripture}: ${parsed.title}`}
-        href={`/come-follow-me/${week.start}`}
+      <LessonHero
+        cover={cover}
+        meta={[guide.scripture, guide.dateLabel]}
+        title={parsed.title}
+        summary={guide.summary}
+        actions={
+          <ReadingLogButton
+            options={[
+              { source: guideSource },
+              ...chapters.map((item) => ({
+                source: {
+                  kind: "scripture" as const,
+                  label: `${range.book} ${item.chapter}`,
+                  href: getChapterHref({ volume: range.volume, book: range.slug, chapter: item.chapter }),
+                  volume: range.volume,
+                  book: range.slug,
+                  chapter: item.chapter,
+                },
+                verseCount: item.verses.length,
+              })),
+            ]}
+          />
+        }
       />
-      <div className="mb-4 flex justify-start">
-        <ReadingLogButton
-          options={[
-            {
-              source: {
-                kind: "guide",
-                label: `${guide.scripture}: ${parsed.title}`,
-                href: `/come-follow-me/${week.start}`,
-              },
-            },
-            ...chapters.map((item) => ({
-              source: {
-                kind: "scripture" as const,
-                label: `${range.book} ${item.chapter}`,
-                href: getChapterHref({ volume: range.volume, book: range.slug, chapter: item.chapter }),
-                volume: range.volume,
-                book: range.slug,
-                chapter: item.chapter,
-              },
-              verseCount: item.verses.length,
-            })),
-          ]}
-        />
-      </div>
+
+      <NoteSourceRegistrar kind={guideSource.kind} label={guideSource.label} href={guideSource.href} />
       <StudyCompanion
         introductionHtml={parsed.introductionHtml}
         readerHtml={parsed.readerHtml}
@@ -211,9 +220,9 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
               <a href={SOURCE_SITE} target="_blank" rel="noopener noreferrer">
                 isaacstuff.com/cfm
               </a>
-              . Paintings are public domain and credited where they appear; generated illustrations are labeled as
-              such.
+              .
             </p>
+            <CoverLine cover={cover} />
             <WeekNav week={week} />
           </footer>
         }
