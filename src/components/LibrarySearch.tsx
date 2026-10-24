@@ -54,10 +54,16 @@ function searchHref(query: string): string {
 export default function LibrarySearch({
   className = "",
   variant = "page",
+  autoFocus = false,
+  onClose,
 }: {
   className?: string;
-  /** "header" matches the floating nav pill (Navbar); "page" is the in-page field. */
+  /** "header" matches the floating nav pill (Navbar, the reader's search popover); "page" is the in-page field. */
   variant?: "page" | "header";
+  /** Focus the field when it mounts, e.g. when a popover opens it. */
+  autoFocus?: boolean;
+  /** Called once the search is done with: after it navigates, or on Escape with no suggestions showing. */
+  onClose?: () => void;
 }) {
   const header = variant === "header";
   // A jump to a chapter shows its page at once; /search and other hrefs go through the router as usual.
@@ -94,6 +100,7 @@ export default function LibrarySearch({
     navigate(href);
     setOpen(false);
     setQuery("");
+    onClose?.();
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -112,6 +119,7 @@ export default function LibrarySearch({
       // Chrome clears type="search" inputs on Escape; keep the query while closing suggestions.
       event.preventDefault();
       if (expanded) setOpen(false);
+      else if (onClose) onClose();
       else setQuery("");
     }
   }
@@ -138,6 +146,7 @@ export default function LibrarySearch({
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
+          autoFocus={autoFocus}
           placeholder="Search or jump to 1 Ne 3:7"
           aria-label="Search scriptures or jump to a reference"
           role="combobox"

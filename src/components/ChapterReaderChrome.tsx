@@ -7,27 +7,26 @@
 
 import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Children, Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Breadcrumbs, { type Crumb } from "./Breadcrumbs";
-import { ChapterLink } from "./ChapterNavigation";
-import ScriptureQuickNav from "./ScriptureQuickNav";
+import type { Crumb } from "./Breadcrumbs";
+import { ChapterLink, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
+import { useReaderHeaderDock } from "./ReaderHeaderSlot";
+import ReaderSearchButton from "./ReaderSearchButton";
 import ReadingLogButton, { type ReadingLogOption } from "@/features/notes/ReadingLogButton";
 import type { ChapterChrome } from "@/lib/browseRoutes";
 import { useSimpleMode } from "@/lib/simpleMode";
 
-export const READER_HEADER_BUTTON_CLASS =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border surface-card-soft text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30";
-
-type VerseItem = { verse: number; text: string };
+/** A control in the chapter header's pill (see `.reader-toolbar` in globals.css). */
+export const READER_HEADER_BUTTON_CLASS = "reader-toolbar-button";
 
 type ChapterHeaderProps = {
   volume: string;
   book: string;
   reference: string;
   breadcrumbs: Crumb[];
-  /** The loaded text, for the quick-nav's in-chapter matches; empty until it arrives. */
-  verses?: VerseItem[];
   logOptions: ReadingLogOption[];
   /** Log offers the chapter's verses, so it waits for the text. */
   logReady: boolean;
@@ -38,12 +37,29 @@ type ChapterHeaderProps = {
   children?: ReactNode;
 };
 
+/**
+ * The header's trail: the volume, then the chapter itself, which opens the book's chapter list. The Library root is
+ * left out (the navigation links it right beside the header) and the book is named by the reference.
+ */
+function headerCrumbs(breadcrumbs: Crumb[], volume: string, book: string) {
+  const bookHref = `/browse/${volume}/${book}`;
+  return {
+    leading: breadcrumbs.slice(0, -1).filter((item) => item.href && item.href !== "/browse" && item.href !== bookHref),
+    currentHref: breadcrumbs.find((item) => item.href === bookHref)?.href,
+  };
+}
+
+/**
+ * The chapter's header: search, where the chapter sits, Log, simple mode and reader settings, in a pill matching the
+ * floating navigation's. On wide screens it is drawn in the app header, to the right of the navigation (see
+ * ReaderHeaderSlot); narrower screens keep it at the top of the page. The loaded reader and the page shown while a
+ * chapter opens (ChapterReaderShell) both draw it here, and only one of them holds the app header at a time.
+ */
 export function ChapterHeader({
   volume,
   book,
   reference,
   breadcrumbs,
-  verses,
   logOptions,
   logReady,
   settings,
@@ -51,56 +67,91 @@ export function ChapterHeader({
   children,
 }: ChapterHeaderProps) {
   const [simpleMode, setSimpleMode] = useSimpleMode();
-  const headerBreadcrumbs = useMemo(() => {
-    if (!breadcrumbs?.length) return breadcrumbs;
-    const leading = breadcrumbs.slice(0, -1).map((item) => ({ ...item }));
-    return [...leading, { label: reference }];
-  }, [breadcrumbs, reference]);
+  const covered = usePageCoveredByChapterNavigation();
+  const dock = useReaderHeaderDock(!simpleMode && !covered);
+  const crumbs = useMemo(() => headerCrumbs(breadcrumbs, volume, book), [breadcrumbs, volume, book]);
+  const hasNotes = Children.toArray(children).length > 0;
+
+  const toolbar = (
+    <div role="group" aria-label={`${reference} reader controls`} className="reader-toolbar simple-hide">
+      <div className="reader-toolbar-group reader-toolbar-nav">
+        <ReaderSearchButton />
+        <nav aria-label="Breadcrumb" className="reader-toolbar-crumbs">
+          <ol>
+            {crumbs.leading.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href!} className="reader-toolbar-crumb" title={item.label}>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+            <li>
+              {crumbs.currentHref ? (
+                <ChapterLink
+                  href={crumbs.currentHref}
+                  aria-current="page"
+                  className="reader-toolbar-crumb"
+                  title={`${reference}: choose a chapter`}
+                >
+                  {reference}
+                </ChapterLink>
+              ) : (
+                <span aria-current="page" className="reader-toolbar-crumb" title={reference}>
+                  {reference}
+                </span>
+              )}
+            </li>
+          </ol>
+        </nav>
+      </div>
+      <div className="reader-toolbar-group reader-toolbar-actions">
+        <ReadingLogButton
+          variant="toolbar"
+          label="Log"
+          ariaLabel={`Log reading of ${reference}`}
+          followLocation
+          options={logOptions}
+          disabled={!logReady}
+        />
+        <button
+          type="button"
+          aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+          title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+          aria-pressed={simpleMode}
+          onClick={() => setSimpleMode(!simpleMode)}
+          className={READER_HEADER_BUTTON_CLASS}
+        >
+          <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
+        </button>
+        {settings ?? (
+          <button type="button" aria-label="Reader settings" title="Reader settings" disabled className={READER_HEADER_BUTTON_CLASS}>
+            <FontAwesomeIcon icon={faGear} aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+  const notes = hasNotes ? <div className="reader-header-notes simple-hide">{children}</div> : null;
+
+  if (dock.slot) {
+    return createPortal(
+      <>
+        {toolbar}
+        {notes}
+      </>,
+      dock.slot
+    );
+  }
 
   return (
-    <header className={`simple-hide sticky top-2 sm:top-[calc(var(--header-height)+0.5rem)] z-20 transition-all ${atTop ? "py-0" : "py-1"}`}>
-      <div className="panel-card-strong relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 sm:px-4">
-        <div className="flex items-center justify-between gap-2 sm:gap-3">
-          <div className="min-w-0 flex flex-1 items-center gap-2 pl-0.5 sm:gap-3 sm:pl-1">
-            <ScriptureQuickNav currentVolume={volume} currentBook={book} verses={verses} />
-            <div className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-lg border surface-card-soft px-2 sm:h-auto sm:flex-none sm:px-2.5 sm:py-1">
-              <div className="min-w-0 w-full text-xs sm:text-sm">
-                <Breadcrumbs items={headerBreadcrumbs} />
-              </div>
-            </div>
-          </div>
-          <ReadingLogButton
-            variant="compact"
-            label="Log"
-            ariaLabel={`Log reading of ${reference}`}
-            followLocation
-            options={logOptions}
-            disabled={!logReady}
-          />
-          <button
-            type="button"
-            aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
-            title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
-            aria-pressed={simpleMode}
-            onClick={() => setSimpleMode(!simpleMode)}
-            className={READER_HEADER_BUTTON_CLASS}
-          >
-            <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
-          </button>
-          {settings ?? (
-            <button
-              type="button"
-              aria-label="Reader settings"
-              title="Reader settings"
-              disabled
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border surface-card-soft text-foreground opacity-50"
-            >
-              <FontAwesomeIcon icon={faGear} aria-hidden="true" className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        {children}
-      </div>
+    <header
+      className={`reader-header-inline simple-hide sticky top-2 sm:top-[calc(var(--header-height)+0.5rem)] z-20 transition-all ${
+        atTop ? "py-0" : "py-1"
+      }`}
+      data-dock-pending={dock.pending ? "true" : undefined}
+    >
+      {toolbar}
+      {notes}
     </header>
   );
 }

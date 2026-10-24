@@ -13,6 +13,7 @@ import {
 import AccountControl from "@/components/AccountControl";
 import { AppHeaderSlot, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import LibrarySearch from "@/components/LibrarySearch";
+import ReaderHeaderSlot from "@/components/ReaderHeaderSlot";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
@@ -135,7 +136,10 @@ export default function Navbar() {
         </button>
       </div>
       {showLibrarySearch ? <LibrarySearch variant="header" className="simple-hide app-header-search" /> : null}
+      {/* Browse pages' controls (AppHeaderPortal), e.g. a volume's or book's navigation. */}
       <AppHeaderSlot className="simple-hide app-header-slot" />
+      {/* A chapter's header (search, trail, Log, settings) sits here on wide screens; see ChapterHeader. */}
+      <ReaderHeaderSlot />
     </header>
   );
 }

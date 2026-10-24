@@ -597,6 +597,240 @@ mark {
   height: var(--desktop-nav-control-size);
 }
 
+/*
+  The chapter header (ChapterHeader in src/components/ChapterReaderChrome.tsx): one pill, shaped like the floating
+  navigation's, holding search, the chapter's trail, Log, simple mode and settings. On wide screens it is drawn in
+  the app header's slot (src/components/ReaderHeaderSlot.tsx) to the right of the navigation, with the comparison key
+  and notices right-aligned beneath it; narrower screens keep it at the top of the page.
+*/
+.reader-header-slot {
+  display: none;
+}
+
+/* Like browse pages' header controls ([data-actions]): the header spans the shell, and its gaps let clicks through
+   to the page. */
+:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) {
+  display: flex;
+  right: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) > .desktop-nav-bar {
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+/* A chapter's header replaces a browse page's controls there (e.g. while a chapter opens over /browse or a book
+   page), so the app header never shows two sets of page controls. */
+:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) > :is(.app-header-search, .app-header-slot) {
+  display: none;
+}
+
+/* The navigation never shrinks; the trail in the reader pill gives way first. */
+:root:not([data-simple="true"]) .reader-header-slot:not(:empty) {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.reader-header-slot > * {
+  pointer-events: auto;
+}
+
+.reader-header-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+}
+
+@media (min-width: 640px) {
+  .reader-header-inline {
+    align-items: flex-end;
+  }
+}
+
+/* Until it is known whether the header moves into the app header, it stays out of view where it would
+   (READER_HEADER_DOCK_QUERY in src/components/ReaderHeaderSlot.tsx). */
+@media (min-width: 900px) {
+  .reader-header-inline[data-dock-pending="true"] {
+    display: none;
+  }
+}
+
+.reader-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 3rem;
+  padding: 0.3125rem 0.375rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.reader-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.reader-toolbar-nav {
+  flex: 1 1 auto;
+}
+
+.reader-toolbar-actions {
+  flex-shrink: 0;
+  padding-left: 0.375rem;
+  border-left: 1px solid var(--surface-border);
+}
+
+.reader-toolbar-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.reader-toolbar-button:hover:not(:disabled),
+.reader-toolbar-button[aria-expanded="true"] {
+  background: var(--surface-button-hover);
+}
+
+.reader-toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.reader-toolbar-log {
+  width: auto;
+  padding-inline: 0.75rem;
+  border-radius: 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.reader-toolbar a:focus-visible,
+.reader-toolbar button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 2px;
+}
+
+.reader-toolbar-crumbs {
+  min-width: 0;
+}
+
+.reader-toolbar-crumbs ol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.reader-toolbar-crumbs li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.reader-toolbar-crumbs li:not(:last-child) {
+  flex-shrink: 4;
+}
+
+.reader-toolbar-crumbs li:not(:last-child)::after {
+  content: "/";
+  padding-inline: 0.125rem;
+  color: var(--foreground-soft);
+}
+
+.reader-toolbar-crumb {
+  display: block;
+  min-width: 0;
+  padding: 0.375rem 0.5rem;
+  overflow: hidden;
+  border-radius: 0.7rem;
+  color: var(--foreground-muted);
+  text-overflow: ellipsis;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+a.reader-toolbar-crumb:hover {
+  background: var(--surface-button-hover);
+  color: var(--foreground);
+}
+
+.reader-toolbar-crumb[aria-current="page"] {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+/* Phones keep just the chapter in the trail. */
+@media (max-width: 639px) {
+  .reader-toolbar-crumbs li:not(:last-child) {
+    display: none;
+  }
+}
+
+/* The search panel is placed against the pill, so it lines up with the pill's right edge. */
+.reader-search {
+  display: contents;
+}
+
+.reader-search-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 40;
+  width: min(22rem, calc(100vw - 2 * var(--shell-gutter)));
+}
+
+/* Comparison key, loading status and notices, right-aligned under the pill. */
+.reader-header-notes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.375rem;
+  max-width: 100%;
+}
+
+.reader-header-notes > * {
+  max-width: 100%;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 1rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.reader-header-notes > .reader-header-notice {
+  border-color: rgb(245 158 11 / 0.3);
+}
+
+@media (max-width: 639px) {
+  .reader-header-inline .reader-header-notes {
+    align-items: stretch;
+  }
+}
+
 .brand-wordmark {
   font-family: var(--font-serif-text);
   font-weight: 400;
