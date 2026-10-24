@@ -163,7 +163,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const { user } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const canUseInsights = !!user;
-  // Per-user queries wait until Convex has the session token, not just Clerk.
+  // Per-user queries wait until Convex has accepted the session token, not just the app session.
   const canQuery = canUseInsights && convexReady;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -191,7 +191,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const activeDraft = useQuery(
     api.insights.getDraft,
     canQuery && activeDraftId ? ({ draftId: activeDraftId as DraftId }) : "skip"
-  ) as InsightDraft | undefined;
+  ) as InsightDraft | null | undefined;
 
   const setActiveDraftMutation = useMutation(api.insights.setActiveDraft);
   const renameDraftMutation = useMutation(api.insights.renameDraft);

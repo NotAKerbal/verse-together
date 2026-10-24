@@ -26,6 +26,7 @@ export default function PublishInsightPage() {
         visibility: InsightVisibility;
         blocks: Array<{ id: string }>;
       }
+    | null
     | undefined;
   const publishDraft = useMutation(api.insights.publishDraft);
 
@@ -63,6 +64,10 @@ export default function PublishInsightPage() {
 
   if (draft === undefined) {
     return <div className="mx-auto max-w-2xl py-8">Loading note…</div>;
+  }
+
+  if (draft === null) {
+    return <div className="mx-auto max-w-2xl py-8">Sign in to publish your notes.</div>;
   }
 
   return (

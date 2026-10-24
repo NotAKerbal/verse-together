@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getServerViewer } from "@/lib/auth-server";
 import { fetchVerseCitations, mapBookKeyToByuId } from "@/lib/citations";
 import type { CitationsResponse, CreateScriptureResourceRequest, ScriptureResource } from "@/lib/citationsApi";
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 import { getLocalLdsBooks } from "@/lib/ldsLocalData.server";
-
-async function isAdmin(userId: string | null): Promise<boolean> {
-  if (!userId) return false;
-  try {
-    return await convexQuery<boolean>("users:isAdmin", { clerkId: userId });
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -105,15 +96,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authState = await auth();
-  const userId = authState.userId;
-  if (!(await isAdmin(userId))) {
-    return NextResponse.json({ error: "Only admins can add resources" }, { status: 403 });
+  // Admin status comes from the Convex-verified app user; Convex re-checks it in the mutation.
+  const { viewer, token } = await getServerViewer();
+  if (!viewer || !token) {
+    return NextResponse.json({ error: "Sign in with an admin account to add resources" }, { status: 401 });
   }
-
-  const token = await authState.getToken({ template: "convex" });
-  if (!token) {
-    return NextResponse.json({ error: "Missing auth token" }, { status: 401 });
+  if (!viewer.isAdmin) {
+    return NextResponse.json({ error: "Only admins can add resources" }, { status: 403 });
   }
 
   const body = (await req.json()) as CreateScriptureResourceRequest & {

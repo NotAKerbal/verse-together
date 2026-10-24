@@ -1,14 +1,14 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { clampFontScale, requireClerkId } from "./utils";
+import { clampFontScale, getViewerClerkId, requireClerkId } from "./utils";
 
 export const getReaderPreferences = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) return null;
-    const row = await ctx.db.query("readerPreferences").withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject)).unique();
+    const clerkId = await getViewerClerkId(ctx);
+    if (!clerkId) return null;
+    const row = await ctx.db.query("readerPreferences").withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId)).unique();
     if (!row) return null;
     return {
       showFootnotes: row.showFootnotes,

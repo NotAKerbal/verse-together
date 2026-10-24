@@ -54,3 +54,6 @@ data/dictionary/
 
 # Isolated Notes component QA build
 /qa-dist
+
+# auth migration mapping files and reports (contain email addresses)
+/.auth-migration/

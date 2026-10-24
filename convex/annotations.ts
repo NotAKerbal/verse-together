@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 import {
   annotationProblem,
   GUIDE_HIGHLIGHTS_PER_GUIDE,
@@ -16,8 +16,7 @@ function toIso(ts: number): string {
 }
 
 async function maybeClerkId(ctx: any): Promise<string | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.subject ?? null;
+  return await getViewerClerkId(ctx);
 }
 
 export const getChapterAnnotations = query({

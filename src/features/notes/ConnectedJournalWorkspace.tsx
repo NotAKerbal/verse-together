@@ -9,7 +9,6 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
-import { SignInButton } from "@clerk/nextjs";
 import { api } from "../../../convex/_generated/api";
 import AccountControl from "@/components/AccountControl";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
@@ -33,6 +32,7 @@ import {
 import { useBelowLg } from "./useBelowLg";
 import { useConvexSignedIn } from "./useConvexSignedIn";
 import { useJournalHistory } from "./useJournalHistory";
+import SignInLink from "@/features/auth/SignInLink";
 
 const MAX_LOG_CHOICES = 8;
 
@@ -164,11 +164,10 @@ export default function ConnectedJournalWorkspace() {
             <Link href="/browse" className="surface-button inline-flex h-10 items-center rounded-full border-2 px-4 text-sm">
               Browse scriptures
             </Link>
-            <SignInButton mode="modal">
-              <button className="inline-flex h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]">
-                Sign in
-              </button>
-            </SignInButton>
+            <SignInLink
+              returnTo="/notes"
+              className="inline-flex h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
+            />
           </div>
         </div>
       </>

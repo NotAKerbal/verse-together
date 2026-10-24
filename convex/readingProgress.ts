@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 import { normalizeScriptureVolume } from "../src/lib/scriptureVolumes";
 import {
   isJournalDate,
@@ -90,8 +90,7 @@ async function preserveLegacyChapterRead(ctx: MutationCtx, clerkId: string, row:
 }
 
 async function maybeClerkId(ctx: QueryCtx): Promise<string | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.subject ?? null;
+  return await getViewerClerkId(ctx);
 }
 
 function assertChapterRef(args: { volume: string; book: string; chapter: number }) {

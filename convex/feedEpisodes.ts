@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 
 function normalizeOptionalString(value: string | undefined) {
   const trimmed = value?.trim();
@@ -11,11 +11,11 @@ function normalizeOptionalString(value: string | undefined) {
 export const listWatchedEpisodes = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) return [];
+    const clerkId = await getViewerClerkId(ctx);
+    if (!clerkId) return [];
     const rows = await ctx.db
       .query("feedEpisodeWatches")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
       .collect();
 
     return rows.map((row: any) => ({
@@ -35,12 +35,12 @@ export const getWatchedEpisodeIds = query({
     episodeIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) return [];
+    const clerkId = await getViewerClerkId(ctx);
+    if (!clerkId) return [];
 
     const rows = await ctx.db
       .query("feedEpisodeWatches")
-      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
       .collect();
 
     if (!args.episodeIds || args.episodeIds.length === 0) {

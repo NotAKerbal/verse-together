@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
 import ResourceManagerWorkspace from "@/components/ResourceManagerWorkspace";
-import { getIsAdmin } from "@/lib/appData";
+import { getServerViewer } from "@/lib/auth-server";
 import { getLocalLdsBooks, getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
 
 export default async function ResourceManagerPage() {
-  const authState = await auth();
-  const clerkId = authState.userId;
+  const { viewer } = await getServerViewer();
 
-  if (!clerkId) {
+  if (!viewer) {
     return (
       <main className="page-shell py-2 sm:py-4">
         <p className="panel-card rounded-[1.35rem] p-4 text-sm text-foreground/70">
@@ -18,8 +16,7 @@ export default async function ResourceManagerPage() {
     );
   }
 
-  const isAdmin = await getIsAdmin(clerkId);
-  if (!isAdmin) {
+  if (!viewer.isAdmin) {
     return (
       <main className="page-shell py-2 sm:py-4">
         <p className="panel-card rounded-[1.35rem] p-4 text-sm text-foreground/70">
