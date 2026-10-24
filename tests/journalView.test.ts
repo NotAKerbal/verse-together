@@ -13,8 +13,9 @@ import {
 } from "../src/features/notes/journalView";
 
 const today = "2026-10-21";
-const arriving: JournalViewContext = { today, activeNoteId: "a", activeNoteDate: "2026-10-20" };
-const noActive: JournalViewContext = { today, activeNoteId: null, activeNoteDate: null };
+const arriving: JournalViewContext = { today, activeNoteId: "a" };
+const noActive: JournalViewContext = { today, activeNoteId: null };
+const calendarToday: JournalView = { stage: "calendar", date: today, noteId: null };
 
 /** Applies actions the way the page does: each from the view on screen, under possibly changing data. */
 function run(context: JournalViewContext, actions: JournalViewAction[], state: JournalViewState = null) {
@@ -24,15 +25,34 @@ function run(context: JournalViewContext, actions: JournalViewAction[], state: J
 }
 
 describe("Notes view state", () => {
-  test("arriving with an active note opens it on its own day; without one shows the calendar for today", () => {
-    expect(resolveJournalView(null, arriving)).toEqual({ stage: "note", date: "2026-10-20", noteId: "a" });
-    expect(resolveJournalView(null, noActive)).toEqual({ stage: "calendar", date: today, noteId: null });
-    // The active note's day isn't known yet: nothing is opened on the wrong day.
-    expect(resolveJournalView(null, { today, activeNoteId: "a", activeNoteDate: null }).stage).toBe("calendar");
+  test("arriving fresh always shows today's calendar, with or without an active note", () => {
+    expect(resolveJournalView(null, noActive)).toEqual(calendarToday);
+    // The provider's active note (say, from the reader's sidebar), whatever its day, is not opened on arrival.
+    expect(resolveJournalView(null, arriving)).toEqual(calendarToday);
+    expect(resolveJournalView(null, { today, activeNoteId: "today-note" })).toEqual(calendarToday);
+  });
+
+  test("an active note restored after arrival, or switched to elsewhere, never opens the view on its own", () => {
+    // The provider restores its active note a moment after the page first renders.
+    expect(resolveJournalView(null, noActive)).toEqual(calendarToday);
+    expect(resolveJournalView(null, arriving)).toEqual(calendarToday);
+    expect(resolveJournalView(null, { ...arriving, activeNoteId: "b" })).toEqual(calendarToday);
+    // A day chosen meanwhile stays chosen when an unrelated note becomes active.
+    const day = run(noActive, [{ type: "selectDate", date: "2026-10-18" }]);
+    expect(resolveJournalView(day, arriving)).toEqual({ stage: "day", date: "2026-10-18", noteId: null });
+  });
+
+  test("the active note still opens when chosen, on the day it was chosen from", () => {
+    const open = run(arriving, [
+      { type: "selectDate", date: "2026-10-20" },
+      { type: "openNote", noteId: "a", date: "2026-10-20" },
+    ]);
+    expect(resolveJournalView(open, arriving)).toEqual({ stage: "note", date: "2026-10-20", noteId: "a" });
   });
 
   test("closing keeps the note's day and shows its chooser, and the provider's active note never reopens it", () => {
-    const closed = run(arriving, [{ type: "closeNote" }]);
+    const open: JournalView = { stage: "note", date: "2026-10-20", noteId: "a" };
+    const closed = run(arriving, [{ type: "closeNote" }], open);
     expect(closed).toEqual({ stage: "day", date: "2026-10-20", noteId: null });
     // The same active note, re-delivered or updated by a reactive query, stays closed.
     expect(resolveJournalView(closed, arriving)).toEqual(closed);
@@ -40,7 +60,8 @@ describe("Notes view state", () => {
   });
 
   test("choosing a day shows that day's chooser and returning to the note's day does not reopen it", () => {
-    const away = run(arriving, [{ type: "selectDate", date: "2026-10-18" }]);
+    const open: JournalView = { stage: "note", date: "2026-10-20", noteId: "a" };
+    const away = run(arriving, [{ type: "selectDate", date: "2026-10-18" }], open);
     expect(away).toEqual({ stage: "day", date: "2026-10-18", noteId: null });
     const back = run(arriving, [{ type: "selectDate", date: "2026-10-20" }], away);
     expect(resolveJournalView(back, arriving)).toEqual({ stage: "day", date: "2026-10-20", noteId: null });
@@ -52,7 +73,7 @@ describe("Notes view state", () => {
   });
 
   test("phone stages go calendar → day → note and back without losing the day", () => {
-    const context: JournalViewContext = { today, activeNoteId: "b", activeNoteDate: "2026-10-19" };
+    const context: JournalViewContext = { today, activeNoteId: "b" };
     const day = run(noActive, [{ type: "selectDate", date: "2026-10-19" }]);
     expect(day).toEqual({ stage: "day", date: "2026-10-19", noteId: null });
     const note = run(context, [{ type: "openNote", noteId: "b", date: "2026-10-19" }], day);
@@ -64,12 +85,12 @@ describe("Notes view state", () => {
 
   test("an open note that stops being the loaded one (deleted, switched elsewhere) leaves for its day's chooser", () => {
     const open: JournalView = { stage: "note", date: today, noteId: "a" };
-    expect(resolveJournalView(open, { today, activeNoteId: null, activeNoteDate: null })).toEqual({
+    expect(resolveJournalView(open, noActive)).toEqual({
       stage: "day",
       date: today,
       noteId: null,
     });
-    expect(resolveJournalView(open, { today, activeNoteId: "z", activeNoteDate: today }).noteId).toBeNull();
+    expect(resolveJournalView(open, { today, activeNoteId: "z" }).noteId).toBeNull();
   });
 });
 
@@ -142,6 +163,21 @@ const tagBefore = (html: string, marker: string) => {
 };
 
 describe("Notes workspace stages", () => {
+  test("arriving with an active note shows the month, not the note: phone the calendar alone, desktop with today's chooser", () => {
+    const arrival = resolveJournalView(null, arriving);
+    const phone = render("phone", arrival);
+    expect(phone).toContain('aria-label="Calendar"');
+    expect(phone).not.toContain("Select a note");
+    expect(phone).not.toContain("EDITOR-PANE");
+
+    const desktop = render("desktop", arrival, { notePane: createElement("p", null, "EDITOR-PANE") });
+    expect(tagBefore(desktop, '<section aria-label="Calendar"')).not.toContain("inert");
+    expect(desktop).toContain(">Select a note</h2>");
+    expect(desktop).toContain(`dateTime="${today}"`);
+    expect(desktop).not.toContain("EDITOR-PANE");
+    expect(desktop).not.toContain('aria-current="true"');
+  });
+
   test("phone calendar stage shows only the month: no day list, no editor, no week/month toggle", () => {
     const html = render("phone", { stage: "calendar", date: today, noteId: null });
     expect(html).toContain('aria-label="Calendar"');

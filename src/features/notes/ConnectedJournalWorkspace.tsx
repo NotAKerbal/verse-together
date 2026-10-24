@@ -52,15 +52,10 @@ export default function ConnectedJournalWorkspace() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Arriving from the reader's sidebar opens on the current note's own day.
-  const activeSummaryDate = useMemo(() => {
-    const row = drafts.find((draft) => draft.id === activeDraftId) as { journal_date?: string } | undefined;
-    return row?.journal_date ?? null;
-  }, [drafts, activeDraftId]);
-  const activeNoteDate = activeSummaryDate ?? (activeNote && activeNote.id === activeDraftId ? activeNote.journal_date : null);
+  // Arriving fresh shows the calendar on today; the provider's active note opens only when chosen.
   const view = useMemo(
-    () => resolveJournalView(viewState, { today, activeNoteId: activeDraftId, activeNoteDate }),
-    [viewState, today, activeDraftId, activeNoteDate]
+    () => resolveJournalView(viewState, { today, activeNoteId: activeDraftId }),
+    [viewState, today, activeDraftId]
   );
   const selectedDate = view.date;
 
