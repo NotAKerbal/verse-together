@@ -70,10 +70,13 @@ function SaveState({
 export default function JournalNoteEditor({
   note,
   authorLabel = "You",
+  showDate = true,
   onClose,
 }: {
   note: JournalNoteDocument;
   authorLabel?: string;
+  /** False where the surrounding page already shows the note's day (the Notes calendar). */
+  showDate?: boolean;
   /** Closes the note's view (the X at its upper right); unmounting then saves anything still unsaved. */
   onClose?: () => void;
 }) {
@@ -120,9 +123,14 @@ export default function JournalNoteEditor({
     <article className="flex min-h-0 flex-1 flex-col gap-3" aria-label={note.title || "Note"}>
       <header className="space-y-1.5">
         <div className="flex items-start justify-between gap-2">
-          <p className="pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
-            <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
-          </p>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            {showDate ? (
+              <p className="pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
+                <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
+              </p>
+            ) : null}
+            <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
+          </div>
           {onClose ? (
             <button
               type="button"
@@ -135,7 +143,6 @@ export default function JournalNoteEditor({
             </button>
           ) : null}
         </div>
-        <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
         {readOnly ? (
           <p className="inline-flex rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-mint)] px-3 py-1 text-xs font-bold">
             {note.status === "published" ? "Published · read-only" : "Archived · read-only"}

@@ -102,6 +102,14 @@ const entries: JournalEntry[] = [
     source: { kind: "scripture", label: "1 Nephi 2", href: "/browse/bookofmormon/1-nephi/2" },
     read_at: `${today}T07:00:00Z`,
   },
+  {
+    kind: "reading",
+    id: "unsafe",
+    journal_date: "2026-10-17",
+    source: { kind: "page", label: "Odd source", href: "javascript:alert(1)" },
+    reader_label: "Reader",
+    read_at: "2026-10-17T07:00:00Z",
+  },
 ];
 
 const noop = () => {};
@@ -186,5 +194,67 @@ describe("Notes workspace stages", () => {
     const html = render("desktop", { stage: "day", date: "2026-10-05", noteId: null });
     expect(html).toContain(">Start a note</h2>");
     expect(html).toContain("Nothing recorded on this day.");
+  });
+});
+
+/** The markup of each list item in the day's list, in order. */
+const cardsOf = (html: string) => [...html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/g)].map((match) => match[1]);
+
+describe("Notes entry cards", () => {
+  test("a note card is one real button with its source link beside it, never nested in it", () => {
+    for (const layout of ["desktop", "phone"] as const) {
+      const html = render(layout, { stage: "day", date: today, noteId: null });
+      expect(html).not.toContain('role="button"');
+      const noteCards = cardsOf(html).filter((card) => card.includes("<button"));
+      expect(noteCards).toHaveLength(2);
+      for (const card of noteCards) {
+        const button = card.match(/<button\b[\s\S]*?<\/button>/)![0];
+        expect(countOf(card, "<button")).toBe(1);
+        expect(button).not.toContain("<a ");
+        // The source link (and the author and time) follow the button instead of sitting inside it.
+        expect(card.slice(card.indexOf("</button>"))).toMatch(/<a [^>]*href="\/browse\/bookofmormon\/1-nephi\/2#v-3"/);
+        expect(card.slice(card.indexOf("</button>"))).toContain("Reader");
+      }
+    }
+  });
+
+  test("the open note's card in the desktop rail is marked current", () => {
+    const html = render("desktop", { stage: "note", date: today, noteId: "a" });
+    const current = cardsOf(html).filter((card) => card.includes('aria-current="true"'));
+    expect(current).toHaveLength(1);
+    expect(current[0]).toContain("Morning thought");
+  });
+
+  test("a reading card is a single link to what was read, covering its label, reader and time", () => {
+    const html = render("desktop", { stage: "day", date: today, noteId: null });
+    const reading = cardsOf(html).find((card) => card.includes("Reading"))!;
+    expect(countOf(reading, "<a ")).toBe(1);
+    expect(reading).toMatch(/^<a [^>]*href="\/browse\/bookofmormon\/1-nephi\/2">[\s\S]*Reading[\s\S]*1 Nephi 2[\s\S]*<time dateTime="2026-10-21T07:00:00Z"[\s\S]*<\/a>$/);
+  });
+
+  test("a reading whose source isn't a safe in-app path is shown without any link", () => {
+    const html = render("desktop", { stage: "day", date: "2026-10-17", noteId: null });
+    const reading = cardsOf(html).find((card) => card.includes("Odd source"))!;
+    expect(reading).toContain("Read by Reader");
+    expect(reading).not.toContain("<a ");
+    expect(html).not.toContain("javascript:");
+  });
+});
+
+describe("Leaving an open note", () => {
+  test("desktop puts a back control right before the day heading in the rail, only while a note is open", () => {
+    const open = render("desktop", { stage: "note", date: today, noteId: "a" });
+    const back = open.indexOf('aria-label="Back to calendar"');
+    expect(back).toBeGreaterThan(-1);
+    const heading = open.indexOf("<h2", back);
+    expect(open.slice(back, heading)).toMatch(/^aria-label="Back to calendar"[^>]*>[\s\S]*<\/button>$/);
+    expect(open.slice(heading)).toMatch(/^<h2[^>]*><time dateTime="2026-10-21">/);
+
+    expect(render("desktop", { stage: "day", date: today, noteId: null })).not.toContain("Back to calendar");
+  });
+
+  test("phone keeps its back-to-the-day control in the top bar", () => {
+    const html = render("phone", { stage: "note", date: today, noteId: "a" });
+    expect(html).toContain('Back to </span><span class="truncate">Wednesday, October 21, 2026');
   });
 });

@@ -219,25 +219,33 @@ function EntryRow({
 }) {
   const padding = prominent ? "px-4 py-3" : "px-3 py-2.5";
   if (entry.kind === "reading") {
-    return (
-      <li className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] ${padding}`}>
-        <p className="flex items-center gap-2 text-sm font-bold">
+    const linked = isSafeSourceHref(entry.source.href);
+    const reading = (
+      <>
+        <span className="flex items-center gap-2 text-sm font-bold">
           <FontAwesomeIcon icon={faBook} className="h-3.5 w-3.5 text-[color:var(--accent-secondary)]" aria-hidden="true" />
           <span>Reading</span>
-          {isSafeSourceHref(entry.source.href) ? (
-            <Link href={entry.source.href} className="min-w-0 truncate underline underline-offset-2">
-              {entry.source.label}
-            </Link>
-          ) : (
-            <span className="min-w-0 truncate">{entry.source.label}</span>
-          )}
-        </p>
-        <p className="mt-0.5 text-xs text-[color:var(--foreground-muted)]">
+          <span className={`min-w-0 truncate ${linked ? "underline underline-offset-2" : ""}`}>{entry.source.label}</span>
+        </span>
+        <span className="mt-0.5 block text-xs text-[color:var(--foreground-muted)]">
           {entry.reader_label ? `Read by ${entry.reader_label} · ` : null}
           {entry.origin === "chapter_mark" || entry.origin === "legacy" ? "Chapter marked read" : "Logged"} at{" "}
           <time dateTime={entry.read_at}>{new Date(entry.read_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time>
-        </p>
+        </span>
+      </>
+    );
+    // The whole card is the link back to what was read; a source that can't be linked safely stays plain text.
+    return linked ? (
+      <li>
+        <Link
+          href={entry.source.href}
+          className={`block rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] transition-[background-color,border-color,box-shadow] hover:bg-[color:var(--surface-button-hover)] hover:shadow-[var(--surface-shadow-lift)] focus-visible:border-[color:var(--accent-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${padding}`}
+        >
+          {reading}
+        </Link>
       </li>
+    ) : (
+      <li className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] ${padding}`}>{reading}</li>
     );
   }
 
@@ -256,9 +264,10 @@ function EntryRow({
   }
 
   return (
-    // The whole card reacts to its button, not to the source link below it, which navigates on its own.
+    // The button's ::after stretches over the whole card, so every part of it opens the note except the source
+    // link, which sits above that layer and navigates on its own.
     <li
-      className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] transition-[background-color,border-color,box-shadow] has-[button:focus-visible]:border-[color:var(--accent-secondary)] ${padding} ${
+      className={`relative rounded-[1rem] border-2 border-[color:var(--surface-border)] transition-[background-color,border-color,box-shadow] has-[button:focus-visible]:border-[color:var(--accent-secondary)] ${padding} ${
         selected
           ? "bg-[color:var(--accent-note)] shadow-[var(--surface-shadow-soft)]"
           : "bg-[color:var(--surface-card)] has-[button:hover]:bg-[color:var(--surface-button-hover)] has-[button:hover]:shadow-[var(--surface-shadow-lift)]"
@@ -268,7 +277,7 @@ function EntryRow({
         type="button"
         onClick={() => onOpenNote(entry.id, entry.journal_date)}
         aria-current={selected ? "true" : undefined}
-        className="flex w-full cursor-pointer items-start gap-2 rounded-[0.6rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+        className="flex w-full cursor-pointer items-start gap-2 text-left after:absolute after:inset-0 after:rounded-[0.875rem] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[color:var(--accent-secondary)]"
       >
         <FontAwesomeIcon icon={faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
@@ -288,7 +297,7 @@ function EntryRow({
         ) : null}
       </button>
       <div className="mt-1.5 pl-5">
-        <NoteSourceLine source={entry.source} authorLabel={entry.author_label} time={entry.created_at} />
+        <NoteSourceLine source={entry.source} authorLabel={entry.author_label} time={entry.created_at} raiseLink />
       </div>
     </li>
   );
@@ -536,10 +545,22 @@ export default function JournalWorkspace({
           {noteOpen ? (
             <section aria-label={`Entries for ${dayName}`} className="space-y-3">
               <div className="space-y-2">
-                <h2 className="font-display text-lg font-extrabold tracking-[-0.02em]">
-                  <time dateTime={selectedDate}>{dayName}</time>
-                  {todayTag}
-                </h2>
+                <div className="flex items-center gap-2">
+                  {/* Same as the note's X: back to the month and this day's chooser. */}
+                  <button
+                    type="button"
+                    onClick={onCloseNote}
+                    aria-label="Back to calendar"
+                    title="Back to calendar"
+                    className={`${ICON_BUTTON_CLASS} shrink-0`}
+                  >
+                    <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                  <h2 className="min-w-0 font-display text-lg font-extrabold tracking-[-0.02em]">
+                    <time dateTime={selectedDate}>{dayName}</time>
+                    {todayTag}
+                  </h2>
+                </div>
                 {dayButtons}
               </div>
               {dayError}

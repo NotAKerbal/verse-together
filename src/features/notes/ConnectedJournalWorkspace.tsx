@@ -199,7 +199,13 @@ export default function ConnectedJournalWorkspace() {
   const authorLabel = activeEntry && activeEntry.kind === "note" ? activeEntry.author_label : viewerLabel;
 
   const notePane = openNote ? (
-    <JournalNoteEditor key={openNote.id} note={openNote} authorLabel={authorLabel} onClose={onCloseNote} />
+    <JournalNoteEditor
+      key={openNote.id}
+      note={openNote}
+      authorLabel={authorLabel}
+      showDate={false}
+      onClose={onCloseNote}
+    />
   ) : openNoteLoading ? (
     <p role="status" className="text-sm text-[color:var(--foreground-muted)]">
       Loading note…
