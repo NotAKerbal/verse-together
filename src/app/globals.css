@@ -289,8 +289,9 @@ mark {
   min-width: 0;
 }
 
-/* A volume's or book's back link, title, and quick navigation, in the nav pill's chrome. */
+/* A volume's or book's back link, title, and search, in the nav pill's chrome; the search panel is placed against it. */
 .app-header-selection {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.375rem;
