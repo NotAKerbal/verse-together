@@ -45,9 +45,9 @@ function LibraryView() {
       <h1 className="sr-only" tabIndex={-1} data-browse-title>
         Browse scriptures
       </h1>
-      {/* Wider screens show this search in the app header (Navbar); phones and narrow windows keep it here. */}
-      <div className="simple-hide browse-hero browse-search-fallback flex justify-end">
-        <LibrarySearch className="max-w-[22rem] flex-1" />
+      {/* Phones keep the floating search pill at the top; wide screens use the app header. */}
+      <div className="simple-hide browse-search-fallback flex justify-end">
+        <LibrarySearch variant="header" className="w-full sm:max-w-[22rem]" />
       </div>
       {/* One grid: study cards first (hidden in simple mode), then the volumes. Continue Reading
           renders nothing without a saved position, so it never leaves a gap. */}
