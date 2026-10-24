@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import LessonCoverImage, { CoverCredit } from "@/features/comeFollowMe/LessonCoverImage";
+import { getLessonCover } from "@/features/comeFollowMe/lessonCovers";
 import StudyCompanion, { type CompanionChapter } from "@/features/comeFollowMe/StudyCompanion";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import ReadingLogButton from "@/features/notes/ReadingLogButton";
@@ -65,19 +67,41 @@ function WeekNav({ week }: { week: ComeFollowMeWeek }) {
   );
 }
 
+function BackLink() {
+  return (
+    <Link href="/come-follow-me" className={styles.backLink}>
+      <span aria-hidden="true">←</span> All lessons
+    </Link>
+  );
+}
+
+/** The week's cover beside the page head (below it on phones), with its credit or provenance. */
+function HeaderCover({ weekStart }: { weekStart: string }) {
+  const cover = getLessonCover(weekStart);
+  return (
+    <figure className={styles.headerCover}>
+      <LessonCoverImage cover={cover} className={styles.headerCoverImage} priority />
+      <figcaption>
+        <CoverCredit cover={cover} />
+      </figcaption>
+    </figure>
+  );
+}
+
 function NoGuide({ week }: { week: ComeFollowMeWeek }) {
   const ranges = week.refs.length > 0 ? week.refs : week.suggestion ? [week.suggestion.ref] : [];
   return (
     <section className={`page-shell ${styles.page}`}>
-      <header className={styles.header}>
-        <Link href="/browse" className={styles.backLink}>
-          <span aria-hidden="true">←</span> Library
-        </Link>
-        <p className={styles.eyebrow}>
-          <span>Come, Follow Me</span>
-          <span>{formatWeekRange(week)}</span>
-        </p>
-        <h1 className={styles.title}>{week.block}</h1>
+      <header className={`${styles.header} ${styles.headerWithCover}`}>
+        <div className={styles.headerText}>
+          <BackLink />
+          <p className={styles.eyebrow}>
+            <span>Come, Follow Me</span>
+            <span>{formatWeekRange(week)}</span>
+          </p>
+          <h1 className={styles.title}>{week.block}</h1>
+        </div>
+        <HeaderCover weekStart={week.start} />
       </header>
       <div className={styles.noGuide}>
         <p>There is no study guide for this week yet. You can still read the assigned scripture.</p>
@@ -117,24 +141,25 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
 
   return (
     <section className={`page-shell-wide ${styles.page}`}>
-      <header className={styles.header}>
-        <Link href="/browse" className={styles.backLink}>
-          <span aria-hidden="true">←</span> Library
-        </Link>
-        <p className={styles.eyebrow}>
-          <span>{guide.scripture}</span>
-          <span>Come, Follow Me</span>
-          <span>{guide.dateLabel}</span>
-        </p>
-        <h1 className={styles.title}>{parsed.title}</h1>
-        <p className={styles.summary}>{guide.summary}</p>
-        <p className={styles.byline}>
-          <span>Guide by {guide.author}</span>
-          <span aria-hidden="true">·</span>
-          <span className={styles.attribution}>{ATTRIBUTION}</span>
-          <span aria-hidden="true">·</span>
-          <span>{readingTime(parsed.words)}</span>
-        </p>
+      <header className={`${styles.header} ${styles.headerWithCover}`}>
+        <div className={styles.headerText}>
+          <BackLink />
+          <p className={styles.eyebrow}>
+            <span>{guide.scripture}</span>
+            <span>Come, Follow Me</span>
+            <span>{guide.dateLabel}</span>
+          </p>
+          <h1 className={styles.title}>{parsed.title}</h1>
+          <p className={styles.summary}>{guide.summary}</p>
+          <p className={styles.byline}>
+            <span>Guide by {guide.author}</span>
+            <span aria-hidden="true">·</span>
+            <span className={styles.attribution}>{ATTRIBUTION}</span>
+            <span aria-hidden="true">·</span>
+            <span>{readingTime(parsed.words)}</span>
+          </p>
+        </div>
+        <HeaderCover weekStart={week.start} />
       </header>
 
       <NoteSourceRegistrar
@@ -186,7 +211,8 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
               <a href={SOURCE_SITE} target="_blank" rel="noopener noreferrer">
                 isaacstuff.com/cfm
               </a>
-              . Paintings are public domain and credited where they appear.
+              . Paintings are public domain and credited where they appear; generated illustrations are labeled as
+              such.
             </p>
             <WeekNav week={week} />
           </footer>

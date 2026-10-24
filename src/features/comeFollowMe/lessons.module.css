@@ -1,0 +1,476 @@
+/*
+  Come, Follow Me lesson covers: the overview at /come-follow-me (this week featured, earlier lessons as a
+  grid of cover cards) and the current-lesson card in the Library. Set like the study pages: cream paper,
+  warm ink, rubric red for kickers, serif titles, sans only for small labels, and space instead of rules.
+  Every color comes from the app theme tokens, so light and dark both apply.
+*/
+
+.overview {
+  gap: clamp(2rem, 5vw, 3.5rem);
+  padding-bottom: clamp(2rem, 6vw, 4rem);
+}
+
+.overview a:focus-visible,
+.currentCard a:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Page head */
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-width: 44rem;
+  padding: clamp(0.5rem, 3vw, 2rem) 0.25rem 0;
+}
+
+/* The kicker shares its row with the phone-only account control. */
+.introTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-rubric);
+}
+
+.kicker span + span {
+  color: var(--foreground-soft);
+}
+
+.kicker span + span::before {
+  content: "·";
+  margin: 0 0.6rem;
+  color: var(--rule-strong);
+}
+
+.heading {
+  font-family: var(--font-serif-text);
+  font-size: clamp(2.1rem, 1.5rem + 2.4vw, 3.2rem);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
+}
+
+.lede {
+  max-width: 34em;
+  font-family: var(--font-serif-text);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--foreground-muted);
+  text-wrap: pretty;
+}
+
+/* Study plans left the main navigation; this keeps them one tap from the lessons. */
+.plansLink {
+  padding-inline: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.plansLink a {
+  color: var(--foreground-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 4px;
+}
+
+.plansLink a:hover {
+  color: var(--foreground);
+}
+
+/* Sections */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.sectionHeading {
+  padding-inline: 0.25rem;
+  font-family: var(--font-serif-text);
+  font-size: clamp(1.4rem, 1.2rem + 0.8vw, 1.75rem);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+/* This week: one wide card, the cover beside the lesson from 768px, above it on phones. */
+
+.featured {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.featuredMedia {
+  position: relative;
+  margin: 0;
+  background: var(--surface-card-soft);
+}
+
+.featuredImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+
+.featuredBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+
+@media (min-width: 768px) {
+  .featured {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+
+  .featuredMedia {
+    min-height: 24rem;
+  }
+
+  .featuredImage {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .featuredBody {
+    justify-content: center;
+  }
+}
+
+.featuredTitle {
+  font-family: var(--font-serif-text);
+  font-size: clamp(1.65rem, 1.25rem + 1.6vw, 2.45rem);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.014em;
+  text-wrap: balance;
+}
+
+.featuredTitle a,
+.currentTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.featuredTitle a:hover,
+.currentTitle a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--accent-rubric-line);
+  text-underline-offset: 0.18em;
+}
+
+.scripture {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-rubric);
+}
+
+.summary {
+  max-width: 34em;
+  font-family: var(--font-serif-text);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--foreground-muted);
+  text-wrap: pretty;
+}
+
+.readingLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--foreground-soft);
+}
+
+.reading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.25rem;
+}
+
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.2rem;
+  border-radius: 999px;
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 120ms ease;
+}
+
+.primaryAction:hover {
+  opacity: 0.88;
+}
+
+.textAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--accent-rubric-line);
+  text-underline-offset: 0.22em;
+}
+
+.textAction:hover {
+  color: var(--accent-rubric);
+  text-decoration-color: currentColor;
+}
+
+/* A painting's credit, set over the bottom of its cover. */
+.mediaCredit {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 2rem 0.9rem 0.6rem;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0), rgb(0 0 0 / 0.68));
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: rgb(255 255 255 / 0.92);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+.mediaCredit a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.mediaCredit a:focus-visible {
+  outline-color: #fff;
+}
+
+.notice {
+  max-width: 40rem;
+  padding: 1.25rem 0.25rem;
+  font-family: var(--font-serif-text);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--foreground-muted);
+}
+
+/* Earlier and upcoming lessons: a grid of cover cards, each one link. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17.5rem), 1fr));
+  gap: clamp(1rem, 2.5vw, 1.75rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: var(--surface-card);
+  color: var(--foreground);
+  text-decoration: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.card:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--surface-shadow-lift);
+}
+
+.overview .card:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+.cardMedia {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--surface-card-soft);
+}
+
+.cardImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 320ms ease;
+}
+
+.card:hover .cardImage {
+  transform: scale(1.025);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardImage {
+    transition: none;
+  }
+
+  .card:hover .cardImage {
+    transform: none;
+  }
+}
+
+.cardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.15rem 1.3rem;
+}
+
+.cardDate {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--foreground-soft);
+}
+
+.cardTitle {
+  font-family: var(--font-serif-text);
+  font-size: 1.3rem;
+  font-weight: 400;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.cardSummary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  font-family: var(--font-serif-text);
+  font-size: 0.975rem;
+  line-height: 1.55;
+  color: var(--foreground-muted);
+}
+
+.footnote {
+  max-width: 44rem;
+  padding-inline: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--foreground-soft);
+}
+
+/* Library: the current lesson as a cover card. */
+
+.currentCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: var(--surface-card);
+  container-type: inline-size;
+}
+
+/* 16:9 while the card is narrow, but never taller than 14rem: signed out, this can be the Library's only
+   card and fill the whole row, where a 16:9 cover would push the title below the fold. */
+.currentMedia {
+  position: relative;
+  flex: none;
+  margin: 0;
+  height: 12rem;
+  height: clamp(9rem, 56.25cqi, 14rem);
+  overflow: hidden;
+  background: var(--surface-card-soft);
+}
+
+.currentMedia .cardImage {
+  height: 100%;
+}
+
+.currentBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.currentBody .kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+
+.currentTitle {
+  font-family: var(--font-serif-text);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+.currentBody .actions {
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.currentBody .primaryAction {
+  min-height: 2.25rem;
+  padding-inline: 1rem;
+  font-size: 0.8125rem;
+}
+
+.currentBody .textAction {
+  min-height: 2.25rem;
+  font-size: 0.8125rem;
+}
+
+.placeholder {
+  min-height: 18rem;
+}
