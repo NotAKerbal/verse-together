@@ -4,14 +4,6 @@ import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
 import ContinueReadingCard from "@/features/plans/ContinueReadingCard";
 import { getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
 
-const VOLUME_TINTS: Record<string, string> = {
-  bookofmormon: "var(--surface-card)",
-  oldtestament: "var(--surface-card)",
-  newtestament: "var(--accent-sky-soft)",
-  doctrineandcovenants: "var(--surface-card)",
-  pearl: "var(--accent-mint)",
-};
-
 // Original generated scenery, with no people or figures; see docs/browse-art-provenance.md.
 const VOLUME_ART: Record<string, BrowseCardImage> = {
   bookofmormon: { src: "/art/browse-bookofmormon.webp" },
@@ -47,7 +39,6 @@ export default async function BrowsePage({
           <BrowseCard
             key={volume.id}
             href={`/browse/${volume.id}`}
-            background={VOLUME_TINTS[volume.id] ?? "var(--surface-card)"}
             image={VOLUME_ART[volume.id]}
             eyebrow={`${volume.shortLabel}${volume.id !== "doctrineandcovenants" ? ` · ${volume.chapterCount} chapters` : ""}`}
             title={volume.label}
