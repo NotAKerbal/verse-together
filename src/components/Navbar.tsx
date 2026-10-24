@@ -8,8 +8,7 @@ import {
   faBookOpen,
   faPencil,
   faShoePrints,
-  faBars,
-  faChevronDown,
+  faChevronLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import AccountControl from "@/components/AccountControl";
 import { useAuth } from "@/lib/auth";
@@ -51,34 +50,36 @@ export default function Navbar() {
   return (
     <header className="app-header" data-collapsed={collapsed ? "true" : "false"}>
       <div className="desktop-nav-bar">
-        <div id="desktop-navigation" className="desktop-nav-content">
-          <Link href="/" className="brand-wordmark desktop-nav-brand" aria-label="Verse Together home">
-            Verse<span>Together</span>
-          </Link>
-          <nav className="simple-hide desktop-nav-links" aria-label="Primary">
-            {navItems.map((item) => {
-              const active = isPathActive(pathname, item.href);
-              const href = item.href === "/browse" ? browseHref : item.href;
-              const icon = navIcons[item.label];
-              return (
-                <Link
-                  key={item.href}
-                  href={href}
-                  data-active={active ? "true" : "false"}
-                  className="desktop-nav-link"
-                  aria-current={active ? "page" : undefined}
-                  aria-label={item.label}
-                  title={item.label}
-                >
-                  <FontAwesomeIcon icon={icon} className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+        <Link href="/" className="brand-wordmark desktop-nav-brand" aria-label="Verse Together home">
+          Verse<span>Together</span>
+        </Link>
+        <div id="desktop-navigation" className="desktop-nav-content" inert={collapsed} aria-hidden={collapsed}>
+          <div className="desktop-nav-items">
+            <nav className="simple-hide desktop-nav-links" aria-label="Primary">
+              {navItems.map((item) => {
+                const active = isPathActive(pathname, item.href);
+                const href = item.href === "/browse" ? browseHref : item.href;
+                const icon = navIcons[item.label];
+                return (
+                  <Link
+                    key={item.href}
+                    href={href}
+                    data-active={active ? "true" : "false"}
+                    className="desktop-nav-link"
+                    aria-current={active ? "page" : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                  >
+                    <FontAwesomeIcon icon={icon} className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
+                    {active ? <span>{item.label}</span> : null}
+                  </Link>
+                );
+              })}
+            </nav>
 
-          <div className="simple-hide desktop-nav-account">
-            <AccountControl variant="dock" />
+            <div className="simple-hide desktop-nav-account">
+              <AccountControl variant="dock" />
+            </div>
           </div>
         </div>
         <button
@@ -90,8 +91,7 @@ export default function Navbar() {
           title={collapsed ? "Expand navigation" : "Collapse navigation"}
           onClick={() => setCollapsed((value) => !value)}
         >
-          <FontAwesomeIcon icon={collapsed ? faBars : faChevronDown} className="h-3.5 w-3.5" aria-hidden="true" />
-          {collapsed ? <span>Menu</span> : null}
+          <FontAwesomeIcon icon={faChevronLeft} className="desktop-nav-toggle-icon h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
     </header>
