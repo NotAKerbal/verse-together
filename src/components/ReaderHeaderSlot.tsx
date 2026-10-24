@@ -1,75 +1,97 @@
 "use client";
 
-import { useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { useId, useLayoutEffect, useSyncExternalStore } from "react";
 
-// Matches the `sm` breakpoint, where the app header appears: below it (phones) the reader keeps its
-// header in the scripture column.
-const READER_HEADER_SLOT_QUERY = "(min-width: 640px)";
+// Wide enough for the chapter header to sit beside the floating navigation; narrower screens keep it in the page.
+const READER_HEADER_DOCK_QUERY = "(min-width: 900px)"; // Matches `.reader-header-inline[data-dock-pending]` in globals.css.
 
 /*
-  The mounted slot element, tracked through its callback ref rather than looked up once, so the
-  reader follows the slot when the header mounts late (Suspense) or is replaced (a remount after
-  a hydration error) instead of portaling into a detached node.
+  The mounted slot, tracked through its callback ref so the reader follows the slot when the header mounts late or
+  is replaced, and the chapter headers that want it. Only the most recent claim is drawn there: while a chapter
+  opens, its page (ChapterReaderShell) and the reader it replaces are both mounted, and the header shows only one.
 */
 let slotElement: HTMLElement | null = null;
-const slotListeners = new Set<() => void>();
+let claims: string[] = [];
+const listeners = new Set<() => void>();
 
-function notifySlotListeners() {
-  slotListeners.forEach((listener) => listener());
+function notify() {
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 function registerSlotElement(element: HTMLDivElement) {
   slotElement = element;
-  notifySlotListeners();
+  notify();
+  // Rows under the docked toolbar (comparison key, notices) make the header taller; --header-height follows so the
+  // page and the panels below the header keep clear of them.
+  const root = document.documentElement;
+  const observer = new ResizeObserver(() => {
+    const toolbar = element.firstElementChild as HTMLElement | null;
+    const extra = toolbar ? element.offsetHeight - toolbar.offsetHeight : 0;
+    if (extra > 1) root.style.setProperty("--header-height", `calc(4rem + ${Math.ceil(extra)}px)`);
+    else root.style.removeProperty("--header-height");
+  });
+  observer.observe(element);
   return () => {
+    observer.disconnect();
+    root.style.removeProperty("--header-height");
     // A replacement slot may already have attached; only clear the one this ref registered.
     if (slotElement !== element) return;
     slotElement = null;
-    notifySlotListeners();
+    notify();
   };
 }
 
-function subscribeToSlot(listener: () => void) {
-  slotListeners.add(listener);
-  return () => {
-    slotListeners.delete(listener);
-  };
+function subscribeToMedia(listener: () => void) {
+  const media = window.matchMedia(READER_HEADER_DOCK_QUERY);
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
 }
-
-const getSlot = () => slotElement;
-const getServerSlot = () => null;
 
 /**
- * The right side of the app header, where the chapter reader portals its toolbar and notes whenever
- * the header is shown.
- * It stays hidden while empty, and the header only takes the reader layout once it is filled
- * (see `.reader-header-slot` in globals.css), so other routes are unaffected.
+ * The right side of the floating app header, where the chapter reader's header is drawn on wide screens. It stays
+ * hidden while empty, and the header only takes the reader layout once it is filled (see `.reader-header-slot` in
+ * globals.css), so other routes are unaffected.
  */
 export default function ReaderHeaderSlot() {
   return <div ref={registerSlotElement} className="reader-header-slot" />;
 }
 
 /**
- * The header slot to portal into when the app header is shown, or null to render in place.
- * `resolved` is false until the client knows where the reader header goes (the viewport is phone
- * width, or the slot is mounted), so the in-place header can stay hidden where the app header is
- * shown until then instead of flashing before it moves.
+ * Where a chapter header goes. `slot` is the app header's slot to portal into, or null to draw in the page.
+ * `pending` is true while it may still move to the header (before hydration, or while another chapter header holds
+ * the slot), so the in-page header can stay hidden on wide screens instead of flashing there first.
  */
-export function useReaderHeaderSlot(): { slot: HTMLElement | null; resolved: boolean } {
-  const slot = useSyncExternalStore(subscribeToSlot, getSlot, getServerSlot);
-  const [isWide, setIsWide] = useState<boolean | null>(null);
+export function useReaderHeaderDock(enabled: boolean): { slot: HTMLElement | null; pending: boolean } {
+  const id = useId();
+  const wide = useSyncExternalStore(
+    subscribeToMedia,
+    () => window.matchMedia(READER_HEADER_DOCK_QUERY).matches,
+    () => null
+  );
+  const slot = useSyncExternalStore(subscribe, () => slotElement, () => null);
+  const owner = useSyncExternalStore(subscribe, () => claims.at(-1) ?? null, () => null);
+  const claiming = enabled && wide === true;
 
   useLayoutEffect(() => {
-    const media = window.matchMedia(READER_HEADER_SLOT_QUERY);
-    const sync = () => setIsWide(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
+    if (!claiming) return;
+    claims = [...claims, id];
+    notify();
+    return () => {
+      claims = claims.filter((claim) => claim !== id);
+      notify();
+    };
+  }, [claiming, id]);
 
-  const connectedSlot = slot?.isConnected ? slot : null;
+  const connected = slot?.isConnected ? slot : null;
   return {
-    slot: isWide ? connectedSlot : null,
-    resolved: isWide === false || (isWide === true && connectedSlot !== null),
+    slot: claiming && owner === id ? connected : null,
+    pending: enabled && (wide === null || (wide && connected !== null && owner !== id)),
   };
 }

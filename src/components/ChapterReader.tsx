@@ -869,7 +869,6 @@ export default function ChapterReader({
     () => chapterLogOptions({ volumeSlug: volume, book, chapter }, reference, pathname, textReady ? verses.length : undefined),
     [reference, pathname, volume, book, chapter, textReady, verses.length]
   );
-  const quickNavVerses = useMemo(() => verses.map((item) => ({ verse: item.verse, text: item.text })), [verses]);
   const compareByTranslation = useMemo(() => {
     const nextMap = new Map<string, Map<number, string>>();
     compareChapters.forEach((chapterData) => {
@@ -1507,7 +1506,6 @@ export default function ChapterReader({
             book={book}
             reference={reference}
             breadcrumbs={breadcrumbs}
-            verses={quickNavVerses}
             logOptions={readingLogOptions}
             logReady={textReady}
             atTop={isAtTop}
@@ -1545,7 +1543,7 @@ export default function ChapterReader({
             }
           >
             {hasCompareSelections ? (
-              <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
+              <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="text-foreground/45">Key:</span>
                 <span
                   className="text-amber-700 dark:text-amber-300"
@@ -1568,7 +1566,7 @@ export default function ChapterReader({
               </div>
             ) : null}
             {translationNotices.length > 0 ? (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+              <div className="reader-header-notice text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
                 {translationNotices.map((notice) => (
                   <div key={notice}>{notice}</div>
                 ))}

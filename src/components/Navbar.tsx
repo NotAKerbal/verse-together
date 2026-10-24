@@ -12,6 +12,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import AccountControl from "@/components/AccountControl";
 import LibrarySearch from "@/components/LibrarySearch";
+import ReaderHeaderSlot from "@/components/ReaderHeaderSlot";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
@@ -132,6 +133,8 @@ export default function Navbar() {
         </button>
       </div>
       {showLibrarySearch ? <LibrarySearch variant="header" className="simple-hide app-header-search" /> : null}
+      {/* A chapter's header (search, trail, Log, settings) sits here on wide screens; see ChapterHeader. */}
+      <ReaderHeaderSlot />
     </header>
   );
 }

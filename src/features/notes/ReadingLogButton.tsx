@@ -24,7 +24,8 @@ type Props = {
   defaultDate?: string;
   /** Use the page's live path and query for a source that points at the current page. */
   followLocation?: boolean;
-  variant?: "compact" | "pill";
+  /** "toolbar" is a control in the chapter reader's header pill (ChapterHeader). */
+  variant?: "compact" | "pill" | "toolbar";
   label?: string;
   /** Accessible name when the visible label is shortened. */
   ariaLabel?: string;
@@ -68,6 +69,7 @@ function partialSource(source: NoteSource, start: number, end: number): NoteSour
 const TRIGGER_CLASS = {
   compact:
     "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border surface-card-soft px-2.5 text-xs font-bold text-foreground hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 disabled:opacity-50",
+  toolbar: "reader-toolbar-button reader-toolbar-log disabled:opacity-50",
   pill:
     "surface-button inline-flex h-9 items-center gap-1.5 rounded-full border-2 px-3.5 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50",
 };
@@ -219,12 +221,12 @@ export default function ReadingLogButton({
           className={TRIGGER_CLASS[variant]}
         >
           <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
-          {variant === "compact" && notice ? "Logged ✓" : label}
+          {variant !== "pill" && notice ? "Logged ✓" : label}
         </button>
-        {/* The compact header control has no room for the confirmation; it is announced instead. */}
+        {/* The compact header controls have no room for the confirmation; it is announced instead. */}
         <span
           role="status"
-          className={variant === "compact" ? "sr-only" : "text-xs font-semibold text-[color:var(--foreground-muted)]"}
+          className={variant !== "pill" ? "sr-only" : "text-xs font-semibold text-[color:var(--foreground-muted)]"}
         >
           {notice}
         </span>
