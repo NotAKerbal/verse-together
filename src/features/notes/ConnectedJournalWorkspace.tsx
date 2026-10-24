@@ -2,7 +2,8 @@
 
 // The /notes page's adapter: the signed-in user's real journal, reading history and active note, fed into
 // the presentational JournalWorkspace. Notes are created and opened through InsightBuilderProvider so the
-// reader's sidebar and this page always agree on which note is current.
+// reader's sidebar and this page always agree on which note is current. Which day and note are in view is
+// this page's own state (journalView.ts): closing a note only clears the view, and nothing reactive reopens one.
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,6 +23,12 @@ import {
   type NoteSource,
   type ReadingLogRow,
 } from "./journal";
+import {
+  nextJournalView,
+  resolveJournalView,
+  type JournalViewAction,
+  type JournalViewState,
+} from "./journalView";
 import { useBelowLg } from "./useBelowLg";
 import { useConvexSignedIn } from "./useConvexSignedIn";
 
@@ -39,7 +46,7 @@ export default function ConnectedJournalWorkspace() {
   const readingLog = useMyReadingLog() as ReadingLogRow[] | undefined;
 
   const [today] = useState(() => localDateKey());
-  const [chosenDate, setChosenDate] = useState<string | null>(null);
+  const [viewState, setViewState] = useState<JournalViewState>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -48,7 +55,14 @@ export default function ConnectedJournalWorkspace() {
     const row = drafts.find((draft) => draft.id === activeDraftId) as { journal_date?: string } | undefined;
     return row?.journal_date ?? null;
   }, [drafts, activeDraftId]);
-  const selectedDate = chosenDate ?? activeSummaryDate ?? today;
+  const activeNoteDate = activeSummaryDate ?? (activeNote && activeNote.id === activeDraftId ? activeNote.journal_date : null);
+  const view = useMemo(
+    () => resolveJournalView(viewState, { today, activeNoteId: activeDraftId, activeNoteDate }),
+    [viewState, today, activeDraftId, activeNoteDate]
+  );
+  const selectedDate = view.date;
+  // Every action starts from the view on screen, so arriving and then acting never depends on stale state.
+  const act = useCallback((action: JournalViewAction) => setViewState(nextJournalView(view, action)), [view]);
 
   // The server's label for the signed-in user, as it appears on their own notes; else their account name.
   const viewerLabel = useMemo(() => {
@@ -65,9 +79,9 @@ export default function ConnectedJournalWorkspace() {
     [journal, readingLog, viewerLabel]
   );
 
-  // The open note is shown only on its own day; choosing another day never leaves it in view.
-  const openNote = activeNote && activeNote.journal_date === selectedDate ? activeNote : null;
-  const openNoteLoading = !openNote && !!activeDraftId && isLoading && activeSummaryDate === selectedDate;
+  // Only the note the view names, and only once its document has loaded.
+  const openNote = view.noteId !== null && activeNote?.id === view.noteId ? activeNote : null;
+  const openNoteLoading = view.noteId !== null && !openNote && isLoading;
 
   // What can be logged from here: sources this person actually has — the open note's, the selected day's,
   // then their recent reading history. Nothing is suggested that they haven't been to.
@@ -89,11 +103,14 @@ export default function ConnectedJournalWorkspace() {
 
   const onOpenNote = useCallback(
     (noteId: string, journalDate: string) => {
-      setChosenDate(journalDate);
+      act({ type: "openNote", noteId, date: journalDate });
       if (noteId !== activeDraftId) void switchDraft(noteId);
     },
-    [activeDraftId, switchDraft]
+    [act, activeDraftId, switchDraft]
   );
+  const onSelectDate = useCallback((date: string) => act({ type: "selectDate", date }), [act]);
+  const onCloseNote = useCallback(() => act({ type: "closeNote" }), [act]);
+  const onShowCalendar = useCallback(() => act({ type: "showCalendar" }), [act]);
 
   const onNewNote = useCallback(
     async (journalDate: string) => {
@@ -101,8 +118,9 @@ export default function ConnectedJournalWorkspace() {
       setCreateError(null);
       try {
         // Written on the Notes page itself, so there is no reading source to claim.
-        await createJournalNote({ journalDate, source: null });
-        setChosenDate(journalDate);
+        const noteId = await createJournalNote({ journalDate, source: null });
+        // The new note becomes the provider's active note; show it, whatever is in view by now.
+        if (noteId) setViewState({ stage: "note", date: journalDate, noteId });
       } catch (error) {
         setCreateError(error instanceof Error && error.message ? error.message : "The note could not be created.");
       } finally {
@@ -181,10 +199,14 @@ export default function ConnectedJournalWorkspace() {
   const authorLabel = activeEntry && activeEntry.kind === "note" ? activeEntry.author_label : viewerLabel;
 
   const notePane = openNote ? (
-    <JournalNoteEditor key={openNote.id} note={openNote} authorLabel={authorLabel} />
+    <JournalNoteEditor key={openNote.id} note={openNote} authorLabel={authorLabel} onClose={onCloseNote} />
   ) : openNoteLoading ? (
     <p role="status" className="text-sm text-[color:var(--foreground-muted)]">
       Loading note…
+    </p>
+  ) : view.noteId !== null ? (
+    <p role="alert" className="text-sm text-[color:var(--foreground-muted)]">
+      This note couldn&apos;t be opened here.
     </p>
   ) : null;
 
@@ -194,7 +216,7 @@ export default function ConnectedJournalWorkspace() {
       key={selectedDate}
       options={logOptions}
       defaultDate={selectedDate}
-      onLogged={setChosenDate}
+      onLogged={onSelectDate}
     />
   ) : (
     <span className="text-xs text-[color:var(--foreground-muted)]">
@@ -215,10 +237,13 @@ export default function ConnectedJournalWorkspace() {
       status={historyLoaded ? "ready" : "loading"}
       entries={entries}
       today={today}
+      stage={view.stage}
       selectedDate={selectedDate}
-      onSelectDate={setChosenDate}
-      selectedKey={openNote ? `note:${openNote.id}` : null}
+      onSelectDate={onSelectDate}
+      selectedKey={view.noteId !== null ? `note:${view.noteId}` : null}
       onOpenNote={onOpenNote}
+      onCloseNote={onCloseNote}
+      onShowCalendar={onShowCalendar}
       onNewNote={(journalDate) => void onNewNote(journalDate)}
       creating={creating}
       createError={createError}

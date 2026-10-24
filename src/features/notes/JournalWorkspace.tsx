@@ -2,9 +2,10 @@
 
 // Layout B of the Notes journal, purely presentational: every piece of data and every action arrives as a
 // prop, so it renders the same under the app's connected adapter or a QA harness. It invents nothing; a day
-// without entries is shown as empty.
+// without entries is shown as empty. On a phone the calendar, a day's entries and the open note are separate
+// screens (stages); on desktop the calendar stays beside a main area showing the open note or the day's chooser.
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBook, faChevronLeft, faChevronRight, faLightbulb, faPlus } from "@fortawesome/free-solid-svg-icons";
@@ -17,9 +18,9 @@ import {
   monthGrid,
   monthKeyOf,
   shiftMonth,
-  weekOf,
   type JournalEntry,
 } from "./journal";
+import type { JournalStage } from "./journalView";
 import { NoteSourceLine } from "./NoteSourceLine";
 
 export type JournalWorkspaceProps = {
@@ -29,15 +30,21 @@ export type JournalWorkspaceProps = {
   entries: JournalEntry[];
   /** The viewer's local day, YYYY-MM-DD. */
   today: string;
+  /** What is in view: the calendar, the selected day's chooser, or an open note (see journalView.ts). */
+  stage: JournalStage;
   selectedDate: string;
   onSelectDate: (day: string) => void;
   /** entryKey() of the open entry. */
   selectedKey: string | null;
   onOpenNote: (noteId: string, journalDate: string) => void;
+  /** Leaves the open note for its day's chooser; the note itself is untouched. */
+  onCloseNote: () => void;
+  /** Phone: back from a day's entries to the calendar. */
+  onShowCalendar: () => void;
   onNewNote: (journalDate: string) => void;
   creating?: boolean;
   createError?: string | null;
-  /** The open note's editor, which must belong to selectedDate: on the right (desktop) or first under the day (phone). */
+  /** The open note's editor, shown while stage is "note"; it must belong to selectedDate. */
   notePane?: ReactNode;
   /** Page-level controls shown beside the title (the account control). */
   headerAccessory?: ReactNode;
@@ -74,14 +81,14 @@ function DayButton({
   today,
   selected,
   onSelect,
-  showWeekday = false,
+  compact,
 }: {
   day: string;
   counts: DayCounts | undefined;
   today: string;
   selected: boolean;
   onSelect: (day: string) => void;
-  showWeekday?: boolean;
+  compact: boolean;
 }) {
   const isToday = day === today;
   const dayNumber = Number(day.slice(8, 10));
@@ -92,7 +99,7 @@ function DayButton({
       aria-pressed={selected}
       aria-current={isToday ? "date" : undefined}
       aria-label={dayLabel(day, counts, today)}
-      className={`flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-[0.8rem] border-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
+      className={`flex ${compact ? "h-9" : "h-12"} min-w-0 flex-col items-center justify-center gap-0.5 rounded-[0.8rem] border-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
         selected
           ? "border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
           : isToday
@@ -100,11 +107,6 @@ function DayButton({
             : "border-transparent hover:bg-[color:var(--surface-button-hover)]"
       }`}
     >
-      {showWeekday ? (
-        <span aria-hidden="true" className="text-[0.62rem] font-semibold uppercase opacity-70">
-          {WEEKDAYS[new Date(`${day}T12:00:00`).getDay()]}
-        </span>
-      ) : null}
       <span aria-hidden="true">{dayNumber}</span>
       <span aria-hidden="true" className="flex h-1.5 items-center gap-1">
         {counts?.notes ? <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-primary)] ring-1 ring-[color:var(--surface-border)]" /> : null}
@@ -136,6 +138,7 @@ function MonthCalendar({
   today,
   selectedDate,
   onSelectDate,
+  compact,
 }: {
   month: string;
   onMonth: (month: string) => void;
@@ -143,10 +146,12 @@ function MonthCalendar({
   today: string;
   selectedDate: string;
   onSelectDate: (day: string) => void;
+  /** Desktop's shorter day cells, so the rest of the page sits higher. */
+  compact: boolean;
 }) {
   const cells = monthGrid(month);
   return (
-    <section aria-label="Calendar" className="space-y-2">
+    <section aria-label="Calendar" className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <h2 className="min-w-0 flex-1 font-display text-lg font-extrabold tracking-[-0.02em]" aria-live="polite">
           {formatMonthHeading(month)}
@@ -188,6 +193,7 @@ function MonthCalendar({
               today={today}
               selected={day === selectedDate}
               onSelect={onSelectDate}
+              compact={compact}
             />
           ) : (
             <span key={`blank-${index}`} aria-hidden="true" />
@@ -199,46 +205,22 @@ function MonthCalendar({
   );
 }
 
-function WeekStrip({
-  countsByDay,
-  today,
-  selectedDate,
-  onSelectDate,
-}: {
-  countsByDay: Map<string, DayCounts>;
-  today: string;
-  selectedDate: string;
-  onSelectDate: (day: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-7 gap-1" role="group" aria-label="This week">
-      {weekOf(selectedDate).map((day) => (
-        <DayButton
-          key={day}
-          day={day}
-          counts={countsByDay.get(day)}
-          today={today}
-          selected={day === selectedDate}
-          onSelect={onSelectDate}
-          showWeekday
-        />
-      ))}
-    </div>
-  );
-}
-
 function EntryRow({
   entry,
   selected,
   onOpenNote,
+  prominent,
 }: {
   entry: JournalEntry;
   selected: boolean;
   onOpenNote: (noteId: string, journalDate: string) => void;
+  /** The main-area chooser's larger cards, as opposed to the desktop rail's compact list. */
+  prominent: boolean;
 }) {
+  const padding = prominent ? "px-4 py-3" : "px-3 py-2.5";
   if (entry.kind === "reading") {
     return (
-      <li className="rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-3 py-2.5">
+      <li className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] ${padding}`}>
         <p className="flex items-center gap-2 text-sm font-bold">
           <FontAwesomeIcon icon={faBook} className="h-3.5 w-3.5 text-[color:var(--accent-secondary)]" aria-hidden="true" />
           <span>Reading</span>
@@ -261,7 +243,7 @@ function EntryRow({
 
   if (entry.kind === "verse_annotation") {
     return (
-      <li className="rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] px-3 py-2.5">
+      <li className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] ${padding}`}>
         <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.06em] text-[color:var(--foreground-soft)]">
           Verse note · read-only here
         </p>
@@ -275,7 +257,7 @@ function EntryRow({
 
   return (
     <li
-      className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] px-3 py-2.5 ${
+      className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] ${padding} ${
         selected ? "bg-[color:var(--accent-note)] shadow-[var(--surface-shadow-soft)]" : "bg-[color:var(--surface-card)]"
       }`}
     >
@@ -287,7 +269,9 @@ function EntryRow({
       >
         <FontAwesomeIcon icon={faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-[1rem] font-extrabold tracking-[-0.02em]">
+          <span
+            className={`block truncate font-display font-extrabold tracking-[-0.02em] ${prominent ? "text-[1.12rem]" : "text-[1rem]"}`}
+          >
             {entry.title || "Untitled note"}
           </span>
           {entry.excerpt ? (
@@ -307,15 +291,48 @@ function EntryRow({
   );
 }
 
+function BackButton({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="-ml-2 inline-flex h-10 min-w-0 items-center gap-1.5 rounded-full px-2 text-sm font-bold hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+    >
+      <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span className="sr-only">Back to </span>
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * Moves focus to the new stage's landmark when a stage change took focus away with it (the control that was
+ * pressed is gone), and on a phone starts the new screen at its top. Focus that survived is left alone.
+ */
+function useStageFocus(stageKey: string, scrollToTop: boolean, target: RefObject<HTMLElement | null>) {
+  const shownKey = useRef(stageKey);
+  useEffect(() => {
+    if (shownKey.current === stageKey) return;
+    shownKey.current = stageKey;
+    if (scrollToTop) window.scrollTo({ top: 0 });
+    const focused = document.activeElement;
+    if (focused && focused !== document.body) return;
+    target.current?.focus({ preventScroll: true });
+  }, [stageKey, scrollToTop, target]);
+}
+
 export default function JournalWorkspace({
   layout,
   status,
   entries,
   today,
+  stage,
   selectedDate,
   onSelectDate,
   selectedKey,
   onOpenNote,
+  onCloseNote,
+  onShowCalendar,
   onNewNote,
   creating = false,
   createError = null,
@@ -324,13 +341,22 @@ export default function JournalWorkspace({
   dayActions,
 }: JournalWorkspaceProps) {
   const [month, setMonth] = useState(() => monthKeyOf(selectedDate));
-  const [phoneMonthOpen, setPhoneMonthOpen] = useState(false);
   // Follow a selection made from outside (Today, opening a note from another day) to its month.
   const [followedDate, setFollowedDate] = useState(selectedDate);
   if (followedDate !== selectedDate) {
     setFollowedDate(selectedDate);
     setMonth(monthKeyOf(selectedDate));
   }
+
+  const isPhone = layout === "phone";
+  const noteOpen = stage === "note" && notePane != null;
+  const focusTarget = useRef<HTMLElement | null>(null);
+  const setFocusTarget = useCallback((element: HTMLElement | null) => {
+    focusTarget.current = element;
+  }, []);
+  const chooserHeadingId = useId();
+  // Desktop shows the same chooser for "calendar" and "day", so only opening or closing a note changes it.
+  useStageFocus(isPhone ? stage : noteOpen ? "note" : "chooser", isPhone, focusTarget);
 
   const countsByDay = useMemo(() => {
     const map = new Map<string, DayCounts>();
@@ -350,20 +376,19 @@ export default function JournalWorkspace({
         .sort((a, b) => entryTime(a).localeCompare(entryTime(b))),
     [entries, selectedDate]
   );
+  const dayHasNotes = dayEntries.some((entry) => entry.kind === "note");
+  const dayName = formatDayHeading(selectedDate);
 
-  const dayHeading = (
+  const todayTag =
+    selectedDate === today ? <span className="ml-2 text-sm font-bold text-[color:var(--accent-rubric)]">Today</span> : null;
+
+  const dayButtons = (
     <div className="flex flex-wrap items-center gap-2">
-      <h2 className="w-full font-display text-xl font-extrabold tracking-[-0.02em]">
-        <time dateTime={selectedDate}>{formatDayHeading(selectedDate)}</time>
-        {selectedDate === today ? <span className="ml-2 text-sm font-bold text-[color:var(--accent-rubric)]">Today</span> : null}
-      </h2>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => onNewNote(selectedDate)} disabled={creating} className={PILL_BUTTON_CLASS}>
-          <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
-          {creating ? "Creating…" : "New note"}
-        </button>
-        {dayActions}
-      </div>
+      <button type="button" onClick={() => onNewNote(selectedDate)} disabled={creating} className={PILL_BUTTON_CLASS}>
+        <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
+        {creating ? "Creating…" : "New note"}
+      </button>
+      {dayActions}
     </div>
   );
 
@@ -373,12 +398,16 @@ export default function JournalWorkspace({
     </p>
   ) : null;
 
-  const dayBody =
-    status === "loading" ? (
+  function dayBody(prominent: boolean) {
+    if (status === "loading") {
+      return (
         <p role="status" className="text-sm text-[color:var(--foreground-muted)]">
           Loading your journal…
         </p>
-      ) : dayEntries.length === 0 ? (
+      );
+    }
+    if (dayEntries.length === 0) {
+      return (
         <div className="rounded-[1rem] border-2 border-dashed border-[color:var(--surface-border)] px-4 py-5 text-sm text-[color:var(--foreground-muted)]">
           <p>Nothing recorded on this day.</p>
           <p className="mt-1">
@@ -393,86 +422,90 @@ export default function JournalWorkspace({
             and write from there.
           </p>
         </div>
-      ) : (
-        <ul className="space-y-2">
-          {dayEntries.map((entry) => (
-            <EntryRow key={entryKey(entry)} entry={entry} selected={entryKey(entry) === selectedKey} onOpenNote={onOpenNote} />
-          ))}
-        </ul>
       );
+    }
+    return (
+      <ul className={prominent ? "space-y-2.5" : "space-y-2"}>
+        {dayEntries.map((entry) => (
+          <EntryRow
+            key={entryKey(entry)}
+            entry={entry}
+            selected={entryKey(entry) === selectedKey}
+            onOpenNote={onOpenNote}
+            prominent={prominent}
+          />
+        ))}
+      </ul>
+    );
+  }
 
-  const dayList = (
-    <section aria-label={`Entries for ${formatDayHeading(selectedDate)}`} className="space-y-3">
-      {dayHeading}
+  // The selected day's entries as the main content: where a closed note leaves you, on a phone or desktop.
+  const chooser = (
+    <section aria-labelledby={chooserHeadingId} className="space-y-3">
+      <div className="space-y-2">
+        <h2
+          id={chooserHeadingId}
+          ref={setFocusTarget}
+          tabIndex={-1}
+          className="font-display text-xl font-extrabold tracking-[-0.02em] focus:outline-none"
+        >
+          {status === "loading" || dayHasNotes ? "Select a note" : "Start a note"}
+        </h2>
+        <p className="text-sm font-semibold text-[color:var(--foreground-muted)]">
+          <time dateTime={selectedDate}>{dayName}</time>
+          {todayTag}
+        </p>
+        {dayButtons}
+      </div>
       {dayError}
-      {dayBody}
+      {dayBody(true)}
+    </section>
+  );
+
+  const openNoteSection = (className: string) => (
+    <section
+      aria-label="Open note"
+      ref={setFocusTarget}
+      tabIndex={-1}
+      className={`panel-card flex flex-col rounded-[20px] focus:outline-none ${className}`}
+    >
+      {notePane}
     </section>
   );
 
   const title = (
-    <div className="flex items-center justify-between gap-3">
-      <h1 className="flex min-w-0 items-center gap-2.5 px-1 font-display text-[1.6rem] font-extrabold tracking-[-0.03em] sm:text-[1.9rem]">
-        Notes
-      </h1>
-      {headerAccessory}
-    </div>
+    <h1
+      className={
+        isPhone && stage !== "calendar"
+          ? "sr-only"
+          : "min-w-0 px-1 font-display text-[1.6rem] font-extrabold tracking-[-0.03em] focus:outline-none"
+      }
+      ref={isPhone && stage === "calendar" ? setFocusTarget : undefined}
+      tabIndex={-1}
+    >
+      Notes
+    </h1>
   );
 
-  if (layout === "phone") {
-    // The open note comes straight after the day heading so the editor isn't buried under the day's cards.
+  if (isPhone) {
+    // One screen per stage: calendar, then a day's entries, then the note. Nothing is stacked under the editor.
+    const back = noteOpen ? (
+      <BackButton label={dayName} onBack={onCloseNote} />
+    ) : stage === "day" ? (
+      <BackButton label="Calendar" onBack={onShowCalendar} />
+    ) : null;
     return (
-      <div className="flex min-h-[calc(100dvh-var(--header-height,0px)-9rem)] flex-col gap-4">
-        {title}
-        <div className="space-y-2">
-          {phoneMonthOpen ? (
-            <MonthCalendar
-              month={month}
-              onMonth={setMonth}
-              countsByDay={countsByDay}
-              today={today}
-              selectedDate={selectedDate}
-              onSelectDate={onSelectDate}
-            />
-          ) : (
-            <WeekStrip countsByDay={countsByDay} today={today} selectedDate={selectedDate} onSelectDate={onSelectDate} />
-          )}
-          <div className="flex items-center justify-between gap-2">
-            {phoneMonthOpen ? <span /> : <Legend />}
-            <button
-              type="button"
-              onClick={() => setPhoneMonthOpen((open) => !open)}
-              aria-expanded={phoneMonthOpen}
-              className="text-xs font-bold underline underline-offset-2"
-            >
-              {phoneMonthOpen ? "Show week" : "Show month"}
-            </button>
-          </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex min-h-10 items-center justify-between gap-3">
+          {title}
+          {back}
+          {headerAccessory}
         </div>
-        <section aria-label={`Entries for ${formatDayHeading(selectedDate)}`} className="space-y-3">
-          {dayHeading}
-          {dayError}
-          {notePane ? (
-            <section aria-label="Open note" className="panel-card flex min-h-[60dvh] flex-col rounded-[20px] p-4">
-              {notePane}
-            </section>
-          ) : null}
-          {notePane && dayEntries.length > 0 ? (
-            <h3 className="pt-1 text-xs font-bold uppercase tracking-[0.06em] text-[color:var(--foreground-soft)]">
-              Also on this day
-            </h3>
-          ) : null}
-          {dayBody}
-        </section>
-      </div>
-    );
-  }
-
-  // Layout B: the month and the selected day's activity share the left rail; the open note gets the rest.
-  return (
-    <div className="space-y-4">
-      {title}
-      <div className="grid min-h-0 gap-5 lg:h-[calc(100vh-var(--header-height)-7.5rem)] lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="min-h-0 space-y-5 lg:overflow-y-auto lg:pr-1">
+        {noteOpen ? (
+          openNoteSection("min-h-[60dvh] p-4")
+        ) : stage === "day" ? (
+          chooser
+        ) : (
           <MonthCalendar
             month={month}
             onMonth={setMonth}
@@ -480,21 +513,51 @@ export default function JournalWorkspace({
             today={today}
             selectedDate={selectedDate}
             onSelectDate={onSelectDate}
+            compact={false}
           />
-          {dayList}
+        )}
+      </div>
+    );
+  }
+
+  // Layout B: the month in the left rail; the main area holds the open note or the selected day's chooser.
+  // With a note open the rail also lists its day, to switch notes without closing.
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        {title}
+        {headerAccessory}
+      </div>
+      <div className="grid min-h-0 gap-5 lg:h-[calc(100dvh-var(--header-height)-6.25rem)] lg:min-h-[30rem] lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="min-h-0 space-y-4 lg:overflow-y-auto lg:pr-1">
+          <MonthCalendar
+            month={month}
+            onMonth={setMonth}
+            countsByDay={countsByDay}
+            today={today}
+            selectedDate={selectedDate}
+            onSelectDate={onSelectDate}
+            compact
+          />
+          {noteOpen ? (
+            <section aria-label={`Entries for ${dayName}`} className="space-y-3">
+              <div className="space-y-2">
+                <h2 className="font-display text-lg font-extrabold tracking-[-0.02em]">
+                  <time dateTime={selectedDate}>{dayName}</time>
+                  {todayTag}
+                </h2>
+                {dayButtons}
+              </div>
+              {dayError}
+              {dayBody(false)}
+            </section>
+          ) : null}
         </aside>
-        <section
-          aria-label="Open note"
-          className="panel-card flex min-h-[24rem] flex-col overflow-y-auto rounded-[20px] p-5 lg:min-h-0"
-        >
-          {notePane ?? (
-            <p className="m-auto max-w-xs text-center text-sm text-[color:var(--foreground-muted)]">
-              {dayEntries.some((entry) => entry.kind === "note")
-                ? "Choose a note from this day, or start a new one."
-                : "Start a note for this day."}
-            </p>
-          )}
-        </section>
+        {noteOpen ? (
+          openNoteSection("min-h-[24rem] overflow-y-auto p-5 lg:min-h-0")
+        ) : (
+          <div className="panel-card min-h-[24rem] overflow-y-auto rounded-[20px] p-5 lg:min-h-0">{chooser}</div>
+        )}
       </div>
     </div>
   );

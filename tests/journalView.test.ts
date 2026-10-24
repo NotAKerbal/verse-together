@@ -1,0 +1,181 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test } from "vitest";
+import JournalWorkspace, { type JournalWorkspaceProps } from "../src/features/notes/JournalWorkspace";
+import type { JournalEntry, JournalNoteEntry } from "../src/features/notes/journal";
+import {
+  nextJournalView,
+  resolveJournalView,
+  type JournalView,
+  type JournalViewAction,
+  type JournalViewContext,
+  type JournalViewState,
+} from "../src/features/notes/journalView";
+
+const today = "2026-10-21";
+const arriving: JournalViewContext = { today, activeNoteId: "a", activeNoteDate: "2026-10-20" };
+const noActive: JournalViewContext = { today, activeNoteId: null, activeNoteDate: null };
+
+/** Applies actions the way the page does: each from the view on screen, under possibly changing data. */
+function run(context: JournalViewContext, actions: JournalViewAction[], state: JournalViewState = null) {
+  let current = state;
+  for (const action of actions) current = nextJournalView(resolveJournalView(current, context), action);
+  return current;
+}
+
+describe("Notes view state", () => {
+  test("arriving with an active note opens it on its own day; without one shows the calendar for today", () => {
+    expect(resolveJournalView(null, arriving)).toEqual({ stage: "note", date: "2026-10-20", noteId: "a" });
+    expect(resolveJournalView(null, noActive)).toEqual({ stage: "calendar", date: today, noteId: null });
+    // The active note's day isn't known yet: nothing is opened on the wrong day.
+    expect(resolveJournalView(null, { today, activeNoteId: "a", activeNoteDate: null }).stage).toBe("calendar");
+  });
+
+  test("closing keeps the note's day and shows its chooser, and the provider's active note never reopens it", () => {
+    const closed = run(arriving, [{ type: "closeNote" }]);
+    expect(closed).toEqual({ stage: "day", date: "2026-10-20", noteId: null });
+    // The same active note, re-delivered or updated by a reactive query, stays closed.
+    expect(resolveJournalView(closed, arriving)).toEqual(closed);
+    expect(resolveJournalView(closed, { ...arriving, activeNoteId: "b" })).toEqual(closed);
+  });
+
+  test("choosing a day shows that day's chooser and returning to the note's day does not reopen it", () => {
+    const away = run(arriving, [{ type: "selectDate", date: "2026-10-18" }]);
+    expect(away).toEqual({ stage: "day", date: "2026-10-18", noteId: null });
+    const back = run(arriving, [{ type: "selectDate", date: "2026-10-20" }], away);
+    expect(resolveJournalView(back, arriving)).toEqual({ stage: "day", date: "2026-10-20", noteId: null });
+  });
+
+  test("re-choosing the open note's own day (Today, a reading logged for it) keeps the note open", () => {
+    const open: JournalView = { stage: "note", date: today, noteId: "a" };
+    expect(nextJournalView(open, { type: "selectDate", date: today })).toBe(open);
+  });
+
+  test("phone stages go calendar → day → note and back without losing the day", () => {
+    const context: JournalViewContext = { today, activeNoteId: "b", activeNoteDate: "2026-10-19" };
+    const day = run(noActive, [{ type: "selectDate", date: "2026-10-19" }]);
+    expect(day).toEqual({ stage: "day", date: "2026-10-19", noteId: null });
+    const note = run(context, [{ type: "openNote", noteId: "b", date: "2026-10-19" }], day);
+    expect(resolveJournalView(note, context)).toEqual({ stage: "note", date: "2026-10-19", noteId: "b" });
+    const closed = run(context, [{ type: "closeNote" }], note);
+    expect(closed).toEqual({ stage: "day", date: "2026-10-19", noteId: null });
+    expect(run(context, [{ type: "showCalendar" }], closed)).toEqual({ stage: "calendar", date: "2026-10-19", noteId: null });
+  });
+
+  test("an open note that stops being the loaded one (deleted, switched elsewhere) leaves for its day's chooser", () => {
+    const open: JournalView = { stage: "note", date: today, noteId: "a" };
+    expect(resolveJournalView(open, { today, activeNoteId: null, activeNoteDate: null })).toEqual({
+      stage: "day",
+      date: today,
+      noteId: null,
+    });
+    expect(resolveJournalView(open, { today, activeNoteId: "z", activeNoteDate: today }).noteId).toBeNull();
+  });
+});
+
+function note(id: string, title: string, journalDate: string, createdAt: string): JournalNoteEntry {
+  return {
+    kind: "note",
+    id,
+    title,
+    status: "draft",
+    journal_date: journalDate,
+    source: { kind: "scripture", label: "1 Nephi 2", href: "/browse/bookofmormon/1-nephi/2#v-3" },
+    excerpt: null,
+    markdown_revision: 0,
+    markdown_canonical: true,
+    read_only: false,
+    author_label: "Reader",
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+}
+
+const entries: JournalEntry[] = [
+  note("a", "Morning thought", today, `${today}T08:00:00Z`),
+  note("b", "Evening question", today, `${today}T20:00:00Z`),
+  note("c", "Another day", "2026-10-18", "2026-10-18T09:00:00Z"),
+  {
+    kind: "reading",
+    id: "r",
+    journal_date: today,
+    source: { kind: "scripture", label: "1 Nephi 2", href: "/browse/bookofmormon/1-nephi/2" },
+    read_at: `${today}T07:00:00Z`,
+  },
+];
+
+const noop = () => {};
+
+function render(layout: JournalWorkspaceProps["layout"], view: JournalView) {
+  const props: JournalWorkspaceProps = {
+    layout,
+    status: "ready",
+    entries,
+    today,
+    stage: view.stage,
+    selectedDate: view.date,
+    onSelectDate: noop,
+    selectedKey: view.noteId ? `note:${view.noteId}` : null,
+    onOpenNote: noop,
+    onCloseNote: noop,
+    onShowCalendar: noop,
+    onNewNote: noop,
+    notePane: view.noteId ? createElement("p", null, "EDITOR-PANE") : undefined,
+  };
+  return renderToStaticMarkup(createElement(JournalWorkspace, props));
+}
+
+const countOf = (html: string, text: string) => html.split(text).length - 1;
+
+describe("Notes workspace stages", () => {
+  test("phone calendar stage shows only the month: no day list, no editor, no week/month toggle", () => {
+    const html = render("phone", { stage: "calendar", date: today, noteId: null });
+    expect(html).toContain('aria-label="Calendar"');
+    expect(html).not.toContain("Select a note");
+    expect(html).not.toContain("Morning thought");
+    expect(html).not.toContain("EDITOR-PANE");
+    expect(html).not.toMatch(/Show (week|month)/);
+  });
+
+  test("phone day stage lists that day's entries under Select a note, with a way back to the calendar", () => {
+    const html = render("phone", { stage: "day", date: today, noteId: null });
+    expect(html).not.toContain('aria-label="Calendar"');
+    expect(html).toContain(">Select a note</h2>");
+    expect(html).toContain("Morning thought");
+    expect(html).toContain("Evening question");
+    expect(html).toContain('href="/browse/bookofmormon/1-nephi/2"');
+    expect(html).not.toContain("Another day");
+    expect(html).toContain("Back to </span><span class=\"truncate\">Calendar");
+  });
+
+  test("phone note stage shows only the note, not the calendar or the day's other entries", () => {
+    const html = render("phone", { stage: "note", date: today, noteId: "a" });
+    expect(html).toContain("EDITOR-PANE");
+    expect(html).not.toContain('aria-label="Calendar"');
+    expect(html).not.toContain("Evening question");
+    expect(html).not.toContain("Select a note");
+  });
+
+  test("desktop without an open note puts the day's chooser in the main area, listed once", () => {
+    const html = render("desktop", { stage: "day", date: today, noteId: null });
+    expect(html).toContain('aria-label="Calendar"');
+    expect(html).toContain(">Select a note</h2>");
+    expect(countOf(html, "Morning thought")).toBe(1);
+    expect(countOf(html, "Evening question")).toBe(1);
+    expect(html).not.toContain("EDITOR-PANE");
+  });
+
+  test("desktop with an open note shows the editor beside the calendar and the day's list for switching", () => {
+    const html = render("desktop", { stage: "note", date: today, noteId: "a" });
+    expect(html).toContain("EDITOR-PANE");
+    expect(html).toContain('aria-label="Calendar"');
+    expect(html).not.toContain("Select a note");
+    expect(countOf(html, "Evening question")).toBe(1);
+  });
+
+  test("a day without notes invites starting one instead of asking to select", () => {
+    const html = render("desktop", { stage: "day", date: "2026-10-05", noteId: null });
+    expect(html).toContain(">Start a note</h2>");
+    expect(html).toContain("Nothing recorded on this day.");
+  });
+});
