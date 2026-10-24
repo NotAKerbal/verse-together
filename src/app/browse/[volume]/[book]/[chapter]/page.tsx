@@ -2,14 +2,9 @@ import { fetchChapter } from "../../../../../lib/openscripture";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import ChapterReader from "@/components/ChapterReader";
-import type { Crumb } from "@/components/Breadcrumbs";
 import BibleTranslationToolbar from "@/components/BibleTranslationToolbar";
 import { isBibleVolume, normalizeBibleTranslationId } from "@/lib/bibleCanon";
-import {
-  getScriptureVolumeLabel,
-  normalizeScriptureVolume,
-  toScriptureVolumeUrlSlug,
-} from "@/lib/scriptureVolumes";
+import { normalizeScriptureVolume, toScriptureVolumeUrlSlug } from "@/lib/scriptureVolumes";
 
 type Params = {
   params: Promise<{ volume: string; book: string; chapter: string }>;
@@ -96,29 +91,6 @@ export default async function ChapterPage({ params, searchParams }: Params) {
   const prevHref =
     currentChapter > 1 ? `/browse/${volumeSlug}/${book}/${currentChapter - 1}${querySuffix}` : undefined;
   const nextHref = `/browse/${volumeSlug}/${book}/${currentChapter + 1}${querySuffix}`;
-  const volumeLabel = getScriptureVolumeLabel(canonicalVolume);
-  const bookTitle = (data.reference || "").replace(/\s+\d+$/, "");
-  const bookLabel = bookTitle || book.replace(/-/g, " ");
-  const duplicateVolumeBook =
-    bookLabel.trim().toLowerCase() === volumeLabel.trim().toLowerCase() ||
-    (canonicalVolume === "doctrineandcovenants" && book === "doctrineandcovenants");
-
-  const breadcrumbs: Crumb[] = [
-    { label: "Browse", href: "/browse" },
-    ...(duplicateVolumeBook
-      ? []
-      : [
-          {
-            label: volumeLabel,
-            href: `/browse/${volumeSlug}`,
-          },
-        ]),
-    {
-      label: bookLabel,
-      href: `/browse/${volumeSlug}/${book}`,
-    },
-    { label: `Chapter ${chapter}` },
-  ];
 
   return (
     <article className="page-shell">
@@ -128,7 +100,6 @@ export default async function ChapterPage({ params, searchParams }: Params) {
         chapter={Number(chapter)}
         verses={data.verses}
         reference={data.reference}
-        breadcrumbs={breadcrumbs}
         translationControls={
           bibleMode ? (
             <BibleTranslationToolbar

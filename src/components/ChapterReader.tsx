@@ -7,7 +7,6 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import Breadcrumbs, { Crumb } from "./Breadcrumbs";
 import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
@@ -19,10 +18,11 @@ import { fetchChapter } from "@/lib/openscripture";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
-import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
+import { getDefaultPreferences, loadPreferences, savePreferences } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
+import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import {
@@ -442,7 +442,6 @@ export default function ChapterReader({
   chapter,
   verses,
   reference,
-  breadcrumbs,
   translationControls,
   prevHref,
   nextHref,
@@ -455,7 +454,6 @@ export default function ChapterReader({
   chapter: number;
   verses: Verse[];
   reference: string;
-  breadcrumbs: Crumb[];
   translationControls?: ReactNode;
   prevHref?: string;
   nextHref?: string;
@@ -465,6 +463,7 @@ export default function ChapterReader({
 }) {
   const { user, getToken, promptSignIn } = useAuth();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
+  useTrackLastPosition(volume, book, chapter);
   const annotationsApi = (api as any).annotations;
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
     volume,
@@ -508,7 +507,6 @@ export default function ChapterReader({
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = openCitations || openExplorer;
-  const [showTapHint, setShowTapHint] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -795,17 +793,6 @@ export default function ChapterReader({
     }
   }
 
-  useEffect(() => {
-    // Show one-time hint on first use
-    try {
-      if (!hasSeenTapToActionsHint()) {
-        setShowTapHint(true);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const selectedText = selectionState?.selectedText ?? "";
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
@@ -861,11 +848,6 @@ export default function ChapterReader({
     [compareByTranslation, translationNameById]
   );
   const hasCompareSelections = compareByTranslation.size > 0;
-  const headerBreadcrumbs = useMemo(() => {
-    if (!breadcrumbs?.length) return breadcrumbs;
-    const leading = breadcrumbs.slice(0, -1).map((item) => ({ ...item }));
-    return [...leading, { label: reference }];
-  }, [breadcrumbs, reference]);
   const selectionReferenceLabel = useMemo(() => {
     if (!selectedBounds) return null;
     return `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
@@ -963,10 +945,6 @@ export default function ChapterReader({
         ) {
           return prev;
         }
-        if (nextSelectionState && showTapHint) {
-          try { setSeenTapToActionsHint(); } catch {}
-          setShowTapHint(false);
-        }
         return nextSelectionState;
       });
     }
@@ -980,7 +958,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [customMobileSelectionEnabled, showTapHint, verses]);
+  }, [customMobileSelectionEnabled, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1179,10 +1157,6 @@ export default function ChapterReader({
       customSelectionActiveRef.current = true;
       setIsCustomTouchSelecting(true);
       if (!applyCustomWordRange(nextWordRange, { haptic: false })) return;
-      if (showTapHint) {
-        try { setSeenTapToActionsHint(); } catch {}
-        setShowTapHint(false);
-      }
       setOpenCitations(false);
       setOpenExplorer(false);
       window.getSelection?.()?.removeAllRanges();
@@ -1471,11 +1445,16 @@ export default function ChapterReader({
                     currentBook={book}
                     verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
                   />
-                  <div className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-lg border surface-card-soft px-2 sm:h-auto sm:flex-none sm:px-2.5 sm:py-1">
-                    <div className="min-w-0 w-full text-xs sm:text-sm">
-                      <Breadcrumbs items={headerBreadcrumbs} />
-                    </div>
-                  </div>
+                  <h1 className="min-w-0 max-w-full flex-1 text-xs font-semibold sm:flex-none sm:text-sm">
+                    <Link
+                      href={`/browse/${volume}/${book}`}
+                      aria-label={`${reference}, choose chapter`}
+                      title={`Choose chapter (currently ${reference})`}
+                      className="flex h-8 min-w-0 items-center rounded-lg border surface-card-soft px-2 text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 sm:h-auto sm:px-2.5 sm:py-1"
+                    >
+                      <span className="min-w-0 truncate">{reference}</span>
+                    </Link>
+                  </h1>
                 </div>
                 <button
                   type="button"
@@ -1507,6 +1486,7 @@ export default function ChapterReader({
                     onClose={() => setSettingsOpen(false)}
                     prefs={prefs}
                     translationControls={translationControls}
+                    chapterProgressControl={<ChapterReadToggle volume={volume} book={book} chapter={chapter} />}
                     anchorRef={settingsAnchorRef}
                     onChange={(next) => {
                       setPrefs(next);
@@ -1705,7 +1685,6 @@ export default function ChapterReader({
               );
             })}
           </ol>
-          <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
           <nav className="simple-only reader-simple-nav" aria-label="Chapter navigation">
             {prevHref ? <Link href={prevHref}>&larr; Previous</Link> : <span />}
             {nextHref ? <Link href={nextHref}>Next &rarr;</Link> : <span />}
@@ -1814,39 +1793,6 @@ export default function ChapterReader({
           }}
           onClose={() => setAnnotationEditorVerse(null)}
         />
-      ) : null}
-
-      {/* One-time onboarding tooltip */}
-      {showTapHint && !overlayOpen && !hasSelection ? (
-        <div
-          className="simple-hide fixed inset-x-0 z-40 pointer-events-none"
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
-        >
-          <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
-            <div
-              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-[color:var(--surface-border)] bg-background/90 px-3 py-2 shadow"
-              style={{ maxWidth: "28rem" }}
-              role="dialog"
-              aria-live="polite"
-            >
-              <div className="text-sm flex items-start gap-3">
-                <div className="text-lg select-none" aria-hidden>Tip</div>
-                <div className="flex-1">
-                  Select passage text to see note, citation, and word study actions.
-                </div>
-                <button
-                  onClick={() => {
-                    try { setSeenTapToActionsHint(); } catch {}
-                    setShowTapHint(false);
-                  }}
-                  className="ml-2 text-sm px-2 py-1 rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       {openCitations && selectedBounds ? (
