@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import type { InsightDraftBlock } from "@/lib/appData";
 import DictionaryEntryBody from "@/components/DictionaryEntryBody";
 import NoteMarkdown from "@/features/notes/NoteMarkdown";
+import type { Id } from "../../../../../convex/_generated/dataModel";
+import { useAuth } from "@/lib/auth";
+import SignInLink from "@/features/auth/SignInLink";
 
 function renderTextWithHighlights(text: string | null, highlightedWordIndices: number[]) {
   const sourceText = text ?? "";
@@ -38,8 +42,9 @@ function renderTextWithHighlights(text: string | null, highlightedWordIndices: n
 
 export default function SharedDraftPage() {
   const params = useParams<{ draftId: string }>();
+  const { user } = useAuth();
   const draftId = String(params?.draftId ?? "");
-  const draft = useQuery(api.insights.getSharedDraft, draftId ? ({ draftId: draftId as any }) : "skip") as
+  const draft = useQuery(api.insights.getSharedDraft, draftId ? ({ draftId: draftId as Id<"insightDrafts"> }) : "skip") as
     | {
         id: string;
         author_name: string | null;
@@ -54,7 +59,8 @@ export default function SharedDraftPage() {
         markdown_body?: string;
         markdown_canonical?: boolean;
       }
-    | undefined;
+    | undefined
+    | null;
 
   const byline = useMemo(() => {
     if (!draft) return "";
@@ -64,6 +70,19 @@ export default function SharedDraftPage() {
 
   if (draft === undefined) {
     return <div className="mx-auto max-w-3xl py-8">Loading note...</div>;
+  }
+
+  if (draft === null) {
+    return (
+      <section className="mx-auto max-w-3xl space-y-4 py-8">
+        <h1 className="text-2xl font-semibold">Note unavailable</h1>
+        <p>This note is private or no longer available.</p>
+        <div className="flex flex-wrap gap-3">
+          {!user ? <SignInLink returnTo={`/insights/shared/${draftId}`} className="underline" /> : null}
+          <Link href="/notes" className="underline">Back to Notes</Link>
+        </div>
+      </section>
+    );
   }
 
   return (

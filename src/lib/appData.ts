@@ -202,18 +202,6 @@ export type WatchedFeedEpisode = {
   updated_at: string;
 };
 
-export async function upsertCurrentUser(
-  token: string | null,
-  payload: { email?: string | null; displayName?: string | null; avatarUrl?: string | null }
-) {
-  if (!token) return;
-  await convexMutation("users:upsertCurrentUser", {
-    email: payload.email ?? undefined,
-    displayName: payload.displayName ?? undefined,
-    avatarUrl: payload.avatarUrl ?? undefined,
-  }, token);
-}
-
 export async function getProfileName(clerkId: string): Promise<string | null> {
   return await convexQuery("users:getProfileName", { clerkId });
 }
@@ -225,10 +213,6 @@ export async function getNames(clerkIds: string[]): Promise<Record<string, strin
 
 export async function lookupUserByEmail(email: string): Promise<string | null> {
   return await convexQuery("users:lookupUserByEmail", { email });
-}
-
-export async function getIsAdmin(clerkId: string): Promise<boolean> {
-  return await convexQuery("users:isAdmin", { clerkId });
 }
 
 export async function getPublishedInsightsFeed(): Promise<PublishedInsight[]> {
@@ -323,7 +307,8 @@ export async function listMyInsightDrafts(token: string): Promise<InsightDraftSu
   return await convexQuery("insights:listMyDrafts", {}, token);
 }
 
-export async function getInsightDraft(token: string, draftId: string): Promise<InsightDraft> {
+/** Null when the session is no longer signed in. */
+export async function getInsightDraft(token: string, draftId: string): Promise<InsightDraft | null> {
   return await convexQuery("insights:getDraft", { draftId }, token);
 }
 

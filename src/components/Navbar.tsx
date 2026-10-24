@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
@@ -10,13 +10,10 @@ import { AppHeaderSlot, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import LibrarySearch from "@/components/LibrarySearch";
 import ReaderHeaderSlot from "@/components/ReaderHeaderSlot";
 import { primaryNavIcons } from "@/components/primaryNavIcons";
-import { useAuth } from "@/lib/auth";
-import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
 export default function Navbar() {
-  const { user, getToken } = useAuth();
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
   const [collapsed, setCollapsed] = useState(false);
@@ -46,23 +43,6 @@ export default function Navbar() {
     labels.forEach((label) => observer.observe(label));
     return () => observer.disconnect();
   }, [activeIndex]);
-
-  useEffect(() => {
-    async function syncCurrentUser() {
-      if (!user?.id) return;
-      try {
-        const token = await getToken({ template: "convex" });
-        await upsertCurrentUser(token, {
-          email: user.email,
-          displayName: user.fullName,
-          avatarUrl: user.imageUrl,
-        });
-      } catch {
-        // non-blocking
-      }
-    }
-    void syncCurrentUser();
-  }, [user?.id, user?.email, user?.fullName, user?.imageUrl, getToken]);
 
   // Phones have no app header (outside simple mode): the bottom navigation carries the destinations,
   // and Notes and Plans show the account at their own top right (AccountControl variant="page").

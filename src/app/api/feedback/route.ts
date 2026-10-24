@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getServerConvexToken } from "@/lib/auth-server";
 import { convexMutation } from "@/lib/convexHttp";
 
 type FeedbackPayload = {
@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Feedback message is too long" }, { status: 400 });
     }
 
-    const { getToken } = await auth();
-    const token = await getToken({ template: "convex" });
+    // Feedback may be anonymous; when signed in, Convex attributes it to the verified app user.
+    const token = await getServerConvexToken();
     await convexMutation(
       "feedback:submitFeedback",
       { message, contact: contact ?? undefined, path: path ?? undefined },
