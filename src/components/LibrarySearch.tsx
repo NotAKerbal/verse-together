@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
+import { getQuickNavSuggestions, parseScriptureReferenceQuery } from "@/lib/scriptureQuickNav";
 
 type Option = { key: string; label: string; href: string; kind: "jump" | "search" };
 
@@ -73,8 +73,8 @@ export default function LibrarySearch({ className = "" }: { className?: string }
       href: searchHref(trimmed),
       kind: "search",
     };
-    // Anything with a number reads as a reference, so Enter jumps; plain words search first.
-    return /\d/.test(trimmed) ? [...jumps, search] : [search, ...jumps];
+    // Only a valid parsed reference makes Enter jump; invalid refs and plain words search first.
+    return parseScriptureReferenceQuery(trimmed, 1).length > 0 ? [...jumps, search] : [search, ...jumps];
   }, [query]);
 
   const expanded = open && options.length > 0;
