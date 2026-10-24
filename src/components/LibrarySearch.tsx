@@ -51,7 +51,15 @@ function searchHref(query: string): string {
  * The Library's one search box: references jump straight to a chapter, anything else searches
  * every scripture. It is a plain GET form, so Enter still reaches /search without JavaScript.
  */
-export default function LibrarySearch({ className = "" }: { className?: string }) {
+export default function LibrarySearch({
+  className = "",
+  variant = "page",
+}: {
+  className?: string;
+  /** "header" matches the floating nav pill (Navbar); "page" is the in-page field. */
+  variant?: "page" | "header";
+}) {
+  const header = variant === "header";
   const router = useRouter();
   const listId = useId();
   const [query, setQuery] = useState("");
@@ -109,7 +117,13 @@ export default function LibrarySearch({ className = "" }: { className?: string }
 
   return (
     <form role="search" action="/search" method="get" onSubmit={onSubmit} className={`relative min-w-0 ${className}`.trim()}>
-      <label className="soft-input flex h-9 items-center gap-2 px-3 text-[color:var(--foreground-muted)] focus-within:ring-2 focus-within:ring-amber-500/30">
+      <label
+        className={
+          header
+            ? "library-search-pill flex items-center gap-2.5 text-[color:var(--foreground-muted)]"
+            : "soft-input flex h-9 items-center gap-2 px-3 text-[color:var(--foreground-muted)] focus-within:ring-2 focus-within:ring-amber-500/30"
+        }
+      >
         <SearchIcon />
         <input
           type="search"
@@ -142,7 +156,9 @@ export default function LibrarySearch({ className = "" }: { className?: string }
           id={listId}
           role="listbox"
           aria-label="Search and jump options"
-          className="absolute inset-x-0 top-full z-40 mt-2 max-h-[22rem] overflow-y-auto rounded-lg border border-[color:var(--surface-border)] bg-background p-1.5 shadow-xl"
+          className={`absolute inset-x-0 top-full z-40 mt-2 max-h-[22rem] overflow-y-auto border border-[color:var(--surface-border)] p-1.5 ${
+            header ? "library-search-menu" : "rounded-lg bg-background shadow-xl"
+          }`}
         >
           {options.map((option) => (
             <li
@@ -154,7 +170,7 @@ export default function LibrarySearch({ className = "" }: { className?: string }
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setActive(options.indexOf(option))}
               onClick={() => go(option.href)}
-              className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm ${
+              className={`flex cursor-pointer items-center gap-2 px-2.5 py-2 text-sm ${header ? "rounded-xl" : "rounded-md"} ${
                 option === activeOption ? "bg-[color:var(--surface-button-hover)]" : ""
               }`}
             >

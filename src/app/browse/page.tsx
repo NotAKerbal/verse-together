@@ -1,5 +1,5 @@
 import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
-import SelectionHeader from "@/components/SelectionHeader";
+import LibrarySearch from "@/components/LibrarySearch";
 import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
 import ContinueReadingCard from "@/features/plans/ContinueReadingCard";
 import { getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
@@ -21,7 +21,11 @@ export default async function BrowsePage({
 
   return (
     <section className="page-shell browse-shell">
-      <SelectionHeader title="Library" showLibrarySearch />
+      <h1 className="sr-only">Browse scriptures</h1>
+      {/* Wider screens show this search in the app header (Navbar); phones and narrow windows keep it here. */}
+      <div className="simple-hide browse-hero browse-search-fallback flex justify-end">
+        <LibrarySearch className="max-w-[22rem] flex-1" />
+      </div>
       {/* One grid: study cards first (hidden in simple mode), then the volumes. Continue Reading
           renders nothing without a saved position, so it never leaves a gap. */}
       <ul className="browse-grid browse-library">

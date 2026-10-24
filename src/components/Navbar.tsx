@@ -11,6 +11,7 @@ import {
   faChevronLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import AccountControl from "@/components/AccountControl";
+import LibrarySearch from "@/components/LibrarySearch";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
@@ -24,6 +25,8 @@ export default function Navbar() {
   const navRef = useRef<HTMLElement>(null);
   const navItems = primaryNavItems;
   const activeIndex = navItems.findIndex((item) => isPathActive(pathname, item.href));
+  // The Library's search sits at the header's right, outside the collapsible (clipped, inert) nav.
+  const showLibrarySearch = pathname === "/browse";
   const navIcons = {
     Browse: faBookOpen,
     Notes: faPencil,
@@ -69,7 +72,11 @@ export default function Navbar() {
   // Phones have no app header (outside simple mode): the bottom navigation carries the destinations,
   // and Notes and Plans show the account at their own top right (AccountControl variant="page").
   return (
-    <header className="app-header" data-collapsed={collapsed ? "true" : "false"}>
+    <header
+      className="app-header"
+      data-collapsed={collapsed ? "true" : "false"}
+      data-search={showLibrarySearch ? "true" : undefined}
+    >
       <div className="desktop-nav-bar">
         <Link href="/" className="brand-wordmark desktop-nav-brand" aria-label="Verse Together home">
           Verse<span>Together</span>
@@ -124,6 +131,7 @@ export default function Navbar() {
           <FontAwesomeIcon icon={faChevronLeft} className="desktop-nav-toggle-icon h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
+      {showLibrarySearch ? <LibrarySearch variant="header" className="simple-hide app-header-search" /> : null}
     </header>
   );
 }
