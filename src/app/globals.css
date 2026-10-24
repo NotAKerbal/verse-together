@@ -400,6 +400,56 @@ mark {
   gap: 0.9rem;
 }
 
+/* Library landing cards: every card in the grid shares one size, padding, and border, and lies flat. */
+.browse-card {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 9rem;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding: 1.25rem;
+  color: var(--foreground);
+}
+
+.browse-card-title {
+  font-size: 1.6rem;
+}
+
+/* Art sits on the right and fades out to the left, so the text column reads over the plain card. */
+.browse-card-media {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 46%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to left, #000 45%, transparent);
+  mask-image: linear-gradient(to left, #000 45%, transparent);
+}
+
+[data-theme="dark"] .browse-card-media {
+  opacity: 0.85;
+}
+
+.browse-card[data-media="true"] .browse-card-text {
+  max-width: 58%;
+}
+
+.browse-card[data-media="true"] .browse-card-title {
+  font-size: 1.35rem;
+}
+
+/* A last card alone on a two-column row takes the whole row. Simple mode hides the study cards,
+   which still count as children, so there the last of the five volumes always stands alone. */
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .browse-library > li:last-child:nth-child(odd),
+  :root[data-simple="true"] .browse-library > li:last-child {
+    grid-column: span 2;
+  }
+}
+
 .browse-summary-card {
   position: relative;
   border: 1px solid var(--surface-border);
