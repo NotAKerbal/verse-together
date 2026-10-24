@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
-import { getStudyGuideHref, hasStudyGuide } from "@/features/comeFollowMe/guideIndex";
+import { hasStudyGuide } from "@/features/comeFollowMe/guideIndex";
 import { formatWeekRange, getComeFollowMeWeek, getComeFollowMeWeekByStart } from "@/lib/comeFollowMe";
 
 const noSubscription = () => () => {};
@@ -14,7 +14,7 @@ const readServerWeekStart = () => null;
 // Generated footprints-in-sand illustration; see docs/browse-art-provenance.md.
 const artwork: BrowseCardImage = { src: "/art/browse-come-follow-me.webp" };
 
-/** The whole card opens this week's lesson; weeks without a guide still have their reading page. */
+/** The whole card opens the Come, Follow Me page, which leads into this week's lesson. */
 export default function ComeFollowMeCard({ className }: { className?: string }) {
   const weekStart = useSyncExternalStore(noSubscription, readCurrentWeekStart, readServerWeekStart);
   const week = weekStart ? getComeFollowMeWeekByStart(weekStart) : null;
@@ -34,7 +34,7 @@ export default function ComeFollowMeCard({ className }: { className?: string }) 
 
   return (
     <BrowseCard
-      href={getStudyGuideHref(week.start)}
+      href="/come-follow-me"
       className={className}
       image={artwork}
       eyebrow={`Come, Follow Me · ${formatWeekRange(week)}`}
