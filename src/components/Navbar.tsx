@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -21,12 +21,33 @@ export default function Navbar() {
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
   const [collapsed, setCollapsed] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
   const navItems = primaryNavItems;
+  const activeIndex = navItems.findIndex((item) => isPathActive(pathname, item.href));
   const navIcons = {
     Browse: faBookOpen,
     Notes: faPencil,
     "Come Follow Me": faShoePrints,
   } as const;
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    // Measure the unclipped text so the label and shared highlight can animate to the same width.
+    const labels = Array.from(nav.querySelectorAll<HTMLElement>(".desktop-nav-label-text"));
+    const measureLabels = () => {
+      labels.forEach((label, index) => {
+        const width = `${label.getBoundingClientRect().width}px`;
+        label.closest("a")?.style.setProperty("--nav-label-width", width);
+        if (index === activeIndex) nav.style.setProperty("--active-label-width", width);
+      });
+      nav.dataset.measured = "true";
+    };
+    measureLabels();
+    const observer = new ResizeObserver(measureLabels);
+    labels.forEach((label) => observer.observe(label));
+    return () => observer.disconnect();
+  }, [activeIndex]);
 
   useEffect(() => {
     async function syncCurrentUser() {
@@ -55,7 +76,14 @@ export default function Navbar() {
         </Link>
         <div id="desktop-navigation" className="desktop-nav-content" inert={collapsed} aria-hidden={collapsed}>
           <div className="desktop-nav-items">
-            <nav className="simple-hide desktop-nav-links" aria-label="Primary">
+            <nav
+              ref={navRef}
+              className="simple-hide desktop-nav-links"
+              aria-label="Primary"
+              data-has-active={activeIndex >= 0 ? "true" : "false"}
+              style={{ "--active-index": Math.max(0, activeIndex) } as CSSProperties}
+            >
+              <span className="desktop-nav-indicator" aria-hidden="true" />
               {navItems.map((item) => {
                 const active = isPathActive(pathname, item.href);
                 const href = item.href === "/browse" ? browseHref : item.href;
@@ -71,7 +99,9 @@ export default function Navbar() {
                     title={item.label}
                   >
                     <FontAwesomeIcon icon={icon} className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
-                    {active ? <span>{item.label}</span> : null}
+                    <span className="desktop-nav-label" aria-hidden="true">
+                      <span className="desktop-nav-label-text">{item.label}</span>
+                    </span>
                   </Link>
                 );
               })}
