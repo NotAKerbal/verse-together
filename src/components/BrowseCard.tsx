@@ -1,6 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import BrowseLink from "./BrowseLink";
 
 export type BrowseCardImage = {
   /** Path under `public/`, e.g. `/art/browse-notes.webp`. */
@@ -39,11 +39,14 @@ function ChevronIcon() {
   );
 }
 
-/** One whole-card link in the Library grid; every card shares its size, padding, and border. */
+/**
+ * One whole-card link in the Library grid; every card shares its size, padding, and border. Inside the browse
+ * selector a volume card switches the view in place (see BrowseLink).
+ */
 export default function BrowseCard({ href, eyebrow, title, description, image, background, className, ariaLabel }: Props) {
   return (
     <li className={className}>
-      <Link
+      <BrowseLink
         href={href}
         className="browse-card panel-card interactive-card group"
         style={background ? { background } : undefined}
@@ -80,7 +83,7 @@ export default function BrowseCard({ href, eyebrow, title, description, image, b
             <p className="mt-1 text-xs font-semibold text-[color:var(--foreground-muted)]">{description}</p>
           ) : null}
         </div>
-      </Link>
+      </BrowseLink>
     </li>
   );
 }

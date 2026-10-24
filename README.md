@@ -44,6 +44,7 @@ This writes:
 
 - `public/scripture-data/manifest.json`
 - `public/scripture-data/*.json`
+- `src/lib/generated/scriptureCatalog.json` — the small navigation catalog (volumes, books, chapter and verse counts) that browse, quick navigation, and server lookups read instead of the verse bundles. `npm run generate:scriptures -- --catalog-only` rebuilds just this file from the bundles already in `public/scripture-data`, and `npm run test:browse` checks that it matches them.
 
 The local runtime and browser IndexedDB installer both read from those generated `public/scripture-data` files.
 

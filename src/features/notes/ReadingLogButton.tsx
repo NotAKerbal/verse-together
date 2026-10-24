@@ -28,6 +28,8 @@ type Props = {
   label?: string;
   /** Accessible name when the visible label is shortened. */
   ariaLabel?: string;
+  /** Shown but unavailable, e.g. while the chapter it logs is still loading. */
+  disabled?: boolean;
   onLogged?: (journalDate: string) => void;
 };
 
@@ -77,6 +79,7 @@ export default function ReadingLogButton({
   variant = "pill",
   label = "Log reading",
   ariaLabel,
+  disabled = false,
   onLogged,
 }: Props) {
   const { promptSignIn } = useAuth();
@@ -209,7 +212,7 @@ export default function ReadingLogButton({
         <button
           type="button"
           onClick={open}
-          disabled={loading}
+          disabled={loading || disabled}
           aria-haspopup="dialog"
           aria-label={ariaLabel}
           title={ariaLabel}

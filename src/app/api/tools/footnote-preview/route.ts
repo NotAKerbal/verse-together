@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchChapter, fetchChapterByBook } from "@/lib/openscripture";
+import { fetchChapterByBook } from "@/lib/openscripture";
+import { fetchChapterOnServer } from "@/lib/scriptureChapters.server";
 
 function parsePositiveInt(value: string | null): number | null {
   if (!value) return null;
@@ -20,7 +21,6 @@ function parseVerses(value: string | null): number[] {
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
   const volume = (url.searchParams.get("volume") || "").trim();
   const book = (url.searchParams.get("book") || "").trim();
   const chapter = parsePositiveInt(url.searchParams.get("chapter"));
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   try {
     let chapterData;
     try {
-      chapterData = await fetchChapter(volume, book, chapter, { baseUrl });
+      chapterData = await fetchChapterOnServer(volume, book, chapter);
     } catch {
       // Fallback mirrors known-working chapter path for edge cases.
       chapterData = await fetchChapterByBook(book, chapter);

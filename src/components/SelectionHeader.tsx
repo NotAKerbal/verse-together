@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BrowseLink from "./BrowseLink";
 import ScriptureQuickNav from "./ScriptureQuickNav";
 
 type Props = {
@@ -36,16 +36,19 @@ export default function SelectionHeader({
       <div className="flex min-h-[2.75rem] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {backHref ? (
-            <Link
+            <BrowseLink
               href={backHref}
               className="browse-header-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[color:var(--foreground-muted)]"
               aria-label="Go back"
               data-tap
             >
               <BackIcon />
-            </Link>
+            </BrowseLink>
           ) : null}
-          <h1 className="browse-title min-w-0">{title}</h1>
+          {/* Focus target after an in-place selection change (see BrowseSelector). */}
+          <h1 className="browse-title min-w-0 outline-none" tabIndex={-1} data-browse-title>
+            {title}
+          </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <ScriptureQuickNav

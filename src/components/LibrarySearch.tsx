@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useChapterNavigation } from "@/components/ChapterNavigation";
 import { getQuickNavSuggestions, parseScriptureReferenceQuery } from "@/lib/scriptureQuickNav";
 
 type Option = { key: string; label: string; href: string; kind: "jump" | "search" };
@@ -60,7 +60,8 @@ export default function LibrarySearch({
   variant?: "page" | "header";
 }) {
   const header = variant === "header";
-  const router = useRouter();
+  // A jump to a chapter shows its page at once; /search and other hrefs go through the router as usual.
+  const navigate = useChapterNavigation();
   const listId = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -90,7 +91,7 @@ export default function LibrarySearch({
   const optionId = (key: string) => `${listId}-${key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
   function go(href: string) {
-    router.push(href);
+    navigate(href);
     setOpen(false);
     setQuery("");
   }
