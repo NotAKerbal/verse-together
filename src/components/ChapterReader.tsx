@@ -1432,9 +1432,7 @@ export default function ChapterReader({
         }`}
       >
         <aside
-          className={`simple-hide hidden lg:block self-start sticky overflow-y-auto pr-1 space-y-3 ${
-            isAtTop ? "top-2 max-h-[calc(100vh-1rem)]" : "top-4 max-h-[calc(100vh-2rem)]"
-          }`}
+          className="simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] max-h-[calc(100vh-var(--header-height)-1rem)] overflow-y-auto pr-1 space-y-3"
         >
           {openCitations && selectedBounds ? (
             <CitationsSidebarPanel
@@ -1473,7 +1471,7 @@ export default function ChapterReader({
             }
           >
           <header
-            className={`simple-hide sticky top-2 z-20 transition-all ${
+            className={`simple-hide sticky top-2 sm:top-[calc(var(--header-height)+0.5rem)] z-20 transition-all ${
               isAtTop ? "py-0" : "py-1"
             }`}
           >
