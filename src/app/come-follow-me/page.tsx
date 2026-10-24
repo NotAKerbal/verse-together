@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import AccountControl from "@/components/AccountControl";
 import LessonOverview from "@/features/comeFollowMe/LessonOverview";
 import styles from "@/features/comeFollowMe/lessons.module.css";
 import { toLocalDateKey } from "@/lib/comeFollowMe";
@@ -18,17 +17,7 @@ export default function ComeFollowMePage() {
   const serverToday = toLocalDateKey(new Date());
   return (
     <section className={`page-shell ${styles.overview}`}>
-      <header className={styles.intro}>
-        <div className={styles.introTop}>
-          <p className={styles.kicker}>
-            <span>Come, Follow Me</span>
-            <span>Old Testament 2026</span>
-          </p>
-          {/* Phones have no app header; the account sits at the page's top right, as on Notes. */}
-          <AccountControl variant="page" />
-        </div>
-        <h1 className={styles.heading}>Weekly lessons</h1>
-      </header>
+      <h1 className="sr-only">Come, Follow Me lessons</h1>
       <LessonOverview serverToday={serverToday} />
       <p className={styles.plansLink}>
         <Link href="/plans">Your study plans</Link>

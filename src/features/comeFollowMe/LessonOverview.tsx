@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import AccountControl from "@/components/AccountControl";
 import { useId, useMemo } from "react";
 import { PUBLISHED_GUIDES } from "./guideIndex";
 import LessonChapters from "./LessonChapters";
@@ -151,9 +152,13 @@ export default function LessonOverview({ serverToday }: Props) {
   return (
     <>
       <section className={styles.section} aria-labelledby="cfm-this-week">
-        <h2 id="cfm-this-week" className={styles.sectionHeading}>
-          This week
-        </h2>
+        <div className={styles.sectionHeader}>
+          <h2 id="cfm-this-week" className={styles.sectionHeading}>
+            This week
+          </h2>
+          {/* Phones have no app header; the account sits at the page's top right, as on Notes. */}
+          <AccountControl variant="page" />
+        </div>
         {overview.current ? (
           <FeaturedLesson key={overview.current.start} lesson={overview.current} />
         ) : (
