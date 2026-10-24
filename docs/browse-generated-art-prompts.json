@@ -1,0 +1,56 @@
+{
+  "generator": "Built-in image_gen tool",
+  "created": "2026-10-24",
+  "note": "Original generated decorative illustrations. No people or Savior depictions; CFM uses sourced public-domain artwork. No Creative Commons license is claimed for generated output.",
+  "assets": [
+    {
+      "key": "continue-reading",
+      "dest": "public/art/browse-continue-reading.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: An open, well-loved old leather-bound scripture book resting on a wooden table, its cream pages show only indistinct faint marks, a muted rust linen bookmark drapes over the page edge, warm sunlight from the upper right. Close three-quarter still life.",
+      "bytes": 60982,
+      "sha256": "cf88b0b71d6c9aee4052df3566055f1279e2b67c5e6fe90ec02e2b3bd82597d2"
+    },
+    {
+      "key": "notes",
+      "dest": "public/art/browse-notes.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: A simple open cream-paper journal with blank pages, a dark wooden dip pen laid beside it and a small ink bottle on a weathered oak writing desk, soft morning light. Close three-quarter still life, no readable writing.",
+      "bytes": 72170,
+      "sha256": "e75399211bd2b1c67ac4de31ecaedfbde0dbba51dd115d8a2e5df046ff89e5ac"
+    },
+    {
+      "key": "bookofmormon",
+      "dest": "public/art/browse-bookofmormon.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: A small closed ancient-style volume made of uninscribed golden metal plates, thick layered gold edges bound with three simple metal rings at the spine, resting on a dark stone ledge with a restrained olive branch nearby; a dignified artistic symbol, no characters, engravings or writing.",
+      "bytes": 68328,
+      "sha256": "10638c6b81dde87673d54039a7398299717953cdddf0626bbcb8273f01db220e"
+    },
+    {
+      "key": "oldtestament",
+      "dest": "public/art/browse-oldtestament.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: A rolled parchment scroll on a sunlit stone ledge in the foreground, with weathered desert mountains and a single olive tree softly receding behind it, warm sandstone atmosphere. Clear central scroll focal subject.",
+      "bytes": 89418,
+      "sha256": "fa228f8c17a2b8a3a136c49e871088e95eb997ebf6c62b19a76f87157a4f24e2"
+    },
+    {
+      "key": "newtestament",
+      "dest": "public/art/browse-newtestament.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: One empty humble wooden fishing boat pulled beside the still shoreline of the Sea of Galilee, folded plain fishing net inside, pale gold morning sky and distant blue-olive hills, quiet natural light. No figures anywhere.",
+      "bytes": 90708,
+      "sha256": "0945c37985b8e578fb7a2d0b56eba529c6682bac9190761d8cf39293fdfac0a1"
+    },
+    {
+      "key": "doctrineandcovenants",
+      "dest": "public/art/browse-doctrineandcovenants.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: A small simple early nineteenth-century white wooden meetinghouse among tall green trees, unadorned architecture, weathered footpath leading toward it, gentle morning sunshine; no visible people, no signage, no lettering.",
+      "bytes": 118374,
+      "sha256": "3a0d7635dd3a7a4646ac2e263e66607f3336c8ba5498398697646c9152f47801"
+    },
+    {
+      "key": "pearl",
+      "dest": "public/art/browse-pearl.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single website card illustration, square canvas. Style: refined naturalistic oil-painted still life or landscape with subtle canvas brushwork, restrained warm ochre, olive, parchment and umber palette, soft luminous daylight, quiet reverent mood, coherent with 19th-century classical religious artwork. Full bleed artwork, no frame, no border, no text, no letters, no inscriptions, no watermark, no UI. Composition: one strong recognizable focal subject centrally framed, readable at thumbnail size, ample breathing room; intended to occupy the right 45% of a small card with a CSS fade to the left. Strict constraints: no people, no faces, no human figures, no statues, no depictions of Jesus or the Savior, no angels or deities. This is original decorative artwork, not a historical reconstruction or a reproduction of an existing painting. Subject: A luminous star-filled indigo night sky and subtle Milky Way above softly lit desert ridges with a single ancient-style tent very small in the distance, a quiet golden glow on the horizon, restrained painterly texture, contemplative and expansive.",
+      "bytes": 74110,
+      "sha256": "dbaacb1850442dbb6ed966eb732e3442516f5a49e04003949637d96bc335029d"
+    }
+  ]
+}

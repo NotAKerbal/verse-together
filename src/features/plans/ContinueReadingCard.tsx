@@ -18,7 +18,8 @@ export default function ContinueReadingCard({ className }: { className?: string 
       className={className}
       ariaLabel={`Continue reading ${label}`}
       eyebrow="Continue reading"
-      title={<span className="block truncate">{label}</span>}
+      image={{ src: "/art/browse-continue-reading.webp" }}
+      title={label}
       description={`Pick up the ${delineation} you had open.`}
     />
   );

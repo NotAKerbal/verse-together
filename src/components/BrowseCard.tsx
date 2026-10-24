@@ -1,13 +1,21 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+
+export type BrowseCardImage = {
+  /** Path under `public/`, e.g. `/art/browse-notes.webp`. */
+  src: string;
+  /** CSS `object-position` for the crop; defaults to centered. */
+  objectPosition?: string;
+};
 
 type Props = {
   href: string;
   eyebrow: ReactNode;
   title: ReactNode;
   description?: ReactNode;
-  /** Decorative art on the card's right side; the text column stays clear of it. */
-  media?: ReactNode;
+  /** Decorative art on the card's right side, fading out to the left; the text column stays clear of it. */
+  image?: BrowseCardImage;
   background?: string;
   /** Classes for the grid item, e.g. `simple-hide`. */
   className?: string;
@@ -32,7 +40,7 @@ function ChevronIcon() {
 }
 
 /** One whole-card link in the Library grid; every card shares its size, padding, and border. */
-export default function BrowseCard({ href, eyebrow, title, description, media, background, className, ariaLabel }: Props) {
+export default function BrowseCard({ href, eyebrow, title, description, image, background, className, ariaLabel }: Props) {
   return (
     <li className={className}>
       <Link
@@ -40,12 +48,20 @@ export default function BrowseCard({ href, eyebrow, title, description, media, b
         className="browse-card panel-card interactive-card group"
         style={background ? { background } : undefined}
         aria-label={ariaLabel}
-        data-media={media ? "true" : undefined}
+        data-media={image ? "true" : undefined}
         data-tap
       >
-        {media ? (
+        {image ? (
           <div className="browse-card-media" aria-hidden="true">
-            {media}
+            <Image
+              src={image.src}
+              alt=""
+              fill
+              // A lone last card spans both tablet columns, so tablets get the phone width.
+              sizes="(min-width: 1024px) 12rem, 45vw"
+              className="object-cover"
+              style={image.objectPosition ? { objectPosition: image.objectPosition } : undefined}
+            />
           </div>
         ) : null}
         <div className="relative flex items-start justify-between gap-3">

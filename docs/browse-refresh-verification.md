@@ -50,3 +50,21 @@ redesign is included.
   The production phone-touch/date-boundary checks reported no client errors.
 
 Art source and public-domain evidence are recorded in [browse-art-provenance.md](browse-art-provenance.md).
+
+## Follow-up: art on every card
+
+Seven original nonfigurative illustrations were generated with the built-in image tool, then optimized
+locally; the sourced Savior painting stays unchanged pending owner selection. Exact prompts, filenames,
+sizes and checksums are in `browse-generated-art-prompts.json`. The four alternative Savior paintings
+and their source/reuse evidence are in `browse-savior-options.md`.
+
+- **Passed:** focused lint on the four changed TSX files and production build (including TypeScript).
+- **Passed:** production Chrome at 320, 390, 768 and 1440 px, light and dark: each of the seven visible
+  signed-out cards has a loaded image; titles/cards have no clipping or overflow; all cards remain flat.
+- **Passed:** search → Alma 32, whole-card current lesson navigation, and simple mode retaining five
+  scripture volumes with five images. No client errors were captured in these checks.
+- **Passed:** interactive Savior comparison at desktop/phone widths, including all five crop selections.
+  The T3 HTML preview hit the same host AppArmor limitation; local Chrome supplied the visual and
+  interaction verification before publishing the HTML artifact.
+- **Not run:** authenticated Continue Reading persistence. Its image is wired through the same card
+  component, but screenshots/checks of actual signed-in account data were not performed.

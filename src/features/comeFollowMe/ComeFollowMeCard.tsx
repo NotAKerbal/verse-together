@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useSyncExternalStore } from "react";
-import BrowseCard from "@/components/BrowseCard";
+import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
 import { getStudyGuideHref, hasStudyGuide } from "@/features/comeFollowMe/guideIndex";
 import { formatWeekRange, getComeFollowMeWeek, getComeFollowMeWeekByStart } from "@/lib/comeFollowMe";
 
@@ -13,15 +12,7 @@ const readCurrentWeekStart = () => getComeFollowMeWeek(new Date())?.start ?? "";
 const readServerWeekStart = () => null;
 
 // Heinrich Hofmann, Figure of Christ (1884). Public domain; see docs/browse-art-provenance.md.
-const portrait = (
-  <Image
-    src="/art/hofmann-christ.webp"
-    alt=""
-    fill
-    sizes="(min-width: 1024px) 12rem, (min-width: 640px) 23vw, 45vw"
-    className="object-cover object-[50%_20%]"
-  />
-);
+const portrait: BrowseCardImage = { src: "/art/hofmann-christ.webp", objectPosition: "50% 20%" };
 
 /** The whole card opens this week's lesson; weeks without a guide still have their reading page. */
 export default function ComeFollowMeCard({ className }: { className?: string }) {
@@ -34,7 +25,7 @@ export default function ComeFollowMeCard({ className }: { className?: string }) 
       <BrowseCard
         href="/come-follow-me"
         className={className}
-        media={portrait}
+        image={portrait}
         eyebrow="Come, Follow Me"
         title={weekStart === null ? "This week" : "Study guides"}
       />
@@ -45,7 +36,7 @@ export default function ComeFollowMeCard({ className }: { className?: string }) 
     <BrowseCard
       href={getStudyGuideHref(week.start)}
       className={className}
-      media={portrait}
+      image={portrait}
       eyebrow={`Come, Follow Me · ${formatWeekRange(week)}`}
       title={week.block}
       description={hasStudyGuide(week.start) ? "This week's study guide" : "This week's reading"}

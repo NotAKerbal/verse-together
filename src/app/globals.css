@@ -416,6 +416,7 @@ mark {
 
 .browse-card-title {
   font-size: 1.6rem;
+  overflow-wrap: break-word;
 }
 
 /* Art sits on the right and fades out to the left, so the text column reads over the plain card. */
@@ -433,12 +434,17 @@ mark {
   opacity: 0.85;
 }
 
+/* The text column may overlap the art's faded left edge, never its opaque right side. */
+.browse-card[data-media="true"] {
+  min-height: 9.75rem;
+}
+
 .browse-card[data-media="true"] .browse-card-text {
-  max-width: 58%;
+  max-width: 62%;
 }
 
 .browse-card[data-media="true"] .browse-card-title {
-  font-size: 1.35rem;
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.35rem);
 }
 
 /* A last card alone on a two-column row takes the whole row. Simple mode hides the study cards,
