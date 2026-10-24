@@ -10,6 +10,7 @@ import {
   faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import AccountControl from "@/components/AccountControl";
+import ReaderHeaderSlot from "@/components/ReaderHeaderSlot";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
@@ -79,6 +80,7 @@ export default function Navbar() {
         <div className="simple-hide hidden min-w-0 sm:flex items-center justify-self-end gap-3">
           <AccountControl variant="header" />
         </div>
+        <ReaderHeaderSlot />
       </div>
     </header>
   );

@@ -3,6 +3,7 @@
 import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,6 +12,7 @@ import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import ScriptureQuickNav from "./ScriptureQuickNav";
+import { useReaderHeaderSlot } from "./ReaderHeaderSlot";
 import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
 import type { Footnote } from "@/lib/openscripture";
@@ -510,6 +512,7 @@ export default function ChapterReader({
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
+  const readerHeaderSlot = useReaderHeaderSlot();
   const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
   const studyPathsByVerse = useMemo(
@@ -1347,6 +1350,73 @@ export default function ChapterReader({
     setOpenExplorer(true);
   }
 
+  // One toolbar, placed once: in the app header's right side on wide screens, else at the top of the column.
+  const readerToolbar = (
+    <div className="reader-toolbar simple-hide">
+      <ScriptureQuickNav
+        currentVolume={volume}
+        currentBook={book}
+        verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
+        align="right"
+        className="reader-toolbar-quicknav"
+        buttonClassName="reader-toolbar-button"
+      />
+      <h1 className="flex min-w-0 text-sm">
+        <Link
+          href={`/browse/${volume}/${book}`}
+          aria-label={`${reference}, choose chapter`}
+          title={`Choose chapter (currently ${reference})`}
+          className="reader-toolbar-button reader-toolbar-title"
+        >
+          <span className="min-w-0 truncate">{reference}</span>
+        </Link>
+      </h1>
+      <button
+        type="button"
+        aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+        title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+        aria-pressed={simpleMode}
+        onClick={() => setSimpleMode(!simpleMode)}
+        className="reader-toolbar-button"
+      >
+        <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
+      </button>
+      <div ref={settingsAnchorRef} className="relative shrink-0">
+        <button
+          aria-label="Reader settings"
+          title="Reader settings"
+          aria-expanded={settingsOpen}
+          aria-haspopup="dialog"
+          onClick={() => setSettingsOpen((open) => !open)}
+          className="group reader-toolbar-button"
+        >
+          <FontAwesomeIcon
+            icon={faGear}
+            aria-hidden="true"
+            className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
+          />
+        </button>
+        <ReaderSettings
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          prefs={prefs}
+          translationControls={translationControls}
+          chapterProgressControl={<ChapterReadToggle volume={volume} book={book} chapter={chapter} />}
+          anchorRef={settingsAnchorRef}
+          onChange={(next) => {
+            setPrefs(next);
+            void (async () => {
+              const token = user ? await getToken({ template: "convex" }) : null;
+              await savePreferences(user?.id ?? null, next, token);
+            })();
+          }}
+        />
+      </div>
+    </div>
+  );
+  const hasTranslationNotices = !!translationNotices && translationNotices.length > 0;
+  const showInlineReaderHeader = !readerHeaderSlot.slot || hasCompareSelections || hasTranslationNotices;
+
   return (
     <section
       className="space-y-4 pb-20"
@@ -1392,9 +1462,7 @@ export default function ChapterReader({
         }`}
       >
         <aside
-          className={`simple-hide hidden lg:block self-start sticky overflow-y-auto pr-1 space-y-3 ${
-            isAtTop ? "top-2 max-h-[calc(100vh-1rem)]" : "top-4 max-h-[calc(100vh-2rem)]"
-          }`}
+          className="simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.25rem)] max-h-[calc(100vh-var(--header-height)-1.25rem)] overflow-y-auto pr-1 space-y-3"
         >
           {openCitations && selectedBounds ? (
             <CitationsSidebarPanel
@@ -1432,74 +1500,17 @@ export default function ChapterReader({
                 : undefined
             }
           >
-          <header
-            className={`simple-hide sticky top-2 z-20 transition-all ${
-              isAtTop ? "py-0" : "py-1"
-            }`}
-          >
-            <div className="panel-card-strong relative flex flex-col gap-1 rounded-[1.15rem] px-3 py-2 sm:px-4">
-              <div className="flex items-center justify-between gap-2 sm:gap-3">
-                <div className="min-w-0 flex flex-1 items-center gap-2 pl-0.5 sm:gap-3 sm:pl-1">
-                  <ScriptureQuickNav
-                    currentVolume={volume}
-                    currentBook={book}
-                    verses={verses.map((item) => ({ verse: item.verse, text: item.text }))}
-                  />
-                  <h1 className="min-w-0 max-w-full flex-1 text-xs font-semibold sm:flex-none sm:text-sm">
-                    <Link
-                      href={`/browse/${volume}/${book}`}
-                      aria-label={`${reference}, choose chapter`}
-                      title={`Choose chapter (currently ${reference})`}
-                      className="flex h-8 min-w-0 items-center rounded-lg border surface-card-soft px-2 text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 sm:h-auto sm:px-2.5 sm:py-1"
-                    >
-                      <span className="min-w-0 truncate">{reference}</span>
-                    </Link>
-                  </h1>
-                </div>
-                <button
-                  type="button"
-                  aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
-                  title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
-                  aria-pressed={simpleMode}
-                  onClick={() => setSimpleMode(!simpleMode)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border surface-card-soft text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
-                >
-                  <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
-                </button>
-                <div ref={settingsAnchorRef} className="relative shrink-0">
-                  <button
-                    aria-label="Reader settings"
-                    title="Reader settings"
-                    aria-expanded={settingsOpen}
-                    aria-haspopup="dialog"
-                    onClick={() => setSettingsOpen((open) => !open)}
-                    className="group inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border surface-card-soft text-foreground transition-[background-color,border-color,color] duration-200 ease-out hover:border-[color:var(--surface-button-hover)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30"
-                  >
-                    <FontAwesomeIcon
-                      icon={faGear}
-                      aria-hidden="true"
-                      className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
-                    />
-                  </button>
-                  <ReaderSettings
-                    open={settingsOpen}
-                    onClose={() => setSettingsOpen(false)}
-                    prefs={prefs}
-                    translationControls={translationControls}
-                    chapterProgressControl={<ChapterReadToggle volume={volume} book={book} chapter={chapter} />}
-                    anchorRef={settingsAnchorRef}
-                    onChange={(next) => {
-                      setPrefs(next);
-                      void (async () => {
-                        const token = user ? await getToken({ template: "convex" }) : null;
-                        await savePreferences(user?.id ?? null, next, token);
-                      })();
-                    }}
-                  />
-                </div>
-              </div>
+          {showInlineReaderHeader ? (
+            <header
+              className={`simple-hide sticky top-2 z-20 flex flex-col items-end gap-1.5 transition-all lg:top-[calc(var(--header-height)+0.25rem)] ${
+                isAtTop ? "py-0" : "py-1"
+              }`}
+            >
+              {readerHeaderSlot.slot ? null : (
+                <div className={`max-w-full ${readerHeaderSlot.resolved ? "" : "lg:hidden"}`}>{readerToolbar}</div>
+              )}
               {hasCompareSelections ? (
-                <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
+                <div className="reader-toolbar-note text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-2">
                   <span className="text-foreground/45">Key:</span>
                   <span
                     className="text-amber-700 dark:text-amber-300"
@@ -1516,15 +1527,15 @@ export default function ChapterReader({
                   ))}
                 </div>
               ) : null}
-              {translationNotices && translationNotices.length > 0 ? (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+              {hasTranslationNotices ? (
+                <div className="reader-toolbar-note text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
                   {translationNotices.map((notice) => (
                     <div key={notice}>{notice}</div>
                   ))}
                 </div>
               ) : null}
-            </div>
-          </header>
+            </header>
+          ) : null}
 
           <h1 className="simple-only reader-simple-title">{reference}</h1>
 
@@ -1836,6 +1847,7 @@ export default function ChapterReader({
         shareLinkNotice={shareLinkNotice}
       />
       )}
+      {readerHeaderSlot.slot ? createPortal(readerToolbar, readerHeaderSlot.slot) : null}
     </section>
   );
 }

@@ -264,6 +264,97 @@ mark {
   top: auto;
 }
 
+/*
+  Chapter reader on wide screens: the reader portals its toolbar into the header's slot
+  (src/components/ReaderHeaderSlot.tsx). The app controls pack to the left, the reader pill
+  sits on the right, and the header stays put so the reader controls remain in reach.
+*/
+.reader-header-slot {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .reader-header-slot:not(:empty) {
+    display: flex;
+    grid-column: 4;
+    justify-self: end;
+    justify-content: flex-end;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-header:has(.reader-header-slot:not(:empty)) > .shell-container {
+    grid-template-columns: auto auto auto minmax(0, 1fr);
+  }
+
+  :root:not([data-simple="true"]) .app-header:has(.reader-header-slot:not(:empty)) {
+    position: sticky;
+    top: 0;
+  }
+}
+
+/* The reader's toolbar: a pill shaped like the header's segmented control. */
+.reader-toolbar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.2rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+}
+
+.reader-toolbar .reader-toolbar-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.reader-toolbar .reader-toolbar-button:hover {
+  background: var(--surface-button-hover);
+}
+
+.reader-toolbar .reader-toolbar-button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: -2px;
+}
+
+.reader-toolbar .reader-toolbar-title {
+  flex-shrink: 1;
+  justify-content: flex-start;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  padding-inline: 0.85rem;
+  font-weight: 600;
+}
+
+/* Quick nav anchors its panel to the whole pill so it opens right-aligned and on screen. */
+.reader-toolbar .reader-toolbar-quicknav {
+  position: static;
+}
+
+/* Comparison key and translation notices, under the toolbar in the scripture column. */
+.reader-toolbar-note {
+  max-width: 100%;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 1rem;
+  background: var(--surface-card);
+}
+
 .brand-wordmark {
   font-family: var(--font-serif-text);
   font-weight: 400;
