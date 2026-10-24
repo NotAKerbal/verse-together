@@ -221,7 +221,9 @@ export default function ReadingLogButton({
           className={TRIGGER_CLASS[variant]}
         >
           <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
-          {variant !== "pill" && notice ? "Logged ✓" : label}
+          <span className={variant === "toolbar" ? "reader-toolbar-log-label" : undefined}>
+            {variant !== "pill" && notice ? "Logged ✓" : label}
+          </span>
         </button>
         {/* The compact header controls have no room for the confirmation; it is announced instead. */}
         <span

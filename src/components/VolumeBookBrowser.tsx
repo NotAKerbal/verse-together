@@ -44,11 +44,7 @@ export default function VolumeBookBrowser({
 }: Props) {
   return (
     <div className="page-shell browse-shell">
-      <SelectionHeader
-        title={volumeLabel}
-        backHref={backHref}
-        currentVolume={volumeSlug}
-      />
+      <SelectionHeader title={volumeLabel} backHref={backHref} />
 
       {books.length === 0 ? (
         <div className="browse-summary-card px-5 py-10 text-center text-sm text-[color:var(--foreground-muted)]">

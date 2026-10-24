@@ -9,8 +9,13 @@ import LibrarySearch from "./LibrarySearch";
  * The chapter header's search: a button that opens the Library's search (references jump to a chapter, anything
  * else searches every scripture) under the header, right-aligned with it. The panel is positioned against the
  * nearest positioned ancestor (the header pill), so it lines up with the pill's right edge and stays on screen.
+ * The volume and book selection header uses it too, styled to match its own buttons.
  */
-export default function ReaderSearchButton() {
+export default function ReaderSearchButton({
+  buttonClassName = "reader-toolbar-button",
+}: {
+  buttonClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -41,7 +46,7 @@ export default function ReaderSearchButton() {
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
-        className="reader-toolbar-button"
+        className={buttonClassName}
       >
         <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" className="h-3.5 w-3.5" />
       </button>

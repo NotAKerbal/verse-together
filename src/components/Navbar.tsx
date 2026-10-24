@@ -4,16 +4,12 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faBookOpen,
-  faPencil,
-  faShoePrints,
-  faChevronLeft,
-} from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import AccountControl from "@/components/AccountControl";
 import { AppHeaderSlot, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import LibrarySearch from "@/components/LibrarySearch";
 import ReaderHeaderSlot from "@/components/ReaderHeaderSlot";
+import { primaryNavIcons } from "@/components/primaryNavIcons";
 import { useAuth } from "@/lib/auth";
 import { upsertCurrentUser } from "@/lib/appData";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
@@ -31,11 +27,6 @@ export default function Navbar() {
   // outside the collapsible (clipped, inert) nav.
   const showLibrarySearch = pathname === "/browse";
   const { filled: headerSlotFilled } = useAppHeaderSlot();
-  const navIcons = {
-    Browse: faBookOpen,
-    Notes: faPencil,
-    "Come Follow Me": faShoePrints,
-  } as const;
 
   useLayoutEffect(() => {
     const nav = navRef.current;
@@ -98,7 +89,7 @@ export default function Navbar() {
               {navItems.map((item) => {
                 const active = isPathActive(pathname, item.href);
                 const href = item.href === "/browse" ? browseHref : item.href;
-                const icon = navIcons[item.label];
+                const icon = primaryNavIcons[item.label];
                 return (
                   <Link
                     key={item.href}

@@ -3,13 +3,11 @@
 import { AppHeaderPortal, useAppHeaderSlot } from "./AppHeaderSlot";
 import BrowseLink from "./BrowseLink";
 import { usePageCoveredByChapterNavigation } from "./ChapterNavigation";
-import ScriptureQuickNav from "./ScriptureQuickNav";
+import ReaderSearchButton from "./ReaderSearchButton";
 
 type Props = {
   title: string;
   backHref?: string;
-  currentVolume?: string;
-  currentBook?: string;
 };
 
 function BackIcon() {
@@ -29,18 +27,29 @@ function BackIcon() {
   );
 }
 
+function SelectionControls({ title, backHref }: Props) {
+  return (
+    <div className="app-header-selection" data-back={backHref ? "true" : undefined}>
+      {backHref ? (
+        <BrowseLink href={backHref} className="app-header-selection-button" aria-label="Go back" title="Go back" data-tap>
+          <BackIcon />
+        </BrowseLink>
+      ) : null}
+      <h1 className="app-header-selection-title outline-none" tabIndex={-1} title={title} data-browse-title>
+        {title}
+      </h1>
+      <ReaderSearchButton buttonClassName="simple-hide app-header-selection-button" />
+    </div>
+  );
+}
+
 /**
- * A volume's or book's back link, title, and quick navigation. Wider screens show them at the app header's
- * right (rendered through a portal, so BrowseLink still switches views in place); phones, narrow windows,
- * simple mode, and the server-rendered page keep them in the page. CSS shows one copy at a time. While a
+ * A volume's or book's back link, title, and search (the Library's, in a popover). Wider screens show them at
+ * the app header's right (rendered through a portal, so BrowseLink still switches views in place); phones, narrow
+ * windows, simple mode, and the server-rendered page keep them in the page. CSS shows one copy at a time. While a
  * chapter opening from this page covers it, the header copy is unmounted, so it never outlives the page.
  */
-export default function SelectionHeader({
-  title,
-  backHref,
-  currentVolume,
-  currentBook,
-}: Props) {
+export default function SelectionHeader({ title, backHref }: Props) {
   const { available } = useAppHeaderSlot();
   // The covered page stays mounted (hidden) so an abandoned navigation can return to it; its header controls
   // must not stay on screen over the chapter, and come back with the page.
@@ -48,53 +57,12 @@ export default function SelectionHeader({
   const inHeader = available && !covered;
   return (
     <>
-      <div className={`browse-hero${inHeader ? " browse-header-fallback" : ""}`}>
-        <div className="flex min-h-[2.75rem] items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            {backHref ? (
-              <BrowseLink
-                href={backHref}
-                className="browse-header-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[color:var(--foreground-muted)]"
-                aria-label="Go back"
-                data-tap
-              >
-                <BackIcon />
-              </BrowseLink>
-            ) : null}
-            {/* Focus target after an in-place selection change (see BrowseSelector). */}
-            <h1 className="browse-title min-w-0 outline-none" tabIndex={-1} data-browse-title>
-              {title}
-            </h1>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <ScriptureQuickNav
-              currentVolume={currentVolume}
-              currentBook={currentBook}
-              align="right"
-              buttonClassName="simple-hide browse-header-button h-9 w-9 rounded-xl"
-            />
-          </div>
-        </div>
+      <div className={`browse-selection-header${inHeader ? " browse-header-fallback" : ""}`}>
+        <SelectionControls title={title} backHref={backHref} />
       </div>
       {inHeader ? (
         <AppHeaderPortal>
-          <div className="app-header-selection" data-back={backHref ? "true" : undefined}>
-            {backHref ? (
-              <BrowseLink href={backHref} className="app-header-selection-button" aria-label="Go back" title="Go back" data-tap>
-                <BackIcon />
-              </BrowseLink>
-            ) : null}
-            <h1 className="app-header-selection-title outline-none" tabIndex={-1} title={title} data-browse-title>
-              {title}
-            </h1>
-            <ScriptureQuickNav
-              currentVolume={currentVolume}
-              currentBook={currentBook}
-              align="right"
-              className="shrink-0"
-              buttonClassName="app-header-selection-button"
-            />
-          </div>
+          <SelectionControls title={title} backHref={backHref} />
         </AppHeaderPortal>
       ) : null}
     </>
