@@ -784,7 +784,7 @@ export default function StudyCompanion({
         const style = getComputedStyle(header);
         // Only a header that stays on screen covers the top of the viewport.
         if (style.display !== "none" && (style.position === "sticky" || style.position === "fixed")) {
-          chromeTop = header.getBoundingClientRect().height;
+          chromeTop = Math.max(0, header.getBoundingClientRect().bottom);
         }
       }
       const nav = document.querySelector<HTMLElement>('nav[aria-label="Primary mobile navigation"]');

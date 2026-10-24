@@ -45,7 +45,9 @@
   --shell-max-width: 1180px;
   --shell-max-width-wide: 1400px;
   --shell-gutter: clamp(1rem, 2.6vw, 2rem);
-  --header-height: 4.75rem;
+  /* Bottom edge of the floating desktop navigation: 1rem inset + 3rem bar. */
+  --header-height: 4rem;
+  --desktop-nav-control-size: 2.25rem;
   --input-surface: #fffdf9;
   --mobile-nav-shell: #fbf9f4;
   --mobile-nav-ring: #d9d1c1;
@@ -248,20 +250,220 @@ mark {
 }
 
 .app-header {
-  position: sticky;
-  top: 0;
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
   z-index: 30;
-  background: transparent;
-  pointer-events: none;
+  max-width: min(var(--shell-max-width), calc(100% - 2 * var(--shell-gutter)));
 }
 
-.app-header > * {
-  pointer-events: auto;
+.desktop-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: max-content;
+  max-width: 100%;
+  min-height: 3rem;
+  padding: 0.3125rem 0.375rem 0.3125rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
 }
 
-.app-header-scroll {
+.desktop-nav-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-width: 0;
+  opacity: 1;
+  visibility: visible;
+  transition: grid-template-columns 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease, visibility 0s linear;
+}
+
+.desktop-nav-items {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.desktop-nav-brand {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 1.25rem;
+}
+
+.desktop-nav-links {
   position: relative;
-  top: auto;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: 0.75rem;
+  gap: 0.375rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--surface-border);
+}
+
+.desktop-nav-indicator {
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  width: calc(var(--desktop-nav-control-size) + 0.375rem + var(--active-label-width, 0px));
+  height: var(--desktop-nav-control-size);
+  border-radius: 0.7rem;
+  background: var(--surface-button-active);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(var(--active-index, 0) * (var(--desktop-nav-control-size) + 0.375rem)));
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1), width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 120ms ease;
+}
+
+.desktop-nav-links[data-has-active="true"][data-measured="true"] .desktop-nav-indicator {
+  opacity: 1;
+}
+
+.desktop-nav-link,
+.desktop-nav-account-control,
+.desktop-nav-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+  border-radius: 50%;
+  color: var(--foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.desktop-nav-link {
+  position: relative;
+  width: var(--desktop-nav-control-size);
+  min-width: var(--desktop-nav-control-size);
+  gap: 0;
+  padding-inline: 0.5rem;
+  border-radius: 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+}
+
+.desktop-nav-link > svg {
+  flex-shrink: 0;
+}
+
+.desktop-nav-label {
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
+}
+
+.desktop-nav-label-text {
+  display: inline-block;
+}
+
+.desktop-nav-link:hover,
+.desktop-nav-toggle:hover {
+  background: var(--surface-button-hover);
+}
+
+.desktop-nav-link[data-active="true"] {
+  width: calc(var(--desktop-nav-control-size) + 0.375rem + var(--nav-label-width, 0px));
+  background: transparent;
+  color: var(--surface-button-active-text);
+}
+
+.desktop-nav-link[data-active="true"] .desktop-nav-label {
+  max-width: var(--nav-label-width, 0px);
+  margin-left: 0.375rem;
+  opacity: 1;
+}
+
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-link,
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-label,
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-indicator {
+  transition: none;
+}
+
+.desktop-nav-account {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--surface-border);
+}
+
+.desktop-nav-account-control {
+  background: var(--surface-card-soft);
+}
+
+.desktop-nav-account-control:hover {
+  background: var(--surface-button-hover);
+}
+
+.desktop-nav-toggle {
+  width: 2rem;
+  height: var(--desktop-nav-control-size);
+  margin-left: 0.25rem;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.desktop-nav-toggle-icon {
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.desktop-nav-bar a:focus-visible,
+.desktop-nav-bar button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+}
+
+.app-header[data-collapsed="true"] .desktop-nav-content {
+  grid-template-columns: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition-delay: 0s, 0s, 280ms;
+}
+
+.app-header[data-collapsed="true"] .desktop-nav-toggle-icon {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-nav-content,
+  .desktop-nav-toggle-icon,
+  .desktop-nav-indicator,
+  .desktop-nav-link,
+  .desktop-nav-label {
+    transition: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .app-header {
+    display: block;
+  }
+
+  /* The bar floats independently; only the page's initial content needs clearance. */
+  .app-main {
+    padding-top: calc(var(--header-height) + 1rem);
+  }
+
+  .app-main[data-fixed="true"] {
+    padding-top: calc(var(--header-height) + 0.75rem);
+  }
+}
+
+.desktop-nav-account-placeholder {
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
 }
 
 .brand-wordmark {
@@ -398,6 +600,62 @@ mark {
 .browse-grid {
   display: grid;
   gap: 0.9rem;
+}
+
+/* Library landing cards: every card in the grid shares one size, padding, and border, and lies flat. */
+.browse-card {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 9rem;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding: 1.25rem;
+  color: var(--foreground);
+}
+
+.browse-card-title {
+  font-size: 1.6rem;
+  overflow-wrap: break-word;
+}
+
+/* Art sits on the right and fades out to the left, so the text column reads over the plain card. */
+.browse-card-media {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 46%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to left, #000 45%, transparent);
+  mask-image: linear-gradient(to left, #000 45%, transparent);
+}
+
+[data-theme="dark"] .browse-card-media {
+  opacity: 0.85;
+}
+
+/* The text column may overlap the art's faded left edge, never its opaque right side. */
+.browse-card[data-media="true"] {
+  min-height: 9.75rem;
+}
+
+.browse-card[data-media="true"] .browse-card-text {
+  max-width: 62%;
+}
+
+.browse-card[data-media="true"] .browse-card-title {
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.35rem);
+}
+
+/* A last card alone on a two-column row takes the whole row. Simple mode hides the study cards,
+   which still count as children, so there the last of the five volumes always stands alone. */
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .browse-library > li:last-child:nth-child(odd),
+  :root[data-simple="true"] .browse-library > li:last-child {
+    grid-column: span 2;
+  }
 }
 
 .browse-summary-card {
@@ -870,6 +1128,23 @@ mark {
 /* Phones: the wordmark header is the way home once the bottom nav is hidden. */
 :root[data-simple="true"] .app-header {
   display: block;
+  position: relative;
+  inset: auto;
+  width: max-content;
+  margin: 1.25rem 0 0 var(--shell-gutter);
+}
+
+:root[data-simple="true"] .app-header .desktop-nav-content {
+  display: none;
+}
+
+:root[data-simple="true"] .app-header .desktop-nav-bar {
+  min-height: 2.75rem;
+  padding: 0.55rem 1.05rem;
+}
+
+:root[data-simple="true"] .desktop-nav-brand {
+  font-size: 1.5rem;
 }
 
 /* The insight side panel is hidden, so the reader no longer reserves room for it. */
