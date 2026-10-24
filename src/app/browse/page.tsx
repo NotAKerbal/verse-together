@@ -5,7 +5,7 @@ import ContinueReadingCard from "@/features/plans/ContinueReadingCard";
 import { getLocalLdsVolumes } from "@/lib/ldsLocalData.server";
 
 const VOLUME_TINTS: Record<string, string> = {
-  bookofmormon: "var(--accent-primary)",
+  bookofmormon: "var(--surface-card)",
   oldtestament: "var(--surface-card)",
   newtestament: "var(--accent-sky-soft)",
   doctrineandcovenants: "var(--surface-card)",
