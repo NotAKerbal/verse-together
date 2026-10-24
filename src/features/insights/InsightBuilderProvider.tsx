@@ -26,6 +26,17 @@ type DictionaryPayload = {
 
 export type NoteSaveStatus = "idle" | "saving" | "saved";
 
+/** The two views of the notebook panel. "log" exists only while a chapter reader is mounted. */
+export type NotebookPanelView = "log" | "notes";
+
+/** The chapter the reader is showing, so the panel's Log view can record it. */
+export type ReaderChapter = {
+  volume: string;
+  book: string;
+  chapter: number;
+  reference: string;
+};
+
 type InsightBuilderContextValue = {
   canUseInsights: boolean;
   /** Phone bottom sheet. */
@@ -36,6 +47,13 @@ type InsightBuilderContextValue = {
   closeBuilder: () => void;
   toggleMobileBuilder: () => void;
   togglePanel: () => void;
+  panelView: NotebookPanelView;
+  setPanelView: (view: NotebookPanelView) => void;
+  /** Opens the panel (phone sheet and desktop panel) on the given view. */
+  openPanel: (view: NotebookPanelView) => void;
+  readerChapter: ReaderChapter | null;
+  /** Called by the chapter reader while mounted; returns the cleanup that unregisters it. */
+  registerReaderChapter: (chapter: ReaderChapter) => () => void;
   /** "saving" while any note write is in flight, "saved" right after one lands. */
   saveStatus: NoteSaveStatus;
   lastSavedAt: number | null;
@@ -86,6 +104,8 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const canUseInsights = !!user;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [panelView, setPanelView] = useState<NotebookPanelView>("notes");
+  const [readerChapter, setReaderChapter] = useState<ReaderChapter | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [pendingSaves, setPendingSaves] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -188,9 +208,18 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     setActiveDraftId(null);
   }, [canUseInsights, draftRows, activeDraftId]);
 
-  const openBuilder = useCallback(() => {
+  const openPanel = useCallback((view: NotebookPanelView) => {
+    setPanelView(view);
     setIsMobileOpen(true);
     setIsPanelOpen(true);
+  }, []);
+
+  // Everything that writes to or asks for a note shows the Notes view.
+  const openBuilder = useCallback(() => openPanel("notes"), [openPanel]);
+
+  const registerReaderChapter = useCallback((chapter: ReaderChapter) => {
+    setReaderChapter(chapter);
+    return () => setReaderChapter((current) => (current === chapter ? null : current));
   }, []);
 
   const closeBuilder = useCallback(() => {
@@ -226,6 +255,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       const created = await tracked(createDraftMutation({ title: title?.trim() || undefined }));
       const id = String(created.id);
       setActiveDraftId(id);
+      setPanelView("notes");
       setIsPanelOpen(true);
       await setActiveDraftMutation({ draftId: created.id as any });
       return id;
@@ -291,10 +321,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           text: text?.trim() || undefined,
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, tracked]
+    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const addQuoteBlock = useCallback(
@@ -311,10 +340,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           linkUrl: linkUrl?.trim() || undefined,
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, tracked]
+    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const appendScriptureBlock = useCallback(
@@ -333,10 +361,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           text: payload.text?.trim() || undefined,
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [appendScriptureBlockMutation, ensureActiveDraftId, tracked]
+    [appendScriptureBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const addDictionaryBlock = useCallback(
@@ -356,10 +383,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
           },
         })
       );
-      setIsMobileOpen(true);
-      setIsPanelOpen(true);
+      openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, tracked]
+    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const updateBlock = useCallback(
@@ -449,6 +475,11 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       closeBuilder,
       toggleMobileBuilder,
       togglePanel,
+      panelView,
+      setPanelView,
+      openPanel,
+      readerChapter,
+      registerReaderChapter,
       saveStatus,
       lastSavedAt,
       drafts,
@@ -478,6 +509,11 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       closeBuilder,
       toggleMobileBuilder,
       togglePanel,
+      panelView,
+      setPanelView,
+      openPanel,
+      readerChapter,
+      registerReaderChapter,
       saveStatus,
       lastSavedAt,
       drafts,

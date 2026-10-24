@@ -331,6 +331,19 @@ mark {
   outline-offset: -2px;
 }
 
+.reader-toolbar .reader-toolbar-log {
+  gap: 0.4rem;
+  width: auto;
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.reader-toolbar .reader-toolbar-log[aria-expanded="true"] {
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
+}
+
 .reader-toolbar .reader-toolbar-title {
   flex-shrink: 1;
   justify-content: flex-start;

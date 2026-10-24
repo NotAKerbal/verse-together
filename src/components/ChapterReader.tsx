@@ -1,6 +1,6 @@
 "use client";
 
-import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
+import { faBookOpen, faCircleCheck, faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -22,9 +22,9 @@ import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
 import { getDefaultPreferences, loadPreferences, savePreferences } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
+import { useIsPhoneLayout } from "@/features/insights/NoteMenus";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
-import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
-import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
+import { useBookProgress, useTrackLastPosition } from "@/features/plans/useReadingProgress";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import {
@@ -464,8 +464,29 @@ export default function ChapterReader({
   compareChapters?: CompareChapter[];
 }) {
   const { user, getToken, promptSignIn } = useAuth();
-  const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
+  const {
+    appendScriptureBlock,
+    openBuilder,
+    activeDraftId,
+    switchDraft,
+    createDraft,
+    isMobileOpen,
+    isPanelOpen,
+    panelView,
+    openPanel,
+    closeBuilder,
+    registerReaderChapter,
+  } = useInsightBuilder();
   useTrackLastPosition(volume, book, chapter);
+  const isPhoneLayout = useIsPhoneLayout();
+  const bookProgress = useBookProgress(volume, book);
+  const isChapterRead = bookProgress?.readChapters.includes(chapter) ?? false;
+  const isLogOpen = panelView === "log" && (isPhoneLayout ? isMobileOpen : isPanelOpen);
+  // While this chapter is open, the notebook panel offers a Log view for it.
+  useEffect(
+    () => registerReaderChapter({ volume, book, chapter, reference }),
+    [registerReaderChapter, volume, book, chapter, reference]
+  );
   const annotationsApi = (api as any).annotations;
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
     volume,
@@ -1338,6 +1359,15 @@ export default function ChapterReader({
     openBuilder();
   }
 
+  function onToggleLog() {
+    if (!user) {
+      void promptSignIn();
+      return;
+    }
+    if (isLogOpen) closeBuilder();
+    else openPanel("log");
+  }
+
   function onOpenCitations() {
     if (!selectedBounds) return;
     setOpenExplorer(false);
@@ -1373,6 +1403,18 @@ export default function ChapterReader({
       </h1>
       <button
         type="button"
+        data-notebook-launcher
+        aria-label={isChapterRead ? `Log for ${reference}, marked read` : `Log for ${reference}`}
+        title={isChapterRead ? "Log (chapter read)" : "Log"}
+        aria-expanded={isLogOpen}
+        onClick={onToggleLog}
+        className="reader-toolbar-button reader-toolbar-log"
+      >
+        <FontAwesomeIcon icon={isChapterRead ? faCircleCheck : faBookOpen} aria-hidden="true" className="h-3.5 w-3.5" />
+        <span>Log</span>
+      </button>
+      <button
+        type="button"
         aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
         title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
         aria-pressed={simpleMode}
@@ -1401,7 +1443,6 @@ export default function ChapterReader({
           onClose={() => setSettingsOpen(false)}
           prefs={prefs}
           translationControls={translationControls}
-          chapterProgressControl={<ChapterReadToggle volume={volume} book={book} chapter={chapter} />}
           anchorRef={settingsAnchorRef}
           onChange={(next) => {
             setPrefs(next);

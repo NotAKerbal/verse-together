@@ -40,7 +40,7 @@ export default function ChapterReadToggle({ volume, book, chapter }: Props) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-[color:var(--surface-border)] pb-3">
+    <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <div id="chapter-read-label" className="text-xs font-medium tracking-wide text-foreground/80">
           Chapter read

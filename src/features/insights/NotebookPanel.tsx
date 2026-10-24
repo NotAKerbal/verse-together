@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRight, faPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
-import { useInsightBuilder } from "./InsightBuilderProvider";
+import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
+import { useInsightBuilder, type NotebookPanelView, type ReaderChapter } from "./InsightBuilderProvider";
 import { useNoteFolders } from "./useNoteFolders";
 import {
   ICON_BUTTON_CLASS,
@@ -22,12 +23,109 @@ import AiInsightAssistant from "./AiInsightAssistant";
 const ACTION_BUTTON_CLASS =
   "surface-button inline-flex h-9 items-center gap-1.5 rounded-full border-2 px-3.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50";
 
+const PANEL_VIEWS: ReadonlyArray<{ value: NotebookPanelView; label: string }> = [
+  { value: "log", label: "Log" },
+  { value: "notes", label: "Notes" },
+];
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+
+type PanelVariant = "desktop" | "sheet";
+
+function CloseButton({ variant, onClose }: { variant: PanelVariant; onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label={variant === "desktop" ? "Collapse the notebook" : "Close the notebook"}
+      title={variant === "desktop" ? "Collapse" : "Close"}
+      className={ICON_BUTTON_CLASS}
+    >
+      <FontAwesomeIcon icon={variant === "desktop" ? faArrowRight : faXmark} className="h-4 w-4" aria-hidden="true" />
+    </button>
+  );
+}
+
+/** Focus the element that opened the panel, or else the reader's Log button (or the desktop pill). */
+function restoreLauncherFocus(previous: HTMLElement | null) {
+  const target =
+    previous && previous.isConnected && previous !== document.body
+      ? previous
+      : document.querySelector<HTMLElement>("[data-notebook-launcher]");
+  target?.focus();
+}
+
+// ---------------------------------------------------------------------------
+// Log | Notes switch, shown while a chapter is open in the reader.
+// ---------------------------------------------------------------------------
+
+function PanelTabs({ view, variant, onClose }: { view: NotebookPanelView; variant: PanelVariant; onClose: () => void }) {
+  const { setPanelView } = useInsightBuilder();
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] px-3 py-2 font-sans">
+      <div className="segmented-control min-w-0 flex-1" role="group" aria-label="Notebook view">
+        {PANEL_VIEWS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={view === value}
+            data-active={view === value ? "true" : "false"}
+            onClick={() => setPanelView(value)}
+            className="segmented-control-button flex-1 text-sm"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <CloseButton variant={variant} onClose={onClose} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Log: record the chapter the reader is showing.
+// ---------------------------------------------------------------------------
+
+function ChapterLogContent({ chapter }: { chapter: ReaderChapter }) {
+  return (
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 font-sans">
+      <section className="space-y-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card-soft)] px-4 py-3">
+        <h2 className="font-display text-base font-extrabold tracking-[-0.02em]">{chapter.reference}</h2>
+        <ChapterReadToggle volume={chapter.volume} book={chapter.book} chapter={chapter.chapter} />
+      </section>
+      <Link href="/plans" className={ACTION_BUTTON_CLASS}>
+        Reading plans
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * The panel body: Log and Notes tabs on a chapter, otherwise just the note.
+ * The note stays mounted (hidden, so out of the tab order and accessibility
+ * tree) while Log shows, keeping editor and AI-assistant state across switches.
+ */
+function PanelBody({ variant, onClose }: { variant: PanelVariant; onClose: () => void }) {
+  const { panelView, readerChapter } = useInsightBuilder();
+  const showLog = readerChapter !== null && panelView === "log";
+  return (
+    <>
+      {readerChapter ? <PanelTabs view={panelView} variant={variant} onClose={onClose} /> : null}
+      {showLog ? <ChapterLogContent chapter={readerChapter} /> : null}
+      <div className={showLog ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+        <NotebookContent variant={variant} onClose={readerChapter ? undefined : onClose} />
+      </div>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // The note itself: header strip, scrollable body, action row. Shared by the
 // desktop panel and the phone sheet.
 // ---------------------------------------------------------------------------
 
-function NotebookContent({ variant, onClose }: { variant: "desktop" | "sheet"; onClose: () => void }) {
+function NotebookContent({ variant, onClose }: { variant: PanelVariant; onClose?: () => void }) {
   const {
     drafts,
     activeDraft,
@@ -146,15 +244,7 @@ function NotebookContent({ variant, onClose }: { variant: "desktop" | "sheet"; o
             </Link>
           }
         />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={variant === "desktop" ? "Collapse the notebook" : "Close the notebook"}
-          title={variant === "desktop" ? "Collapse" : "Close"}
-          className={ICON_BUTTON_CLASS}
-        >
-          <FontAwesomeIcon icon={variant === "desktop" ? faArrowRight : faXmark} className="h-4 w-4" aria-hidden="true" />
-        </button>
+        {onClose ? <CloseButton variant={variant} onClose={onClose} /> : null}
       </header>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 font-sans">
@@ -214,29 +304,36 @@ function NotebookContent({ variant, onClose }: { variant: "desktop" | "sheet"; o
 }
 
 // ---------------------------------------------------------------------------
-// Desktop: fixed panel card or the collapsed pill
+// Desktop: fixed panel card, or the collapsed pill away from the reader (where
+// the reader's Log button opens the panel instead)
 // ---------------------------------------------------------------------------
 
 function DesktopNotebook() {
-  const { isPanelOpen, togglePanel, closeBuilder, activeDraftId, drafts } = useInsightBuilder();
+  const { isPanelOpen, togglePanel, closeBuilder, activeDraftId, drafts, readerChapter } = useInsightBuilder();
   const activeTitle = drafts.find((draft) => draft.id === activeDraftId)?.title ?? null;
   const panelRef = useRef<HTMLElement | null>(null);
-  const pillRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(isPanelOpen);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   // Keep keyboard focus sensible when the panel expands or collapses.
   useEffect(() => {
     if (wasOpenRef.current === isPanelOpen) return;
     wasOpenRef.current = isPanelOpen;
-    if (isPanelOpen) panelRef.current?.focus();
-    else pillRef.current?.focus();
+    if (isPanelOpen) {
+      restoreFocusRef.current = document.activeElement as HTMLElement | null;
+      panelRef.current?.focus();
+    } else {
+      restoreLauncherFocus(restoreFocusRef.current);
+      restoreFocusRef.current = null;
+    }
   }, [isPanelOpen]);
 
   if (!isPanelOpen) {
+    if (readerChapter) return null;
     return (
       <button
-        ref={pillRef}
         type="button"
+        data-notebook-launcher
         onClick={togglePanel}
         aria-label={activeTitle ? `Open the notebook: ${activeTitle}` : "Open the notebook"}
         className="simple-hide fixed bottom-4 right-4 z-40 hidden h-11 max-w-[16rem] items-center gap-2 rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] pl-1.5 pr-4 text-sm font-bold text-foreground shadow-[var(--surface-shadow-soft)] hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] lg:inline-flex"
@@ -254,7 +351,7 @@ function DesktopNotebook() {
       aria-label="Notebook"
       className="simple-hide fixed bottom-4 right-4 top-[calc(var(--header-height)+0.5rem)] z-40 hidden w-[440px] flex-col overflow-hidden rounded-[20px] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] shadow-[var(--surface-shadow)] outline-none lg:flex xl:w-[480px]"
     >
-      <NotebookContent variant="desktop" onClose={closeBuilder} />
+      <PanelBody variant="desktop" onClose={closeBuilder} />
     </aside>
   );
 }
@@ -264,7 +361,7 @@ function DesktopNotebook() {
 // ---------------------------------------------------------------------------
 
 function PhoneNotebookSheet() {
-  const { isMobileOpen, toggleMobileBuilder } = useInsightBuilder();
+  const { isMobileOpen, toggleMobileBuilder, readerChapter } = useInsightBuilder();
   const sheetRef = useRef<HTMLElement | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const dragStartYRef = useRef<number | null>(null);
@@ -281,13 +378,35 @@ function PhoneNotebookSheet() {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !event.defaultPrevented) close();
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        close();
+        return;
+      }
+      // The sheet is modal: keep Tab focus inside it.
+      const sheet = sheetRef.current;
+      if (event.key !== "Tab" || !sheet) return;
+      const focusables = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (element) => element.getClientRects().length > 0
+      );
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (!first || !last) {
+        event.preventDefault();
+        sheet.focus();
+      } else if (!sheet.contains(active) || (event.shiftKey && (active === first || active === sheet))) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
-      restoreFocusRef.current?.focus?.();
+      restoreLauncherFocus(restoreFocusRef.current);
     };
   }, [isMobileOpen, close]);
 
@@ -321,7 +440,9 @@ function PhoneNotebookSheet() {
         className="fixed inset-x-0 bottom-0 z-50 flex h-[66vh] flex-col overflow-hidden rounded-t-[1.25rem] border-2 border-b-0 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] outline-none"
       >
         <div
-          className="flex shrink-0 cursor-grab justify-center bg-[color:var(--accent-note)] pb-1 pt-2 touch-none"
+          className={`flex shrink-0 cursor-grab justify-center pb-1 pt-2 touch-none ${
+            readerChapter ? "bg-[color:var(--surface-card-soft)]" : "bg-[color:var(--accent-note)]"
+          }`}
           onTouchStart={onHandleTouchStart}
           onTouchMove={onHandleTouchMove}
           onTouchEnd={onHandleTouchEnd}
@@ -329,7 +450,7 @@ function PhoneNotebookSheet() {
         >
           <span className="h-1.5 w-12 rounded-full bg-[color:var(--surface-border)] opacity-50" />
         </div>
-        <NotebookContent variant="sheet" onClose={close} />
+        <PanelBody variant="sheet" onClose={close} />
       </section>
     </div>
   );
