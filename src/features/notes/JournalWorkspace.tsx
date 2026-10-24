@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBook, faChevronLeft, faChevronRight, faLightbulb, faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faBook, faChevronLeft, faChevronRight, faPlus } from "@fortawesome/free-solid-svg-icons";
 import {
   entryKey,
   entryTime,
@@ -24,6 +24,7 @@ import {
 } from "./journal";
 import type { JournalStage } from "./journalView";
 import { NoteSourceLine } from "./NoteSourceLine";
+import { JournalNoteCard } from "./JournalNoteCard";
 import styles from "./JournalWorkspace.module.css";
 
 export type JournalWorkspaceProps = {
@@ -267,45 +268,7 @@ function EntryRow({
     );
   }
 
-  return (
-    // The button's ::after stretches over the whole card, so every part of it opens the note except the source
-    // link, which sits above that layer and navigates on its own.
-    <li
-      className={`relative rounded-[1rem] border-2 border-[color:var(--surface-border)] transition-[background-color,border-color,box-shadow] has-[button:focus-visible]:border-[color:var(--accent-secondary)] ${padding} ${
-        selected
-          ? "bg-[color:var(--accent-note)] shadow-[var(--surface-shadow-soft)]"
-          : "bg-[color:var(--surface-card)] has-[button:hover]:bg-[color:var(--surface-button-hover)] has-[button:hover]:shadow-[var(--surface-shadow-lift)]"
-      }`}
-    >
-      <button
-        type="button"
-        onClick={() => onOpenNote(entry.id, entry.journal_date)}
-        aria-current={selected ? "true" : undefined}
-        className="flex w-full cursor-pointer items-start gap-2 text-left after:absolute after:inset-0 after:rounded-[0.875rem] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[color:var(--accent-secondary)]"
-      >
-        <FontAwesomeIcon icon={faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          {/* line-clamp sets its own display, so no display utility sits beside it. */}
-          <span
-            className={`line-clamp-2 font-display leading-snug font-extrabold tracking-[-0.02em] wrap-anywhere ${prominent ? "text-[1.12rem]" : "text-[1rem]"}`}
-          >
-            {entry.title || "Untitled note"}
-          </span>
-          {entry.excerpt ? (
-            <span className="mt-0.5 line-clamp-2 text-xs leading-5 wrap-anywhere text-[color:var(--foreground-muted)]">{entry.excerpt}</span>
-          ) : null}
-        </span>
-        {entry.status !== "draft" ? (
-          <span className="pill-tag shrink-0 px-2 py-0.5 text-[0.62rem]" style={{ background: "var(--accent-mint)" }}>
-            {entry.status === "published" ? "Published" : "Archived"}
-          </span>
-        ) : null}
-      </button>
-      <div className="mt-1.5 pl-5">
-        <NoteSourceLine source={entry.source} authorLabel={entry.author_label} time={entry.created_at} raiseLink />
-      </div>
-    </li>
-  );
+  return <JournalNoteCard note={entry} selected={selected} onOpen={() => onOpenNote(entry.id, entry.journal_date)} prominent={prominent} />;
 }
 
 function BackButton({ label, onBack }: { label: string; onBack: () => void }) {
