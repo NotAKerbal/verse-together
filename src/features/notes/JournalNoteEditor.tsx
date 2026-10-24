@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder, useNoteOutboxEntry } from "@/features/insights/InsightBuilderProvider";
 import type { OutboxEntry } from "./journalOutbox";
 import { formatDayHeading, formatTime, type JournalNoteDocument } from "./journal";
@@ -68,9 +70,15 @@ function SaveState({
 export default function JournalNoteEditor({
   note,
   authorLabel = "You",
+  showDate = true,
+  onClose,
 }: {
   note: JournalNoteDocument;
   authorLabel?: string;
+  /** False where the surrounding page already shows the note's day (the Notes calendar). */
+  showDate?: boolean;
+  /** Closes the note's view (the X at its upper right); unmounting then saves anything still unsaved. */
+  onClose?: () => void;
 }) {
   const { journalOutbox } = useInsightBuilder();
   const entry = useNoteOutboxEntry(journalOutbox, note.id);
@@ -114,10 +122,27 @@ export default function JournalNoteEditor({
   return (
     <article className="flex min-h-0 flex-1 flex-col gap-3" aria-label={note.title || "Note"}>
       <header className="space-y-1.5">
-        <p className="text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
-          <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
-        </p>
-        <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            {showDate ? (
+              <p className="pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
+                <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
+              </p>
+            ) : null}
+            <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
+          </div>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close note"
+              title="Close note"
+              className="-mr-2 -mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+            >
+              <FontAwesomeIcon icon={faXmark} className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
         {readOnly ? (
           <p className="inline-flex rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--accent-mint)] px-3 py-1 text-xs font-bold">
             {note.status === "published" ? "Published · read-only" : "Archived · read-only"}
