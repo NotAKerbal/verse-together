@@ -1,5 +1,7 @@
 "use client";
 
+import { faBook } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Link from "next/link";
 import {
   useCallback,
@@ -14,7 +16,19 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
+import { chapterLogOptions, READER_HEADER_BUTTON_CLASS } from "@/components/ChapterReaderChrome";
+import { useReaderHeaderDock } from "@/components/ReaderHeaderSlot";
+import {
+  useInsightBuilder,
+  type ReaderChapter,
+  type ReaderChapterRegistration,
+} from "@/features/insights/InsightBuilderProvider";
+import type { NoteSource } from "@/features/notes/journal";
+import { useBelowLg } from "@/features/notes/useBelowLg";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import { getChapterHref } from "@/features/plans/scriptureCatalog";
+import { useAuth } from "@/lib/auth";
 import {
   decodeFragment,
   localScriptureTarget,
@@ -79,6 +93,8 @@ type Props = {
   chapters: CompanionChapter[];
   /** The guide's week start (its route key), which identifies the guide for the reader's guide highlights. */
   weekStart: string;
+  /** The guide as a reading source (its full label and page link), one of the panel's Log choices. */
+  guideSource: NoteSource & { kind: "guide" };
   /**
    * The page footer. It normally follows the closing sections below the companion; in the phone reader it
    * closes the guide side instead, so nothing trails the docked reader on the page.
@@ -188,7 +204,7 @@ function busyWithin(root: HTMLElement | null): boolean {
   return [selection.anchorNode, selection.focusNode].some((node) => node != null && root.contains(node));
 }
 
-/** Height of the app's sticky header where it is shown (it is hidden on phones). */
+/** Bottom of the app's fixed header where it is shown (on this page at every width, holding the guide's controls). */
 function headerBottom(): number {
   const header = document.querySelector<HTMLElement>(".app-header");
   if (!header) return 0;
@@ -260,6 +276,7 @@ export default function StudyCompanion({
   book,
   chapters,
   weekStart,
+  guideSource,
   footer,
 }: Props) {
   const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
@@ -337,6 +354,64 @@ export default function StudyCompanion({
   const lastGuideAnchorRef = useRef<GuideAnchor | null>(null);
   /** Whether the viewport was last settled at desktop width; null until the first commit. */
   const settledDesktopRef = useRef<boolean | null>(null);
+  /**
+   * The app header's right side, where the guide's Contents and Log buttons go at every width and in simple mode
+   * too (see ReaderHeaderSlot and `.guide-header-actions` in globals.css). They have no copies in the page.
+   */
+  const dock = useReaderHeaderDock(true, true);
+  const { user, promptSignIn } = useAuth();
+  const { loading: logLoading } = useConvexSignedIn();
+  const belowLg = useBelowLg();
+  const { isPanelOpen, isSheetOpen, panelView, openPanel, setPanelView, setSheetOpen, closeBuilder, registerReaderChapter } =
+    useInsightBuilder();
+  // The chapter being read, for the shared Log and Notes panel's Log view: the one the guide or the scripture is
+  // at, as the pager label names it, and the first chapter until the reader reaches one (the introduction too).
+  const logChapter = active?.chapter ?? firstChapter;
+  const logReference = `${book.label} ${logChapter}`;
+  const logVerseCount = chapters.find((entry) => entry.chapter === logChapter)?.verses.length;
+  const { label: guideLabel, href: guideHref } = guideSource;
+  const readerChapter = useMemo<ReaderChapter>(() => {
+    const chapterOption = (chapter: number, verseCount?: number) =>
+      chapterLogOptions(
+        { volumeSlug: book.volume, book: book.slug, chapter },
+        `${book.label} ${chapter}`,
+        getChapterHref({ volume: book.volume, book: book.slug, chapter }),
+        verseCount
+      );
+    return {
+      volume: book.volume,
+      book: book.slug,
+      chapter: logChapter,
+      reference: logReference,
+      // The chapter being read first (what Mark read and the form start on), then the guide itself and the
+      // week's other chapters, each logged whole or in part.
+      logOptions: [
+        ...chapterOption(logChapter, logVerseCount),
+        { source: { kind: "guide", label: guideLabel, href: guideHref } },
+        ...chapters
+          .filter((entry) => entry.chapter !== logChapter)
+          .flatMap((entry) => chapterOption(entry.chapter, entry.verses.length)),
+      ],
+      // This week's verses are already on the page.
+      logReady: true,
+    };
+  }, [book.volume, book.slug, book.label, chapters, guideLabel, guideHref, logChapter, logReference, logVerseCount]);
+  // While the guide is open, the panel offers Log for that chapter, as on a chapter page (ChapterHeader): one
+  // registration for the page's lifetime, kept on the chapter being read.
+  const readerRegistrationRef = useRef<ReaderChapterRegistration | null>(null);
+  useEffect(() => {
+    const registration = registerReaderChapter();
+    readerRegistrationRef.current = registration;
+    return () => {
+      readerRegistrationRef.current = null;
+      registration.unregister();
+    };
+  }, [registerReaderChapter]);
+  useEffect(() => {
+    readerRegistrationRef.current?.update(readerChapter);
+  }, [readerChapter, registerReaderChapter]);
+  // Log shows pressed while it shows the chapter's Log: below lg the phone sheet, else the panel on Log.
+  const isLogOpen = !!user && (belowLg ? isSheetOpen : isPanelOpen && panelView === "log");
   const introHtml = useMemo(() => ({ __html: introductionHtml }), [introductionHtml]);
   const guideHtml = useMemo(() => ({ __html: readerHtml }), [readerHtml]);
   const closingDoc = useMemo(() => ({ __html: closingHtml }), [closingHtml]);
@@ -1347,12 +1422,54 @@ export default function StudyCompanion({
   const highlighted = (chapter: number, verse: number) =>
     active != null && active.chapter === chapter && active.first != null && verse >= active.first && verse <= (active.last ?? active.first);
 
-  // The reader's sticky toolbar row. Phones: the pager row across the top of the whole strip. Desktop: only
-  // the compact Contents button, at the top of the guide column alone (hidden, and zero-height, where the
-  // contents rail shows), so the scripture column beside it starts level with the guide column.
+  // Log opens the shared Log and Notes panel on Log, as the chapter reader's does (ReaderLogToggle): the desktop
+  // panel, or below lg the phone sheet; while it shows Log it closes it. Signed out, it asks to sign in.
+  function onToggleLog() {
+    if (!user) {
+      void promptSignIn();
+      return;
+    }
+    if (belowLg) {
+      if (isSheetOpen) setSheetOpen(false);
+      else {
+        setPanelView("log");
+        setSheetOpen(true);
+      }
+    } else if (isLogOpen) {
+      closeBuilder();
+    } else {
+      openPanel("log");
+    }
+  }
+
+  // The guide's controls (Contents, then the chapter reader's Log for the chapter being read), one pill drawn
+  // once, in the app header's right side at every width (see `dock`), outside this page: only global styles and
+  // page-independent ones. Log is the notebook's launcher, the button it returns focus to when the one that
+  // opened it is gone. Where the header is narrow both are icons, each keeping its name.
+  const readerActions = (
+    <div role="group" aria-label="Study guide controls" className="reader-toolbar guide-header-actions">
+      <ContentsOpener onOpen={openContents} />
+      <button
+        type="button"
+        data-notebook-launcher=""
+        onClick={onToggleLog}
+        disabled={logLoading}
+        aria-expanded={isLogOpen}
+        aria-label={`Log and notes for ${logReference}`}
+        title="Log and notes"
+        className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-log`}
+      >
+        <FontAwesomeIcon icon={faBook} aria-hidden="true" className="h-3 w-3" />
+        <span className="reader-toolbar-log-label guide-header-label">Log</span>
+      </button>
+    </div>
+  );
+
+  // The reader's sticky toolbar row. Phones: the pager row across the top of the whole strip. Desktop: empty and
+  // zero-height at the top of the guide column (the guide's controls are in the app header), so the scripture
+  // column beside it starts level with the guide column.
   const toolbar = (
     <div ref={toolbarRef} className={styles.toolbar}>
-      <ContentsOpener onOpen={openContents} />
       {mode === "strip" ? (
         <div className={styles.pager} role="group" aria-label="Study guide and scripture">
           <button
@@ -1390,12 +1507,10 @@ export default function StudyCompanion({
     </div>
   );
 
-  // The closing sections: below the paired columns on desktop, with their own Contents button as the
-  // introduction has (the reader's scrolls away with the columns); at the end of the guide side on phones,
-  // under the reader's own toolbar.
+  // The closing sections: below the paired columns on desktop; at the end of the guide side on phones, under
+  // the reader's own toolbar.
   const closingSections = closingHtml ? (
     <div className={styles.closing}>
-      {mode !== "strip" ? <ContentsOpener onOpen={openContents} /> : null}
       <div
         ref={closingRef}
         className={`${styles.guide} ${styles.closingGuide}`}
@@ -1421,7 +1536,6 @@ export default function StudyCompanion({
       {preview.layer}
       {introductionHtml ? (
         <div className={styles.introduction}>
-          <ContentsOpener onOpen={openContents} />
           <div ref={introRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={introHtml} />
         </div>
       ) : null}
@@ -1507,6 +1621,7 @@ export default function StudyCompanion({
           {footer}
         </div>
       ) : null}
+      {dock.slot ? createPortal(readerActions, dock.slot) : null}
     </>
   );
 }

@@ -20,8 +20,10 @@
   (and its own toolbar row, zero-height wherever it has nothing to show) for docking and landings.
 
   The contents sit outside all of this: a rail fixed in the left margin where the margin is wide enough,
-  otherwise a drawer opened from compact Contents buttons (top of the introduction, and the reader's
-  toolbar row).
+  and a drawer opened from the one Contents button. That button, with Log beside it, is in the guide's
+  controls pill, which StudyCompanion portals into the app header's right side (ReaderHeaderSlot) at every
+  width and in simple mode, outside this page, styled in globals.css (.guide-header-actions), and stays
+  visible beside the rail. The header is fixed on this page at every width, phones included.
 */
 
 .page {
@@ -103,11 +105,6 @@
   -webkit-mask-composite: source-in;
   mask-image: var(--cfm-fade-x), var(--cfm-fade-y);
   mask-composite: intersect;
-}
-
-.heroActions {
-  display: flex;
-  margin-top: 0.25rem;
 }
 
 @media (min-width: 900px) {
@@ -246,15 +243,15 @@
 /* Companion layout. */
 
 /*
-  StudyCompanion measures the live page and overrides these on the element: --cfm-chrome-top (the sticky
-  app header's height, 0 where it is hidden), --cfm-toolbar-h (the toolbar row's real height, 0 where it is
+  StudyCompanion measures the live page and overrides these on the element: --cfm-chrome-top (the fixed
+  app header's bottom, 0 where it is hidden), --cfm-toolbar-h (the toolbar row's real height, 0 where it is
   empty; on desktop it covers the guide column only), --cfm-vh (the viewport height) and --cfm-bottom-clear (how much of the viewport the fixed bottom
   navigation covers). The values here are only the first paint's fallbacks.
 */
 .companion {
   --cfm-toolbar-h: 0px;
-  /* Under the app's sticky header where it shows (640px and up); phones have none. */
-  --cfm-chrome-top: 0px;
+  /* Under the app's fixed header, which holds the guide's controls at every width. */
+  --cfm-chrome-top: var(--header-height);
   --cfm-bottom-clear: 0px;
   display: flex;
   flex-direction: column;
@@ -264,12 +261,6 @@
 /* The page footer follows the closing sections, except in the phone reader where it closes the guide side. */
 .afterReader > .footer {
   margin-top: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-@media (min-width: 640px) {
-  .companion {
-    --cfm-chrome-top: var(--header-height);
-  }
 }
 
 /*
@@ -289,12 +280,10 @@
 
 /*
   The reader's sticky toolbar row. It holds only what the reader needs at its top: on phones the pager row
-  across the whole strip (see below); on desktop the compact Contents button, at the top of the guide
-  column only, and only where the contents rail does not show (with the rail showing it is empty and
-  zero-height). The scripture column beside it therefore starts level with the guide column's top (and
-  docks at the viewport top, see below). It is transparent, like the app header above it: on desktop it is only as wide as its button, which
-  carries its own small background. StudyCompanion measures its real height (including zero) for the
-  guide's landings and reading top.
+  across the whole strip (see below); on desktop nothing (the guide's controls are in the app header), so it
+  is empty and zero-height at the top of the guide column, and the scripture column beside it starts level
+  with the guide column's top (and docks at the viewport top, see below). StudyCompanion measures its real
+  height (including zero) for the guide's landings and reading top.
 */
 .toolbar {
   position: sticky;
@@ -310,20 +299,10 @@
   width: fit-content;
 }
 
-.companion[data-mode="columns"] .toolbar > .contentsOpener {
-  min-height: 2.25rem;
-  margin-block: 0.25rem;
-  padding: 0 0.85rem;
-  border: 1px solid var(--cfm-rule);
-  border-radius: 999px;
-  background: var(--background);
-}
-
 .backLink:focus-visible,
 .weekNav a:focus-visible,
 .footer a:focus-visible,
 .noGuide a:focus-visible,
-.contentsOpener:focus-visible,
 .contentsExpand:focus-visible,
 .drawerClose:focus-visible,
 .contentsGroups a:focus-visible,
@@ -428,8 +407,8 @@
   }
 
   /*
-    The pager row spans the reader; the Contents button closes it. It is the docked reader's own top row,
-    above the two sides' scrollers, so no text scrolls under it.
+    The pager row spans the reader. It is the docked reader's own top row, above the two sides' scrollers, so
+    no text scrolls under it.
   */
   .companion[data-mode="strip"] .toolbar {
     align-self: stretch;
@@ -439,21 +418,6 @@
     background: var(--background);
     /* A soft edge rather than a rule over the text scrolling beneath. */
     box-shadow: 0 10px 12px -12px rgb(0 0 0 / 0.28);
-  }
-
-  .companion[data-mode="strip"] .toolbar > .contentsOpener {
-    order: 1;
-    margin-right: 0;
-    padding-inline: 0.5rem 0.2rem;
-  }
-
-  .companion[data-mode="strip"] .toolbar .contentsOpenerLabel {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
   }
 
   .companion[data-mode="strip"] .layout {
@@ -494,7 +458,7 @@
 
   /*
     The closing sections end the guide side, but nothing is paired with them: once they reach its reading
-    line (data-closing, kept by StudyCompanion), the pager steps aside, leaving the Contents button, and the
+    line (data-closing, kept by StudyCompanion), the pager steps aside, and the
     strip no longer swipes over to the scripture. Scrolling back up into the last chapter brings both back.
   */
   .companion[data-mode="strip"][data-closing] .pager {
@@ -811,17 +775,10 @@
   max-width: none;
 }
 
-/* Native anchor jumps into the introduction land below the app header (none on phones). */
+/* Native anchor jumps into the introduction land below the app header (fixed here at every width). */
 .introduction .guide [id],
 .afterReader .guide [id] {
-  scroll-margin-top: 1rem;
-}
-
-@media (min-width: 640px) {
-  .introduction .guide [id],
-  .afterReader .guide [id] {
-    scroll-margin-top: calc(var(--header-height) + 1rem);
-  }
+  scroll-margin-top: calc(var(--header-height) + 1rem);
 }
 
 /*
@@ -858,26 +815,6 @@
 
 /* Contents */
 
-.contentsOpener {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 2.75rem;
-  padding: 0 0.15rem;
-  font-family: var(--cfm-sans);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--cfm-muted);
-}
-
-.contentsOpener:hover {
-  color: var(--cfm-ink);
-}
-
 .contentsIcon {
   width: 1rem;
   height: 1rem;
@@ -890,7 +827,8 @@
   pair's width) leaves room for it: 12rem plus 1rem from the viewport edge and 1.5rem from the reading
   region. This width (--cfm-rail-width, on .page) decides the first paint; ContentsNav then sizes it to the
   margin it measures (--cfm-rail-w, set on .page) and stands it down (data-blocked) where something else, like
-  the Notebook panel, takes the room. Wherever the rail does not show, the compact Contents buttons do.
+  the Notebook panel, takes the room. The header's Contents button, outside the page, opens the drawer
+  either way.
 */
 .contentsRail {
   position: fixed;
@@ -910,10 +848,6 @@
 @media (min-width: 106.5rem) {
   .page:has(> .companion[data-mode="columns"]) > .contentsRail:not([data-blocked]) {
     display: flex;
-  }
-
-  .page:has(> .companion[data-mode="columns"]):has(> .contentsRail:not([data-blocked])) .contentsOpener {
-    display: none;
   }
 
   /*
