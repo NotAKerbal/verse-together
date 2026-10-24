@@ -1,32 +1,14 @@
-import Link from "next/link";
-import ScriptureQuickNav from "./ScriptureQuickNav";
+"use client";
+
+import { AppHeaderPortal, useAppHeaderSlot } from "./AppHeaderSlot";
+import BrowseLink from "./BrowseLink";
+import { usePageCoveredByChapterNavigation } from "./ChapterNavigation";
+import ReaderSearchButton from "./ReaderSearchButton";
 
 type Props = {
   title: string;
   backHref?: string;
-  currentVolume?: string;
-  currentBook?: string;
-  /** Show the link to full scripture search (the Library; phones have no other way there). */
-  showSearchLink?: boolean;
 };
-
-function SearchIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="5.5" />
-      <path d="m15.2 15.2 4.3 4.3" />
-    </svg>
-  );
-}
 
 function BackIcon() {
   return (
@@ -45,49 +27,44 @@ function BackIcon() {
   );
 }
 
-export default function SelectionHeader({
-  title,
-  backHref,
-  currentVolume,
-  currentBook,
-  showSearchLink = false,
-}: Props) {
+function SelectionControls({ title, backHref }: Props) {
   return (
-    <div className="browse-hero">
-      <div className="flex min-h-[2.75rem] items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          {backHref ? (
-            <Link
-              href={backHref}
-              className="browse-header-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[color:var(--foreground-muted)]"
-              aria-label="Go back"
-              data-tap
-            >
-              <BackIcon />
-            </Link>
-          ) : null}
-          <h1 className="browse-title min-w-0">{title}</h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {showSearchLink ? (
-            <Link
-              href="/search"
-              className="simple-hide browse-header-button inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-[color:var(--foreground-muted)]"
-              title="Search all scriptures"
-              data-tap
-            >
-              <SearchIcon />
-              Search
-            </Link>
-          ) : null}
-          <ScriptureQuickNav
-            currentVolume={currentVolume}
-            currentBook={currentBook}
-            align="right"
-            buttonClassName="simple-hide browse-header-button h-9 w-9 rounded-xl"
-          />
-        </div>
-      </div>
+    <div className="app-header-selection" data-back={backHref ? "true" : undefined}>
+      {backHref ? (
+        <BrowseLink href={backHref} className="app-header-selection-button" aria-label="Go back" title="Go back" data-tap>
+          <BackIcon />
+        </BrowseLink>
+      ) : null}
+      <h1 className="app-header-selection-title outline-none" tabIndex={-1} title={title} data-browse-title>
+        {title}
+      </h1>
+      <ReaderSearchButton buttonClassName="simple-hide app-header-selection-button" />
     </div>
+  );
+}
+
+/**
+ * A volume's or book's back link, title, and search (the Library's, in a popover). Wider screens show them at
+ * the app header's right (rendered through a portal, so BrowseLink still switches views in place); phones, narrow
+ * windows, simple mode, and the server-rendered page keep them in the page. CSS shows one copy at a time. While a
+ * chapter opening from this page covers it, the header copy is unmounted, so it never outlives the page.
+ */
+export default function SelectionHeader({ title, backHref }: Props) {
+  const { available } = useAppHeaderSlot();
+  // The covered page stays mounted (hidden) so an abandoned navigation can return to it; its header controls
+  // must not stay on screen over the chapter, and come back with the page.
+  const covered = usePageCoveredByChapterNavigation();
+  const inHeader = available && !covered;
+  return (
+    <>
+      <div className={`browse-selection-header${inHeader ? " browse-header-fallback" : ""}`}>
+        <SelectionControls title={title} backHref={backHref} />
+      </div>
+      {inHeader ? (
+        <AppHeaderPortal>
+          <SelectionControls title={title} backHref={backHref} />
+        </AppHeaderPortal>
+      ) : null}
+    </>
   );
 }

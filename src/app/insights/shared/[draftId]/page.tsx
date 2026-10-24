@@ -6,6 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import type { InsightDraftBlock } from "@/lib/appData";
 import DictionaryEntryBody from "@/components/DictionaryEntryBody";
+import NoteMarkdown from "@/features/notes/NoteMarkdown";
 
 function renderTextWithHighlights(text: string | null, highlightedWordIndices: number[]) {
   const sourceText = text ?? "";
@@ -49,6 +50,9 @@ export default function SharedDraftPage() {
         tags: string[];
         updated_at: string;
         blocks: InsightDraftBlock[];
+        /** Present on backends with Markdown notes; when canonical, the body is the note. */
+        markdown_body?: string;
+        markdown_canonical?: boolean;
       }
     | undefined;
 
@@ -83,6 +87,9 @@ export default function SharedDraftPage() {
         ) : null}
       </header>
 
+      {draft.markdown_canonical && typeof draft.markdown_body === "string" ? (
+        <NoteMarkdown markdown={draft.markdown_body} />
+      ) : (
       <ul className="space-y-2">
         {draft.blocks
           .slice()
@@ -144,6 +151,7 @@ export default function SharedDraftPage() {
             </li>
           ))}
       </ul>
+      )}
     </section>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { parseScriptureReferenceQuery } from "@/lib/scriptureQuickNav";
 
 type ScriptureVerse = {
@@ -142,6 +143,7 @@ type EnsureStorageOptions = {
 };
 
 const DATASET_MANIFEST_PATH = "/scripture-data/manifest.json";
+
 const DB_NAME = "scripture-browser-storage";
 const DB_VERSION = 3;
 const META_STORE = "meta";
@@ -270,12 +272,40 @@ function openDatabase() {
   });
 }
 
+function manifestFromCatalog(): ScriptureDatasetManifest {
+  // The bundled navigation catalog is generated alongside manifest.json, so it describes the same dataset
+  // without a network request before the first local read.
+  const volumes = scriptureCatalog.datasetVolumes.map((volume) => ({
+    volume: volume.volume,
+    title: volume.title,
+    longTitle: volume.longTitle,
+    subtitle: volume.subtitle,
+    shortTitle: volume.shortTitle,
+    bundlePath: volume.bundlePath,
+    bookCount: volume.bookCount,
+    chapterCount: volume.chapterCount,
+    verseCount: volume.verseCount,
+  }));
+  return {
+    version: scriptureCatalog.version,
+    generatedFrom: "catalog",
+    volumes,
+    bookCount: volumes.reduce((total, volume) => total + volume.bookCount, 0),
+    chapterCount: volumes.reduce((total, volume) => total + volume.chapterCount, 0),
+    verseCount: volumes.reduce((total, volume) => total + volume.verseCount, 0),
+  };
+}
+
 async function getManifest() {
-  manifestPromise ??= fetch(DATASET_MANIFEST_PATH).then(async (response) => {
-    if (!response.ok) {
-      throw new Error(`Unable to load bundled scripture manifest (${response.status})`);
-    }
-    return (await response.json()) as ScriptureDatasetManifest;
+  manifestPromise ??= Promise.resolve().then(() => {
+    const manifest = manifestFromCatalog();
+    if (manifest.volumes.length > 0) return manifest;
+    return fetch(DATASET_MANIFEST_PATH).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Unable to load bundled scripture manifest (${response.status})`);
+      }
+      return (await response.json()) as ScriptureDatasetManifest;
+    });
   });
   return manifestPromise;
 }
@@ -302,6 +332,10 @@ async function getVolumeBundle(volume: string) {
     return (await response.json()) as ScriptureVolumeBundle;
   });
   bundlePromiseByVolume.set(volume, nextPromise);
+  // A failed download is not kept, so the next read retries it once the network recovers.
+  nextPromise.catch(() => {
+    if (bundlePromiseByVolume.get(volume) === nextPromise) bundlePromiseByVolume.delete(volume);
+  });
   return nextPromise;
 }
 

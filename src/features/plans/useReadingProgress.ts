@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { useAuth } from "@/lib/auth";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
+import { localDateKey, newRequestId, type NoteSource } from "@/features/notes/journal";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import type { ChapterRef } from "./scriptureCatalog";
 import type { PlanStepInput, PlanTemplate } from "./planSchedule";
 import type { PlanSelection } from "./planScope";
@@ -24,61 +25,63 @@ function canonicalRef(ref: ChapterRef): ChapterRef {
 
 /** `undefined` while loading or signed out, `null` when the server has nothing. */
 export function useBookProgress(volume: string, book: string) {
-  const { user } = useAuth();
+  const { ready } = useConvexSignedIn();
   return useQuery(
     api.readingProgress.getMyProgressForBook,
-    user ? { volume: normalizeScriptureVolume(volume), book } : "skip"
+    ready ? { volume: normalizeScriptureVolume(volume), book } : "skip"
   );
 }
 
 export function useVolumeProgress(volume: string) {
-  const { user } = useAuth();
-  return useQuery(api.readingProgress.getMyProgressForVolume, user ? { volume: normalizeScriptureVolume(volume) } : "skip");
+  const { ready } = useConvexSignedIn();
+  return useQuery(api.readingProgress.getMyProgressForVolume, ready ? { volume: normalizeScriptureVolume(volume) } : "skip");
 }
 
 export function useLastPosition() {
-  const { user } = useAuth();
-  return useQuery(api.readingProgress.getLastPosition, user ? {} : "skip");
+  const { ready } = useConvexSignedIn();
+  return useQuery(api.readingProgress.getLastPosition, ready ? {} : "skip");
 }
 
 export function useMyPlans() {
-  const { user } = useAuth();
-  return useQuery(api.readingPlans.listMyPlans, user ? {} : "skip");
+  const { ready } = useConvexSignedIn();
+  return useQuery(api.readingPlans.listMyPlans, ready ? {} : "skip");
 }
 
 export function usePlan(planId: string | null) {
-  const { user } = useAuth();
-  return useQuery(api.readingPlans.getPlan, user && planId ? { planId } : "skip");
+  const { ready } = useConvexSignedIn();
+  return useQuery(api.readingPlans.getPlan, ready && planId ? { planId } : "skip");
+}
+
+/** The signed-in user's reading history, newest first; `undefined` while loading or signed out. */
+export function useMyReadingLog() {
+  const { ready } = useConvexSignedIn();
+  return useQuery(api.readingProgress.listMyReadingLog, ready ? {} : "skip");
 }
 
 export function useReadingProgressActions() {
   const markRead = useMutation(api.readingProgress.markChapterRead);
   const unmarkRead = useMutation(api.readingProgress.unmarkChapterRead);
   const savePosition = useMutation(api.readingProgress.setLastPosition);
+  const logRead = useMutation(api.readingProgress.logReading);
 
   return useMemo(
     () => ({
-      markChapterRead: (ref: ChapterRef) => markRead(canonicalRef(ref)),
+      /**
+       * Marks the whole chapter complete and adds it to the reading history. Without `log` it is logged on
+       * today's local day under a fresh requestId; pass the same `log` when retrying so a retry can't log twice.
+       */
+      markChapterRead: (ref: ChapterRef, log?: { journalDate: string; requestId: string }) => {
+        const entry = log ?? { journalDate: localDateKey(), requestId: newRequestId() };
+        return markRead({ ...canonicalRef(ref), journalDate: entry.journalDate, requestId: entry.requestId });
+      },
+      /** Records a reading in the history only; it never marks a chapter complete. */
+      logReading: (input: { source: NoteSource; journalDate: string; requestId: string }) => logRead(input),
       unmarkChapterRead: (ref: ChapterRef) => unmarkRead(canonicalRef(ref)),
       setLastPosition: (ref: ChapterRef & { verse?: number }) =>
         savePosition({ ...canonicalRef(ref), verse: ref.verse }),
     }),
-    [markRead, unmarkRead, savePosition]
+    [markRead, unmarkRead, savePosition, logRead]
   );
-}
-
-/** Records the open chapter as the signed-in reader's last position. */
-export function useTrackLastPosition(volume: string, book: string, chapter: number) {
-  const { user } = useAuth();
-  const { setLastPosition } = useReadingProgressActions();
-  const userId = user?.id ?? null;
-
-  useEffect(() => {
-    if (!userId) return;
-    setLastPosition({ volume, book, chapter }).catch(() => {
-      // Position tracking is best-effort; the reader should never surface this.
-    });
-  }, [userId, volume, book, chapter, setLastPosition]);
 }
 
 export type PlanWriteInput = {

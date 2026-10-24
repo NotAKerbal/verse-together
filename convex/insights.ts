@@ -1,8 +1,23 @@
 // @ts-nocheck
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireClerkId } from "./utils";
 import { normalizeScriptureVolume } from "../src/lib/scriptureVolumes";
+import {
+  appendMarkdownChunk,
+  blocksToMarkdown,
+  blockToMarkdown,
+  DEFAULT_NOTE_TITLE,
+  deriveNoteTitle,
+  inferSourceFromBlocks,
+  isJournalDate,
+  journalDateFromTimestamp,
+  markdownExcerpt,
+  normalizeNoteSource,
+  NOTE_MARKDOWN_MAX,
+  noteSourceValidator,
+  scriptureSource,
+} from "./noteJournal";
 
 const insightBlockType = v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"), v.literal("dictionary"));
 const insightVisibility = v.union(
@@ -120,6 +135,98 @@ async function getBlockOrThrow(ctx: any, blockId: any, clerkId: string) {
   return { block, draft };
 }
 
+async function draftBlocks(ctx: any, draftId: any) {
+  return await ctx.db
+    .query("insightDraftBlocks")
+    .withIndex("by_draft_order", (q: any) => q.eq("draftId", draftId))
+    .collect();
+}
+
+// A note is Markdown-backed once it has a stored body (even an empty one).
+function hasCanonicalMarkdown(draft: any): boolean {
+  return typeof draft.markdownBody === "string";
+}
+
+function noteMarkdown(draft: any, blocks: any[]): string {
+  return hasCanonicalMarkdown(draft) ? draft.markdownBody : blocksToMarkdown(draft.title, blocks);
+}
+
+function nextRevision(draft: any): number {
+  return (draft.markdownRevision ?? 0) + 1;
+}
+
+function assertNotMarkdownBacked(draft: any) {
+  if (hasCanonicalMarkdown(draft)) {
+    throw new Error("This note is edited as text now; change it in the note body instead");
+  }
+}
+
+// Markdown, revision, journal date and source of a draft, for every read path. Older notes get a projection
+// of their blocks, their creation day, and a source only when a block actually references one.
+function noteJournalFields(draft: any, blocks: any[]) {
+  return {
+    markdown_body: noteMarkdown(draft, blocks),
+    markdown_revision: draft.markdownRevision ?? 0,
+    markdown_canonical: hasCanonicalMarkdown(draft),
+    journal_date: draft.journalDate ?? journalDateFromTimestamp(draft.createdAt),
+    source: draft.source ?? inferSourceFromBlocks(blocks) ?? null,
+  };
+}
+
+// Old clients render blocks, so a Markdown-backed note is shown to them as one text block holding the
+// current body rather than its stale block snapshot.
+function canonicalTextBlock(id: string, markdownBody: string, createdAt: number, updatedAt: number) {
+  return {
+    id: `${id}:markdown`,
+    order: 0,
+    type: "text",
+    text: markdownBody,
+    highlight_text: null,
+    highlight_word_indices: [],
+    link_url: null,
+    scripture_ref: null,
+    dictionary_meta: null,
+    created_at: toIso(createdAt),
+    updated_at: toIso(updatedAt),
+  };
+}
+
+function publicBlock(b: any) {
+  return {
+    id: b._id,
+    order: b.order,
+    type: b.type,
+    text: b.text ?? null,
+    highlight_text: b.highlightText ?? null,
+    highlight_word_indices: b.highlightWordIndices ?? [],
+    link_url: b.linkUrl ?? null,
+    scripture_ref: b.scriptureRef ?? null,
+    dictionary_meta: b.dictionaryMeta
+      ? {
+          edition: b.dictionaryMeta.edition,
+          word: b.dictionaryMeta.word,
+          heading: b.dictionaryMeta.heading ?? null,
+          pronounce: b.dictionaryMeta.pronounce ?? null,
+        }
+      : null,
+  };
+}
+
+// After a new block row is stored on a Markdown-backed note, its Markdown is appended to the body so the
+// body and the block snapshot never disagree about what was added.
+async function appendBlockToMarkdown(ctx: any, draft: any, block: any, now: number) {
+  const patch: Record<string, unknown> = {
+    updatedAt: now,
+    lastActiveAt: now,
+    markdownRevision: nextRevision(draft),
+  };
+  if (hasCanonicalMarkdown(draft)) {
+    patch.markdownBody = appendMarkdownChunk(draft.markdownBody, blockToMarkdown(block));
+    if (patch.markdownBody.length > NOTE_MARKDOWN_MAX) throw new Error("This note is too long");
+  }
+  await ctx.db.patch(draft._id, patch);
+}
+
 export const listMyDrafts = query({
   args: {},
   handler: async (ctx) => {
@@ -131,10 +238,9 @@ export const listMyDrafts = query({
       .collect();
     const rows = [];
     for (const d of drafts) {
-      const blocks = await ctx.db
-        .query("insightDraftBlocks")
-        .withIndex("by_draft_order", (q: any) => q.eq("draftId", d._id))
-        .collect();
+      const blocks = await draftBlocks(ctx, d._id);
+      // Summaries leave out the full body (up to NOTE_MARKDOWN_MAX each); getDraft returns it.
+      const { markdown_body: _body, ...journal } = noteJournalFields(d, blocks);
       rows.push({
         id: d._id,
         title: d.title,
@@ -145,8 +251,9 @@ export const listMyDrafts = query({
         updated_at: toIso(d.updatedAt),
         last_active_at: toIso(d.lastActiveAt),
         block_count: blocks.length,
-        excerpt: draftExcerpt(blocks),
+        excerpt: hasCanonicalMarkdown(d) ? markdownExcerpt(d.markdownBody) : draftExcerpt(blocks),
         scripture_refs: draftScriptureRefs(blocks),
+        ...journal,
       });
     }
     return rows;
@@ -158,10 +265,7 @@ export const getDraft = query({
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
     const draft = await getDraftOrThrow(ctx, args.draftId, clerkId);
-    const blocks = await ctx.db
-      .query("insightDraftBlocks")
-      .withIndex("by_draft_order", (q: any) => q.eq("draftId", args.draftId))
-      .collect();
+    const blocks = await draftBlocks(ctx, args.draftId);
     return {
       id: draft._id,
       title: draft.title,
@@ -171,23 +275,10 @@ export const getDraft = query({
       created_at: toIso(draft.createdAt),
       updated_at: toIso(draft.updatedAt),
       last_active_at: toIso(draft.lastActiveAt),
+      ...noteJournalFields(draft, blocks),
+      // The owner sees the real block rows (a retained snapshot once markdown_canonical is true).
       blocks: blocks.map((b) => ({
-        id: b._id,
-        order: b.order,
-        type: b.type,
-        text: b.text ?? null,
-        highlight_text: b.highlightText ?? null,
-        highlight_word_indices: b.highlightWordIndices ?? [],
-        link_url: b.linkUrl ?? null,
-        scripture_ref: b.scriptureRef ?? null,
-        dictionary_meta: b.dictionaryMeta
-          ? {
-              edition: b.dictionaryMeta.edition,
-              word: b.dictionaryMeta.word,
-              heading: b.dictionaryMeta.heading ?? null,
-              pronounce: b.dictionaryMeta.pronounce ?? null,
-            }
-          : null,
+        ...publicBlock(b),
         created_at: toIso(b.createdAt),
         updated_at: toIso(b.updatedAt),
       })),
@@ -217,6 +308,28 @@ export const listMyScriptureRefsForChapter = query({
     }> = [];
     for (const draft of drafts) {
       if (draft.status !== "draft" && draft.status !== "published") continue;
+      const seen = new Set<string>();
+      const push = (verseStart: number, verseEnd: number) => {
+        const start = Math.min(verseStart, verseEnd);
+        const end = Math.max(verseStart, verseEnd);
+        const key = `${start}-${end}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({ draftId: draft._id, draftTitle: draft.title, verseStart: start, verseEnd: end, status: draft.status });
+      };
+      // A Markdown note's own source marks the reader only when it names verses; a whole-chapter source does not.
+      const src = draft.source;
+      if (
+        src?.kind === "scripture" &&
+        src.volume &&
+        src.book &&
+        src.chapter === args.chapter &&
+        typeof src.verseStart === "number" &&
+        normalizeScriptureVolume(src.volume) === targetVolume &&
+        looseBookKey(src.book) === targetBook
+      ) {
+        push(src.verseStart, src.verseEnd ?? src.verseStart);
+      }
       // scriptureRef is a nested optional object, so it cannot be indexed; scan this draft's blocks.
       const blocks = await ctx.db
         .query("insightDraftBlocks")
@@ -228,13 +341,7 @@ export const listMyScriptureRefsForChapter = query({
         if (!ref || ref.chapter !== args.chapter) continue;
         if (normalizeScriptureVolume(ref.volume) !== targetVolume) continue;
         if (looseBookKey(ref.book) !== targetBook) continue;
-        out.push({
-          draftId: draft._id,
-          draftTitle: draft.title,
-          verseStart: Math.min(ref.verseStart, ref.verseEnd),
-          verseEnd: Math.max(ref.verseStart, ref.verseEnd),
-          status: draft.status,
-        });
+        push(ref.verseStart, ref.verseEnd);
       }
     }
     return out;
@@ -254,10 +361,7 @@ export const getSharedDraft = query({
       .query("users")
       .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", draft.clerkId))
       .unique();
-    const blocks = await ctx.db
-      .query("insightDraftBlocks")
-      .withIndex("by_draft_order", (q: any) => q.eq("draftId", args.draftId))
-      .collect();
+    const blocks = await draftBlocks(ctx, args.draftId);
 
     return {
       id: draft._id,
@@ -268,24 +372,10 @@ export const getSharedDraft = query({
       visibility: draft.visibility ?? "private",
       tags: draft.tags ?? [],
       updated_at: toIso(draft.updatedAt),
-      blocks: blocks.map((b) => ({
-        id: b._id,
-        order: b.order,
-        type: b.type,
-        text: b.text ?? null,
-        highlight_text: b.highlightText ?? null,
-        highlight_word_indices: b.highlightWordIndices ?? [],
-        link_url: b.linkUrl ?? null,
-        scripture_ref: b.scriptureRef ?? null,
-        dictionary_meta: b.dictionaryMeta
-          ? {
-              edition: b.dictionaryMeta.edition,
-              word: b.dictionaryMeta.word,
-              heading: b.dictionaryMeta.heading ?? null,
-              pronounce: b.dictionaryMeta.pronounce ?? null,
-            }
-          : null,
-      })),
+      ...noteJournalFields(draft, blocks),
+      blocks: hasCanonicalMarkdown(draft)
+        ? [canonicalTextBlock(String(draft._id), draft.markdownBody, draft.createdAt, draft.updatedAt)]
+        : blocks.map(publicBlock),
     };
   },
 });
@@ -314,6 +404,158 @@ export const createDraft = mutation({
   },
 });
 
+/** A new private, Markdown-backed journal note for a day, optionally tied to where it was written from. */
+export const createJournalNote = mutation({
+  args: {
+    journalDate: v.string(),
+    source: v.optional(noteSourceValidator),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    if (!isJournalDate(args.journalDate)) throw new Error("Journal date must be a real YYYY-MM-DD date");
+    const source = args.source ? normalizeNoteSource(args.source) : undefined;
+    const now = Date.now();
+    const id = await ctx.db.insert("insightDrafts", {
+      clerkId,
+      title: DEFAULT_NOTE_TITLE,
+      status: "draft",
+      visibility: "private",
+      tags: [],
+      markdownBody: "",
+      markdownRevision: 0,
+      journalDate: args.journalDate,
+      source,
+      createdAt: now,
+      updatedAt: now,
+      lastActiveAt: now,
+    });
+    return { id, markdownRevision: 0 };
+  },
+});
+
+/**
+ * Stores the note body exactly as given (whitespace and empty bodies included). The first save of an older
+ * note makes Markdown canonical; its block rows are kept untouched as a snapshot. A save naming any revision
+ * other than the current one is refused so a stale editor cannot overwrite newer content.
+ */
+export const saveJournalNote = mutation({
+  args: {
+    draftId: v.id("insightDrafts"),
+    markdownBody: v.string(),
+    expectedRevision: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const draft = await getDraftOrThrow(ctx, args.draftId, clerkId);
+    if (draft.status !== "draft") throw new Error("Only draft notes can be edited");
+    if (args.markdownBody.length > NOTE_MARKDOWN_MAX) throw new Error("This note is too long");
+    if (!Number.isInteger(args.expectedRevision) || args.expectedRevision < 0) {
+      throw new Error("Invalid revision");
+    }
+    const currentRevision = draft.markdownRevision ?? 0;
+    if (args.expectedRevision !== currentRevision) {
+      throw new ConvexError({
+        code: "REVISION_CONFLICT",
+        message: "This note changed since it was opened",
+        currentRevision,
+      });
+    }
+    const now = Date.now();
+    const revision = currentRevision + 1;
+    const title = deriveNoteTitle(args.markdownBody);
+    const patch: Record<string, unknown> = {
+      markdownBody: args.markdownBody,
+      markdownRevision: revision,
+      title,
+      updatedAt: now,
+      lastActiveAt: now,
+    };
+    // Fix the projected journal date and inferred source in place, so they stay put after conversion.
+    if (!draft.journalDate) patch.journalDate = journalDateFromTimestamp(draft.createdAt);
+    if (!draft.source) {
+      const inferred = inferSourceFromBlocks(await draftBlocks(ctx, draft._id));
+      if (inferred) patch.source = inferred;
+    }
+    await ctx.db.patch(draft._id, patch);
+    return { ok: true, markdownRevision: revision, title };
+  },
+});
+
+/**
+ * The signed-in user's journal: their notes (any status) and, as read-only legacy activity, their verse
+ * annotations that have note text. Highlight-only annotations are not journal entries.
+ */
+export const listMyJournal = query({
+  args: {},
+  handler: async (ctx) => {
+    const clerkId = await requireClerkId(ctx);
+    const me = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+      .unique();
+    const authorLabel = me?.displayName?.trim() || "You";
+
+    const entries = [];
+    const drafts = await ctx.db
+      .query("insightDrafts")
+      .withIndex("by_clerk_last_active", (q: any) => q.eq("clerkId", clerkId))
+      .collect();
+    for (const draft of drafts) {
+      const blocks = await draftBlocks(ctx, draft._id);
+      const fields = noteJournalFields(draft, blocks);
+      entries.push({
+        kind: "note",
+        id: draft._id,
+        title: draft.title,
+        status: draft.status,
+        visibility: draft.visibility ?? "private",
+        journal_date: fields.journal_date,
+        source: fields.source,
+        excerpt: markdownExcerpt(fields.markdown_body),
+        markdown_revision: fields.markdown_revision,
+        markdown_canonical: fields.markdown_canonical,
+        read_only: false,
+        author_label: authorLabel,
+        created_at: toIso(draft.createdAt),
+        updated_at: toIso(draft.updatedAt),
+      });
+    }
+
+    const annotations = await ctx.db
+      .query("verseAnnotations")
+      .withIndex("by_user_chapter", (q: any) => q.eq("clerkId", clerkId))
+      .collect();
+    for (const row of annotations) {
+      if (!row.body?.trim()) continue;
+      entries.push({
+        kind: "verse_annotation",
+        id: row._id,
+        title: null,
+        body: row.body,
+        journal_date: journalDateFromTimestamp(row.createdAt),
+        source: scriptureSource({
+          volume: row.volume,
+          book: row.book,
+          chapter: row.chapter,
+          verseStart: row.verse,
+          verseEnd: row.verse,
+        }),
+        highlight_color: row.highlightColor ?? null,
+        read_only: true,
+        author_label: authorLabel,
+        created_at: toIso(row.createdAt),
+        updated_at: toIso(row.updatedAt),
+      });
+    }
+
+    entries.sort((a, b) => {
+      if (a.journal_date !== b.journal_date) return a.journal_date < b.journal_date ? 1 : -1;
+      return a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0;
+    });
+    return entries;
+  },
+});
+
 export const setActiveDraft = mutation({
   args: { draftId: v.id("insightDrafts") },
   handler: async (ctx, args) => {
@@ -339,6 +581,8 @@ export const renameDraft = mutation({
     await ctx.db.patch(args.draftId, {
       title,
       updatedAt: Date.now(),
+      // An older note's projection starts with its title, so renaming it changes the projected Markdown.
+      ...(hasCanonicalMarkdown(draft) ? {} : { markdownRevision: nextRevision(draft) }),
     });
     return { ok: true };
   },
@@ -363,6 +607,7 @@ export const saveDraftSettings = mutation({
       const title = args.title.trim();
       if (!title) throw new Error("Title is required");
       patch.title = title;
+      if (!hasCanonicalMarkdown(draft) && title !== draft.title) patch.markdownRevision = nextRevision(draft);
     }
     if (args.visibility !== undefined) patch.visibility = args.visibility;
     if (args.tags !== undefined) patch.tags = normalizeTags(args.tags);
@@ -413,7 +658,7 @@ export const addBlock = mutation({
       .withIndex("by_draft_order", (q: any) => q.eq("draftId", args.draftId))
       .collect();
     const nextOrder = blocks.length > 0 ? blocks[blocks.length - 1].order + 1 : 0;
-    const id = await ctx.db.insert("insightDraftBlocks", {
+    const block = {
       draftId: args.draftId,
       order: nextOrder,
       type: args.type,
@@ -432,8 +677,9 @@ export const addBlock = mutation({
         : undefined,
       createdAt: now,
       updatedAt: now,
-    });
-    await ctx.db.patch(args.draftId, { updatedAt: now, lastActiveAt: now });
+    };
+    const id = await ctx.db.insert("insightDraftBlocks", block);
+    await appendBlockToMarkdown(ctx, draft, block, now);
     return { id };
   },
 });
@@ -461,7 +707,7 @@ export const appendScriptureBlock = mutation({
       .withIndex("by_draft_order", (q: any) => q.eq("draftId", args.draftId))
       .collect();
     const nextOrder = blocks.length > 0 ? blocks[blocks.length - 1].order + 1 : 0;
-    const id = await ctx.db.insert("insightDraftBlocks", {
+    const block = {
       draftId: args.draftId,
       order: nextOrder,
       type: "scripture",
@@ -478,8 +724,9 @@ export const appendScriptureBlock = mutation({
       },
       createdAt: now,
       updatedAt: now,
-    });
-    await ctx.db.patch(args.draftId, { updatedAt: now, lastActiveAt: now });
+    };
+    const id = await ctx.db.insert("insightDraftBlocks", block);
+    await appendBlockToMarkdown(ctx, draft, block, now);
     return { id };
   },
 });
@@ -498,6 +745,7 @@ export const updateBlock = mutation({
     const clerkId = await requireClerkId(ctx);
     const { block, draft } = await getBlockOrThrow(ctx, args.blockId, clerkId);
     if (draft.status !== "draft") throw new Error("Only draft insights can be edited");
+    assertNotMarkdownBacked(draft);
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.text !== undefined) patch.text = args.text.trim() || undefined;
     if (args.highlightText !== undefined) patch.highlightText = args.highlightText.trim() || undefined;
@@ -516,7 +764,8 @@ export const updateBlock = mutation({
     }
     await ctx.db.patch(block._id, patch);
     const now = Date.now();
-    await ctx.db.patch(draft._id, { updatedAt: now, lastActiveAt: now });
+    // The revision moves with the projection, so a Markdown save based on the old projection conflicts.
+    await ctx.db.patch(draft._id, { updatedAt: now, lastActiveAt: now, markdownRevision: nextRevision(draft) });
     return { ok: true };
   },
 });
@@ -527,6 +776,7 @@ export const removeBlock = mutation({
     const clerkId = await requireClerkId(ctx);
     const { block, draft } = await getBlockOrThrow(ctx, args.blockId, clerkId);
     if (draft.status !== "draft") throw new Error("Only draft insights can be edited");
+    assertNotMarkdownBacked(draft);
     await ctx.db.delete(block._id);
     const remaining = await ctx.db
       .query("insightDraftBlocks")
@@ -538,7 +788,7 @@ export const removeBlock = mutation({
         item.order === idx ? null : ctx.db.patch(item._id, { order: idx, updatedAt: now })
       )
     );
-    await ctx.db.patch(draft._id, { updatedAt: now, lastActiveAt: now });
+    await ctx.db.patch(draft._id, { updatedAt: now, lastActiveAt: now, markdownRevision: nextRevision(draft) });
     return { ok: true };
   },
 });
@@ -549,6 +799,7 @@ export const reorderBlocks = mutation({
     const clerkId = await requireClerkId(ctx);
     const draft = await getDraftOrThrow(ctx, args.draftId, clerkId);
     if (draft.status !== "draft") throw new Error("Only draft insights can be edited");
+    assertNotMarkdownBacked(draft);
     const currentBlocks = await ctx.db
       .query("insightDraftBlocks")
       .withIndex("by_draft", (q: any) => q.eq("draftId", args.draftId))
@@ -560,7 +811,7 @@ export const reorderBlocks = mutation({
     }
     const now = Date.now();
     await Promise.all(args.blockIds.map((id, idx) => ctx.db.patch(id, { order: idx, updatedAt: now })));
-    await ctx.db.patch(args.draftId, { updatedAt: now, lastActiveAt: now });
+    await ctx.db.patch(args.draftId, { updatedAt: now, lastActiveAt: now, markdownRevision: nextRevision(draft) });
     return { ok: true };
   },
 });
@@ -581,7 +832,12 @@ export const publishDraft = mutation({
       .query("insightDraftBlocks")
       .withIndex("by_draft_order", (q: any) => q.eq("draftId", args.draftId))
       .collect();
-    if (blocks.length === 0) throw new Error("Add at least one block before publishing");
+    const canonical = hasCanonicalMarkdown(draft);
+    if (canonical) {
+      if (!draft.markdownBody.trim()) throw new Error("Write something before publishing");
+    } else if (blocks.length === 0) {
+      throw new Error("Add at least one block before publishing");
+    }
     const now = Date.now();
     const title = (args.title ?? draft.title).trim();
     if (!title) throw new Error("Title is required");
@@ -595,13 +851,33 @@ export const publishDraft = mutation({
       summary,
       visibility,
       tags,
-      blockCount: blocks.length,
+      // A Markdown-backed note publishes only its current body (as one text block below); its retained draft
+      // block snapshot stays on the draft and is never copied into the publication.
+      ...(canonical
+        ? {
+            markdownBody: draft.markdownBody,
+            markdownRevision: draft.markdownRevision ?? 0,
+            journalDate: draft.journalDate ?? journalDateFromTimestamp(draft.createdAt),
+            source: draft.source ?? inferSourceFromBlocks(blocks) ?? undefined,
+          }
+        : {}),
+      blockCount: canonical ? 1 : blocks.length,
       createdAt: draft.createdAt,
       updatedAt: now,
       publishedAt: now,
     });
+    if (canonical) {
+      await ctx.db.insert("publishedInsightBlocks", {
+        insightId,
+        order: 0,
+        type: "text",
+        text: draft.markdownBody,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     await Promise.all(
-      blocks.map((b) =>
+      (canonical ? [] : blocks).map((b) =>
         ctx.db.insert("publishedInsightBlocks", {
           insightId,
           order: b.order,
@@ -657,24 +933,14 @@ export const getPublishedInsightsFeed = query({
         tags: row.tags ?? [],
         block_count: row.blockCount,
         published_at: toIso(row.publishedAt),
-        blocks: blocks.map((b) => ({
-          id: b._id,
-          order: b.order,
-          type: b.type,
-          text: b.text ?? null,
-          highlight_text: b.highlightText ?? null,
-          highlight_word_indices: b.highlightWordIndices ?? [],
-          link_url: b.linkUrl ?? null,
-          scripture_ref: b.scriptureRef ?? null,
-          dictionary_meta: b.dictionaryMeta
-            ? {
-                edition: b.dictionaryMeta.edition,
-                word: b.dictionaryMeta.word,
-                heading: b.dictionaryMeta.heading ?? null,
-                pronounce: b.dictionaryMeta.pronounce ?? null,
-              }
-            : null,
-        })),
+        markdown_body: typeof row.markdownBody === "string" ? row.markdownBody : null,
+        markdown_revision: row.markdownRevision ?? null,
+        journal_date: row.journalDate ?? null,
+        source: row.source ?? null,
+        blocks:
+          typeof row.markdownBody === "string"
+            ? [canonicalTextBlock(String(row._id), row.markdownBody, row.createdAt, row.updatedAt)]
+            : blocks.map(publicBlock),
       });
     }
     return out;

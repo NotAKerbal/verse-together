@@ -51,3 +51,6 @@ data/dictionary/
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Isolated Notes component QA build
+/qa-dist

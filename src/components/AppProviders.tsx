@@ -4,6 +4,7 @@ import { ClerkProvider, useAuth } from "@clerk/nextjs";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { PropsWithChildren, useMemo } from "react";
+import { AppHeaderSlotProvider } from "@/components/AppHeaderSlot";
 import { InsightBuilderProvider } from "@/features/insights/InsightBuilderProvider";
 import NotebookPanel from "@/features/insights/NotebookPanel";
 
@@ -30,7 +31,7 @@ export default function AppProviders({ children }: PropsWithChildren) {
     <ClerkProvider>
       <ConvexClerkProvider>
         <InsightBuilderProvider>
-          {children}
+          <AppHeaderSlotProvider>{children}</AppHeaderSlotProvider>
           <NotebookPanel />
         </InsightBuilderProvider>
       </ConvexClerkProvider>

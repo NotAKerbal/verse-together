@@ -1,6 +1,5 @@
-import Link from "next/link";
+import BrowseLink from "@/components/BrowseLink";
 import SelectionHeader from "@/components/SelectionHeader";
-import BookProgressBar from "@/features/plans/BookProgressBar";
 
 export type VolumeBookBrowserItem = {
   id: string;
@@ -9,6 +8,8 @@ export type VolumeBookBrowserItem = {
   category?: string;
   subtitle?: string | null;
   titleOfficial?: string;
+  /** Defaults to /browse/<volume>/<book>. */
+  href?: string;
 };
 
 type Props = {
@@ -43,11 +44,7 @@ export default function VolumeBookBrowser({
 }: Props) {
   return (
     <div className="page-shell browse-shell">
-      <SelectionHeader
-        title={volumeLabel}
-        backHref={backHref}
-        currentVolume={volumeSlug}
-      />
+      <SelectionHeader title={volumeLabel} backHref={backHref} />
 
       {books.length === 0 ? (
         <div className="browse-summary-card px-5 py-10 text-center text-sm text-[color:var(--foreground-muted)]">
@@ -57,8 +54,8 @@ export default function VolumeBookBrowser({
         <ul className="browse-grid">
           {books.map((book, index) => (
             <li key={book.id}>
-              <Link
-                href={`/browse/${volumeSlug}/${book.id}`}
+              <BrowseLink
+                href={book.href ?? `/browse/${volumeSlug}/${book.id}`}
                 className="panel-card interactive-card group flex h-full items-center gap-4 px-4 py-4"
                 data-tap
               >
@@ -79,14 +76,11 @@ export default function VolumeBookBrowser({
                       {book.chapters} {book.chapters === 1 ? "chapter" : "chapters"}
                     </div>
                   ) : null}
-                  {book.chapters ? (
-                    <BookProgressBar volume={volumeSlug} book={book.id} chapterCount={book.chapters} />
-                  ) : null}
                 </div>
                 <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] text-[color:var(--foreground)] transition-transform duration-150 group-hover:translate-x-0.5">
                   <ChevronIcon />
                 </div>
-              </Link>
+              </BrowseLink>
             </li>
           ))}
         </ul>
