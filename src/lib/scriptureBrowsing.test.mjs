@@ -7,14 +7,22 @@ import { buildScriptureCatalogFromDirectory, serializeScriptureCatalog } from ".
 import { BIBLE_BOOKS } from "./bibleCanon.ts";
 import {
   browseBookBackHref,
+  browseBookEntryHref,
   browseBookHref,
   browseSelectionHref,
   browseVolumeHref,
   buildBookView,
   buildLibraryVolumes,
   buildVolumeBooks,
+  chapterNavigationTarget,
+  describeChapterTarget,
+  isBrowseSelectionHref,
+  isChapterSkeletonVisible,
   isPlainLeftClick,
+  parseBrowseChapterHref,
   parseBrowseSelection,
+  singleChapterBookHref,
+  toSearchSuffix,
 } from "./browseRoutes.ts";
 import {
   chapterRequestKey,
@@ -257,6 +265,127 @@ test("view data comes from the catalog alone", () => {
   });
   assert.equal(buildBookView(catalog, "bookofmormon", "alma").compact, false);
   assert.equal(buildBookView(catalog, "bookofmormon", "genesis"), null);
+});
+
+// --- One-chapter books and chapter navigation ---------------------------------------------------------------
+
+test("a one-chapter book opens straight to its chapter; every other book (and D&C) keeps its chapter list", () => {
+  const singleChapterBooks = catalog.volumes.flatMap((volume) =>
+    volume.books.filter((book) => book.chapterCount === 1).map((book) => `${volume.volume}:${book.book}`)
+  );
+  for (const key of ["bookofmormon:enos", "bookofmormon:jarom", "bookofmormon:omni", "bookofmormon:wordsofmormon"]) {
+    assert.ok(singleChapterBooks.includes(key), key);
+  }
+  for (const key of ["bookofmormon:4nephi", "newtestament:jude", "pearl:josephsmithhistory", "oldtestament:obadiah"]) {
+    assert.ok(singleChapterBooks.includes(key), key);
+  }
+
+  for (const volume of catalog.volumes) {
+    const items = buildVolumeBooks(catalog, volume.volume);
+    for (const book of volume.books) {
+      const item = items.find((entry) => entry.id === book.book);
+      const expected =
+        book.chapterCount === 1
+          ? `${browseBookHref(volume.volume, book.book)}/1`
+          : browseBookHref(volume.volume, book.book);
+      assert.equal(item.href, expected, `${volume.volume}:${book.book}`);
+      // A list link is either another selection view (shown in place) or a chapter (through the router), never
+      // a one-chapter book's list.
+      assert.equal(isBrowseSelectionHref(item.href), book.chapterCount !== 1, item.href);
+    }
+  }
+
+  assert.equal(singleChapterBookHref(catalog, "bookofmormon", "enos"), "/browse/bookofmormon/enos/1");
+  assert.equal(singleChapterBookHref(catalog, "newtestament", "jude"), "/browse/newtestament/jude/1");
+  assert.equal(singleChapterBookHref(catalog, "pearl", "josephsmithhistory"), "/browse/pearl/josephsmithhistory/1");
+  // Volume aliases land on the canonical chapter URL in one step.
+  assert.equal(singleChapterBookHref(catalog, "new-testament", "jude"), "/browse/newtestament/jude/1");
+  assert.equal(singleChapterBookHref(catalog, "dnc", "doctrineandcovenants"), null);
+  assert.equal(singleChapterBookHref(catalog, "doctrineandcovenants", "doctrineandcovenants"), null);
+  assert.equal(singleChapterBookHref(catalog, "bookofmormon", "alma"), null);
+  assert.equal(singleChapterBookHref(catalog, "bookofmormon", "not-a-book"), null);
+  assert.equal(singleChapterBookHref(catalog, "oldtestament", "enos"), null);
+  assert.equal(browseBookEntryHref(catalog, "bookofmormon", "alma"), "/browse/bookofmormon/alma");
+  assert.equal(browseBookEntryHref(catalog, "old-testament", "obadiah"), "/browse/oldtestament/obadiah/1");
+  assert.equal(buildBookView(catalog, "doctrineandcovenants", "doctrineandcovenants").chapterCount, 138);
+});
+
+test("a one-chapter book redirect keeps the page's query, in order", () => {
+  assert.equal(toSearchSuffix({}), "");
+  assert.equal(toSearchSuffix({ translation: undefined }), "");
+  assert.equal(toSearchSuffix({ translation: "kjv", compare: ["nrsv", "esv"] }), "?translation=kjv&compare=nrsv&compare=esv");
+  assert.equal(toSearchSuffix({ q: "a b&c" }), "?q=a+b%26c");
+});
+
+test("only selection views are shown in place by the selector; chapters always go through the router", () => {
+  for (const href of ["/browse", "/browse/oldtestament", "/browse/bookofmormon/alma", "/browse/dnc", "/browse?x=1"]) {
+    assert.equal(isBrowseSelectionHref(href), true, href);
+  }
+  for (const href of [
+    "/browse/bookofmormon/enos/1",
+    "/browse/bookofmormon/alma/32#v-21",
+    "/browse/oldtestament/genesis/1?translation=kjv",
+    "/browsex",
+    "/search",
+    "https://example.com/browse",
+  ]) {
+    assert.equal(isBrowseSelectionHref(href), false, href);
+  }
+});
+
+test("chapter hrefs parse to their canonical chapter, ignoring query and fragment", () => {
+  assert.deepEqual(parseBrowseChapterHref("/browse/old-testament/genesis/3?translation=kjv#v-2"), {
+    volume: "oldtestament",
+    volumeSlug: "oldtestament",
+    book: "genesis",
+    chapter: 3,
+    pathname: "/browse/old-testament/genesis/3",
+  });
+  assert.equal(parseBrowseChapterHref("/browse/bookofmormon/enos"), null);
+  assert.equal(parseBrowseChapterHref("/browse/bookofmormon/enos/0"), null);
+  assert.equal(parseBrowseChapterHref("/browse/bookofmormon/enos/one"), null);
+  assert.equal(parseBrowseChapterHref("/browse/bookofmormon/enos/1/extra"), null);
+  assert.equal(parseBrowseChapterHref("https://example.com/browse/bookofmormon/enos/1"), null);
+  assert.equal(parseBrowseChapterHref("/plans"), null);
+});
+
+test("the skeleton is for navigations to another chapter, never for verse jumps on the current one", () => {
+  const alma32 = "/browse/bookofmormon/alma/32";
+  assert.equal(chapterNavigationTarget(alma32, `${alma32}#v-21`), null);
+  assert.equal(chapterNavigationTarget(alma32, `${alma32}?translation=kjv`), null);
+  assert.equal(chapterNavigationTarget(`${alma32}?x=1#v-3`, alma32), null);
+  assert.equal(chapterNavigationTarget(alma32, "/browse/bookofmormon/alma"), null);
+  assert.equal(chapterNavigationTarget(alma32, "/plans"), null);
+  assert.equal(chapterNavigationTarget(alma32, "/browse/bookofmormon/alma/33").chapter, 33);
+  assert.equal(chapterNavigationTarget("/browse/bookofmormon", "/browse/bookofmormon/enos/1#v-3").book, "enos");
+  assert.equal(chapterNavigationTarget("/browse/bookofmormon/alma", "/browse/bookofmormon/alma/1").chapter, 1);
+});
+
+test("the skeleton is labelled with the chapter it stands in for", () => {
+  const label = (href) => describeChapterTarget(catalog, parseBrowseChapterHref(href));
+  assert.equal(label("/browse/bookofmormon/enos/1"), "Enos 1");
+  assert.equal(label("/browse/newtestament/jude/1"), "Jude 1");
+  assert.equal(label("/browse/bookofmormon/alma/32?translation=kjv"), "Alma 32");
+  assert.equal(label("/browse/dnc/doctrineandcovenants/76"), "Doctrine and Covenants 76");
+  assert.equal(label("/browse/pearl/josephsmithhistory/1"), `${catalog.getBook("pearl", "josephsmithhistory").label} 1`);
+  assert.equal(label("/browse/bookofmormon/made-up-book/2"), "made up book 2");
+});
+
+test("the skeleton shows only while its navigation is in flight from the page it started on", () => {
+  const pending = {
+    fromPathname: "/browse/bookofmormon/alma",
+    target: parseBrowseChapterHref("/browse/bookofmormon/alma/32"),
+  };
+  // Started: the old page is still current while the router fetches.
+  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma", navigating: true }), true);
+  // Arrived (or the route's own loading boundary took over).
+  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma/32", navigating: true }), false);
+  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma/32", navigating: false }), false);
+  // Back/Forward or another navigation moved off the starting page before the chapter came.
+  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon", navigating: true }), false);
+  // The navigation ended without leaving (failed or superseded): the page comes back.
+  assert.equal(isChapterSkeletonVisible(pending, { pathname: "/browse/bookofmormon/alma", navigating: false }), false);
+  assert.equal(isChapterSkeletonVisible(null, { pathname: "/browse/bookofmormon/alma", navigating: true }), false);
 });
 
 // --- Shared chapter request cache ---------------------------------------------------------------------------

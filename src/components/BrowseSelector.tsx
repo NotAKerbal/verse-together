@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
 import { BrowseNavigationContext } from "@/components/BrowseLink";
+import { useChapterNavigation } from "@/components/ChapterNavigation";
+import ChapterReaderSkeleton from "@/components/ChapterReaderSkeleton";
 import SelectionHeader from "@/components/SelectionHeader";
 import VolumeBookBrowser from "@/components/VolumeBookBrowser";
 import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
@@ -14,7 +16,10 @@ import {
   buildLibraryVolumes,
   buildVolumeBooks,
   browseSelectionHref,
+  describeChapterTarget,
+  parseBrowseChapterHref,
   parseBrowseSelection,
+  singleChapterBookHref,
   toBookView,
   type BookView,
   type BookViewSource,
@@ -121,6 +126,10 @@ export default function BrowseSelector({ fallbackBook }: Props) {
   const pathname = usePathname();
   const selection = parseBrowseSelection(pathname);
   const canonicalHref = selection ? browseSelectionHref(selection) : null;
+  // A one-chapter book has no list to show: its URL (an old link, or a history entry) opens the chapter.
+  const chapterHref =
+    selection?.kind === "book" ? singleChapterBookHref(scriptureCatalog, selection.volume, selection.book) : null;
+  const navigateToChapter = useChapterNavigation();
   const focusTitleRef = useRef(false);
 
   const navigate = useCallback((href: string) => {
@@ -133,11 +142,16 @@ export default function BrowseSelector({ fallbackBook }: Props) {
   }, []);
 
   useEffect(() => {
+    // Replacing the book URL keeps Back from returning to it (and from bouncing straight forward again).
+    if (chapterHref) navigateToChapter(`${chapterHref}${window.location.search}${window.location.hash}`, { replace: true });
+  }, [chapterHref, navigateToChapter]);
+
+  useEffect(() => {
     // An alias URL (e.g. /browse/old-testament) shows its canonical view; give it the canonical URL too.
-    if (canonicalHref && pathname !== canonicalHref) {
+    if (!chapterHref && canonicalHref && pathname !== canonicalHref) {
       window.history.replaceState(null, "", `${canonicalHref}${window.location.search}${window.location.hash}`);
     }
-  }, [pathname, canonicalHref]);
+  }, [pathname, canonicalHref, chapterHref]);
 
   useEffect(() => {
     // After an in-place navigation, move focus to the new view's title, as a page load would reset it.
@@ -149,6 +163,9 @@ export default function BrowseSelector({ fallbackBook }: Props) {
   let content: ReactNode = null;
   if (!selection) {
     // Not a selection URL (the router is moving on to a chapter); this view is about to unmount.
+  } else if (chapterHref) {
+    const target = parseBrowseChapterHref(chapterHref);
+    content = <ChapterReaderSkeleton reference={target ? describeChapterTarget(scriptureCatalog, target) : null} />;
   } else if (selection.kind === "library") {
     content = <LibraryView />;
   } else if (selection.kind === "volume") {

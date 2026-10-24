@@ -4,6 +4,7 @@ import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useChapterNavigation } from "@/components/ChapterNavigation";
 import { getQuickNavSuggestions } from "@/lib/scriptureQuickNav";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
@@ -44,6 +45,7 @@ export default function ScriptureQuickNav({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
+  const navigateToChapter = useChapterNavigation();
   const pathname = usePathname();
   const locationData = useMemo(() => parseBrowseLocation(pathname), [pathname]);
   const activeVolume = normalizeScriptureVolume(currentVolume ?? locationData.volume ?? "");
@@ -107,7 +109,7 @@ export default function ScriptureQuickNav({
       nextUrl.searchParams.set("translation", currentTranslation);
       compare.forEach((value) => nextUrl.searchParams.append("compare", value));
     }
-    router.push(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    navigateToChapter(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     setOpen(false);
     setQuery("");
   }

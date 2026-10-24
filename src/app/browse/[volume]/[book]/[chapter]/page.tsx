@@ -91,10 +91,15 @@ export default async function ChapterPage({ params, searchParams }: Params) {
             href: `/browse/${volumeSlug}`,
           },
         ]),
-    {
-      label: bookLabel,
-      href: `/browse/${volumeSlug}/${book}`,
-    },
+    // A one-chapter book's own URL opens this chapter, so it gets no crumb of its own (the reference names it).
+    ...(catalogBook?.chapterCount === 1
+      ? []
+      : [
+          {
+            label: bookLabel,
+            href: `/browse/${volumeSlug}/${book}`,
+          },
+        ]),
     { label: `Chapter ${chapter}` },
   ];
 

@@ -4,7 +4,6 @@ import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import Breadcrumbs, { Crumb } from "./Breadcrumbs";
@@ -12,6 +11,7 @@ import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import ScriptureQuickNav from "./ScriptureQuickNav";
+import { ChapterLink, useChapterNavigation } from "./ChapterNavigation";
 import WordStudyPanel from "./WordStudyPanel";
 import { useAuth } from "@/lib/auth";
 import type { Footnote } from "@/lib/openscripture";
@@ -518,6 +518,7 @@ export default function ChapterReader({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
   const router = useRouter();
+  const navigateToChapter = useChapterNavigation();
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number | null>(null);
@@ -1301,7 +1302,7 @@ export default function ChapterReader({
       const href = navHrefRef.current;
       navHrefRef.current = null;
       leavingRef.current = false;
-      router.push(href);
+      navigateToChapter(href);
       return;
     }
     setAnimTargetX(null);
@@ -1722,8 +1723,8 @@ export default function ChapterReader({
           <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
           <NoteSourceRegistrar kind="scripture" label={reference} volume={volume} book={book} chapter={chapter} />
           <nav className="simple-only reader-simple-nav" aria-label="Chapter navigation">
-            {prevHref ? <Link href={prevHref}>&larr; Previous</Link> : <span />}
-            {nextHref ? <Link href={nextHref}>Next &rarr;</Link> : <span />}
+            {prevHref ? <ChapterLink href={prevHref}>&larr; Previous</ChapterLink> : <span />}
+            {nextHref ? <ChapterLink href={nextHref}>Next &rarr;</ChapterLink> : <span />}
           </nav>
           </div>
         </div>

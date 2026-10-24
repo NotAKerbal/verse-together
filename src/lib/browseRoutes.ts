@@ -54,6 +54,100 @@ export function browseChapterHref(volume: string, book: string, chapter: number)
   return `${browseBookHref(volume, book)}/${chapter}`;
 }
 
+/**
+ * A one-chapter book (Enos, Jude, Joseph Smith—History, …) has nothing to choose, so it opens straight to its
+ * only chapter: that chapter's URL, or null for every other book. D&C's single book is its section list.
+ */
+export function singleChapterBookHref(catalog: ScriptureCatalogIndex, volume: string, book: string): string | null {
+  const canonical = normalizeScriptureVolume(volume);
+  if (SINGLE_BOOK_VOLUMES[canonical] === book) return null;
+  const entry = catalog.getBook(canonical, book);
+  return entry && entry.chapterCount === 1 ? browseChapterHref(canonical, entry.book, 1) : null;
+}
+
+/** Where opening a book goes: its chapter list, or its only chapter. */
+export function browseBookEntryHref(catalog: ScriptureCatalogIndex, volume: string, book: string): string {
+  return singleChapterBookHref(catalog, volume, book) ?? browseBookHref(normalizeScriptureVolume(volume), book);
+}
+
+/** "?translation=…&compare=…" from a page's searchParams, in order, or "" when there are none. */
+export function toSearchSuffix(query: Record<string, string | string[] | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+      params.append(key, item);
+    }
+  }
+  const out = params.toString();
+  return out ? `?${out}` : "";
+}
+
+/** Whether an href is a selection view the browse selector can show in place (library, volume, or book list). */
+export function isBrowseSelectionHref(href: string): boolean {
+  return /^\/browse(\/|$|[?#])/.test(href) && parseBrowseSelection(href) !== null;
+}
+
+export type BrowseChapterTarget = {
+  volume: string;
+  volumeSlug: string;
+  book: string;
+  chapter: number;
+  pathname: string;
+};
+
+/** The chapter an in-app href opens, or null for anything else (selection views, other pages, other origins). */
+export function parseBrowseChapterHref(href: string): BrowseChapterTarget | null {
+  let url: URL;
+  try {
+    url = new URL(href, "http://app.invalid");
+  } catch {
+    return null;
+  }
+  if (url.origin !== "http://app.invalid") return null;
+  const parts = url.pathname.split("/").filter(Boolean).map(decodeSegment);
+  if (parts.length !== 4 || parts[0] !== "browse") return null;
+  const chapter = Number(parts[3]);
+  if (!parts[1] || !parts[2] || !Number.isInteger(chapter) || chapter < 1) return null;
+  const volume = normalizeScriptureVolume(parts[1]);
+  return { volume, volumeSlug: toScriptureVolumeUrlSlug(volume), book: parts[2], chapter, pathname: url.pathname };
+}
+
+/**
+ * A navigation that should show the chapter skeleton while it loads: one to a chapter page other than the page
+ * already shown. Verse jumps and query changes on the current chapter keep the page in place.
+ */
+export function chapterNavigationTarget(currentPathname: string, href: string): BrowseChapterTarget | null {
+  const target = parseBrowseChapterHref(href);
+  if (!target) return null;
+  return target.pathname === currentPathname.split(/[?#]/)[0] ? null : target;
+}
+
+/** "Alma 32" style label for a chapter, from the catalog (the book slug when it is unknown). */
+export function describeChapterTarget(
+  catalog: ScriptureCatalogIndex,
+  target: Pick<BrowseChapterTarget, "volume" | "book" | "chapter">
+): string {
+  const entry = catalog.getBook(normalizeScriptureVolume(target.volume), target.book);
+  return `${entry?.label ?? target.book.replace(/-/g, " ")} ${target.chapter}`;
+}
+
+export type PendingChapterNavigation = {
+  /** The page the navigation started from. */
+  fromPathname: string;
+  target: BrowseChapterTarget;
+};
+
+/**
+ * The skeleton stands in for the page only while its navigation is still in flight from the page it started on:
+ * arriving, going Back/Forward, navigating elsewhere, or the navigation ending in failure all put a page back.
+ */
+export function isChapterSkeletonVisible(
+  pending: PendingChapterNavigation | null,
+  state: { pathname: string; navigating: boolean }
+): boolean {
+  return !!pending && state.navigating && state.pathname === pending.fromPathname;
+}
+
 /** Where a book view's back button goes: its volume, or the Library for a one-book volume. */
 export function browseBookBackHref(volume: string): string {
   const canonical = normalizeScriptureVolume(volume);
@@ -204,7 +298,7 @@ export function buildVolumeBooks(catalog: ScriptureCatalogIndex, volume: string)
     category: CATEGORY_BY_BOOK.get(`${canonical}:${book.book}`),
     subtitle: book.subtitle,
     titleOfficial: book.longTitle ?? undefined,
-    href: browseBookHref(canonical, book.book),
+    href: browseBookEntryHref(catalog, canonical, book.book),
   }));
 }
 

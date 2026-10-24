@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useChapterNavigation } from "@/components/ChapterNavigation";
 import { getQuickNavSuggestions, parseScriptureReferenceQuery } from "@/lib/scriptureQuickNav";
 
 type Option = { key: string; label: string; href: string; kind: "jump" | "search" };
@@ -52,7 +52,8 @@ function searchHref(query: string): string {
  * every scripture. It is a plain GET form, so Enter still reaches /search without JavaScript.
  */
 export default function LibrarySearch({ className = "" }: { className?: string }) {
-  const router = useRouter();
+  // A jump to a chapter shows the reader skeleton at once; /search and other hrefs go through the router as usual.
+  const navigate = useChapterNavigation();
   const listId = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -82,7 +83,7 @@ export default function LibrarySearch({ className = "" }: { className?: string }
   const optionId = (key: string) => `${listId}-${key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
   function go(href: string) {
-    router.push(href);
+    navigate(href);
     setOpen(false);
     setQuery("");
   }

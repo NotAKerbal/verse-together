@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChapterLink } from "@/components/ChapterNavigation";
 import { useEffect, useMemo } from "react";
 import { scheduleIdleTask } from "@/lib/idle";
 import { useBookProgress } from "./useReadingProgress";
@@ -46,7 +46,7 @@ export default function ChapterGrid({ volume, book, chapterCount, delineation, c
 
         return (
           <li key={chapterNumber}>
-            <Link
+            <ChapterLink
               href={chapterHref(chapterNumber)}
               prefetch={false}
               onPointerEnter={() => prefetchChapter(chapterHref(chapterNumber))}
@@ -64,7 +64,7 @@ export default function ChapterGrid({ volume, book, chapterCount, delineation, c
               data-tap
             >
               {chapterNumber}
-            </Link>
+            </ChapterLink>
           </li>
         );
       })}
