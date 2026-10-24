@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faCompass,
-  faLightbulb,
-  faListCheck,
+  faBookOpen,
+  faPencil,
+  faShoePrints,
   faBars,
   faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
@@ -24,9 +24,9 @@ export default function Navbar() {
   const [collapsed, setCollapsed] = useState(false);
   const navItems = primaryNavItems;
   const navIcons = {
-    Browse: faCompass,
-    Notes: faLightbulb,
-    Plans: faListCheck,
+    Browse: faBookOpen,
+    Notes: faPencil,
+    "Come Follow Me": faShoePrints,
   } as const;
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function Navbar() {
             {navItems.map((item) => {
               const active = isPathActive(pathname, item.href);
               const href = item.href === "/browse" ? browseHref : item.href;
-              const icon = navIcons[item.label as keyof typeof navIcons];
+              const icon = navIcons[item.label];
               return (
                 <Link
                   key={item.href}
@@ -71,6 +71,7 @@ export default function Navbar() {
                   title={item.label}
                 >
                   <FontAwesomeIcon icon={icon} className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
+                  <span>{item.label}</span>
                 </Link>
               );
             })}
