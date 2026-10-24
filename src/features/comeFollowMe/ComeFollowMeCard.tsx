@@ -11,8 +11,8 @@ const readCurrentWeekStart = () => getComeFollowMeWeek(new Date())?.start ?? "";
 /** The server cannot know the reader's date, so the week fills in once hydrated. */
 const readServerWeekStart = () => null;
 
-// Heinrich Hofmann, Figure of Christ (1884). Public domain; see docs/browse-art-provenance.md.
-const portrait: BrowseCardImage = { src: "/art/hofmann-christ.webp", objectPosition: "50% 20%" };
+// Generated footprints-in-sand illustration; see docs/browse-art-provenance.md.
+const artwork: BrowseCardImage = { src: "/art/browse-come-follow-me.webp" };
 
 /** The whole card opens this week's lesson; weeks without a guide still have their reading page. */
 export default function ComeFollowMeCard({ className }: { className?: string }) {
@@ -25,7 +25,7 @@ export default function ComeFollowMeCard({ className }: { className?: string }) 
       <BrowseCard
         href="/come-follow-me"
         className={className}
-        image={portrait}
+        image={artwork}
         eyebrow="Come, Follow Me"
         title={weekStart === null ? "This week" : "Study guides"}
       />
@@ -36,7 +36,7 @@ export default function ComeFollowMeCard({ className }: { className?: string }) 
     <BrowseCard
       href={getStudyGuideHref(week.start)}
       className={className}
-      image={portrait}
+      image={artwork}
       eyebrow={`Come, Follow Me · ${formatWeekRange(week)}`}
       title={week.block}
       description={hasStudyGuide(week.start) ? "This week's study guide" : "This week's reading"}

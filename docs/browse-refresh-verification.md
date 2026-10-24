@@ -49,14 +49,14 @@ redesign is included.
 - An existing AccountControl hydration warning appeared on the dev server before the Browse edits.
   The production phone-touch/date-boundary checks reported no client errors.
 
-Art source and public-domain evidence are recorded in [browse-art-provenance.md](browse-art-provenance.md).
+Art generation and processing details are recorded in [browse-art-provenance.md](browse-art-provenance.md).
 
 ## Follow-up: art on every card
 
-Seven original nonfigurative illustrations were generated with the built-in image tool, then optimized
-locally; the sourced Savior painting stays unchanged pending owner selection. Exact prompts, filenames,
-sizes and checksums are in `browse-generated-art-prompts.json`. The four alternative Savior paintings
-and their source/reuse evidence are in `browse-savior-options.md`.
+Seven original nonfigurative illustrations were initially generated with the built-in image tool, then
+optimized locally. The later footsteps update below replaces the remaining sourced portrait, so all
+eight cards now use generated illustrations. Exact prompts, filenames, sizes and checksums are in
+`browse-generated-art-prompts.json`.
 
 - **Passed:** focused lint on the four changed TSX files and production build (including TypeScript).
 - **Passed:** production Chrome at 320, 390, 768 and 1440 px, light and dark: each of the seven visible
@@ -68,3 +68,24 @@ and their source/reuse evidence are in `browse-savior-options.md`.
   interaction verification before publishing the HTML artifact.
 - **Not run:** authenticated Continue Reading persistence. Its image is wired through the same card
   component, but screenshots/checks of actual signed-in account data were not performed.
+
+## Follow-up: symbolic Come Follow Me artwork
+
+Tested `91278698267bc49a61f08f99f932ad6e1dfb72a7` plus the footprints asset/component/documentation
+changes, using `npm run dev:local -- --port 3423` and Chrome 155. The full PR deployment and exact
+published revision are recorded in the PR's Previews section.
+
+- **Passed:** independent review confirms only the CFM image/comment/variable changed in runtime
+  code. The weekly route, date logic, text, grid, neutral Book of Mormon color, and fade are preserved.
+- **Passed:** focused ESLint on `ComeFollowMeCard.tsx` and `npx tsc --noEmit`.
+- **Passed:** loaded generated footprints image at 320 and 1440 px in light/dark mode, right-side
+  CSS fade, no card/title clipping or page overflow, and no Hofmann image in the rendered page.
+- **Passed:** whole-card click opens `/come-follow-me/2026-10-19` and renders the Jeremiah lesson.
+- **Observed:** the known development Clerk `AccountControl` hydration mismatch remains; it is
+  outside the changed component. These development checks do not establish an error-free production
+  render; the deployed preview is checked separately.
+- **Not run again:** unrelated search, notes/backend tests, and authenticated Continue Reading
+  persistence. Their runtime logic is unchanged by this artwork update.
+
+The unused Hofmann asset and obsolete Savior-options document were removed. All eight current
+illustrations are generated landscapes/study objects; no Savior depiction was generated.
