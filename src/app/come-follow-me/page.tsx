@@ -28,10 +28,6 @@ export default function ComeFollowMePage() {
           <AccountControl variant="page" />
         </div>
         <h1 className={styles.heading}>Weekly lessons</h1>
-        <p className={styles.lede}>
-          Each study guide is paired with the week&apos;s full scripture text. Start with this week, then scroll back
-          through earlier lessons.
-        </p>
       </header>
       <LessonOverview serverToday={serverToday} />
       <p className={styles.plansLink}>
