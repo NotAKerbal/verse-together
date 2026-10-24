@@ -165,6 +165,16 @@ export function formatDayHeading(dayKey: string): string {
   });
 }
 
+/** The same day abbreviated ("Fri, Oct 23, 2026"), for narrow places such as the desktop rail. */
+export function formatShortDayHeading(dayKey: string): string {
+  return dateFromKey(dayKey).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function formatMonthHeading(monthKey: string): string {
   return dateFromKey(`${monthKey}-01`).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }

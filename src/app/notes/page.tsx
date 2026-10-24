@@ -2,7 +2,7 @@ import NotesWorkspace from "@/components/NotesWorkspace";
 
 export default function NotesPage() {
   return (
-    <section className="page-shell-wide pb-8">
+    <section className="page-shell-wide pb-8 lg:pb-0">
       <NotesWorkspace />
     </section>
   );

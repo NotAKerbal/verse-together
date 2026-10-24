@@ -9,12 +9,15 @@ export function NoteSourceLine({
   authorLabel,
   time,
   verb = "Wrote",
+  raiseLink = false,
 }: {
   source: NoteSource | null;
   authorLabel?: string;
   /** ISO timestamp the entry was recorded. */
   time: string;
   verb?: string;
+  /** Lifts the source link above a card's stretched button, so it stays clickable on its own. */
+  raiseLink?: boolean;
 }) {
   return (
     <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-[color:var(--foreground-muted)]">
@@ -30,7 +33,7 @@ export function NoteSourceLine({
           <span>from</span>
           <Link
             href={source.href}
-            className="inline-flex items-center gap-1 font-semibold text-[color:var(--ink)] underline decoration-[color:var(--rule-strong)] underline-offset-2 hover:decoration-[color:var(--accent-rubric)]"
+            className={`${raiseLink ? "relative z-[1] " : ""}inline-flex min-w-0 items-center gap-1 font-semibold wrap-anywhere text-[color:var(--ink)] underline decoration-[color:var(--rule-strong)] underline-offset-2 hover:decoration-[color:var(--accent-rubric)]`}
             title={`${sourceKindLabel(source)}: ${source.label}`}
           >
             <FontAwesomeIcon
