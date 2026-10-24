@@ -76,15 +76,14 @@ class FakeTimers {
 }
 
 /** The Notes page as the adapter wires it: view state resolved against the provider's active note. */
-function page(options: { active?: string | null; activeDate?: string | null; notes?: Record<string, string> } = {}) {
+function page(options: { active?: string | null; notes?: Record<string, string> } = {}) {
   const notes = options.notes ?? { a: today, b: today, c: "2026-10-18" };
   const browser = new FakeBrowser();
   const timers = new FakeTimers();
   let state: JournalViewState = null;
   let active = options.active ?? null;
   const selected: string[] = [];
-  const view = () =>
-    resolveJournalView(state, { today, activeNoteId: active, activeNoteDate: active ? (options.activeDate ?? notes[active] ?? null) : null });
+  const view = () => resolveJournalView(state, { today, activeNoteId: active });
   const history = new JournalHistory(
     browser,
     {
@@ -213,22 +212,27 @@ describe("Back and Forward on the Notes page", () => {
     expect(browser.calls).toEqual(["push"]);
   });
 
-  test("arriving with an active note adds no entry, and closing it stays on the page", () => {
-    const { browser, history, view, act } = page({ active: "a" });
+  test("arriving with an active note shows today's calendar, selects nothing and adds no entry", () => {
+    const { browser, history, view, selected, setActive } = page({ active: "c" });
     history.restore();
-    expect(view()).toEqual(noteAt("a", today));
-    act({ type: "closeNote" });
+    expect(view()).toEqual({ stage: "calendar", date: today, noteId: null });
+    // The provider restoring or switching its active note afterwards doesn't open it either.
+    setActive("a");
+    expect(view()).toEqual({ stage: "calendar", date: today, noteId: null });
+    expect(selected).toEqual([]);
     expect(browser.calls).toEqual([]);
-    expect(browser.index).toBe(1);
-    expect(view()).toEqual(day(today));
   });
 
-  test("switching away from a note arrived with adds an entry whose Back shows that day's chooser", () => {
-    const { browser, view, open } = page({ active: "a" });
-    open("b");
+  test("opening the active note arrived with adds an entry whose Back shows the calendar again", () => {
+    const { browser, history, view, open } = page({ active: "a" });
+    history.restore();
+    open("a");
     expect(browser.calls).toEqual(["push"]);
+    expect(view()).toEqual(noteAt("a", today));
     browser.traverse(-1);
-    expect(view()).toEqual(day(today));
+    expect(view()).toEqual({ stage: "calendar", date: today, noteId: null });
+    browser.traverse(1);
+    expect(view()).toEqual(noteAt("a", today));
   });
 
   test("phone: calendar → day → note, Back returns to the day's list, and the Calendar button needs no history", () => {

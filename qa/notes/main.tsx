@@ -40,7 +40,7 @@ function QaApp(){
  const entries:JournalEntry[]=[...docs.map(d=>({...d,kind:"note" as const,author_label:"QA user",excerpt:excerptOf(d.markdown_body),read_only:false as const})),...fixedEntries,...readings];
  useEffect(()=>{const f=(event:Event)=>setReadings(rows=>[...rows,(event as CustomEvent<JournalEntry>).detail]);addEventListener("qa-reading",f);return()=>removeEventListener("qa-reading",f);},[]);
  const activeDoc=docs.find(d=>d.id===active)??null;
- const view=resolveJournalView(viewState,{today:"2026-10-21",activeNoteId:active,activeNoteDate:activeDoc?.journal_date??null});
+ const view=resolveJournalView(viewState,{today:"2026-10-21",activeNoteId:active});
  // The page's own history hook: Back and Forward reopen and close notes here exactly as on /notes.
  const go=useJournalHistory(view,{enabled:true,show:setViewState,select:id=>{if(id!==active&&docs.some(d=>d.id===id))setActive(id);}});
  const act=(action:JournalViewAction)=>go(current=>nextJournalView(current,action));
