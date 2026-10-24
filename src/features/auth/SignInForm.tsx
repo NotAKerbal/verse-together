@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/lib/auth";
 import { safeReturnPath, signInHref } from "@/lib/safeRedirect";
+import { socialCallbackURLs } from "@/lib/signInFlow";
 import { authErrorMessage } from "./authErrors";
 import {
   AuthOptionsLoading,
@@ -86,8 +87,7 @@ function SignInFormInner() {
     try {
       const { error: socialError } = await authClient.signIn.social({
         provider: "google",
-        callbackURL: returnTo,
-        errorCallbackURL: signInHref(returnTo),
+        ...socialCallbackURLs(returnTo, window.location.origin),
       });
       if (socialError) {
         setError(authErrorMessage(socialError));

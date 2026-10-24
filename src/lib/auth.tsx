@@ -278,7 +278,7 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
         if (caps === undefined) {
           caps = await (convex.query(api.auth.capabilities, {}) as Promise<AuthCapabilities>).catch(() => undefined);
         }
-        const route = chooseSignInRoute(caps, target);
+        const route = chooseSignInRoute(caps, target, window.location.origin);
         if (route.kind === "page") return toSignInPage(route.href);
         try {
           const { data, error: socialError } = await authClient.signIn.social({

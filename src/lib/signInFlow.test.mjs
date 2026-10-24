@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseSignInRoute, signInErrorHref, signInReturnPath, socialErrorCode } from "./signInFlow.ts";
+import { chooseSignInRoute, signInErrorHref, signInReturnPath, socialCallbackURLs, socialErrorCode } from "./signInFlow.ts";
 
 const GOOGLE_ONLY = { google: true, emailPassword: false };
 
@@ -58,4 +58,35 @@ test("reports the Better Auth error code, rate limiting, or a generic failure", 
   assert.equal(socialErrorCode({ status: 429 }), "TOO_MANY_REQUESTS");
   assert.equal(socialErrorCode({ status: 0 }), "sign_in_failed");
   assert.equal(socialErrorCode(null), "sign_in_failed");
+});
+
+const ORIGIN = "https://scripture-sharing-dev.vercel.app";
+
+test("sends Google absolute same-origin callbacks so a return path with a hash survives", () => {
+  assert.deepEqual(chooseSignInRoute(GOOGLE_ONLY, "/notes?authcheck=1#return", ORIGIN), {
+    kind: "google",
+    callbackURL: `${ORIGIN}/notes?authcheck=1#return`,
+    errorCallbackURL: `${ORIGIN}/sign-in?redirect=%2Fnotes%3Fauthcheck%3D1%23return`,
+  });
+  assert.deepEqual(chooseSignInRoute({ google: true, emailPassword: true }, "/notes#return", ORIGIN), {
+    kind: "page",
+    href: "/sign-in?redirect=%2Fnotes%23return",
+  });
+});
+
+test("absolute callbacks still only ever point at a safe path on the browser's origin", () => {
+  for (const target of ["https://evil.example/", "//evil.example", "/\\evil.example", "/sign-in?redirect=/notes", "/api/auth/callback/google", null]) {
+    assert.deepEqual(
+      socialCallbackURLs(target, ORIGIN),
+      { callbackURL: `${ORIGIN}/`, errorCallbackURL: `${ORIGIN}/sign-in` },
+      String(target)
+    );
+  }
+});
+
+test("the sign-up page's Google error lands back on sign-up", () => {
+  assert.deepEqual(socialCallbackURLs("/plans#today", ORIGIN, "/sign-up"), {
+    callbackURL: `${ORIGIN}/plans#today`,
+    errorCallbackURL: `${ORIGIN}/sign-up?redirect=%2Fplans%23today`,
+  });
 });

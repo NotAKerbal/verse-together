@@ -30,3 +30,24 @@ export function signInHref(returnTo: string | null | undefined, page: "/sign-in"
   const safe = safeReturnPath(returnTo, "");
   return safe && safe !== "/" ? `${page}?redirect=${encodeURIComponent(safe)}` : page;
 }
+
+/**
+ * An app path built by this module (`safeReturnPath` or `signInHref` output) as an absolute URL on
+ * `origin`, the browser's own `location.origin`. Better Auth accepts relative callback URLs only
+ * when they avoid characters such as `#`, `:` or `!`, so callbacks carrying a real return path are
+ * sent absolute and checked against its trusted origins instead. A path that isn't path-absolute
+ * becomes the home page; an `origin` that isn't a plain http(s) origin leaves the path relative.
+ */
+export function appURL(path: string, origin: string | null | undefined): string {
+  const safePath =
+    path.startsWith("/") && !path.startsWith("//") && !/[\u0000-\u001f\u007f\\]/.test(path) ? path : FALLBACK;
+  let base: URL;
+  try {
+    base = new URL(origin ?? "");
+  } catch {
+    return safePath;
+  }
+  if ((base.protocol !== "https:" && base.protocol !== "http:") || base.origin !== origin) return safePath;
+  const url = new URL(safePath, base);
+  return url.origin === base.origin ? url.href : `${base.origin}${FALLBACK}`;
+}

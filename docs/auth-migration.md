@@ -557,6 +557,15 @@ Development configuration is scoped as follows:
   owner IDs; accessing legacy content still requires an explicit verified mapping from §3. No Clerk
   accounts or content are automatically linked by email during deployment.
 
+**Callback URL correction.** A live smoke test on dev found that `POST /api/auth/sign-in/social` returned
+403 `INVALID_CALLBACK_URL` for `callbackURL=/notes?authcheck=1#return`. Better Auth 1.6 accepts a relative
+callback URL only if it avoids characters such as `#`, `:` and `!`. It also skips this check when
+`NODE_ENV=test`, so the §13 simulated response and the unit tests did not catch the problem. The app now sends
+Google and sign-up return URLs as absolute same-origin URLs (`appURL` / `socialCallbackURLs`). Each is built
+from the browser's `location.origin` plus a path that has already passed `safeReturnPath`. The backend's
+trusted-origin validation is unchanged. `tests/convex/authCallbackUrls.test.ts` runs the real handler with
+`NODE_ENV=production`.
+
 The rollout result and deployed revision are recorded in the release PR.
 
 ## Missing configuration and open gaps

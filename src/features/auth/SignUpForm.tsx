@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/lib/auth";
-import { safeReturnPath, signInHref } from "@/lib/safeRedirect";
+import { appURL, safeReturnPath, signInHref } from "@/lib/safeRedirect";
+import { socialCallbackURLs } from "@/lib/signInFlow";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../../convex/authEnvironment";
 import { authErrorMessage } from "./authErrors";
 import {
@@ -71,7 +72,7 @@ function SignUpFormInner() {
         name: name.trim(),
         email: email.trim(),
         password,
-        callbackURL: returnTo,
+        callbackURL: appURL(returnTo, window.location.origin),
       });
       if (signUpError) {
         setError(authErrorMessage(signUpError));
@@ -97,8 +98,7 @@ function SignUpFormInner() {
     try {
       const { error: socialError } = await authClient.signIn.social({
         provider: "google",
-        callbackURL: returnTo,
-        errorCallbackURL: signInHref(returnTo, "/sign-up"),
+        ...socialCallbackURLs(returnTo, window.location.origin, "/sign-up"),
       });
       if (socialError) {
         setError(authErrorMessage(socialError));
