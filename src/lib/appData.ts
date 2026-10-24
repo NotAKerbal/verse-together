@@ -12,7 +12,32 @@ export type InsightScriptureRef = {
   reference: string;
 };
 
-export type InsightDraftSummary = {
+/** Where a note or reading came from; href is always a path in this app. */
+export type NoteSource = {
+  kind: "scripture" | "guide" | "page";
+  label: string;
+  href: string;
+  volume?: string;
+  book?: string;
+  chapter?: number;
+  verseStart?: number;
+  verseEnd?: number;
+};
+
+/** Markdown fields on every note read path; optional so an older backend still satisfies the types. */
+export type NoteMarkdownFields = {
+  /** Stored Markdown, or a projection of the note's blocks when markdown_canonical is false. */
+  markdown_body?: string;
+  /** Pass back as expectedRevision when saving. */
+  markdown_revision?: number;
+  /** True once the note has been saved as Markdown; legacy block edits are then refused. */
+  markdown_canonical?: boolean;
+  /** YYYY-MM-DD. */
+  journal_date?: string;
+  source?: NoteSource | null;
+};
+
+export type InsightDraftSummary = NoteMarkdownFields & {
   id: string;
   title: string;
   status: "draft" | "published" | "archived";
@@ -60,6 +85,11 @@ export type PublishedInsight = {
   tags: string[];
   block_count: number;
   published_at: string;
+  /** Present when a Markdown-backed note was published; blocks then hold one text block with this body. */
+  markdown_body?: string | null;
+  markdown_revision?: number | null;
+  journal_date?: string | null;
+  source?: NoteSource | null;
   blocks: Array<{
     id: string;
     order: number;
@@ -76,6 +106,72 @@ export type PublishedInsight = {
       pronounce: string | null;
     } | null;
   }>;
+};
+
+/** insights:getSharedDraft. A Markdown-backed note's blocks are one text block holding markdown_body. */
+export type SharedInsightDraft = NoteMarkdownFields & {
+  id: string;
+  user_id: string;
+  author_name: string | null;
+  title: string;
+  status: "draft" | "published" | "archived";
+  visibility: InsightVisibility;
+  tags: string[];
+  updated_at: string;
+  blocks: PublishedInsight["blocks"];
+};
+
+/** insights:saveJournalNote failure data when expectedRevision is stale (thrown as a ConvexError). */
+export type NoteRevisionConflict = {
+  code: "REVISION_CONFLICT";
+  message: string;
+  currentRevision: number;
+};
+
+/** insights:listMyJournal rows, newest journal day first. */
+export type JournalEntry =
+  | {
+      kind: "note";
+      id: string;
+      title: string;
+      status: "draft" | "published" | "archived";
+      visibility: InsightVisibility;
+      journal_date: string;
+      source: NoteSource | null;
+      excerpt: string | null;
+      markdown_revision: number;
+      markdown_canonical: boolean;
+      read_only: false;
+      author_label: string;
+      created_at: string;
+      updated_at: string;
+    }
+  | {
+      /** A verse annotation with note text, shown read-only. */
+      kind: "verse_annotation";
+      id: string;
+      title: null;
+      body: string;
+      journal_date: string;
+      source: NoteSource;
+      highlight_color: "yellow" | "blue" | "green" | "pink" | "purple" | null;
+      read_only: true;
+      author_label: string;
+      created_at: string;
+      updated_at: string;
+    };
+
+/** readingProgress:listMyReadingLog rows, newest first. */
+export type ReadingLogEntry = {
+  id: string;
+  /** legacy_chapter_read: a chapter's latest completion from before history was logged. */
+  kind: "log" | "legacy_chapter_read";
+  origin: "chapter_mark" | "manual" | "legacy";
+  source: NoteSource;
+  journal_date: string;
+  read_at: string;
+  created_at: string;
+  request_id: string | null;
 };
 
 export type AccountData = {

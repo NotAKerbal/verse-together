@@ -1,0 +1,21 @@
+/* Fills whatever the parent gives it: the desktop notes sidebar or the phone's full-screen note. */
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.root :global(.cm-editor) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.root :global(.cm-scroller) {
+  overflow: auto;
+}
+
+.root:focus-within {
+  outline: none;
+}

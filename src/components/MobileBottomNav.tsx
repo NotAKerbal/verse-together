@@ -57,15 +57,16 @@ function LightbulbIcon({ active }: { active: boolean }) {
 const navItems: NavItem[] = [
   {
     href: "/browse",
-    label: "Read",
+    label: "Browse",
     icon: BookIcon,
     active: (pathname) => pathname === "/" || isBrowseDiscoveryPath(pathname) || isReaderPath(pathname),
   },
   {
-    href: "/plans",
-    label: "Plans",
+    href: "/come-follow-me",
+    label: "CFM",
     icon: ListCheckIcon,
-    active: (pathname) => isPathActive(pathname, "/plans"),
+    // The index and every guide page under it.
+    active: (pathname) => isPathActive(pathname, "/come-follow-me"),
   },
   {
     href: "/notes",
