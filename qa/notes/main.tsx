@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {StrictMode,useEffect,useMemo,useState} from "react";
 import {createRoot} from "react-dom/client";
+import NotesSidebar from "../../src/features/notes/NotesSidebar";
 import JournalWorkspace from "../../src/features/notes/JournalWorkspace";
 import ReadingLogButton from "../../src/features/notes/ReadingLogButton";
 import JournalNoteEditor from "../../src/features/notes/JournalNoteEditor";
@@ -30,7 +31,9 @@ const fixedEntries:JournalEntry[]=[
 // Roughly the server's markdownExcerpt: up to 220 characters, then an ellipsis.
 function excerptOf(markdown:string){const rest=markdown.split("\n").slice(1).join(" ").replace(/[#*-]/g,"").replace(/\s+/g," ").trim();return rest.length>220?`${rest.slice(0,220).trimEnd()}...`:rest||null;}
 function QaApp(){
- const [readings,setReadings]=useState<JournalEntry[]>([]);const [docs,setDocs]=useState(fixtures);
+ const [readings,setReadings]=useState<JournalEntry[]>([]);const [docs,setDocs]=useState(()=>new URLSearchParams(location.search).get("empty")==="true"?[]:fixtures);
+ const sidebarMode=new URLSearchParams(location.search).has("sidebar");
+ const [panelOpen,setPanelOpen]=useState(true);
  // Stands in for the provider's active note: the only note whose document is "loaded".
  const [active,setActive]=useState<string|null>(()=>new URLSearchParams(location.search).get("active")==="none"?null:initial.id);
  const [viewState,setViewState]=useState<JournalViewState>(null);
@@ -45,7 +48,36 @@ function QaApp(){
  const go=useJournalHistory(view,{enabled:true,show:setViewState,select:id=>{if(id!==active&&docs.some(d=>d.id===id))setActive(id);}});
  const act=(action:JournalViewAction)=>go(current=>nextJournalView(current,action));
  const note=view.noteId!==null&&activeDoc?.id===view.noteId?activeDoc:null;
- function create(date:string){const next={...initial,id:`qa-${Date.now()}`,title:"Untitled note",markdown_body:"",journal_date:date,source:null,created_at:new Date().toISOString()};setDocs(d=>[...d,next]);setActive(next.id);go({stage:"note",date,noteId:next.id});}
- return <QaContext.Provider value={{journalOutbox:outbox}}><div className="app-shell min-h-screen"><header className="app-header hidden sm:block"><div className="shell-container flex items-center justify-between py-4"><span className="brand-wordmark brand-pill text-2xl">Verse<span>Together</span></span><nav className="segmented-control"><Link className="segmented-control-button" href="/browse">Browse</Link><Link className="segmented-control-button" data-active="true" href="/notes">Notes</Link><Link className="segmented-control-button" href="/come-follow-me">Come Follow Me</Link></nav><span className="pill-tag">QA user</span></div></header><main className="mx-auto max-w-[1440px] px-4 pt-3 pb-32 sm:px-8 sm:pt-4 lg:pb-4"><p className="mb-2 text-xs opacity-60">Component QA · synthetic fixtures · no backend connection</p><JournalWorkspace layout={layout} status="ready" entries={entries} today="2026-10-21" stage={view.stage} selectedDate={view.date} onSelectDate={date=>act({type:"selectDate",date})} selectedKey={view.noteId!==null?`note:${view.noteId}`:null} onOpenNote={(noteId,date)=>{act({type:"openNote",noteId,date});setActive(noteId);}} onCloseNote={()=>act({type:"closeNote"})} onShowCalendar={()=>act({type:"showCalendar"})} onNewNote={create} dayActions={<ReadingLogButton key={view.date} options={[{source,verseCount:24}]} defaultDate={view.date} onLogged={date=>act({type:"selectDate",date})}/>} notePane={note?<JournalNoteEditor key={note.id} note={note} authorLabel="QA user" showDate={false} onClose={()=>act({type:"closeNote"})}/>:undefined}/></main><nav className="fixed bottom-3 inset-x-4 z-40 grid grid-cols-3 rounded-full border-2 p-2 shadow-lg sm:hidden" style={{background:"var(--mobile-nav-shell)",borderColor:"var(--surface-border)"}}><Link className="p-3 text-center" href="/browse">Browse</Link><Link className="p-3 text-center" href="/come-follow-me">CFM</Link><Link className="rounded-full p-3 text-center" style={{background:"var(--mobile-nav-active)",color:"var(--mobile-nav-active-text)"}} href="/notes">Notes</Link></nav></div></QaContext.Provider>;
+ function create(date:string,fromReader=false){const next={...initial,id:`qa-${Date.now()}`,title:"Untitled note",markdown_body:"",journal_date:date,source:fromReader?source:null,created_at:new Date().toISOString()};setDocs(d=>[...d,next]);setActive(next.id);go({stage:"note",date,noteId:next.id});return next.id;}
+ const sidebarPane = (
+   <>
+     <section className="panel-card max-w-lg rounded-[20px] p-6">
+       <h1 className="font-display text-2xl font-extrabold">1 Nephi 2</h1>
+       <p className="mt-4 font-serif text-lg leading-relaxed">
+         And it came to pass that he was obedient unto the word of the Lord, wherefore he did as the Lord commanded him.
+       </p>
+       <p className="mt-4 text-sm text-[color:var(--foreground-muted)]">Synthetic reader context for the Notes sidebar.</p>
+     </section>
+     <NotesSidebar
+       isOpen={panelOpen}
+       onToggle={() => setPanelOpen(open => !open)}
+       onCollapse={() => setPanelOpen(false)}
+       activeNoteId={active}
+       activeNote={activeDoc}
+       notes={docs.map(d => ({
+         ...d, visibility: "private" as const, tags: [], last_active_at: d.updated_at, excerpt: excerptOf(d.markdown_body),
+       }))}
+       isLoading={false}
+       onSelect={async id => { setActive(id); }}
+       onCreate={async () => {
+         if (new URLSearchParams(location.search).has("createError")) {
+           throw new Error("Synthetic create failure. Your current note is safe.");
+         }
+         return create("2026-10-21", true);
+       }}
+     />
+   </>
+ );
+ return <QaContext.Provider value={{journalOutbox:outbox}}><div className="app-shell min-h-screen"><header className="app-header hidden sm:block"><div className="shell-container flex items-center justify-between py-4"><span className="brand-wordmark brand-pill text-2xl">Verse<span>Together</span></span><nav className="segmented-control"><Link className="segmented-control-button" href="/browse">Browse</Link><Link className="segmented-control-button" data-active="true" href="/notes">Notes</Link><Link className="segmented-control-button" href="/come-follow-me">Come Follow Me</Link></nav><span className="pill-tag">QA user</span></div></header><main className="mx-auto max-w-[1440px] px-4 pt-3 pb-32 sm:px-8 sm:pt-[calc(var(--header-height)+2rem)] lg:pb-4"><p className="mb-2 text-xs opacity-60">Component QA · synthetic fixtures · no backend connection</p>{sidebarMode?sidebarPane:<JournalWorkspace layout={layout} status="ready" entries={entries} today="2026-10-21" stage={view.stage} selectedDate={view.date} onSelectDate={date=>act({type:"selectDate",date})} selectedKey={view.noteId!==null?`note:${view.noteId}`:null} onOpenNote={(noteId,date)=>{act({type:"openNote",noteId,date});setActive(noteId);}} onCloseNote={()=>act({type:"closeNote"})} onShowCalendar={()=>act({type:"showCalendar"})} onNewNote={create} dayActions={<ReadingLogButton key={view.date} options={[{source,verseCount:24}]} defaultDate={view.date} onLogged={date=>act({type:"selectDate",date})}/>} notePane={note?<JournalNoteEditor key={note.id} note={note} authorLabel="QA user" showDate={false} onClose={()=>act({type:"closeNote"})}/>:undefined}/>}</main><nav className="fixed bottom-3 inset-x-4 z-40 grid grid-cols-3 rounded-full border-2 p-2 shadow-lg sm:hidden" style={{background:"var(--mobile-nav-shell)",borderColor:"var(--surface-border)"}}><Link className="p-3 text-center" href="/browse">Browse</Link><Link className="p-3 text-center" href="/come-follow-me">CFM</Link><Link className="rounded-full p-3 text-center" style={{background:"var(--mobile-nav-active)",color:"var(--mobile-nav-active-text)"}} href="/notes">Notes</Link></nav></div></QaContext.Provider>;
 }
 createRoot(document.getElementById("root")!).render(<StrictMode><QaApp/></StrictMode>);
