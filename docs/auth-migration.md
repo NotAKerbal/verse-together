@@ -7,8 +7,8 @@ missing before production.
 
 > **Status (2026-10-24):** implemented, unit/integration tested, and exercised end to end against an
 > anonymous **local** Convex backend with Next.js development and production servers (see [Local runtime evidence](#9-local-runtime-evidence-2026-10-24-historical)).
-> It has **not** been deployed to any cloud Convex deployment or production. A real Google sign-in has not
-> been tested end to end. No real Clerk export has been migrated. See
+> It is deployed to the isolated cloud preview in §12, where the user confirmed Google sign-in works.
+> Production remains unchanged. No real Clerk export has been migrated. See
 > [Missing configuration](#missing-configuration-and-open-gaps).
 >
 > **Current rollout: Google only.** Email/password sign-up, sign-in, password reset/change and email
@@ -535,12 +535,35 @@ Tested on `b241aec` plus uncommitted changes, Node.js 24:
 The browser fixture and task-owned local frontend were stopped after verification. No Convex code or
 environment change is needed for this frontend update.
 
+## 14. Shared development rollout
+
+The development target is `fabulous-dogfish-606` and its existing site is
+`https://scripture-sharing-dev.vercel.app`. Vercel's `dev` branch is a Preview environment; production is a
+separate target and is not part of this rollout. The current reader/guide changes from `dev` `7fcb76f`
+were integrated before release; the combined tree passed 118 Vitest tests, 19 auth tests, and both app and
+Convex TypeScript checks.
+
+Development configuration is scoped as follows:
+
+* Convex dev has its own `BETTER_AUTH_SECRET`, `AUTH_PROXY_SECRET`, and
+  `SITE_URL=https://scripture-sharing-dev.vercel.app`, alongside its existing Google credentials.
+* Vercel Preview overrides on **Git branch `dev` only** select `fabulous-dogfish-606` for both public Convex
+  URLs and provide the matching proxy secret. Other Preview branches and Production do not inherit them.
+* The Google OAuth client must allow
+  `https://scripture-sharing-dev.vercel.app/api/auth/callback/google` before switching the dev aliases.
+* Build the frontend first, then deploy the reviewed Convex functions explicitly to this development
+  deployment and switch the development aliases. The repo build command does not deploy Convex.
+* Existing Clerk sessions will require Google sign-in. Existing content is retained under its original
+  owner IDs; accessing legacy content still requires an explicit verified mapping from §3. No Clerk
+  accounts or content are automatically linked by email during deployment.
+
+The rollout result and deployed revision are recorded in the release PR.
+
 ## Missing configuration and open gaps
 
-* **Shared development still requires:** `BETTER_AUTH_SECRET`, `SITE_URL`, `AUTH_PROXY_SECRET`, and
-  `NEXT_PUBLIC_CONVEX_SITE_URL`/`AUTH_PROXY_SECRET` on the Next.js side. The dev deployment has Google
-  credentials (checked by name only); production configuration has not been verified. Email delivery is not needed for the Google-only
-  rollout.
+* **Shared development configuration:** prepared as described in §14; its Google redirect URI must be
+  registered before cutover. Production configuration has not been verified. Email delivery is not needed
+  for the Google-only rollout.
 * **Legacy password-only users without a Google account at the same address cannot reach their data** until
   email/password and Resend are enabled. The migration still pre-creates and links their accounts, so they
   will be able to use Forgot password then.
