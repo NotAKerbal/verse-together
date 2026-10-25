@@ -42,12 +42,35 @@ import {
 import { createLocalScriptureStore } from "./localScriptureStore.ts";
 import { createScriptureCatalogIndex } from "./scriptureCatalogIndex.ts";
 import { createServerChapterFetcher } from "./serverChapterFetcher.ts";
+import { getScriptureBookArt } from "./scriptureBookArt.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const dataDir = path.join(root, "public/scripture-data");
 const catalogPath = path.join(root, "src/lib/generated/scriptureCatalog.json");
 const rawCatalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const catalog = createScriptureCatalogIndex(rawCatalog);
+
+test("every scripture book has local artwork matching its displayed section", () => {
+  const { assets } = JSON.parse(fs.readFileSync(path.join(root, "docs/scripture-book-art-prompts.json"), "utf8"));
+  const artByBook = new Map(assets.map((asset) => [`${asset.volume}:${asset.book}`, asset]));
+  const images = new Set();
+  for (const volume of catalog.volumes) {
+    for (const book of buildVolumeBooks(catalog, volume.volume)) {
+      const src = getScriptureBookArt(volume.volume, book.id);
+      assert.ok(fs.existsSync(path.join(root, "public", src)), `Missing artwork for ${book.label}: ${src}`);
+      images.add(src);
+      if (volume.volume === "doctrineandcovenants") continue;
+      const asset = artByBook.get(`${volume.volume}:${book.id}`);
+      assert.ok(asset, `Missing provenance for ${book.label}`);
+      assert.equal(asset.dest, `public${src}`);
+      assert.equal(asset.section, book.category, `Section mismatch for ${book.label}`);
+    }
+  }
+  assert.equal(images.size, 87);
+  assert.equal(artByBook.size, 86);
+  assert.equal(getScriptureBookArt("old-testament", "genesis"), getScriptureBookArt("oldtestament", "genesis"));
+  assert.equal(getScriptureBookArt("dnc", "doctrineandcovenants"), "/art/browse-doctrineandcovenants.webp");
+});
 
 function deferred() {
   let resolve;
@@ -253,7 +276,7 @@ test("view data comes from the catalog alone", () => {
     href: "/browse/oldtestament/genesis",
   });
   assert.equal(oldTestament.find((book) => book.id === "psalms").category, "Wisdom");
-  assert.equal(buildVolumeBooks(catalog, "bookofmormon")[0].category, undefined);
+  assert.equal(buildVolumeBooks(catalog, "bookofmormon")[0].category, "Small Plates");
   assert.deepEqual(buildVolumeBooks(catalog, "nonsense"), []);
 
   assert.deepEqual(buildBookView(catalog, "doctrineandcovenants", "doctrineandcovenants"), {
