@@ -1897,3 +1897,196 @@ a.reader-toolbar-crumb:hover {
     text-align: center;
   }
 }
+
+/* Selection tools stay close to the passage, with the same paper and rubric as the reader. */
+.selection-popover {
+  position: fixed;
+  z-index: 40;
+  width: min(calc(100vw - 1.5rem), 27.5rem);
+  max-height: calc(100dvh - 100px);
+  visibility: hidden;
+  font-family: var(--font-dm-sans), sans-serif;
+  transition: top 180ms ease, left 180ms ease;
+}
+
+.selection-popover[data-ready="true"] { visibility: visible; }
+
+.selection-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: 20px;
+  background: var(--surface-card-strong);
+  color: var(--foreground);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ink) 5%, transparent), 0 16px 48px -16px color-mix(in srgb, var(--ink) 22%, transparent);
+  animation: selection-card-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transform-origin: bottom center;
+}
+
+.selection-popover[data-placement="bottom"] .selection-card { transform-origin: top center; }
+
+.selection-card-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 12px 8px 18px;
+}
+
+.selection-eyebrow {
+  margin: 0 0 3px;
+  color: var(--accent-rubric);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.11em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.selection-reference {
+  margin: 0;
+  font-family: var(--font-serif-text);
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.selection-dismiss {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--foreground-soft);
+  cursor: pointer;
+}
+
+.selection-dismiss svg { width: 17px; height: 17px; }
+.selection-dismiss:hover { background: var(--surface-card-soft); color: var(--foreground); }
+
+.selection-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.selection-action {
+  display: flex;
+  min-height: 70px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.selection-action:hover:not(:disabled) { background: var(--surface-card-soft); border-color: var(--surface-border); }
+.selection-action:active:not(:disabled) { background: var(--surface-button-hover); }
+.selection-action:disabled { color: var(--foreground-soft); cursor: not-allowed; }
+
+.selection-action-icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  background: var(--surface-card);
+  transition: color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.selection-action-icon svg { width: 19px; height: 19px; }
+.selection-action:hover:not(:disabled) .selection-action-icon { transform: translateY(-1px); color: var(--accent-rubric); }
+.selection-action-label { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.selection-action-title { font-size: 13px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.selection-action-description { color: var(--foreground-soft); font-size: 11px; line-height: 1.35; }
+
+.selection-action[data-featured="true"] {
+  border-color: color-mix(in srgb, var(--accent-rubric) 18%, var(--surface-border));
+  background: color-mix(in srgb, var(--accent-rubric) 5%, var(--surface-card-strong));
+}
+
+.selection-action[data-featured="true"] .selection-action-icon {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent-rubric) 10%, var(--surface-card-strong));
+  color: var(--accent-rubric);
+}
+
+.selection-action[data-featured="true"]:hover {
+  border-color: var(--accent-rubric-line);
+  background: color-mix(in srgb, var(--accent-rubric) 9%, var(--surface-card-strong));
+}
+
+.selection-card-footer {
+  display: flex;
+  min-height: 45px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px 0 10px;
+  border-top: 1px solid var(--rule);
+  background: var(--surface-card);
+}
+
+.selection-copy { display: inline-flex; min-height: 44px; align-items: center; gap: 7px; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
+.selection-copy svg { width: 15px; height: 15px; }
+.selection-copy:hover { color: var(--accent-rubric); }
+.selection-copy[data-notice="copied"] { color: var(--accent-rubric); }
+.selection-word-count { color: var(--foreground-soft); font-size: 11px; white-space: nowrap; }
+.selection-escape kbd { font: inherit; }
+
+.selection-popover :is(button, a):focus-visible { outline: 2px solid var(--accent-rubric); outline-offset: -2px; }
+
+.selection-pointer {
+  position: absolute;
+  left: var(--selection-pointer-x, 50%);
+  bottom: -5px;
+  width: 11px;
+  height: 11px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-card);
+  pointer-events: none;
+}
+
+.selection-popover[data-placement="bottom"] .selection-pointer { top: -5px; bottom: auto; transform: translateX(-50%) rotate(225deg); background: var(--surface-card-strong); }
+.selection-popover[data-overlap="true"] .selection-pointer { display: none; }
+
+@keyframes selection-card-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 639px) {
+  .selection-popover { max-height: calc(100dvh - 188px); }
+  .selection-action { gap: 8px; padding-inline: 8px; }
+  .selection-action-icon { width: 30px; height: 30px; border-radius: 9px; }
+  .selection-action-title { font-size: 12px; }
+  .selection-action-description { font-size: 10px; }
+  .selection-escape { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-popover, .selection-action, .selection-action-icon { transition: none; }
+  .selection-card { animation: none; }
+  .selection-action:hover:not(:disabled) .selection-action-icon { transform: none; }
+}

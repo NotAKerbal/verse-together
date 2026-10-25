@@ -1,9 +1,8 @@
 "use client";
 
 import type { MouseEvent } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faLink } from "@fortawesome/free-solid-svg-icons";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import { positionSelectionPopover } from "@/lib/selectionPopover";
 
 export type VerseActionAnchorRect = {
   top: number;
@@ -19,251 +18,171 @@ type Props = {
   anchorRect: VerseActionAnchorRect | null;
   hasSelection: boolean;
   hasActiveInsight: boolean;
+  selectionReference: string;
+  selectedText: string;
+  selectedVerseCount: number;
+  selectedWord?: string;
   showInsightAction?: boolean;
   showExplore?: boolean;
   showTranslations?: boolean;
   actionsEnabled?: boolean;
+  onClear: () => void;
   onInsight: () => void;
   onNewInsight: () => void;
   onAnnotation: () => void;
   onCitations: () => void;
   onExplore?: () => void;
   onTranslations?: () => void;
-  onShareLink?: () => void;
-  shareLinkNotice?: ShareLinkNotice;
+  shareHref?: string | null;
   targetLabel?: string;
 };
 
-export type ShareLinkNotice = "copied" | "shared" | "failed" | null;
+const ICON_PATHS = {
+  add: ["M12 5v14", "M5 12h14"],
+  note: ["M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8", "m16 3 5 5-9 9-5 1 1-5Z"],
+  book: ["M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Z", "M12 6v14"],
+  spark: ["m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"],
+  translate: ["M3 5h12", "M9 3v2c0 6-3 9-6 11", "M5 9c1 3 4 6 7 7", "m13 17 4-10 4 10", "M15 13h4"],
+  focus: ["M8 3H5a2 2 0 0 0-2 2v3", "M16 3h3a2 2 0 0 1 2 2v3", "M21 16v3a2 2 0 0 1-2 2h-3", "M8 21H5a2 2 0 0 1-2-2v-3", "M8 9h8", "M8 13h5"],
+  copy: ["M9 9h11v12H9Z", "M5 16H3V3h12v2"],
+  check: ["m5 12 4 4L19 6"],
+  close: ["m6 6 12 12", "M18 6 6 18"],
+} as const;
 
-export function shareLinkNoticeLabel(notice: ShareLinkNotice, idle = "Copy link"): string {
-  if (notice === "copied") return "Link copied";
-  if (notice === "shared") return "Shared";
-  if (notice === "failed") return "Couldn't copy";
-  return idle;
-}
-
-type FloatingStyle = {
-  top: number;
-  left: number;
-  placement: "top" | "bottom";
-};
-
-const VIEWPORT_MARGIN = 12;
-const SAFE_TOP = 64;
-const SAFE_BOTTOM = 20;
-const POPOVER_GAP = 10;
-
-function preserveSelection(event: MouseEvent<HTMLButtonElement>) {
-  event.preventDefault();
-}
-
-function ActionIcon({ kind }: { kind: "insight" | "folder" | "note" | "book" | "spark" | "translate" | "close" }) {
-  const iconClassName = "h-3.5 w-3.5 shrink-0";
-
-  if (kind === "insight") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 3v18" />
-        <path d="M3 12h18" />
-      </svg>
-    );
-  }
-
-  if (kind === "folder") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3.5 7.5a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" />
-      </svg>
-    );
-  }
-
-  if (kind === "note") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 4.5h8l3 3V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V6A1.5 1.5 0 0 1 7.5 4.5Z" />
-        <path d="M14 4.5v3h3" />
-        <path d="M9 12h6" />
-        <path d="M9 15.5h4.5" />
-      </svg>
-    );
-  }
-
-  if (kind === "book") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16.5H7.5A2.5 2.5 0 0 0 5 22Z" />
-        <path d="M5 5.5V22" />
-        <path d="M8.5 7.5h7" />
-      </svg>
-    );
-  }
-
-  if (kind === "spark") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m12 3 1.7 4.6L18 9.3l-4.3 1.7L12 15.7l-1.7-4.7L6 9.3l4.3-1.7Z" />
-        <path d="m18.5 14 1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1Z" />
-      </svg>
-    );
-  }
-
-  if (kind === "translate") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 6h9" />
-        <path d="M8.5 4v2c0 4.4-2.1 7.6-5.5 9.5" />
-        <path d="M6.2 11.5c1.4 2.1 3.3 3.8 5.6 4.9" />
-        <path d="M14 8h6" />
-        <path d="m17 5-4 14" />
-        <path d="m13.5 15.5 2.2-5.5 2.2 5.5" />
-      </svg>
-    );
-  }
-
+function ActionIcon({ kind }: { kind: keyof typeof ICON_PATHS }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 6l12 12" />
-      <path d="M18 6 6 18" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+      {ICON_PATHS[kind].map((path) => <path key={path} d={path} />)}
     </svg>
   );
 }
 
+function preserveSelection(event: MouseEvent<HTMLElement>) {
+  // Leave auxiliary clicks and the browser's link menu available.
+  if (event.button === 0) event.preventDefault();
+}
+
+function CopySelection({ text }: { text: string }) {
+  const [notice, setNotice] = useState<"idle" | "copied" | "failed">("idle");
+
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice("copied");
+    } catch {
+      setNotice("failed");
+    }
+  }
+
+  return (
+    <button type="button" className="selection-copy" onMouseDown={preserveSelection} onClick={() => void copyText()} data-notice={notice}>
+      <ActionIcon kind={notice === "copied" ? "check" : "copy"} />
+      <span aria-live="polite">{notice === "copied" ? "Copied" : notice === "failed" ? "Couldn't copy · retry" : "Copy text"}</span>
+    </button>
+  );
+}
+
+function ActionLabel({ icon, title, description }: {
+  icon: keyof typeof ICON_PATHS;
+  title: string;
+  description: string;
+}) {
+  return (
+    <>
+      <span className="selection-action-icon"><ActionIcon kind={icon} /></span>
+      <span className="selection-action-label">
+        <span className="selection-action-title">{title}</span>
+        <span className="selection-action-description">{description}</span>
+      </span>
+    </>
+  );
+}
+
 export default function VerseActionBar({
-  visible,
-  anchorRect,
-  hasSelection,
-  hasActiveInsight,
-  showInsightAction = true,
-  showExplore = false,
-  showTranslations = false,
-  actionsEnabled = true,
-  onInsight,
-  onNewInsight,
-  onAnnotation,
-  onCitations,
-  onExplore,
-  onTranslations,
-  onShareLink,
-  shareLinkNotice = null,
-  targetLabel = "Note",
+  visible, anchorRect, hasSelection, hasActiveInsight,
+  selectionReference, selectedText, selectedVerseCount, selectedWord,
+  showInsightAction = true, showExplore = false, showTranslations = false,
+  actionsEnabled = true, onClear, onInsight, onNewInsight, onAnnotation,
+  onCitations, onExplore, onTranslations, shareHref, targetLabel = "Note",
 }: Props) {
-  const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [floatingStyle, setFloatingStyle] = useState<FloatingStyle | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const headingId = useId();
+  const wordCount = selectedText.trim().split(/\s+/).filter(Boolean).length;
+  const selectionLabel = selectedWord ? "Word selected" : `${selectedVerseCount} ${selectedVerseCount === 1 ? "verse" : "verses"} selected`;
 
   useLayoutEffect(() => {
-    if (!visible || !hasSelection || !anchorRect || typeof window === "undefined") {
-      setFloatingStyle(null);
-      return;
+    const popover = popoverRef.current;
+    if (!visible || !hasSelection || !anchorRect || !popover) return;
+
+    function updatePosition() {
+      if (!popover || !anchorRect) return;
+      const position = positionSelectionPopover(anchorRect, popover.getBoundingClientRect(), {
+        width: window.innerWidth, height: window.innerHeight,
+      });
+      popover.style.top = `${position.top}px`;
+      popover.style.left = `${position.left}px`;
+      popover.style.setProperty("--selection-pointer-x", `${position.pointerLeft}px`);
+      popover.dataset.placement = position.placement;
+      popover.dataset.overlap = String(position.overlapsSelection);
+      popover.dataset.ready = "true";
     }
 
-    const popover = popoverRef.current;
-    if (!popover) return;
-
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const popoverRect = popover.getBoundingClientRect();
-    const centeredLeft = anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2;
-    const maxLeft = viewportWidth - popoverRect.width - VIEWPORT_MARGIN;
-    const left = Math.min(Math.max(VIEWPORT_MARGIN, centeredLeft), Math.max(VIEWPORT_MARGIN, maxLeft));
-
-    const aboveTop = anchorRect.top - popoverRect.height - POPOVER_GAP;
-    const belowTop = anchorRect.bottom + POPOVER_GAP;
-    const canFitAbove = aboveTop >= SAFE_TOP;
-    const maxTop = viewportHeight - popoverRect.height - SAFE_BOTTOM;
-    const top = canFitAbove
-      ? aboveTop
-      : Math.min(Math.max(SAFE_TOP, belowTop), Math.max(SAFE_TOP, maxTop));
-
-    setFloatingStyle({
-      top,
-      left,
-      placement: canFitAbove ? "top" : "bottom",
-    });
-  }, [visible, hasSelection, anchorRect, hasActiveInsight, showTranslations, shareLinkNotice]);
+    updatePosition();
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(popover);
+    return () => observer.disconnect();
+  }, [visible, hasSelection, anchorRect]);
 
   if (!visible || !hasSelection || !anchorRect) return null;
 
-  const baseActionClass =
-    "inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-background/92 px-3 text-sm text-foreground shadow-sm transition hover:bg-black/[0.04] dark:hover:bg-white/[0.08] disabled:opacity-45 disabled:hover:bg-background/92";
-  const primaryActionClass =
-    "inline-flex h-10 items-center gap-2 rounded-full bg-foreground px-3.5 text-sm font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-45";
-
   return (
-    <div
-      ref={popoverRef}
-      data-selection-popover="true"
-      className={`fixed z-40 w-[min(calc(100vw-1.5rem),38rem)] transition duration-150 ease-out ${
-        floatingStyle ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-1"
-      }`}
-      style={{
-        top: floatingStyle?.top ?? -9999,
-        left: floatingStyle?.left ?? VIEWPORT_MARGIN,
-      }}
-      role="dialog"
-      aria-label="Selection actions"
-    >
-      <div className="relative overflow-hidden rounded-[1.25rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-2 shadow-[var(--surface-shadow)] border-[color:var(--surface-border)]">
-        <div className="flex flex-wrap gap-2">
-          {showInsightAction ? (
-            hasActiveInsight ? (
-              <button type="button" onMouseDown={preserveSelection} onClick={onInsight} disabled={!actionsEnabled} className={primaryActionClass}>
-                <ActionIcon kind="insight" />
-                <span>Add to {targetLabel}</span>
-              </button>
-            ) : (
-              <button type="button" onMouseDown={preserveSelection} onClick={onNewInsight} disabled={!actionsEnabled} className={primaryActionClass}>
-                <ActionIcon kind="insight" />
-                <span>New {targetLabel}</span>
-              </button>
-            )
-          ) : null}
-          <button type="button" onMouseDown={preserveSelection} onClick={onAnnotation} disabled={!actionsEnabled} className={baseActionClass}>
-            <ActionIcon kind="note" />
-            <span>Annotate</span>
+    <div ref={popoverRef} data-selection-popover="true" className="selection-popover" role="dialog" aria-label="Selection actions" aria-describedby={headingId}>
+      <div className="selection-card">
+        <header className="selection-card-header">
+          <div className="min-w-0">
+            <p className="selection-eyebrow">{selectionLabel}</p>
+            <h2 id={headingId} className="selection-reference">{selectionReference}</h2>
+          </div>
+          <button type="button" className="selection-dismiss" aria-label="Clear selection" title="Clear selection (Esc)" onMouseDown={preserveSelection} onClick={onClear}>
+            <ActionIcon kind="close" />
           </button>
-          <button type="button" onMouseDown={preserveSelection} onClick={onCitations} className={baseActionClass}>
-            <ActionIcon kind="book" />
-            <span>Resources</span>
-          </button>
+        </header>
+
+        <div className="selection-actions">
           {showExplore && onExplore ? (
-            <button type="button" onMouseDown={preserveSelection} onClick={onExplore} className={baseActionClass}>
-              <ActionIcon kind="spark" />
-              <span>Explore</span>
+            <button type="button" className="selection-action" data-featured="true" onMouseDown={preserveSelection} onClick={onExplore}>
+              <ActionLabel icon="spark" title={`Explore${selectedWord ? ` “${selectedWord}”` : ""}`} description="Meaning & context" />
             </button>
           ) : null}
+          {showInsightAction ? (
+            <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={hasActiveInsight ? onInsight : onNewInsight} disabled={!actionsEnabled}>
+              <ActionLabel icon="add" title={hasActiveInsight ? `Add to ${targetLabel}` : `New ${targetLabel}`} description={actionsEnabled ? "Keep your thoughts" : "Sign in to save"} />
+            </button>
+          ) : null}
+          <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onAnnotation} disabled={!actionsEnabled}>
+            <ActionLabel icon="note" title="Annotate" description={actionsEnabled ? "Mark what matters" : "Sign in to annotate"} />
+          </button>
+          <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onCitations}>
+            <ActionLabel icon="book" title="Resources" description="Go a little deeper" />
+          </button>
           {showTranslations && onTranslations ? (
-            <button type="button" onMouseDown={preserveSelection} onClick={onTranslations} className={baseActionClass}>
-              <ActionIcon kind="translate" />
-              <span>Translations</span>
+            <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onTranslations}>
+              <ActionLabel icon="translate" title="Translations" description="Compare the wording" />
             </button>
           ) : null}
-          {onShareLink ? (
-            <button
-              type="button"
-              onMouseDown={preserveSelection}
-              onClick={onShareLink}
-              className={baseActionClass}
-              aria-label="Copy a link to the selected verses"
-              data-notice={shareLinkNotice ?? undefined}
-            >
-              <FontAwesomeIcon icon={shareLinkNotice === "copied" || shareLinkNotice === "shared" ? faCheck : faLink} aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-              <span aria-live="polite">{shareLinkNoticeLabel(shareLinkNotice)}</span>
-            </button>
+          {shareHref ? (
+            <a href={shareHref} className="selection-action" data-featured="true" aria-label="Focus scripture for the selected verses" onMouseDown={preserveSelection}>
+              <ActionLabel icon="focus" title="Focus scripture" description="Read & share passage" />
+            </a>
           ) : null}
         </div>
-        <div
-          aria-hidden="true"
-          className={`pointer-events-none absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] border-[color:var(--surface-border)] ${
-            floatingStyle?.placement === "top"
-              ? "bottom-[-0.35rem] border-b border-r"
-              : "top-[-0.35rem] border-l border-t"
-          }`}
-          style={{
-            marginLeft: `${Math.max(-140, Math.min(140, anchorRect.left + anchorRect.width / 2 - ((floatingStyle?.left ?? 0) + 24)))}px`,
-          }}
-        />
+
+        <footer className="selection-card-footer">
+          <CopySelection key={selectedText} text={selectedText} />
+          <span className="selection-word-count">{wordCount} {wordCount === 1 ? "word" : "words"}<span className="selection-escape"> · <kbd>esc</kbd> to close</span></span>
+        </footer>
       </div>
+      <span className="selection-pointer" aria-hidden="true" />
     </div>
   );
 }
