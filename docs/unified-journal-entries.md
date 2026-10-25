@@ -208,6 +208,36 @@ Checks run on these repairs:
   none on the changed lines.
 - **Not run**: browser QA of the panel without the card, the production build, deployment.
 
+### Parent acceptance (code `5ee9132`, Linux VM, 2026-10-25)
+
+- **Passed:** final diff review of the chapter-card removal and retry revision repair. A changed retry advances
+  the note revision and its request baseline; a stale editor is rejected. Earlier review findings are resolved.
+- **Passed:** production build with both public Convex URLs set to the verified `fabulous-dogfish-606` dev target.
+- **Passed:** independent `npx vitest run tests/journalEntry.test.ts tests/entryDraftStore.test.ts
+  tests/journalEntryComposer.test.ts` — 35 tests in three files. The implementer's full 177-test run and both
+  type checks are recorded above.
+- **Passed:** final component browser checks at 390×844 and 1280×800: Log contains the reading chip, blank writer,
+  day and Save entry, with no chapter-completion card and no horizontal overflow.
+- **Passed:** earlier component checks of these same components covered the 320×568 single header and 44px
+  reading/editor actions, 844×390 scrolling, a note-only save and draft retention, a reading-only save, editing a
+  range to verses 3–5, and opening an older reading as an editable entry. The desktop Journal reading popover fit
+  inside the note pane. These used synthetic fixtures, not backend persistence.
+- **Passed:** shared-store browser regressions: close/reopen during a 15-second save stays read-only with
+  "Saving…", then displays the saved text; a conflicting retry keeps local text and can open the other window's
+  saved version for comparison.
+- **Passed:** simulated visible viewport at 390×844: sheet bottom 360px, caret bottom 352.55px; with a 200px pan,
+  the sheet ran from 208px to 560px and its header stayed visible. This does not establish real-device keyboard behavior.
+- **Passed:** built real app at `7b2c134`: 1 Nephi 2 rendered 24 verses at 320px without horizontal overflow;
+  the merged CFM header's docked Guide, Scripture, Contents and Log controls fit at 320px with 44px targets.
+- **Blocked:** authenticated local end-to-end checks: localhost is not an allowed auth origin for the shared dev
+  backend. No auth configuration or secrets were changed. The dev browser preview requires Vercel authentication;
+  the default browser profile was signed out. The authenticated CLI HTTP fallback also lacked its `curl` executable.
+- **Not run:** real iOS/Android keyboard checks and authenticated browser saves against the deployed backend.
+- **Passed:** `npm run deploy:notes:development` deployed code `5ee9132` to the explicitly verified
+  `dev:fabulous-dogfish-606` target. The push typechecked successfully and added the two journal indexes.
+  Post-deploy `function-spec --deployment-name fabulous-dogfish-606` readback returned the expected dev URL and
+  all three APIs: `createJournalEntry`, `openReadingEntry`, and `setJournalReading`.
+
 ## Rollout requirements
 
 Deploy the Convex schema and functions before, or together with, the frontend. The frontend calls
