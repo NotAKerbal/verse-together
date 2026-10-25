@@ -6,7 +6,7 @@ import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } 
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import VerseActionBar, { type ShareLinkNotice, type VerseActionAnchorRect } from "./VerseActionBar";
+import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import CitationsModal from "./CitationsModal";
 import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
@@ -35,7 +35,7 @@ import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
-import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import type { ReadingLogOption } from "@/features/notes/ReadingChip";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
@@ -101,16 +101,6 @@ function extractFirstWord(value: string): string {
 function extractSingleSelectedWord(value: string): string {
   const matches = value.match(/[A-Za-z][A-Za-z'\-]*/g) ?? [];
   return matches.length === 1 ? matches[0].toLowerCase() : "";
-}
-
-async function copyShareLink(url: string): Promise<ShareLinkNotice> {
-  try {
-    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return "failed";
-    await navigator.clipboard.writeText(url);
-    return "copied";
-  } catch {
-    return "failed";
-  }
 }
 
 function normalizeSelectionText(value: string): string {
@@ -914,53 +904,9 @@ export default function ChapterReader({
     if (!selectedBounds) return null;
     return `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
   }, [book, chapter, selectedBounds]);
-  const [shareLinkNotice, setShareLinkNotice] = useState<ShareLinkNotice>(null);
-  const shareLinkNoticeTimer = useRef<number | null>(null);
-  useEffect(() => {
-    return () => {
-      if (shareLinkNoticeTimer.current) window.clearTimeout(shareLinkNoticeTimer.current);
-    };
-  }, []);
-  useEffect(() => {
-    if (!hasSelection) setShareLinkNotice(null);
-  }, [hasSelection]);
-
-  // Share link: a URL that shows only the selected verses. Native share sheet
-  // on phones, clipboard everywhere else, with a brief inline confirmation.
-  async function onShareLink() {
-    const verseNumbers = selectedVerses.map((verse) => verse.verse);
-    if (verseNumbers.length === 0 || typeof window === "undefined") return;
-    const url = `${window.location.origin}${buildShareUrl({ volume, book, chapter, verses: verseNumbers })}`;
-    const title = formatPassageReference(getBookLabel(volume, book), chapter, verseNumbers);
-    let notice: ShareLinkNotice = "failed";
-    const nav = typeof navigator !== "undefined" ? navigator : null;
-    const canNativeShare =
-      !!nav && typeof nav.share === "function" && (typeof nav.canShare !== "function" || nav.canShare({ title, url }));
-    // Phones and tablets get the native share sheet; a mouse gets the clipboard, as the label promises.
-    const touchPrimary = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-    if (canNativeShare && touchPrimary) {
-      try {
-        await nav.share({ title, url });
-        notice = "shared";
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        notice = await copyShareLink(url);
-      }
-    } else {
-      notice = await copyShareLink(url);
-      if (notice === "failed" && canNativeShare) {
-        try {
-          await nav.share({ title, url });
-          notice = "shared";
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") return;
-        }
-      }
-    }
-    setShareLinkNotice(notice);
-    if (shareLinkNoticeTimer.current) window.clearTimeout(shareLinkNoticeTimer.current);
-    shareLinkNoticeTimer.current = window.setTimeout(() => setShareLinkNotice(null), 2200);
-  }
+  const shareHref = selectedVerses.length > 0
+    ? buildShareUrl({ volume, book, chapter, verses: selectedVerses.map((verse) => verse.verse) })
+    : null;
   const annotationsByVerse = useMemo(
     () => chapterAnnotationData?.by_verse ?? {},
     [chapterAnnotationData]
@@ -1911,10 +1857,15 @@ export default function ChapterReader({
         anchorRect={selectionPopoverAnchor}
         hasSelection={hasSelection}
         hasActiveInsight={hasActiveNote}
+        selectionReference={formatPassageReference(getBookLabel(volume, book), chapter, selectedVerses.map((verse) => verse.verse))}
+        selectedText={selectedText}
+        selectedVerseCount={selectedVerses.length}
+        selectedWord={singleSelectedWord}
         showInsightAction={showInsightAction}
         showExplore={canExploreWord}
         targetLabel="Note"
         actionsEnabled={!!user}
+        onClear={clearSelection}
         onInsight={() => {
           void onAddToNote();
         }}
@@ -1924,10 +1875,7 @@ export default function ChapterReader({
         onAnnotation={onOpenAnnotation}
         onCitations={onOpenCitations}
         onExplore={onOpenExplore}
-        onShareLink={() => {
-          void onShareLink();
-        }}
-        shareLinkNotice={shareLinkNotice}
+        shareHref={shareHref}
       />
       )}
     </section>

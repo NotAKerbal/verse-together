@@ -161,6 +161,20 @@ export default defineSchema({
     // YYYY-MM-DD the note belongs to in the journal.
     journalDate: v.optional(v.string()),
     source: v.optional(noteSourceValidator),
+    // When set, the entry also logs reading of `source` (with or without note text). Kept on its original value
+    // while the reading is edited, so an older reading opened as an entry keeps its time.
+    readingAt: v.optional(v.number()),
+    // The client request that created the entry, so a retried create finds it instead of adding another.
+    entryRequestId: v.optional(v.string()),
+    // noteJournal's entryContentFingerprint of the content that request last wrote: a later retry carrying the same
+    // content is the same save; one carrying other content is refused once the entry has been edited since.
+    entryRequestFingerprint: v.optional(v.string()),
+    // The note revision that request last left (absent: 0). A retry replacing the text bumps the revision so an
+    // editor opened on the earlier text can't save over it; any revision past this one is an edit made since.
+    entryRequestRevision: v.optional(v.number()),
+    // An older reading opened as this entry (see noteJournal's history keys): the original is kept but no
+    // longer listed on its own.
+    readingHistoryKey: v.optional(v.string()),
     // Reserved for a future generated summary heading. Nothing writes it yet.
     summaryHeading: v.optional(v.object({ text: v.string(), updatedAt: v.number() })),
     createdAt: v.number(),
@@ -169,7 +183,16 @@ export default defineSchema({
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_clerk_status", ["clerkId", "status"])
-    .index("by_clerk_last_active", ["clerkId", "lastActiveAt"]),
+    .index("by_clerk_last_active", ["clerkId", "lastActiveAt"])
+    .index("by_clerk_entry_request", ["clerkId", "entryRequestId"]),
+
+  // Keys of deleted journal entries (their create request id and any older reading they stood for), so a late
+  // retry of the create or a reading kept for history doesn't bring a deleted entry back.
+  journalEntryDeletions: defineTable({
+    clerkId: v.string(),
+    key: v.string(),
+    deletedAt: v.number(),
+  }).index("by_clerk_key", ["clerkId", "key"]),
 
   insightDraftBlocks: defineTable({
     draftId: v.id("insightDrafts"),

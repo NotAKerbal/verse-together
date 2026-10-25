@@ -105,12 +105,63 @@ export function normalizeNoteSource(source: NoteSource): NoteSource {
   return out;
 }
 
+/**
+ * A digest of what a journal-entry create carried (text, day, source and whether it logs reading), so a repeated
+ * create can be told from one bringing changes. Not a security measure: a fast, stable 64-bit hash (cyrb53-style)
+ * of the normalized content, prefixed with its length.
+ */
+export function entryContentFingerprint(content: {
+  markdownBody: string;
+  journalDate: string;
+  source?: NoteSource;
+  logReading: boolean;
+}): string {
+  const s = content.source;
+  const text = JSON.stringify([
+    content.markdownBody,
+    content.journalDate,
+    content.logReading,
+    s ? [s.kind, s.label, s.href, s.volume ?? null, s.book ?? null, s.chapter ?? null, s.verseStart ?? null, s.verseEnd ?? null] : null,
+  ]);
+  let h1 = 0xdeadbeef ^ text.length;
+  let h2 = 0x41c6ce57 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const hex = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
+  return `${text.length}:${hex(h2)}${hex(h1)}`;
+}
+
 /** Why a client request id can't be used for idempotency, or null if it can. */
 export function requestIdProblem(requestId: string): string | null {
   if (!requestId || requestId.length > REQUEST_ID_MAX || !REQUEST_ID_PATTERN.test(requestId)) {
     return "Invalid request id";
   }
   return null;
+}
+
+/**
+ * History keys name one older reading wherever it is stored. A chapterReads row is keyed by its id and read time;
+ * the readingLogs snapshot preserveLegacyChapterRead later takes of that same read carries the same key as its
+ * requestId, so opening either one as an entry hides both. Any other log is keyed by its id.
+ */
+const LEGACY_CHAPTER_READ_PREFIX = "legacy-chapter-read:";
+
+export function chapterReadHistoryKey(row: { _id: string; readAt: number }): string {
+  return `${LEGACY_CHAPTER_READ_PREFIX}${row._id}:${row.readAt}`;
+}
+
+export function readingLogHistoryKey(row: { _id: string; requestId: string }): string {
+  return row.requestId.startsWith(LEGACY_CHAPTER_READ_PREFIX) ? row.requestId : `reading:${row._id}`;
+}
+
+/** History keys share the entry request index; a client request id may not look like one. */
+export function isHistoryKey(key: string): boolean {
+  return key.startsWith(LEGACY_CHAPTER_READ_PREFIX) || key.startsWith("reading:");
 }
 
 /** Reader URL book segment: "1 Nephi" and "1-nephi" both become "1-nephi". */

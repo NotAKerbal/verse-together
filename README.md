@@ -88,7 +88,7 @@ The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/rou
 
 - `MERRIAM_WEBSTER_API_KEY` (or `MW_DICTIONARY_API_KEY`)
 - Chapter study paths were generated once with the batch scripts below and are served from the Convex cache; reading them needs no API key.
-- `OPENAI_API_KEY` is only needed for the signed-in Notes assistant and for regenerating a chapter that has no cache entry. Chapter research runs server-side with `gpt-5.6-luna`, searches only the configured LDS and Mormon studies sources, and caches grounded results in Convex. The key is never sent to the browser.
+- `OPENAI_API_KEY` is only needed for regenerating a chapter that has no cache entry. Chapter research runs server-side with `gpt-5.6-luna`, searches only the configured LDS and Mormon studies sources, and caches grounded results in Convex. The key is never sent to the browser.
 
 If no Merriam-Webster key is configured, only Free Dictionary API entries will be returned.
 

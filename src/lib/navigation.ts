@@ -1,6 +1,6 @@
 export const primaryNavItems = [
   { href: "/browse", label: "Browse" },
-  { href: "/notes", label: "Notes" },
+  { href: "/notes", label: "Journal" },
   { href: "/come-follow-me", label: "Come Follow Me" },
 ] as const;
 

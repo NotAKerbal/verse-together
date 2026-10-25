@@ -21,6 +21,7 @@ const OWNED_TABLE_CHECKS: Array<{ table: string; check: (ctx: Ctx, ownerId: stri
   { table: "guideHighlights", check: (ctx, id) => ctx.db.query("guideHighlights").withIndex("by_user_guide", (q) => q.eq("clerkId", id)).first() },
   { table: "chapterReads", check: (ctx, id) => ctx.db.query("chapterReads").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first() },
   { table: "readingLogs", check: (ctx, id) => ctx.db.query("readingLogs").withIndex("by_clerk_day", (q) => q.eq("clerkId", id)).first() },
+  { table: "journalEntryDeletions", check: (ctx, id) => ctx.db.query("journalEntryDeletions").withIndex("by_clerk_key", (q) => q.eq("clerkId", id)).first() },
   { table: "lastReadingPositions", check: (ctx, id) => ctx.db.query("lastReadingPositions").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first() },
   { table: "readingPlans", check: (ctx, id) => ctx.db.query("readingPlans").withIndex("by_clerk_id", (q) => q.eq("clerkId", id)).first() },
   { table: "friendships (requester)", check: (ctx, id) => ctx.db.query("friendships").withIndex("by_requester", (q) => q.eq("requesterClerkId", id)).first() },

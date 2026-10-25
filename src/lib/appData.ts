@@ -35,6 +35,8 @@ export type NoteMarkdownFields = {
   /** YYYY-MM-DD. */
   journal_date?: string;
   source?: NoteSource | null;
+  /** When the entry also logs reading of its source; owner read paths only. */
+  reading_at?: string | null;
 };
 
 export type InsightDraftSummary = NoteMarkdownFields & {
@@ -140,6 +142,7 @@ export type JournalEntry =
       source: NoteSource | null;
       excerpt: string | null;
       markdown_revision: number;
+      reading_at?: string | null;
       markdown_canonical: boolean;
       read_only: false;
       author_label: string;
@@ -172,6 +175,8 @@ export type ReadingLogEntry = {
   read_at: string;
   created_at: string;
   request_id: string | null;
+  /** The journal entry this reading belongs to. */
+  note_id?: string;
 };
 
 export type AccountData = {

@@ -212,6 +212,43 @@ describe("Back and Forward on the Notes page", () => {
     expect(browser.calls).toEqual(["push"]);
   });
 
+  test("a deleted note still in view closes through its entry; a view moved on from it is left alone", () => {
+    // Still open when its deletion finishes: closes to its day exactly like the X.
+    {
+      const { browser, view, act, open, setActive } = page();
+      open("a");
+      act({ type: "noteDeleted", noteId: "a" });
+      setActive(null);
+      expect(browser.calls).toEqual(["push", "back"]);
+      browser.land();
+      expect(view()).toEqual(day(today));
+      browser.traverse(-1);
+      expect(browser.leftPage).toBe(true);
+    }
+    // Closed, then the phone's Calendar, before the deletion finished: the calendar stays, no further step back.
+    {
+      const { browser, view, act, open, setActive } = page();
+      act({ type: "selectDate", date: today });
+      open("a");
+      act({ type: "closeNote" });
+      browser.land();
+      act({ type: "showCalendar" });
+      act({ type: "noteDeleted", noteId: "a" });
+      setActive(null);
+      expect(browser.calls).toEqual(["push", "back"]);
+      expect(view()).toEqual({ stage: "calendar", date: today, noteId: null });
+    }
+    // Another note opened meanwhile: it stays open, with its entry.
+    {
+      const { browser, view, act, open } = page();
+      open("a");
+      open("c");
+      act({ type: "noteDeleted", noteId: "a" });
+      expect(browser.calls).toEqual(["push", "replace"]);
+      expect(view()).toEqual(noteAt("c", "2026-10-18"));
+    }
+  });
+
   test("arriving with an active note shows today's calendar, selects nothing and adds no entry", () => {
     const { browser, history, view, selected, setActive } = page({ active: "c" });
     history.restore();

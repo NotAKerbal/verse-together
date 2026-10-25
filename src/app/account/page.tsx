@@ -1,33 +1,37 @@
 "use client";
 
-import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck } from "@fortawesome/free-solid-svg-icons";
 import AccountManager from "@/features/auth/AccountManager";
+import { useSimpleMode } from "@/lib/simpleMode";
+import styles from "./page.module.css";
 
 export default function AccountPage() {
+  const [simpleMode, setSimpleMode] = useSimpleMode();
+
   return (
-    <section className="page-shell space-y-3 py-6">
-      <header className="page-hero space-y-1">
-        <div className="page-eyebrow">Account</div>
-        <h1 className="page-title mt-2">Account</h1>
-        <p className="page-subtitle mt-3 text-sm">Manage your profile, sign-in methods, and sessions.</p>
-      </header>
-
-      <AccountManager />
-
-      <div className="panel-card space-y-2 rounded-[1.35rem] p-4">
-        <h2 className="text-base font-semibold">Where to go next</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/notes" className="surface-button rounded-full border px-4 py-2 text-sm">
-            Open Notes
-          </Link>
-          <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">
-            Browse Scriptures
-          </Link>
-          <Link href="/help" className="surface-button rounded-full border px-4 py-2 text-sm">
-            Guide
-          </Link>
+    <section className={styles.shell} aria-label="Account settings">
+      <h1 className="sr-only">Account settings</h1>
+      <AccountManager>
+        <div className={styles.preferences}>
+          <div className={styles.setting}>
+            <div>
+              <span className={styles.settingTitle}>Simple mode</span>
+              <p aria-live="polite">{simpleMode ? "Study tools hidden" : "Study tools visible"} · This device</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={simpleMode}
+              aria-label="Simple mode"
+              className={styles.toggle}
+              onClick={() => setSimpleMode(!simpleMode)}
+            >
+              <span><FontAwesomeIcon icon={faCheck} aria-hidden="true" /></span>
+            </button>
+          </div>
         </div>
-      </div>
+      </AccountManager>
     </section>
   );
 }

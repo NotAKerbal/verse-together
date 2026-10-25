@@ -83,6 +83,18 @@ describe("Notes view state", () => {
     expect(run(context, [{ type: "showCalendar" }], closed)).toEqual({ stage: "calendar", date: "2026-10-19", noteId: null });
   });
 
+  test("a finished deletion closes only the deleted note, and leaves every other view exactly as it is", () => {
+    const open: JournalView = { stage: "note", date: "2026-10-20", noteId: "a" };
+    expect(nextJournalView(open, { type: "noteDeleted", noteId: "a" })).toEqual({ stage: "day", date: "2026-10-20", noteId: null });
+    const others: JournalView[] = [
+      calendarToday,
+      { stage: "day", date: "2026-10-20", noteId: null },
+      { stage: "note", date: "2026-10-18", noteId: "b" },
+    ];
+    // The same object, so the page's history knows there is nothing to do.
+    for (const view of others) expect(nextJournalView(view, { type: "noteDeleted", noteId: "a" })).toBe(view);
+  });
+
   test("an open note that stops being the loaded one (deleted, switched elsewhere) leaves for its day's chooser", () => {
     const open: JournalView = { stage: "note", date: today, noteId: "a" };
     expect(resolveJournalView(open, noActive)).toEqual({
@@ -156,6 +168,8 @@ function render(layout: JournalWorkspaceProps["layout"], view: JournalView, over
 }
 
 const countOf = (html: string, text: string) => html.split(text).length - 1;
+/** The day's chooser is headed by its full date (an id'd, focusable h2); the rail's abbreviated date is not. */
+const CHOOSER_HEADING = /<h2 id="[^"]+"[^>]*><time dateTime="\d{4}-\d{2}-\d{2}">/;
 /** The opening tag of the element whose markup starts right before `marker` (its parent, for a child's tag). */
 const tagBefore = (html: string, marker: string) => {
   const end = html.indexOf(marker);
@@ -167,12 +181,12 @@ describe("Notes workspace stages", () => {
     const arrival = resolveJournalView(null, arriving);
     const phone = render("phone", arrival);
     expect(phone).toContain('aria-label="Calendar"');
-    expect(phone).not.toContain("Select a note");
+    expect(phone).not.toMatch(CHOOSER_HEADING);
     expect(phone).not.toContain("EDITOR-PANE");
 
     const desktop = render("desktop", arrival, { notePane: createElement("p", null, "EDITOR-PANE") });
     expect(tagBefore(desktop, '<section aria-label="Calendar"')).not.toContain("inert");
-    expect(desktop).toContain(">Select a note</h2>");
+    expect(desktop).toMatch(CHOOSER_HEADING);
     expect(desktop).toContain(`dateTime="${today}"`);
     expect(desktop).not.toContain("EDITOR-PANE");
     expect(desktop).not.toContain('aria-current="true"');
@@ -181,16 +195,16 @@ describe("Notes workspace stages", () => {
   test("phone calendar stage shows only the month: no day list, no editor, no week/month toggle", () => {
     const html = render("phone", { stage: "calendar", date: today, noteId: null });
     expect(html).toContain('aria-label="Calendar"');
-    expect(html).not.toContain("Select a note");
+    expect(html).not.toMatch(CHOOSER_HEADING);
     expect(html).not.toContain("Morning thought");
     expect(html).not.toContain("EDITOR-PANE");
     expect(html).not.toMatch(/Show (week|month)/);
   });
 
-  test("phone day stage lists that day's entries under Select a note, with a way back to the calendar", () => {
+  test("phone day stage lists that day's entries under its date, with a way back to the calendar", () => {
     const html = render("phone", { stage: "day", date: today, noteId: null });
     expect(html).not.toContain('aria-label="Calendar"');
-    expect(html).toContain(">Select a note</h2>");
+    expect(html).toMatch(CHOOSER_HEADING);
     expect(html).toContain("Morning thought");
     expect(html).toContain("Evening question");
     expect(html).toContain('href="/browse/bookofmormon/1-nephi/2"');
@@ -203,13 +217,13 @@ describe("Notes workspace stages", () => {
     expect(html).toContain("EDITOR-PANE");
     expect(html).not.toContain('aria-label="Calendar"');
     expect(html).not.toContain("Evening question");
-    expect(html).not.toContain("Select a note");
+    expect(html).not.toMatch(CHOOSER_HEADING);
   });
 
   test("desktop without an open note puts the day's chooser in the main area, listed once", () => {
     const html = render("desktop", { stage: "day", date: today, noteId: null });
     expect(html).toContain('aria-label="Calendar"');
-    expect(html).toContain(">Select a note</h2>");
+    expect(html).toMatch(CHOOSER_HEADING);
     expect(countOf(html, "Morning thought")).toBe(1);
     expect(countOf(html, "Evening question")).toBe(1);
     expect(html).not.toContain("EDITOR-PANE");
@@ -223,13 +237,13 @@ describe("Notes workspace stages", () => {
     // The month stays mounted (its month and day survive) but is inert until the note closes.
     expect(tagBefore(html, '<section aria-label="Calendar"')).toContain('inert=""');
     expect(html).toContain(`aria-label="Entries for`);
-    expect(html).not.toContain("Select a note");
+    expect(html).not.toMatch(CHOOSER_HEADING);
     expect(countOf(html, "Evening question")).toBe(1);
 
     const closed = render("desktop", nextJournalView(open, { type: "closeNote" }));
     expect(tagBefore(closed, '<section aria-label="Calendar"')).not.toContain("inert");
     expect(closed).toContain("October 2026");
-    expect(closed).toContain(">Select a note</h2>");
+    expect(closed).toMatch(CHOOSER_HEADING);
     expect(closed).toContain(`dateTime="${today}"`);
     expect(closed).not.toContain("EDITOR-PANE");
     expect(countOf(closed, "Evening question")).toBe(1);
@@ -238,13 +252,14 @@ describe("Notes workspace stages", () => {
   test("desktop never mounts a note pane while no note is open, even if one is passed, and its empty panel is inert", () => {
     const html = render("desktop", { stage: "day", date: today, noteId: null }, { notePane: createElement("p", null, "EDITOR-PANE") });
     expect(html).not.toContain("EDITOR-PANE");
-    expect(html).toMatch(/<section aria-label="Open note"[^>]*inert=""[^>]*><\/section>/);
+    expect(html).toMatch(/<section aria-label="Open entry"[^>]*inert=""[^>]*><\/section>/);
   });
 
-  test("a day without notes invites starting one instead of asking to select", () => {
+  test("a day without notes shows just its date and New note, with no empty-state box", () => {
     const html = render("desktop", { stage: "day", date: "2026-10-05", noteId: null });
-    expect(html).toContain(">Start a note</h2>");
-    expect(html).toContain("Nothing recorded on this day.");
+    expect(html).toMatch(/<h2 id="[^"]+"[^>]*><time dateTime="2026-10-05">/);
+    expect(html).toContain("New note");
+    expect(html).not.toContain("Nothing recorded on this day.");
   });
 });
 
@@ -324,5 +339,25 @@ describe("Leaving an open note", () => {
   test("phone keeps its back-to-the-day control in the top bar", () => {
     const html = render("phone", { stage: "note", date: today, noteId: "a" });
     expect(html).toContain('Back to </span><span class="truncate">Wednesday, October 21, 2026');
+  });
+});
+
+describe("unified journal entries in the workspace", () => {
+  test("an entry with note and reading is one card and one count; a reading-only entry is titled by its reading", () => {
+    const both = { ...note("both", "Reading with a thought", "2026-10-15", "2026-10-15T08:00:00Z"), reading_at: "2026-10-15T08:00:00Z" };
+    const readingOnly = { ...note("only", "Untitled note", "2026-10-15", "2026-10-15T09:00:00Z"), reading_at: "2026-10-15T09:00:00Z" };
+    const html = render("desktop", { stage: "day", date: "2026-10-15", noteId: null }, { entries: [both, readingOnly] });
+    expect(countOf(html, "Reading with a thought")).toBe(1);
+    expect(countOf(html, "Reading logged")).toBe(1);
+    expect(html).toContain("Read 1 Nephi 2");
+    expect(html).toContain('aria-label="Thursday, October 15, 2026, 2 entries"');
+    expect(html).not.toMatch(/\d readings?/);
+  });
+
+  test("with onOpenReading an older reading opens as an entry (a button), instead of linking away", () => {
+    const html = render("desktop", { stage: "day", date: today, noteId: null }, { onOpenReading: noop });
+    const reading = cardsOf(html).find((card) => card.includes("Open to add a note or edit"))!;
+    expect(reading).toMatch(/^<button type="button"/);
+    expect(countOf(reading, "<a ")).toBe(0);
   });
 });

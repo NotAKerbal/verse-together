@@ -9,9 +9,8 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type MutableRefObject,
 } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQueries, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -20,8 +19,15 @@ import type { InsightDraft, InsightDraftSummary, InsightVisibility } from "@/lib
 import { isSafeSourceHref, localDateKey, type JournalNoteDocument, type NoteSource } from "@/features/notes/journal";
 import { JournalOutbox, RevisionConflictError, type OutboxEntry } from "@/features/notes/journalOutbox";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
-import type { ReadingLogAttempt, ReadingLogOption } from "@/features/notes/ReadingLogButton";
-import type { ChapterMarkAttempt } from "@/features/plans/ChapterReadToggle";
+import type { ReadingLogOption } from "@/features/notes/ReadingChip";
+import {
+  restartEntryDraft,
+  type EntryDefaults,
+  type EntryDraft,
+  type EntryDraftSaveResult,
+  type EntrySaveState,
+} from "@/features/notes/entryDraft";
+import { useEntryDraftStore, type CreateJournalEntry } from "@/features/notes/useEntryDraftStore";
 
 /**
  * What the page being read says about itself. `href` defaults to the live URL (path, query and hash) at the
@@ -49,7 +55,7 @@ type DictionaryPayload = {
 
 export type NoteSaveStatus = "idle" | "saving" | "saved";
 
-/** The two views of the notes panel. "log" exists only while a chapter page is showing. */
+/** The two views of the notes panel: "log" is the unsaved entry (Log, New note), "notes" the saved ones. */
 export type NotebookPanelView = "log" | "notes";
 
 /** The chapter a chapter page is showing, so the panel's Log view can record it. */
@@ -59,7 +65,7 @@ export type ReaderChapter = {
   chapter: number;
   reference: string;
   logOptions: ReadingLogOption[];
-  /** Log offers the chapter's verses, so it waits for the text. */
+  /** The chapter's text has arrived (its verse count is known). */
   logReady: boolean;
 };
 
@@ -91,12 +97,28 @@ type InsightBuilderContextValue = {
   /** Called once per mounted chapter header; update it as the chapter's details change, unregister on unmount. */
   registerReaderChapter: () => ReaderChapterRegistration;
   /**
-   * The Log view's last unfinished log attempt. It outlives the panel (collapsing it, closing the sheet) so a
-   * retry after an unknown result reuses the request id; cleared when the account changes.
+   * The one unsaved journal entry (Log, New note, a Journal day's New note). It outlives the panel, so closing
+   * and reopening keeps its text; it is cleared when the account changes and once it is saved.
    */
-  readerLogPendingRef: MutableRefObject<ReadingLogAttempt | null>;
-  /** The same for the Log view's mark-read toggle. */
-  readerMarkPendingRef: MutableRefObject<ChapterMarkAttempt | null>;
+  entryDraft: EntryDraft;
+  updateEntryDraft: (change: (draft: EntryDraft) => EntryDraft) => void;
+  /** Starts the draft from these defaults unless it already holds something, and shows it in the panel. */
+  startEntry: (defaults: EntryDefaults) => void;
+  /**
+   * The header's Log: the entry draft for `source` (logging reading of it), in the phone sheet or desktop panel.
+   * Opening is immediate; nothing is stored until the entry is saved.
+   */
+  openLog: (source: NoteSource | null, surface: "sheet" | "panel") => void;
+  /**
+   * Saves the draft as one entry and makes it the active note; one save at a time, which a remounted composer
+   * joins. Rejects with EntryDraftProblem before sending anything incomplete; otherwise resolves with the entry to
+   * show, or null with the reason in entrySave (the draft keeps its text). See useEntryDraftStore.
+   */
+  saveEntryDraft: () => Promise<EntryDraftSaveResult>;
+  /** The draft's save: in flight, or how the last one ended. Shared by every composer. */
+  entrySave: EntrySaveState;
+  /** After a conflict, or changes left behind by a save: activates the entry concerned and returns it to show. */
+  openSavedEntry: () => { id: string; journalDate: string } | null;
   /** "saving" while any note write is in flight, "saved" right after one lands. */
   saveStatus: NoteSaveStatus;
   lastSavedAt: number | null;
@@ -172,8 +194,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const [readerChapter, setReaderChapter] = useState<ReaderChapter | null>(null);
   const readerChaptersRef = useRef(new Map<number, ReaderChapter>());
   const readerChapterTokenRef = useRef(0);
-  const readerLogPendingRef = useRef<ReadingLogAttempt | null>(null);
-  const readerMarkPendingRef = useRef<ChapterMarkAttempt | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [pendingSaves, setPendingSaves] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -188,10 +208,25 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const draftRows = useQuery(api.insights.listMyDrafts, canQuery ? {} : "skip") as
     | InsightDraftSummary[]
     | undefined;
-  const activeDraft = useQuery(
-    api.insights.getDraft,
-    canQuery && activeDraftId ? ({ draftId: activeDraftId as DraftId }) : "skip"
-  ) as InsightDraft | null | undefined;
+  // getDraft fails once its note is gone (deleted here or elsewhere). useQueries reports that instead of throwing
+  // during render, so a missing note reads as unavailable, like any other note that can't be opened.
+  const activeDraftQuery = useMemo(() => {
+    const queries: Parameters<typeof useQueries>[0] = {};
+    if (canQuery && activeDraftId) {
+      queries.draft = { query: api.insights.getDraft, args: { draftId: activeDraftId as DraftId } };
+    }
+    return queries;
+  }, [canQuery, activeDraftId]);
+  const activeDraftResult = useQueries(activeDraftQuery).draft as InsightDraft | null | Error | undefined;
+  // The note being deleted stays on screen until its deletion settles: the server's answer to the delete and
+  // its subscription's failure arrive together, a moment before the active note can be cleared.
+  const [deletingDraft, setDeletingDraft] = useState<InsightDraft | null>(null);
+  const activeDraft =
+    activeDraftResult instanceof Error
+      ? deletingDraft && deletingDraft.id === activeDraftId
+        ? deletingDraft
+        : null
+      : activeDraftResult;
 
   const setActiveDraftMutation = useMutation(api.insights.setActiveDraft);
   const renameDraftMutation = useMutation(api.insights.renameDraft);
@@ -204,6 +239,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const reorderBlocksMutation = useMutation(api.insights.reorderBlocks);
   const publishDraftMutation = useMutation(api.insights.publishDraft);
   const createJournalNoteMutation = useMutation(api.insights.createJournalNote);
+  const createJournalEntryMutation = useMutation(api.insights.createJournalEntry);
   const saveJournalNoteMutation = useMutation(api.insights.saveJournalNote);
 
   // Saves go through a ref so the outbox, created once per user, always uses the current mutation and
@@ -215,10 +251,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     userIdRef.current = userId;
     saveJournalNoteRef.current = saveJournalNoteMutation;
   }, [userId, saveJournalNoteMutation]);
-  useEffect(() => {
-    readerLogPendingRef.current = null;
-    readerMarkPendingRef.current = null;
-  }, [userId]);
   const journalOutbox = useMemo(() => {
     const owner = userId;
     return new JournalOutbox(async (noteId, markdownBody, expectedRevision) => {
@@ -235,18 +267,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       }
     });
   }, [userId]);
-
-  // Unsaved note text lives only in this tab, so leaving with some still pending asks first.
-  useEffect(() => {
-    function onBeforeUnload(event: BeforeUnloadEvent) {
-      if (!journalOutbox.hasUnsaved()) return;
-      journalOutbox.flushAll();
-      event.preventDefault();
-      event.returnValue = "";
-    }
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [journalOutbox]);
 
   const [currentSource, setCurrentSource] = useState<RegisteredNoteSource | null>(null);
   const sourceTokenRef = useRef(0);
@@ -425,6 +445,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       markdown_canonical: draft.markdown_canonical ?? false,
       journal_date: draft.journal_date ?? draft.created_at.slice(0, 10),
       source: draft.source ?? null,
+      reading_at: draft.reading_at ?? null,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
     };
@@ -464,6 +485,60 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [canUseInsights, captureCurrentSource, createJournalNoteMutation, setActiveDraftMutation, tracked]
   );
 
+  const createEntry = useCallback<CreateJournalEntry>(
+    async (input) => {
+      const result = await tracked(createJournalEntryMutation(input));
+      return { id: result.id === null ? null : String(result.id) };
+    },
+    [createJournalEntryMutation, tracked]
+  );
+  const activateEntry = useCallback(
+    (id: string) => {
+      setActiveDraftId(id);
+      void setActiveDraftMutation({ draftId: id as DraftId }).catch(() => {});
+    },
+    [setActiveDraftMutation]
+  );
+  const {
+    entryDraft,
+    getEntryDraft,
+    changeEntryDraft: updateEntryDraft,
+    entrySave,
+    saveEntryDraft,
+    openSavedEntry,
+  } = useEntryDraftStore({ ownerId: userId, create: createEntry, activate: activateEntry });
+
+  // Unsaved note text lives only in this tab, so leaving with some still pending asks first.
+  useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      const unsavedEntry = getEntryDraft().text.trim() !== "";
+      if (!journalOutbox.hasUnsaved() && !unsavedEntry) return;
+      journalOutbox.flushAll();
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [journalOutbox, getEntryDraft]);
+
+  const startEntry = useCallback(
+    (defaults: EntryDefaults) => {
+      updateEntryDraft((draft) => restartEntryDraft(draft, defaults));
+      setPanelView("log");
+    },
+    [updateEntryDraft]
+  );
+
+  const openLog = useCallback(
+    (source: NoteSource | null, surface: "sheet" | "panel") => {
+      updateEntryDraft((draft) => restartEntryDraft(draft, { source, logReading: !!source }));
+      setPanelView("log");
+      if (surface === "sheet") setSheetOpen(true);
+      else setIsPanelOpen(true);
+    },
+    [updateEntryDraft]
+  );
+
   // Kept for every existing caller (reader, dictionary, notebook). New notes are Markdown journal notes for
   // today, tied to the page they were started from; the title comes from the note's first line, so the
   // old title argument no longer applies.
@@ -494,12 +569,20 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [renameDraftMutation, tracked]
   );
 
+  // Published notes can't be deleted (the server refuses). The outbox holds the note's saves meanwhile and, once
+  // it is gone, forgets its text, so no late save or unload warning outlives it.
   const deleteDraft = useCallback(
     async (draftId: string) => {
-      await tracked(deleteDraftMutation({ draftId: draftId as DraftId }));
-      if (activeDraftId === draftId) setActiveDraftId(null);
+      if (activeDraft && activeDraft.id === draftId) setDeletingDraft(activeDraft);
+      try {
+        await journalOutbox.remove(draftId, () => tracked(deleteDraftMutation({ draftId: draftId as DraftId })));
+        // Another note may have been chosen while this one was being deleted; that one stays active.
+        setActiveDraftId((current) => (current === draftId ? null : current));
+      } finally {
+        setDeletingDraft((current) => (current?.id === draftId ? null : current));
+      }
     },
-    [deleteDraftMutation, activeDraftId, tracked]
+    [activeDraft, deleteDraftMutation, journalOutbox, tracked]
   );
 
   const saveDraftSettings = useCallback(
@@ -688,8 +771,13 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setSheetOpen,
       readerChapter,
       registerReaderChapter,
-      readerLogPendingRef,
-      readerMarkPendingRef,
+      entryDraft,
+      updateEntryDraft,
+      startEntry,
+      openLog,
+      saveEntryDraft,
+      entrySave,
+      openSavedEntry,
       saveStatus,
       lastSavedAt,
       drafts,
@@ -740,8 +828,13 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setSheetOpen,
       readerChapter,
       registerReaderChapter,
-      readerLogPendingRef,
-      readerMarkPendingRef,
+      entryDraft,
+      updateEntryDraft,
+      startEntry,
+      openLog,
+      saveEntryDraft,
+      entrySave,
+      openSavedEntry,
       saveStatus,
       lastSavedAt,
       drafts,

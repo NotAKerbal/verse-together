@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { getViewerClerkId, requireClerkId } from "./utils";
 import { normalizeScriptureVolume } from "../src/lib/scriptureVolumes";
 import {
@@ -16,6 +16,11 @@ import {
   normalizeNoteSource,
   NOTE_MARKDOWN_MAX,
   noteSourceValidator,
+  chapterReadHistoryKey,
+  entryContentFingerprint,
+  isHistoryKey,
+  readingLogHistoryKey,
+  requestIdProblem,
   scriptureSource,
 } from "./noteJournal";
 
@@ -43,6 +48,26 @@ const dictionaryMetaValidator = v.object({
 
 function toIso(ts: number): string {
   return new Date(ts).toISOString();
+}
+
+// Whether an entry logs reading. Owner read paths only: shared and published views never include it.
+function readingAtIso(draft: { readingAt?: number }): string | null {
+  return draft.readingAt === undefined ? null : toIso(draft.readingAt);
+}
+
+async function findEntryByKey(ctx: QueryCtx, clerkId: string, key: string) {
+  return await ctx.db
+    .query("insightDrafts")
+    .withIndex("by_clerk_entry_request", (q) => q.eq("clerkId", clerkId).eq("entryRequestId", key))
+    .first();
+}
+
+async function wasEntryDeleted(ctx: QueryCtx, clerkId: string, key: string): Promise<boolean> {
+  const row = await ctx.db
+    .query("journalEntryDeletions")
+    .withIndex("by_clerk_key", (q) => q.eq("clerkId", clerkId).eq("key", key))
+    .first();
+  return row !== null;
 }
 
 // A short preview of the first text block, for note lists.
@@ -254,6 +279,7 @@ export const listMyDrafts = query({
         excerpt: hasCanonicalMarkdown(d) ? markdownExcerpt(d.markdownBody) : draftExcerpt(blocks),
         scripture_refs: draftScriptureRefs(blocks),
         ...journal,
+        reading_at: readingAtIso(d),
       });
     }
     return rows;
@@ -277,6 +303,7 @@ export const getDraft = query({
       updated_at: toIso(draft.updatedAt),
       last_active_at: toIso(draft.lastActiveAt),
       ...noteJournalFields(draft, blocks),
+      reading_at: readingAtIso(draft),
       // The owner sees the real block rows (a retained snapshot once markdown_canonical is true).
       blocks: blocks.map((b) => ({
         ...publicBlock(b),
@@ -437,6 +464,175 @@ export const createJournalNote = mutation({
 });
 
 /**
+ * One private journal entry with note text, reading, or both, created atomically. A retry with the same request
+ * id returns the same entry; while nothing has edited that entry since, the retry's content replaces it, so an
+ * edit made before retrying a lost response isn't dropped. Replacing the text bumps its revision, so an editor
+ * opened on the earlier text can't save over it. Once the entry has been edited, a retry with other content is
+ * refused (ENTRY_CONFLICT) rather than overwriting those edits or reporting its own content as saved. An entry
+ * deleted meanwhile stays deleted.
+ */
+export const createJournalEntry = mutation({
+  args: {
+    journalDate: v.string(),
+    source: v.optional(noteSourceValidator),
+    markdownBody: v.string(),
+    logReading: v.boolean(),
+    requestId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    if (!isJournalDate(args.journalDate)) throw new Error("Journal date must be a real YYYY-MM-DD date");
+    const problem = requestIdProblem(args.requestId);
+    if (problem || isHistoryKey(args.requestId)) throw new Error(problem ?? "Invalid request id");
+    if (args.markdownBody.length > NOTE_MARKDOWN_MAX) throw new Error("This note is too long");
+    if (!args.logReading && !args.markdownBody.trim()) throw new Error("Add a note or log reading");
+    const source = args.source ? normalizeNoteSource(args.source) : undefined;
+    if (args.logReading && !source) throw new Error("Choose what you read");
+
+    if (await wasEntryDeleted(ctx, clerkId, args.requestId)) return { id: null, duplicate: true, deleted: true };
+    const now = Date.now();
+    const content = {
+      title: deriveNoteTitle(args.markdownBody),
+      markdownBody: args.markdownBody,
+      journalDate: args.journalDate,
+      source,
+    };
+    const fingerprint = entryContentFingerprint({ ...content, logReading: args.logReading });
+    const existing = await findEntryByKey(ctx, clerkId, args.requestId);
+    if (existing) {
+      const current =
+        existing.markdownBody !== undefined && existing.journalDate !== undefined
+          ? entryContentFingerprint({
+              markdownBody: existing.markdownBody,
+              journalDate: existing.journalDate,
+              source: existing.source,
+              logReading: existing.readingAt !== undefined,
+            })
+          : null;
+      // Untouched: no note revision past the one this request left, and the entry still holds exactly what this
+      // request last wrote. The content is compared, not the clock, so a reading edit landing in the create's own
+      // millisecond still counts as an edit. An entry without a fingerprint can't show that and is treated as edited.
+      const requestRevision = existing.entryRequestRevision ?? 0;
+      const untouched =
+        (existing.markdownRevision ?? 0) === requestRevision &&
+        existing.updatedAt === existing.createdAt &&
+        current !== null &&
+        current === existing.entryRequestFingerprint;
+      if (untouched && existing.status === "draft") {
+        // New text is a new revision: an editor still holding the earlier text (another window that loaded the
+        // entry before this retry) is refused rather than saving over it. The same text keeps the revision, so
+        // repeating a request stays idempotent and leaves open editors alone.
+        const revision = args.markdownBody === existing.markdownBody ? requestRevision : requestRevision + 1;
+        await ctx.db.patch(existing._id, {
+          ...content,
+          readingAt: args.logReading ? existing.readingAt ?? existing.createdAt : undefined,
+          markdownRevision: revision,
+          entryRequestFingerprint: fingerprint,
+          entryRequestRevision: revision,
+        });
+        return { id: existing._id, duplicate: true, deleted: false };
+      }
+      // Edited since (here or in another window). Repeating what this request last wrote, or matching what the
+      // entry now holds, is the same save. Anything else would either drop the caller's changes or overwrite the
+      // later edits, so it is refused, naming the entry; the client keeps its text to save as a separate entry.
+      if (fingerprint === existing.entryRequestFingerprint || fingerprint === current) {
+        return { id: existing._id, duplicate: true, deleted: false };
+      }
+      throw new ConvexError({
+        code: "ENTRY_CONFLICT",
+        message: "This entry changed since it was first saved",
+        id: existing._id,
+        journalDate: existing.journalDate ?? journalDateFromTimestamp(existing.createdAt),
+      });
+    }
+    const id = await ctx.db.insert("insightDrafts", {
+      clerkId,
+      status: "draft",
+      visibility: "private",
+      tags: [],
+      ...content,
+      markdownRevision: 0,
+      readingAt: args.logReading ? now : undefined,
+      entryRequestId: args.requestId,
+      entryRequestFingerprint: fingerprint,
+      createdAt: now,
+      updatedAt: now,
+      lastActiveAt: now,
+    });
+    return { id, duplicate: false, deleted: false };
+  },
+});
+
+/**
+ * Opens an older reading (a readingLogs row, or a chapterReads completion shown as legacy history) as an editable
+ * entry, once: it keeps the reading's day, source and time. The original row stays as it is, so chapter progress
+ * and plans don't change; listMyReadingLog stops listing it on its own.
+ */
+export const openReadingEntry = mutation({
+  args: { readingId: v.union(v.id("readingLogs"), v.id("chapterReads")) },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const row = await ctx.db.get(args.readingId);
+    if (!row || row.clerkId !== clerkId) throw new Error("Reading not found");
+    const isLog = "requestId" in row;
+    const historyKey = isLog ? readingLogHistoryKey(row) : chapterReadHistoryKey(row);
+    const existing = await findEntryByKey(ctx, clerkId, historyKey);
+    if (existing) return { id: existing._id };
+    if (await wasEntryDeleted(ctx, clerkId, historyKey)) throw new Error("Reading not found");
+    const now = Date.now();
+    const id = await ctx.db.insert("insightDrafts", {
+      clerkId,
+      title: DEFAULT_NOTE_TITLE,
+      status: "draft",
+      visibility: "private",
+      tags: [],
+      markdownBody: "",
+      markdownRevision: 0,
+      source: isLog ? row.source : scriptureSource(row),
+      journalDate: isLog ? row.journalDate : journalDateFromTimestamp(row.readAt),
+      readingAt: row.readAt,
+      readingHistoryKey: historyKey,
+      entryRequestId: historyKey,
+      createdAt: row.readAt,
+      updatedAt: now,
+      lastActiveAt: now,
+    });
+    return { id };
+  },
+});
+
+/**
+ * Logs, edits (passage, verses, day) or removes the reading on an entry. The note text and its revision are left
+ * alone, as are chapter completion and plans. An entry keeps its first reading time while the reading is edited.
+ * Removing the reading from an entry with no note text is refused: delete the entry instead.
+ */
+export const setJournalReading = mutation({
+  args: {
+    draftId: v.id("insightDrafts"),
+    logged: v.boolean(),
+    source: v.optional(noteSourceValidator),
+    journalDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const draft = await getDraftOrThrow(ctx, args.draftId, clerkId);
+    if (draft.status !== "draft") throw new Error("Only draft entries can be edited");
+    if (args.journalDate !== undefined && !isJournalDate(args.journalDate)) throw new Error("Choose a valid reading date");
+    const blocks = await draftBlocks(ctx, draft._id);
+    const source = args.source ? normalizeNoteSource(args.source) : draft.source ?? inferSourceFromBlocks(blocks);
+    if (args.logged && !source) throw new Error("This entry has no reading source");
+    if (!args.logged && !noteMarkdown(draft, blocks).trim()) throw new Error("Add a note before removing the reading");
+    await ctx.db.patch(draft._id, {
+      source: source ?? undefined,
+      journalDate: args.journalDate ?? draft.journalDate ?? journalDateFromTimestamp(draft.createdAt),
+      readingAt: args.logged ? draft.readingAt ?? Date.now() : undefined,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/**
  * Stores the note body exactly as given (whitespace and empty bodies included). The first save of an older
  * note makes Markdown canonical; its block rows are kept untouched as a snapshot. A save naming any revision
  * other than the current one is refused so a stale editor cannot overwrite newer content.
@@ -516,6 +712,7 @@ export const listMyJournal = query({
         visibility: draft.visibility ?? "private",
         journal_date: fields.journal_date,
         source: fields.source,
+        reading_at: readingAtIso(draft),
         excerpt: markdownExcerpt(fields.markdown_body),
         markdown_revision: fields.markdown_revision,
         markdown_canonical: fields.markdown_canonical,
@@ -637,6 +834,14 @@ export const deleteDraft = mutation({
       .withIndex("by_clerk_draft", (q: any) => q.eq("clerkId", clerkId).eq("draftId", args.draftId))
       .unique();
     if (folderAssignment) await ctx.db.delete(folderAssignment._id);
+    // Remember what the entry stood for, so neither a late retry of its create nor the older reading it was
+    // opened from (still stored for history and progress) brings it back.
+    const keys = new Set([draft.entryRequestId, draft.readingHistoryKey].filter((key): key is string => !!key));
+    for (const key of keys) {
+      if (!(await wasEntryDeleted(ctx, clerkId, key))) {
+        await ctx.db.insert("journalEntryDeletions", { clerkId, key, deletedAt: Date.now() });
+      }
+    }
     await ctx.db.delete(args.draftId);
     return { ok: true };
   },

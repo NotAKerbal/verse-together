@@ -6,6 +6,6 @@ import {
 
 export const primaryNavIcons = {
   Browse: faBookOpen,
-  Notes: faPencil,
+  Journal: faPencil,
   "Come Follow Me": faShoePrints,
 } as const;
