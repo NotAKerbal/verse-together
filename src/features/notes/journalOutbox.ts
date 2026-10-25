@@ -3,6 +3,9 @@
 //
 // Every save names the revision its text was based on. When the server refuses because the note moved on,
 // the entry stops in "conflict" with the local text intact and waits for the person to choose.
+//
+// Deleting a note goes through here too (remove), so its saves hold while the server deletes it, and once it
+// is gone nothing (a save still in flight, an editor flushing as it closes) can bring its entry back.
 
 export type OutboxStatus = "pending" | "saving" | "saved" | "error" | "conflict";
 
@@ -39,6 +42,10 @@ export class JournalOutbox {
   private listeners = new Set<() => void>();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private inFlight = new Set<string>();
+  /** Notes being deleted: their saves wait for the outcome. */
+  private deleting = new Set<string>();
+  /** Notes the server has deleted: nothing more is kept or saved for them. */
+  private deleted = new Set<string>();
   private disposed = false;
 
   constructor(private save: SaveFn) {}
@@ -66,6 +73,7 @@ export class JournalOutbox {
 
   /** Records typed text. `revision` is the server revision the editor loaded, used for a note's first edit. */
   edit(noteId: string, text: string, revision: number) {
+    if (this.deleted.has(noteId)) return;
     const current = this.entries.get(noteId);
     const base: OutboxEntry = current ?? {
       noteId,
@@ -126,6 +134,29 @@ export class JournalOutbox {
     this.emit();
   }
 
+  /**
+   * Deletes a note with `deleteOnServer`, holding its saves meanwhile. Once that succeeds the note's local text
+   * is forgotten for good, even if a save sent earlier lands afterwards. If it fails, the text stays as it was
+   * and saving resumes; the error is rethrown for the caller to show.
+   */
+  async remove(noteId: string, deleteOnServer: () => Promise<unknown>) {
+    if (this.deleted.has(noteId)) return;
+    this.clearTimer(noteId);
+    this.deleting.add(noteId);
+    try {
+      await deleteOnServer();
+    } catch (error) {
+      this.deleting.delete(noteId);
+      // Anything typed before or during the attempt is still waiting to be saved.
+      if (!this.disposed && this.entries.get(noteId)?.status === "pending") this.schedule(noteId);
+      throw error;
+    }
+    this.deleting.delete(noteId);
+    this.deleted.add(noteId);
+    this.clearTimer(noteId);
+    if (this.entries.delete(noteId)) this.emit();
+  }
+
   /** Stops timers; any text still unsaved is lost with the tab, which is why the page warns before unload. */
   dispose() {
     this.disposed = true;
@@ -152,7 +183,7 @@ export class JournalOutbox {
   }
 
   private async run(noteId: string) {
-    if (this.disposed || this.inFlight.has(noteId)) return;
+    if (this.disposed || this.inFlight.has(noteId) || this.deleting.has(noteId) || this.deleted.has(noteId)) return;
     const entry = this.entries.get(noteId);
     if (!entry || entry.status !== "pending") return;
     if (entry.savedText !== null && entry.text === entry.savedText) {
@@ -167,6 +198,10 @@ export class JournalOutbox {
     try {
       const result = await this.save(noteId, sentText, sentRevision);
       if (this.disposed) return;
+      if (this.deleted.has(noteId)) {
+        this.inFlight.delete(noteId);
+        return;
+      }
       const latest = this.entries.get(noteId) ?? entry;
       const clean = latest.text === sentText;
       this.put({
@@ -182,7 +217,7 @@ export class JournalOutbox {
       if (!clean) this.schedule(noteId);
     } catch (error) {
       this.inFlight.delete(noteId);
-      if (this.disposed) return;
+      if (this.disposed || this.deleted.has(noteId)) return;
       const latest = this.entries.get(noteId) ?? entry;
       if (error instanceof RevisionConflictError) {
         this.put({ ...latest, status: "conflict", error: error.message, conflictRevision: error.currentRevision });

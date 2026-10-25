@@ -11,7 +11,7 @@ import {
   useSyncExternalStore,
   type MutableRefObject,
 } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQueries, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -188,10 +188,25 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const draftRows = useQuery(api.insights.listMyDrafts, canQuery ? {} : "skip") as
     | InsightDraftSummary[]
     | undefined;
-  const activeDraft = useQuery(
-    api.insights.getDraft,
-    canQuery && activeDraftId ? ({ draftId: activeDraftId as DraftId }) : "skip"
-  ) as InsightDraft | null | undefined;
+  // getDraft fails once its note is gone (deleted here or elsewhere). useQueries reports that instead of throwing
+  // during render, so a missing note reads as unavailable, like any other note that can't be opened.
+  const activeDraftQuery = useMemo(() => {
+    const queries: Parameters<typeof useQueries>[0] = {};
+    if (canQuery && activeDraftId) {
+      queries.draft = { query: api.insights.getDraft, args: { draftId: activeDraftId as DraftId } };
+    }
+    return queries;
+  }, [canQuery, activeDraftId]);
+  const activeDraftResult = useQueries(activeDraftQuery).draft as InsightDraft | null | Error | undefined;
+  // The note being deleted stays on screen until its deletion settles: the server's answer to the delete and
+  // its subscription's failure arrive together, a moment before the active note can be cleared.
+  const [deletingDraft, setDeletingDraft] = useState<InsightDraft | null>(null);
+  const activeDraft =
+    activeDraftResult instanceof Error
+      ? deletingDraft && deletingDraft.id === activeDraftId
+        ? deletingDraft
+        : null
+      : activeDraftResult;
 
   const setActiveDraftMutation = useMutation(api.insights.setActiveDraft);
   const renameDraftMutation = useMutation(api.insights.renameDraft);
@@ -494,12 +509,20 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [renameDraftMutation, tracked]
   );
 
+  // Published notes can't be deleted (the server refuses). The outbox holds the note's saves meanwhile and, once
+  // it is gone, forgets its text, so no late save or unload warning outlives it.
   const deleteDraft = useCallback(
     async (draftId: string) => {
-      await tracked(deleteDraftMutation({ draftId: draftId as DraftId }));
-      if (activeDraftId === draftId) setActiveDraftId(null);
+      if (activeDraft && activeDraft.id === draftId) setDeletingDraft(activeDraft);
+      try {
+        await journalOutbox.remove(draftId, () => tracked(deleteDraftMutation({ draftId: draftId as DraftId })));
+        // Another note may have been chosen while this one was being deleted; that one stays active.
+        setActiveDraftId((current) => (current === draftId ? null : current));
+      } finally {
+        setDeletingDraft((current) => (current?.id === draftId ? null : current));
+      }
     },
-    [deleteDraftMutation, activeDraftId, tracked]
+    [activeDraft, deleteDraftMutation, journalOutbox, tracked]
   );
 
   const saveDraftSettings = useCallback(

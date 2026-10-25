@@ -83,6 +83,18 @@ describe("Notes view state", () => {
     expect(run(context, [{ type: "showCalendar" }], closed)).toEqual({ stage: "calendar", date: "2026-10-19", noteId: null });
   });
 
+  test("a finished deletion closes only the deleted note, and leaves every other view exactly as it is", () => {
+    const open: JournalView = { stage: "note", date: "2026-10-20", noteId: "a" };
+    expect(nextJournalView(open, { type: "noteDeleted", noteId: "a" })).toEqual({ stage: "day", date: "2026-10-20", noteId: null });
+    const others: JournalView[] = [
+      calendarToday,
+      { stage: "day", date: "2026-10-20", noteId: null },
+      { stage: "note", date: "2026-10-18", noteId: "b" },
+    ];
+    // The same object, so the page's history knows there is nothing to do.
+    for (const view of others) expect(nextJournalView(view, { type: "noteDeleted", noteId: "a" })).toBe(view);
+  });
+
   test("an open note that stops being the loaded one (deleted, switched elsewhere) leaves for its day's chooser", () => {
     const open: JournalView = { stage: "note", date: today, noteId: "a" };
     expect(resolveJournalView(open, noActive)).toEqual({
