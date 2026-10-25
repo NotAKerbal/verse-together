@@ -71,6 +71,12 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+## Accounts
+
+Sign-in uses Better Auth inside Convex. The current rollout is **Google only**; email/password support is built
+but stays switched off until `AUTH_EMAIL_PASSWORD_ENABLED=true` is set on the Convex deployment. Configuration,
+the Clerk account migration, cutover and rollback are documented in [docs/auth-migration.md](docs/auth-migration.md).
+
 ## Dictionary Providers
 
 The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/route.ts`:

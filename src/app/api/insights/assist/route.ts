@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { getServerViewer } from "@/lib/auth-server";
 import { NextRequest, NextResponse } from "next/server";
 import {
   aiInsightSourceHasMaterial,
@@ -51,8 +51,8 @@ function isInsightSource(value: unknown): value is AiInsightSource {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
+  const { viewer } = await getServerViewer();
+  if (!viewer) {
     return NextResponse.json({ error: "Sign in to use AI assist." }, { status: 401 });
   }
 

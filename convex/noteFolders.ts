@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 
 const MAX_FOLDER_NAME_LENGTH = 120;
 const MAX_IMPORTED_FOLDERS = 200;
@@ -52,7 +52,8 @@ async function assertNoCycles(
 export const getWorkspace = query({
   args: {},
   handler: async (ctx) => {
-    const clerkId = await requireClerkId(ctx);
+    const clerkId = await getViewerClerkId(ctx);
+    if (!clerkId) return { folders: [], assignments: [] };
     const folders = await listUserFolders(ctx, clerkId);
     folders.sort((a, b) => a.name.localeCompare(b.name));
 

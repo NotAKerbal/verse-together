@@ -8,6 +8,8 @@ Backend ownership, persistence, revision conflicts, legacy retention and idempot
 
 Add `?sidebar` to render the actual desktop `NotesSidebar` beside a synthetic reader, using the same note fixtures and save outbox. This covers the dated note chooser, long cards and sources, switching, Markdown editing, published read-only notes, new source-linked notes and collapse/reopen. Use `?sidebar&active=none&empty=true` for the empty state, or `?sidebar&createError` for a creation failure. The sidebar stays desktop-only, as in the app; mobile reader actions continue to open `/notes` through `NotebookPanel`.
 
+Add `?panel` to render a chapter page's combined Log and Notes panel: the actual `NotesSidebar` with its Log view (desktop) or `NotesSheet` (below 1024px), opened by a synthetic stand-in for the reader header's Log button. The Log view is the actual `ChapterLogView` (mark-read toggle and the embedded `ReadingLogForm` with verse and day fields); "Go to 1 Nephi 3" switches the synthetic chapter while the panel stays open, and the synthetic reading history lists what was logged. Request ids are deduplicated like the server's; `?panel&logFail` or `?panel&markFail` makes the first save land but report an error, so a retry (also after collapsing and reopening the panel) must not add a second history row.
+
 Sidebar verification (October 24, 2026; local working tree based on `51d3f46`):
 
 - **Passed** — `npm run test:notes`: 64 tests in 8 files; `npx tsc --noEmit`; targeted ESLint for `NotebookPanel`, `NotesSidebar`, `JournalNoteCard`, `JournalWorkspace` and this harness; `git diff --check`.

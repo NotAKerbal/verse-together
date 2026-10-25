@@ -324,3 +324,114 @@
   }
 
 }
+
+.manager {
+  border-bottom: 1px solid var(--rule);
+}
+
+.accountSection {
+  border-bottom: 1px solid var(--rule);
+}
+
+.sectionSummary {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-height: 52px;
+  padding: .5rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sectionSummary h2 {
+  font-family: inherit;
+  font-size: .82rem;
+  font-weight: 500;
+}
+
+.sectionMeta {
+  margin-left: auto;
+  font-size: .72rem;
+  color: var(--foreground-muted);
+  text-align: right;
+}
+
+.chevron {
+  width: .65rem;
+  margin-left: auto;
+  color: var(--foreground-soft);
+  transition: transform 160ms ease;
+}
+
+.sectionMeta + .chevron {
+  margin-left: .25rem;
+}
+
+.accountSection[open] > summary .chevron {
+  transform: rotate(180deg);
+}
+
+.sectionContent {
+  padding: .25rem 1rem 1rem;
+}
+
+.sectionSummary:hover,
+.profile:hover {
+  background: var(--surface-button-hover);
+}
+
+.profile {
+  cursor: pointer;
+  list-style: none;
+}
+
+.profile::-webkit-details-marker,
+.sectionSummary::-webkit-details-marker {
+  display: none;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.edit {
+  display: inline-flex;
+  align-items: center;
+}
+
+.profileForm {
+  display: grid;
+  gap: .75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.profileForm > button {
+  justify-self: start;
+}
+
+.notice {
+  display: grid;
+  gap: .75rem;
+  padding: 1rem;
+}
+
+.shell summary:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+.profileEditor[open] .edit {
+  color: var(--accent-rubric);
+  border-color: var(--accent-rubric-line);
+}

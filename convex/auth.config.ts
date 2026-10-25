@@ -1,15 +1,8 @@
-const domain = process.env.CLERK_JWT_ISSUER_DOMAIN;
+import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
+import type { AuthConfig } from "convex/server";
 
-if (!domain) {
-  throw new Error("Missing CLERK_JWT_ISSUER_DOMAIN for Convex auth provider configuration.");
-}
-
+// Convex trusts only JWTs issued by this deployment's Better Auth component (issuer CONVEX_SITE_URL,
+// audience "convex"). Clerk-issued tokens are no longer accepted.
 export default {
-  providers: [
-    {
-      domain,
-      // Must match the JWT template audience in Clerk.
-      applicationID: "convex",
-    },
-  ],
-};
+  providers: [getAuthConfigProvider()],
+} satisfies AuthConfig;

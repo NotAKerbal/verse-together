@@ -1,13 +1,17 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { getSessionCookie } from "better-auth/cookies";
+import { NextResponse, type NextRequest } from "next/server";
 
-const isProtectedRoute = createRouteMatcher(["/account(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    await auth.protect();
+// Optimistic gate only: it checks that a Better Auth session cookie is present so signed-out visitors
+// are sent to sign in. It does not validate the session; Convex enforces auth on every data access.
+export default function proxy(request: NextRequest) {
+  if (getSessionCookie(request)) {
+    return NextResponse.next();
   }
-});
+  const signInUrl = new URL("/sign-in", request.url);
+  signInUrl.searchParams.set("redirect", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  return NextResponse.redirect(signInUrl);
+}
 
 export const config = {
-  matcher: ["/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)", "/(api|trpc)(.*)"],
+  matcher: ["/account", "/account/:path*"],
 };

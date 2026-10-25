@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
@@ -82,6 +82,20 @@ export function useReadingProgressActions() {
     }),
     [markRead, unmarkRead, savePosition, logRead]
   );
+}
+
+/** Records the chapter as the signed-in reader's last position; best-effort, never surfaced to the reader. */
+export function useTrackLastPosition(volume: string, book: string, chapter: number) {
+  const { user, ready } = useConvexSignedIn();
+  const { setLastPosition } = useReadingProgressActions();
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (!userId || !ready) return;
+    setLastPosition({ volume, book, chapter }).catch(() => {
+      // Position tracking is best-effort; the reader should never surface this.
+    });
+  }, [userId, ready, volume, book, chapter, setLastPosition]);
 }
 
 export type PlanWriteInput = {

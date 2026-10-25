@@ -3,7 +3,7 @@
 import { useAuth } from "@/lib/auth";
 
 export default function PlansSignedOut() {
-  const { promptSignIn } = useAuth();
+  const { promptSignIn, signingIn } = useAuth();
 
   return (
     <div className="panel-card flex flex-col items-start gap-3 p-5" style={{ background: "var(--accent-sky-soft)" }}>
@@ -14,9 +14,11 @@ export default function PlansSignedOut() {
       <button
         type="button"
         onClick={() => promptSignIn()}
-        className="inline-flex min-h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
+        disabled={signingIn}
+        aria-busy={signingIn || undefined}
+        className="inline-flex min-h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)] disabled:cursor-wait disabled:opacity-70"
       >
-        Sign in
+        {signingIn ? "Signing in…" : "Sign in"}
       </button>
     </div>
   );

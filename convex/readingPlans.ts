@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 
 const MAX_STEPS = 2000;
 const MAX_TITLE = 120;
@@ -34,8 +34,7 @@ function chapterKey(step: { volume: string; book: string; chapter: number }): st
 }
 
 async function maybeClerkId(ctx: QueryCtx): Promise<string | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.subject ?? null;
+  return await getViewerClerkId(ctx);
 }
 
 async function loadReadMap(ctx: QueryCtx, clerkId: string): Promise<Map<string, number>> {

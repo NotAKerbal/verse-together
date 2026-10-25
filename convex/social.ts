@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 
 function toIso(ts: number): string {
   return new Date(ts).toISOString();
@@ -225,7 +225,8 @@ export const getChapterActivity = query({
 export const getAccountData = query({
   args: {},
   handler: async (ctx) => {
-    const clerkId = await requireClerkId(ctx);
+    const clerkId = await getViewerClerkId(ctx);
+    if (!clerkId) return { friends: [], myComments: [], names: {}, shares: {} };
     const friendships = [
       ...(await ctx.db.query("friendships").withIndex("by_requester", (q: any) => q.eq("requesterClerkId", clerkId)).collect()),
       ...(await ctx.db.query("friendships").withIndex("by_addressee", (q: any) => q.eq("addresseeClerkId", clerkId)).collect()),

@@ -1,35 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { localDateKey, newRequestId } from "@/features/notes/journal";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import { useBookProgress, useReadingProgressActions } from "./useReadingProgress";
+
+/** An unfinished completion attempt for one chapter; a retry reuses it so the server logs the reading once. */
+export type ChapterMarkAttempt = { chapterKey: string; requestId: string; journalDate: string };
 
 type Props = {
   volume: string;
   book: string;
   chapter: number;
+  /** Keeps the unfinished attempt beyond this toggle's mount (e.g. a panel that unmounts when collapsed). */
+  pendingRef?: MutableRefObject<ChapterMarkAttempt | null>;
 };
 
-export default function ChapterReadToggle({ volume, book, chapter }: Props) {
-  const { user, ready } = useConvexSignedIn();
+export default function ChapterReadToggle({ volume, book, chapter, pendingRef }: Props) {
+  const { user } = useConvexSignedIn();
   const progress = useBookProgress(volume, book);
-  const { markChapterRead, unmarkChapterRead, setLastPosition } = useReadingProgressActions();
+  const { markChapterRead, unmarkChapterRead } = useReadingProgressActions();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const userId = user?.id ?? null;
   // One id per completion attempt: a retry after an error reuses it so the server logs the reading once.
-  const markRequestRef = useRef<{ requestId: string; journalDate: string } | null>(null);
+  const ownRequestRef = useRef<ChapterMarkAttempt | null>(null);
+  const markRequestRef = pendingRef ?? ownRequestRef;
+  const chapterKey = `${volume}/${book}/${chapter}`;
   useEffect(() => {
-    markRequestRef.current = null;
-  }, [userId, volume, book, chapter]);
-
-  useEffect(() => {
-    if (!userId || !ready) return;
-    setLastPosition({ volume, book, chapter }).catch(() => {
-      // Position tracking is best-effort; the reader should never surface this.
-    });
-  }, [userId, ready, volume, book, chapter, setLastPosition]);
+    ownRequestRef.current = null;
+  }, [userId, chapterKey]);
 
   if (!user) return null;
 
@@ -44,10 +44,15 @@ export default function ChapterReadToggle({ volume, book, chapter }: Props) {
       if (isRead) {
         await unmarkChapterRead({ volume, book, chapter });
       } else {
-        const attempt = markRequestRef.current ?? { requestId: newRequestId(), journalDate: localDateKey() };
+        const previous = markRequestRef.current;
+        const attempt =
+          previous && previous.chapterKey === chapterKey
+            ? previous
+            : { chapterKey, requestId: newRequestId(), journalDate: localDateKey() };
         markRequestRef.current = attempt;
-        await markChapterRead({ volume, book, chapter }, attempt);
-        markRequestRef.current = null;
+        await markChapterRead({ volume, book, chapter }, { requestId: attempt.requestId, journalDate: attempt.journalDate });
+        // The shared ref may now hold a newer attempt from another instance; only clear our own.
+        if (markRequestRef.current === attempt) markRequestRef.current = null;
       }
     } catch {
       setError("Couldn't save that. Try again in a moment.");
@@ -58,8 +63,8 @@ export default function ChapterReadToggle({ volume, book, chapter }: Props) {
 
   return (
     <div
-      className="simple-hide mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] px-4 py-3 font-sans shadow-[var(--surface-shadow-soft)]"
-      style={{ background: isRead ? "var(--accent-mint)" : "var(--surface-card)", fontSize: "1rem" }}
+      className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border-2 border-[color:var(--surface-border)] px-4 py-3 font-sans"
+      style={{ background: isRead ? "var(--accent-mint)" : "var(--surface-card-soft)" }}
     >
       <div className="min-w-0">
         <p className="font-display text-[1.05rem] font-bold leading-tight">

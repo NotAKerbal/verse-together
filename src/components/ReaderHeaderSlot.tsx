@@ -66,9 +66,11 @@ export default function ReaderHeaderSlot() {
 /**
  * Where a chapter header goes. `slot` is the app header's slot to portal into, or null to draw in the page.
  * `pending` is true while it may still move to the header (before hydration, or while another chapter header holds
- * the slot), so the in-page header can stay hidden on wide screens instead of flashing there first.
+ * the slot), so the in-page header can stay hidden on wide screens instead of flashing there first. `always` claims
+ * the slot at every width once hydrated (a study guide's controls, which have no in-page copy; see
+ * `.guide-header-actions` in globals.css).
  */
-export function useReaderHeaderDock(enabled: boolean): { slot: HTMLElement | null; pending: boolean } {
+export function useReaderHeaderDock(enabled: boolean, always = false): { slot: HTMLElement | null; pending: boolean } {
   const id = useId();
   const wide = useSyncExternalStore(
     subscribeToMedia,
@@ -77,7 +79,7 @@ export function useReaderHeaderDock(enabled: boolean): { slot: HTMLElement | nul
   );
   const slot = useSyncExternalStore(subscribe, () => slotElement, () => null);
   const owner = useSyncExternalStore(subscribe, () => claims.at(-1) ?? null, () => null);
-  const claiming = enabled && wide === true;
+  const claiming = enabled && (always ? wide !== null : wide === true);
 
   useLayoutEffect(() => {
     if (!claiming) return;
