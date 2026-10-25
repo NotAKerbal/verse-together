@@ -466,9 +466,10 @@ export const createJournalNote = mutation({
 /**
  * One private journal entry with note text, reading, or both, created atomically. A retry with the same request
  * id returns the same entry; while nothing has edited that entry since, the retry's content replaces it, so an
- * edit made before retrying a lost response isn't dropped. Once the entry has been edited, a retry with other
- * content is refused (ENTRY_CONFLICT) rather than overwriting those edits or reporting its own content as saved.
- * An entry deleted meanwhile stays deleted.
+ * edit made before retrying a lost response isn't dropped. Replacing the text bumps its revision, so an editor
+ * opened on the earlier text can't save over it. Once the entry has been edited, a retry with other content is
+ * refused (ENTRY_CONFLICT) rather than overwriting those edits or reporting its own content as saved. An entry
+ * deleted meanwhile stays deleted.
  */
 export const createJournalEntry = mutation({
   args: {
@@ -508,19 +509,26 @@ export const createJournalEntry = mutation({
               logReading: existing.readingAt !== undefined,
             })
           : null;
-      // Untouched: no note revision, and the entry still holds exactly what this request last wrote. The content is
-      // compared, not the clock, so a reading edit landing in the create's own millisecond still counts as an edit.
-      // An entry without a fingerprint can't show that and is treated as edited.
+      // Untouched: no note revision past the one this request left, and the entry still holds exactly what this
+      // request last wrote. The content is compared, not the clock, so a reading edit landing in the create's own
+      // millisecond still counts as an edit. An entry without a fingerprint can't show that and is treated as edited.
+      const requestRevision = existing.entryRequestRevision ?? 0;
       const untouched =
-        (existing.markdownRevision ?? 0) === 0 &&
+        (existing.markdownRevision ?? 0) === requestRevision &&
         existing.updatedAt === existing.createdAt &&
         current !== null &&
         current === existing.entryRequestFingerprint;
       if (untouched && existing.status === "draft") {
+        // New text is a new revision: an editor still holding the earlier text (another window that loaded the
+        // entry before this retry) is refused rather than saving over it. The same text keeps the revision, so
+        // repeating a request stays idempotent and leaves open editors alone.
+        const revision = args.markdownBody === existing.markdownBody ? requestRevision : requestRevision + 1;
         await ctx.db.patch(existing._id, {
           ...content,
           readingAt: args.logReading ? existing.readingAt ?? existing.createdAt : undefined,
+          markdownRevision: revision,
           entryRequestFingerprint: fingerprint,
+          entryRequestRevision: revision,
         });
         return { id: existing._id, duplicate: true, deleted: false };
       }

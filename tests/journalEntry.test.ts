@@ -155,10 +155,11 @@ describe("deleting and retrying unified entries", () => {
     expect(retried).toEqual({ id: first.id, duplicate: true, deleted: false });
     let doc = (await alice.query(api.insights.getDraft, { draftId: first.id! }))!;
     expect(doc.markdown_body).toBe("First words, finished");
+    expect(doc.markdown_revision).toBe(1);
     expect(doc.reading_at).toBeNull();
     expect(await alice.query(api.insights.listMyJournal, {})).toHaveLength(1);
 
-    await alice.mutation(api.insights.saveJournalNote, { draftId: first.id!, markdownBody: "Edited in the entry", expectedRevision: 0 });
+    await alice.mutation(api.insights.saveJournalNote, { draftId: first.id!, markdownBody: "Edited in the entry", expectedRevision: 1 });
     await expect(
       alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "A stale retry", logReading: true })
     ).rejects.toMatchObject({ data: { code: "ENTRY_CONFLICT", id: first.id } });
@@ -167,6 +168,53 @@ describe("deleting and retrying unified entries", () => {
     expect(doc.reading_at).toBeNull();
     // The content the request last wrote is still the same save.
     expect(await alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "First words, finished", logReading: false })).toEqual(retried);
+  });
+
+  test("a retry that replaces the text invalidates an editor opened on the earlier text", async () => {
+    const { t, alice } = await setup();
+    const sent = { ...input, markdownBody: "First words", logReading: true };
+    const first = created(await alice.mutation(api.insights.createJournalEntry, sent));
+    // Another window opens the entry the lost response created, at revision 0.
+    const opened = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect(opened.markdown_revision).toBe(0);
+
+    // The composer retries with more text: it replaces the untouched entry under a new revision.
+    const changed = { ...sent, markdownBody: "First words, and more written before retrying" };
+    expect(await alice.mutation(api.insights.createJournalEntry, changed)).toEqual({ id: first, duplicate: true, deleted: false });
+    let doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect(doc.markdown_body).toBe(changed.markdownBody);
+    expect(doc.markdown_revision).toBe(1);
+
+    // The other window's editor still names revision 0, so its save is refused instead of dropping the retry's text.
+    await expect(
+      alice.mutation(api.insights.saveJournalNote, { draftId: first, markdownBody: "First words, from the old editor", expectedRevision: 0 })
+    ).rejects.toMatchObject({ data: { code: "REVISION_CONFLICT", currentRevision: 1 } });
+    doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect(doc.markdown_body).toBe(changed.markdownBody);
+
+    // Repeating the same request is the same save and keeps the revision, so open editors stay valid.
+    expect(await alice.mutation(api.insights.createJournalEntry, changed)).toEqual({ id: first, duplicate: true, deleted: false });
+    expect((await alice.query(api.insights.getDraft, { draftId: first }))!.markdown_revision).toBe(1);
+    // A reading-only change keeps the text and its revision.
+    const moved = { ...changed, journalDate: "2026-10-23" };
+    expect(await alice.mutation(api.insights.createJournalEntry, moved)).toEqual({ id: first, duplicate: true, deleted: false });
+    doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect([doc.journal_date, doc.markdown_revision]).toEqual(["2026-10-23", 1]);
+
+    // With nothing edited elsewhere, a further changed retry still replaces the entry, under the next revision.
+    const again = { ...moved, markdownBody: "First words, finished at last" };
+    expect(await alice.mutation(api.insights.createJournalEntry, again)).toEqual({ id: first, duplicate: true, deleted: false });
+    doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect([doc.markdown_body, doc.markdown_revision]).toEqual([again.markdownBody, 2]);
+    expect(await t.run((ctx) => ctx.db.query("insightDrafts").collect())).toHaveLength(1);
+
+    // An editor at the current revision saves normally; after that edit a changed retry conflicts.
+    await alice.mutation(api.insights.saveJournalNote, { draftId: first, markdownBody: "Edited in the entry", expectedRevision: 2 });
+    await expect(alice.mutation(api.insights.createJournalEntry, { ...again, markdownBody: "Yet another retry" })).rejects.toMatchObject({
+      data: { code: "ENTRY_CONFLICT", id: first },
+    });
+    expect((await alice.query(api.insights.getDraft, { draftId: first }))!.markdown_body).toBe("Edited in the entry");
+    expect(await alice.mutation(api.insights.createJournalEntry, again)).toEqual({ id: first, duplicate: true, deleted: false });
   });
 
   test("after a lost response and an edit elsewhere, an unchanged retry succeeds and a changed one conflicts", async () => {
@@ -213,11 +261,13 @@ describe("deleting and retrying unified entries", () => {
   });
 
   test("a reading edit in the create's own millisecond still protects the entry from a changed retry", async () => {
-    const { t, alice } = await setup();
-    // Freeze the clock through create, edit and retry, so the edit's updatedAt can't tell it apart.
+    // Freeze the clock before the backend exists, through setup, create, edit and retry, so the edit's updatedAt
+    // can't tell it apart. (Freezing after setup at an earlier time lets convex-test's clock, which never runs
+    // behind its last commit, move the edit a millisecond past the create.)
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(new Date("2026-10-24T12:00:00Z"));
+      const { t, alice } = await setup();
       const first = created(await alice.mutation(api.insights.createJournalEntry, input));
       await alice.mutation(api.insights.setJournalReading, {
         draftId: first,

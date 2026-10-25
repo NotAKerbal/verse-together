@@ -41,8 +41,8 @@ export function focusNotesLauncher() {
 
 /**
  * The Log panel, the same in the phone sheet and the desktop sidebar: one compact header row (All notes or back,
- * the title, New note, the calendar, close) above one scroll. `view` "log" is the unsaved entry with `footer` (the
- * chapter's completion) below it; "notes" is the saved notes by day, or the open one with its reading chip.
+ * the title, New note, the calendar, close) above one scroll. `view` "log" is the unsaved entry (its reading chip,
+ * writer, day and Save); "notes" is the saved notes by day, or the open one with its reading chip.
  */
 export function NotesPanelContent({
   activeNoteId,
@@ -54,7 +54,6 @@ export function NotesPanelContent({
   onViewChange,
   onNewEntry,
   readingOptions,
-  footer,
   frame,
   autoFocus = false,
 }: NotesPanelNotes & {
@@ -63,7 +62,6 @@ export function NotesPanelContent({
   /** New note: the unsaved entry, from this page's defaults unless it already holds something. */
   onNewEntry: () => void;
   readingOptions: ReadingOption[];
-  footer?: ReactNode;
   frame: NotesPanelFrame;
   autoFocus?: boolean;
 }) {
@@ -124,18 +122,15 @@ export function NotesPanelContent({
   }
 
   const body = composing ? (
-    <>
-      <JournalEntryComposer
-        options={readingOptions}
-        followPage
-        autoFocus={autoFocus}
-        onSaved={() => {
-          setBrowsingFor(null);
-          onViewChange("notes");
-        }}
-      />
-      {footer}
-    </>
+    <JournalEntryComposer
+      options={readingOptions}
+      followPage
+      autoFocus={autoFocus}
+      onSaved={() => {
+        setBrowsingFor(null);
+        onViewChange("notes");
+      }}
+    />
   ) : browsing ? (
     notes.length > 0 ? (
       <div className="space-y-5">

@@ -169,6 +169,9 @@ export default defineSchema({
     // noteJournal's entryContentFingerprint of the content that request last wrote: a later retry carrying the same
     // content is the same save; one carrying other content is refused once the entry has been edited since.
     entryRequestFingerprint: v.optional(v.string()),
+    // The note revision that request last left (absent: 0). A retry replacing the text bumps the revision so an
+    // editor opened on the earlier text can't save over it; any revision past this one is an edit made since.
+    entryRequestRevision: v.optional(v.number()),
     // An older reading opened as this entry (see noteJournal's history keys): the original is kept but no
     // longer listed on its own.
     readingHistoryKey: v.optional(v.string()),

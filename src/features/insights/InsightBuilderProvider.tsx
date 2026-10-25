@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type MutableRefObject,
 } from "react";
 import { useMutation, useQueries, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
@@ -29,7 +28,6 @@ import {
   type EntrySaveState,
 } from "@/features/notes/entryDraft";
 import { useEntryDraftStore, type CreateJournalEntry } from "@/features/notes/useEntryDraftStore";
-import type { ChapterMarkAttempt } from "@/features/plans/ChapterReadToggle";
 
 /**
  * What the page being read says about itself. `href` defaults to the live URL (path, query and hash) at the
@@ -98,11 +96,6 @@ type InsightBuilderContextValue = {
   readerChapter: ReaderChapter | null;
   /** Called once per mounted chapter header; update it as the chapter's details change, unregister on unmount. */
   registerReaderChapter: () => ReaderChapterRegistration;
-  /**
-   * The panel's mark-read toggle's last unfinished attempt. It outlives the panel (collapsing it, closing the
-   * sheet) so a retry after an unknown result reuses the request id; cleared when the account changes.
-   */
-  readerMarkPendingRef: MutableRefObject<ChapterMarkAttempt | null>;
   /**
    * The one unsaved journal entry (Log, New note, a Journal day's New note). It outlives the panel, so closing
    * and reopening keeps its text; it is cleared when the account changes and once it is saved.
@@ -201,7 +194,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const [readerChapter, setReaderChapter] = useState<ReaderChapter | null>(null);
   const readerChaptersRef = useRef(new Map<number, ReaderChapter>());
   const readerChapterTokenRef = useRef(0);
-  const readerMarkPendingRef = useRef<ChapterMarkAttempt | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [pendingSaves, setPendingSaves] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -259,9 +251,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     userIdRef.current = userId;
     saveJournalNoteRef.current = saveJournalNoteMutation;
   }, [userId, saveJournalNoteMutation]);
-  useEffect(() => {
-    readerMarkPendingRef.current = null;
-  }, [userId]);
   const journalOutbox = useMemo(() => {
     const owner = userId;
     return new JournalOutbox(async (noteId, markdownBody, expectedRevision) => {
@@ -782,7 +771,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setSheetOpen,
       readerChapter,
       registerReaderChapter,
-      readerMarkPendingRef,
       entryDraft,
       updateEntryDraft,
       startEntry,
@@ -840,7 +828,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setSheetOpen,
       readerChapter,
       registerReaderChapter,
-      readerMarkPendingRef,
       entryDraft,
       updateEntryDraft,
       startEntry,

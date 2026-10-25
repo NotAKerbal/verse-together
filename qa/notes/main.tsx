@@ -4,7 +4,6 @@ import {ConvexError} from "convex/values";
 import {createRoot} from "react-dom/client";
 import NotesSidebar,{NotesPanelContent,type NotesPanelFrame} from "../../src/features/notes/NotesSidebar";
 import NotesSheet from "../../src/features/notes/NotesSheet";
-import ChapterReadToggle,{type ChapterMarkAttempt} from "../../src/features/plans/ChapterReadToggle";
 import JournalWorkspace from "../../src/features/notes/JournalWorkspace";
 import JournalNoteEditor from "../../src/features/notes/JournalNoteEditor";
 import JournalEntryComposer from "../../src/features/notes/JournalEntryComposer";
@@ -58,8 +57,9 @@ function QaApp(){
  const deletedKeys=useRef(new Set<string>());
  const historyKeys=useRef(new Map<string,string>());
  const entryFailures=useRef(params.has("entryFail")||params.has("entryConflict")?1:0);
- // Like the server's entryRequestFingerprint: what each request last wrote.
+ // Like the server's entryRequestFingerprint and entryRequestRevision: what each request last wrote, at which revision.
  const entrySent=useRef(new Map<string,string>());
+ const entryRevisions=useRef(new Map<string,number>());
  const [hiddenReadings,setHiddenReadings]=useState<Set<string>>(()=>new Set());
  const [readings,setReadings]=useState<JournalEntry[]>([]);
  const panelMode=params.has("panel");
@@ -67,7 +67,6 @@ function QaApp(){
  const [panelView,setPanelView]=useState<NotebookPanelView>("notes");
  const [sheetOpen,setSheetOpen]=useState(false);
  const [chapterIndex,setChapterIndex]=useState(0);
- const readerMarkPendingRef=useRef<ChapterMarkAttempt|null>(null);
  const [panelOpen,setPanelOpen]=useState(true);
  // Stands in for the provider's active note: the only note whose document is "loaded".
  const [active,setActive]=useState<string|null>(()=>params.get("active")==="none"?null:initial.id);
@@ -85,8 +84,8 @@ function QaApp(){
  const act=(action:JournalViewAction)=>go(current=>nextJournalView(current,action));
  const note=view.noteId!==null&&activeDoc?.id===view.noteId?activeDoc:null;
  // Stands in for insights:createJournalEntry under the provider's own draft store (useEntryDraftStore): one entry per
- // request id; a retry replaces an untouched entry's content, and is refused once the entry was edited unless it
- // repeats what that request last wrote or matches the entry.
+ // request id; a retry replaces an untouched entry's content (new text is a new revision), and is refused once the
+ // entry was edited unless it repeats what that request last wrote or matches the entry.
  const createEntry=useCallback<CreateJournalEntry>(async(input)=>{
    await wait(Number(params.get("entryDelay"))||150);
    if(deletedKeys.current.has(input.requestId))return {id:null};
@@ -96,7 +95,8 @@ function QaApp(){
    const doc=id?docsRef.current.find(d=>d.id===id):undefined;
    const content={title:titleOf(input.markdownBody),markdown_body:input.markdownBody,journal_date:input.journalDate,source:input.source??null};
    if(id&&doc){
-     if(doc.markdown_revision===0&&doc.updated_at===doc.created_at){setDocs(all=>all.map(d=>d.id===id?{...d,...content,reading_at:input.logReading?d.reading_at??d.created_at:null}:d));entrySent.current.set(input.requestId,sent);}
+     const base=entryRevisions.current.get(input.requestId)??0;
+     if(doc.markdown_revision===base&&doc.updated_at===doc.created_at){const revision=input.markdownBody===doc.markdown_body?base:base+1;setDocs(all=>all.map(d=>d.id===id?{...d,...content,markdown_revision:revision,reading_at:input.logReading?d.reading_at??d.created_at:null}:d));entrySent.current.set(input.requestId,sent);entryRevisions.current.set(input.requestId,revision);}
      else if(entrySent.current.get(input.requestId)!==sent&&JSON.stringify([doc.markdown_body,doc.journal_date,!!doc.reading_at,doc.source])!==sent)throw new ConvexError({code:"ENTRY_CONFLICT",id,journalDate:doc.journal_date});
    }else if(!id){
      id=`qa-entry-${Date.now()}`;entryRequests.current.set(input.requestId,id);entrySent.current.set(input.requestId,sent);
@@ -133,7 +133,7 @@ function QaApp(){
  const logOpen=layout==="phone"?sheetOpen:panelOpen&&panelView==="log";
  // The header's Log: a blank entry for the chapter, logging reading of it, opened at once (nothing is stored).
  function onLog(){if(layout==="phone"&&sheetOpen){setSheetOpen(false);return;}if(layout==="desktop"&&logOpen){setPanelOpen(false);return;}restart({source:chapterSource,logReading:true});setPanelView("log");if(layout==="phone")setSheetOpen(true);else setPanelOpen(true);}
- const panelContent=(frame:NotesPanelFrame)=><NotesPanelContent frame={frame} autoFocus={layout==="desktop"} activeNoteId={active} activeNote={activeDoc} notes={summaries} isLoading={false} onSelect={async id=>{setActive(id);}} view={panelView} onViewChange={setPanelView} onNewEntry={()=>{restart({source:panelMode?chapterSource:source});setPanelView("log");}} readingOptions={panelMode?chapter.logOptions:[]} footer={panelMode?<ChapterReadToggle volume={chapter.volume} book={chapter.book} chapter={chapter.chapter} pendingRef={readerMarkPendingRef}/>:null}/>;
+ const panelContent=(frame:NotesPanelFrame)=><NotesPanelContent frame={frame} autoFocus={layout==="desktop"} activeNoteId={active} activeNote={activeDoc} notes={summaries} isLoading={false} onSelect={async id=>{setActive(id);}} view={panelView} onViewChange={setPanelView} onNewEntry={()=>{restart({source:panelMode?chapterSource:source});setPanelView("log");}} readingOptions={panelMode?chapter.logOptions:[]}/>;
  const sidebarPane = (
    <>
      <section className="panel-card max-w-lg rounded-[20px] p-6">
@@ -150,7 +150,7 @@ function QaApp(){
          <button type="button" className="surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm" onClick={()=>{setPanelView("notes");if(layout==="phone")setSheetOpen(true);else setPanelOpen(true);}}>Reader note action</button>
          <span className="text-xs text-[color:var(--foreground-muted)]">Synthetic stand-ins for the reader header (Log), chapter navigation, and a reader note action (openBuilder: the active note).</span>
          <section aria-label="Synthetic reading history" className="w-full text-sm">
-           <h2 className="mt-2 font-bold">Synthetic entries with reading ({docs.filter(d=>d.reading_at).length}) and chapter marks ({readings.length})</h2>
+           <h2 className="mt-2 font-bold">Synthetic entries with reading ({docs.filter(d=>d.reading_at).length})</h2>
            <ul>{docs.filter(d=>d.reading_at).map(d=><li key={d.id} data-qa-entry-reading>{d.source?.label} · {d.journal_date}{d.markdown_body.trim()?" · with note":""}</li>)}</ul>
          </section>
        </div>
@@ -166,7 +166,7 @@ function QaApp(){
    </>
  );
  const composer=composing?<section aria-label="New entry" className="panel-card rounded-[1.25rem] p-4"><JournalEntryComposer options={[{source,verseCount:24}]} autoFocus={layout==="desktop"} onSaved={(id,date)=>{setComposing(false);go({stage:"note",date,noteId:id});}} heading={<div className="flex items-center justify-between gap-2"><h3 className="font-display text-base font-extrabold">New entry</h3><button type="button" onClick={()=>setComposing(false)} className="surface-button inline-flex h-11 items-center rounded-full border-2 px-4 text-sm font-semibold lg:h-9">Close</button></div>}/></section>:null;
- const provider={journalOutbox:outbox,deleteDraft,readerMarkPendingRef,entryDraft,updateEntryDraft:changeEntryDraft,saveEntryDraft,entrySave,openSavedEntry};
+ const provider={journalOutbox:outbox,deleteDraft,entryDraft,updateEntryDraft:changeEntryDraft,saveEntryDraft,entrySave,openSavedEntry};
  return <QaContext.Provider value={provider}><div className="app-shell min-h-screen"><header className="app-header hidden sm:block"><div className="shell-container flex items-center justify-between py-4"><span className="brand-wordmark brand-pill text-2xl">Verse<span>Together</span></span><nav className="segmented-control"><Link className="segmented-control-button" href="/browse">Browse</Link><Link className="segmented-control-button" data-active="true" href="/notes">Journal</Link><Link className="segmented-control-button" href="/come-follow-me">Come Follow Me</Link></nav><span className="pill-tag">QA user</span></div></header><main className="app-main mx-auto max-w-[1440px] px-4 pt-3 pb-32 sm:px-8 sm:pt-[calc(var(--header-height)+2rem)] lg:pb-4"><p className="mb-2 text-xs opacity-60">Component QA · synthetic fixtures · no backend connection</p>{sidebarMode?sidebarPane:<JournalWorkspace layout={layout} status="ready" entries={entries} today="2026-10-21" stage={view.stage} selectedDate={view.date} onSelectDate={date=>act({type:"selectDate",date})} selectedKey={view.noteId!==null?`note:${view.noteId}`:null} onOpenNote={(noteId,date)=>{act({type:"openNote",noteId,date});setActive(noteId);}} onOpenReading={entry=>{void qaEntryActions.openReadingEntry(entry.id).then(({id})=>{act({type:"openNote",noteId:id,date:entry.journal_date});});}} onCloseNote={()=>act({type:"closeNote"})} onShowCalendar={()=>act({type:"showCalendar"})} onNewNote={date=>{restart({journalDate:date,source:null});setComposing(true);}} dayActions={composer} notePane={note?<JournalNoteEditor key={note.id} note={note} authorLabel="QA user" showDate={false} onClose={()=>act({type:"closeNote"})} onDeleted={onNoteDeleted} onDateChange={date=>act({type:"openNote",noteId:note.id,date})} readingOptions={[{source,verseCount:24}]}/>:undefined}/>}</main><nav className="fixed bottom-3 inset-x-4 z-40 grid grid-cols-3 rounded-full border-2 p-2 shadow-lg sm:hidden" style={{background:"var(--mobile-nav-shell)",borderColor:"var(--surface-border)"}}><Link className="p-3 text-center" href="/browse">Browse</Link><Link className="p-3 text-center" href="/come-follow-me">CFM</Link><Link className="rounded-full p-3 text-center" style={{background:"var(--mobile-nav-active)",color:"var(--mobile-nav-active-text)"}} href="/notes">Journal</Link></nav></div></QaContext.Provider>;
 }
 createRoot(document.getElementById("root")!).render(<StrictMode><QaApp/></StrictMode>);

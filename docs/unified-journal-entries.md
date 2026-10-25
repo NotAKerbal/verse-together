@@ -40,13 +40,17 @@ entry.
 - **All notes** lists saved entries by day, and opening one shows the saved-entry editor: the existing Markdown
   outbox editor with the same chip above it. Its reading changes go through `setJournalReading`, which leaves the
   text and its revision alone.
-- On a chapter page the panel also keeps the chapter's **Mark chapter as read** toggle. Chapter completion and plans
-  stay separate from an entry's reading, so marking, unmarking, editing or deleting an entry never changes them.
+- The Log panel shows no chapter-completion card (no **Mark chapter as read** there). Chapter completion and plans
+  stay separate from an entry's reading, so editing or deleting an entry never changes them; chapter progress and
+  its server functions are unchanged, and plans still mark their steps read.
 - The unsaved entry lives in `InsightBuilderProvider`. Closing the sheet or panel keeps its text, and unloading the
   page with text in it asks first. It is cleared when the account changes. While untouched it follows the chapter
   in view (desktop navigation with the panel open). Once it has text or a chosen reading it stays as it is.
 - One request id lasts for the whole unsaved entry, so every retry names the same entry. A retry made after editing
   replaces the entry's content only while nothing has touched the entry since; it never overwrites later edits.
+  Replacing the text bumps the entry's revision (`entryRequestRevision` records the one the request left), so an
+  editor opened on the earlier text, in another window, gets a revision conflict instead of saving over the
+  retry. Repeating the same request, or changing only its reading or day, keeps the revision.
 - The save lives in the provider too (`EntryDraftStore` in `useEntryDraftStore.ts`), not in the composer. One
   save runs at a time; closing and reopening the sheet mid-save shows it still in flight, with the entry
   read-only, and a second Save joins it rather than sending again. When it lands, only the exact content that was
@@ -78,9 +82,12 @@ No existing field changes, and no migration runs.
   - Each create stores `entryRequestFingerprint`, a hash of the content it wrote (`entryContentFingerprint` in
     `convex/noteJournal.ts`: text, day, source, reading).
   - A retry while the entry is untouched replaces its content and fingerprint. Untouched means no note revision
-    and the entry still holding exactly the fingerprinted content (its current fingerprint is compared, not
+    past `entryRequestRevision` (the one the request last left; absent is 0) and the entry still holding exactly
+    the fingerprinted content (its current fingerprint is compared, not
     `updatedAt`), so a reading edit in the create's own millisecond still counts. An entry with no stored
-    fingerprint is treated as edited.
+    fingerprint is treated as edited. A retry that replaces the text bumps `markdownRevision` and records it in
+    `entryRequestRevision`, so a stale editor's save (`saveJournalNote` naming the earlier revision) gets
+    `REVISION_CONFLICT`; the same text keeps the revision.
   - Once the entry has been edited (a note revision or a reading change), a retry repeating the fingerprinted
     content, or matching what the entry now holds, returns the entry as a duplicate. Any other retry throws
     `ConvexError({ code: "ENTRY_CONFLICT", id, journalDate })` and changes nothing.
@@ -176,6 +183,30 @@ Checks run on these repairs:
   - real-device keyboards;
   - authenticated backend end-to-end checks;
   - deployment.
+
+### Log card removal and final-review repairs (working tree on `7b2c134`, uncommitted)
+
+- The Log panel (phone sheet and desktop sidebar) no longer shows the "Finished this chapter? / Mark chapter as
+  read" card. `ChapterReadToggle`, `NotesPanelContent`'s `footer` prop and the provider's `readerMarkPendingRef`
+  were only used by it and are removed. Chapter progress, `markChapterRead`/`unmarkChapterRead`, plans and the
+  reading history are unchanged.
+- A changed retry of `createJournalEntry` now bumps the revision when it replaces the text (above), so an editor
+  opened on the earlier text can no longer save over it at revision 0.
+- The same-millisecond test freezes the clock before the backend is set up. Freezing afterwards at an earlier time
+  let convex-test's clock, which never runs behind its last commit, put the edit a millisecond after the create.
+
+Checks run on these repairs:
+
+- **Passed**: `npx vitest run` in full: 177 tests in 20 files. The new test in `tests/journalEntry.test.ts` (an
+  editor at revision 0 is refused after a changed retry; repeating the request keeps the revision; a further
+  changed retry still lands; after an edit a changed retry conflicts) fails against `7b2c134`'s
+  `convex/insights.ts`.
+- **Passed**: the same-millisecond test 15 times in isolation and `tests/journalEntry.test.ts` 5 times, all green,
+  with its `updatedAt === createdAt` precondition holding.
+- **Passed**: `npx tsc --noEmit -p tsconfig.json` (includes `qa/`), `npx tsc --noEmit -p convex/tsconfig.json`,
+  `git diff --check`, and ESLint on the changed files; `convex/insights.ts` keeps its 47 pre-existing findings,
+  none on the changed lines.
+- **Not run**: browser QA of the panel without the card, the production build, deployment.
 
 ## Rollout requirements
 

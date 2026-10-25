@@ -6,7 +6,6 @@ import { useInsightBuilder } from "./InsightBuilderProvider";
 import NotesSheet from "@/features/notes/NotesSheet";
 import NotesSidebar, { NotesPanelContent, type NotesPanelFrame } from "@/features/notes/NotesSidebar";
 import { useBelowLg } from "@/features/notes/useBelowLg";
-import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
 
 export default function NotebookPanel() {
   const pathname = usePathname();
@@ -14,7 +13,7 @@ export default function NotebookPanel() {
   const {
     canUseInsights, isMobileOpen, dismissMobile,
     isPanelOpen, togglePanel, closeBuilder, activeDraftId, activeNote, drafts, isLoading, switchDraft,
-    panelView, setPanelView, isSheetOpen, setSheetOpen, readerChapter, readerMarkPendingRef, startEntry,
+    panelView, setPanelView, isSheetOpen, setSheetOpen, readerChapter, startEntry,
     captureCurrentSource,
   } = useInsightBuilder();
   const belowLg = useBelowLg();
@@ -39,15 +38,6 @@ export default function NotebookPanel() {
   if (!canUseInsights || onNotesPage || belowLg === null) return null;
 
   const readingOptions = readerChapter?.logOptions ?? [];
-  const footer = readerChapter ? (
-    // Completion and plans stay separate from an entry's reading; the chapter can still be marked read here.
-    <ChapterReadToggle
-      volume={readerChapter.volume}
-      book={readerChapter.book}
-      chapter={readerChapter.chapter}
-      pendingRef={readerMarkPendingRef}
-    />
-  ) : null;
   const content = (frame: NotesPanelFrame, autoFocus: boolean): ReactNode => (
     <NotesPanelContent
       activeNoteId={activeDraftId}
@@ -60,7 +50,6 @@ export default function NotebookPanel() {
       // New note links to the page in view (with its live position), without logging reading of it.
       onNewEntry={() => startEntry({ source: captureCurrentSource() ?? readingOptions[0]?.source ?? null })}
       readingOptions={readingOptions}
-      footer={footer}
       frame={frame}
       autoFocus={autoFocus}
     />
