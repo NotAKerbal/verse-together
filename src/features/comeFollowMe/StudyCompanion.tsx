@@ -1,6 +1,6 @@
 "use client";
 
-import { faBook } from "@fortawesome/free-solid-svg-icons";
+import { faBook, faBookOpen, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Link from "next/link";
 import {
@@ -82,7 +82,7 @@ type Props = {
    * page content, in every layout; the reader HTML (every chapter, and any section between them) is the
    * guide side of the paired reader; the closing HTML (synthesis, study plans, sources) follows the reader,
    * never beside the scripture: below the paired columns on desktop, and on phones as the end of the
-   * guide side, where the pager and the swipe to the scripture stand down while it is read.
+   * guide side, where the header's pager and the swipe to the scripture stand down while it is read.
    */
   introductionHtml: string;
   readerHtml: string;
@@ -142,8 +142,8 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const READING_LINE = 0.3;
 /**
  * Gap left above an element an explicit navigation brings to the top, below the measured chrome (the app
- * header, plus the reader's toolbar row where one shows). It matches the top padding of the guide and
- * scripture columns, so landing on the first chapter docks the reader exactly, with its heading just clear.
+ * header). It matches the top padding of the guide and scripture columns, so landing on the first chapter
+ * docks the reader exactly, with its heading just clear.
  */
 const LANDING_GAP = 12;
 /** The contents mark the entry whose heading has passed this far below the measured chrome as current. */
@@ -318,7 +318,6 @@ export default function StudyCompanion({
   const introRef = useRef<HTMLDivElement>(null);
   const contentsRef = useRef<ContentsHandle>(null);
   const companionRef = useRef<HTMLDivElement>(null);
-  const toolbarRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const guidePanelRef = useRef<HTMLElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
@@ -327,6 +326,8 @@ export default function StudyCompanion({
   const scriptureRef = useRef<HTMLElement>(null);
   const scriptureDocRef = useRef<HTMLDivElement>(null);
   const backToGuideRef = useRef<HTMLButtonElement>(null);
+  /** Phones: the Guide / scripture pager in the header's controls pill (see syncPager). */
+  const pagerRef = useRef<HTMLDivElement | null>(null);
   const pendingRef = useRef<Pending | null>(null);
   const ownershipRef = useRef(new ScrollOwnership());
   const segmentsRef = useRef<Segment<SegmentMeta>[] | null>(null);
@@ -356,9 +357,38 @@ export default function StudyCompanion({
   const settledDesktopRef = useRef<boolean | null>(null);
   /**
    * The app header's right side, where the guide's Contents and Log buttons go at every width and in simple mode
-   * too (see ReaderHeaderSlot and `.guide-header-actions` in globals.css). They have no copies in the page.
+   * too, and on phones the pager between the guide and the scripture, which opens before them while the reader is
+   * docked (see ReaderHeaderSlot, `.guide-header-actions` in globals.css, and syncPager). They have no copies in
+   * the page.
    */
   const dock = useReaderHeaderDock(true, true);
+  /**
+   * Phones: the header's pill holds only Contents and Log above the reader, and opens the pager before them
+   * (growing to the left; its right edge stays put) once the reader is docked, on either side, until the page
+   * scrolls back up off the reader or the guide's closing sections are reached (data-docked and data-closing on
+   * the companion). Closed, the pager is inert: out of the tab order and the accessibility tree. Kept on the
+   * elements, not in state, as the dock is: it changes as the page scrolls.
+   */
+  const syncPager = useCallback(() => {
+    const pager = pagerRef.current;
+    if (!pager) return;
+    const companion = companionRef.current;
+    const open = companion?.dataset.mode === "strip" && !!companion.dataset.docked && !companion.dataset.closing;
+    pager.toggleAttribute("data-open", open);
+    // Closing under the keyboard (the page scrolled up off the reader): focus moves on to Contents, beside it.
+    if (!open && pager.contains(document.activeElement)) {
+      focusWithoutScrolling(pager.parentElement?.querySelector<HTMLElement>(".guide-header-contents") ?? null);
+    }
+    pager.inert = !open;
+  }, []);
+  // The pager is portalled into the header, which may mount after the companion: it takes the current state then.
+  const setPagerRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      pagerRef.current = element;
+      syncPager();
+    },
+    [syncPager]
+  );
   const { user, promptSignIn } = useAuth();
   const { loading: logLoading } = useConvexSignedIn();
   const belowLg = useBelowLg();
@@ -437,12 +467,11 @@ export default function StudyCompanion({
 
   /**
    * Where the guide scrolls in the current layout: its own side of the strip on phones, else the page, under
-   * the app header and the guide column's own toolbar row, both measured live (the row is zero-height
-   * wherever it has nothing to show). The scripture column has no toolbar row: it measures its own pane.
+   * the app header (measured live). The scripture column measures its own pane.
    */
   const guideBox = useCallback((): ScrollBox => {
     if (mode === "strip" && guidePanelRef.current) return elementBox(guidePanelRef.current);
-    return windowBox(() => headerBottom() + (toolbarRef.current?.offsetHeight ?? 0));
+    return pageBox();
   }, [mode]);
 
   const scriptureBox = useCallback((): ScrollBox | null => {
@@ -454,7 +483,7 @@ export default function StudyCompanion({
    * Where reading starts inside the docked scripture pane, from its top. On desktop the pane's own scroller
    * runs up to the viewport top, exactly like the page-scrolled guide beside it, so its text passes under and
    * between the transparent app header's floating controls; that header (measured) is where reading starts.
-   * On phones the strip side starts below its pager row, with nothing floating over it.
+   * On phones the strip side starts below the app header, with nothing floating over it.
    * This is a reading and landing measure only: the pane still clips at its real top edge.
    */
   const scriptureReadingTop = useCallback(() => (mode === "columns" ? headerBottom() : 0), [mode]);
@@ -560,7 +589,7 @@ export default function StudyCompanion({
     [book.label, book.slug, passageLabels]
   );
 
-  /** Note which segment the guide is in, for the pager label and the active verses' side line. */
+  /** Note which segment the guide is in, for the header pager's label and the active verses' side line. */
   const noteSegment = useCallback((list: Segment<SegmentMeta>[], guideY: number) => {
     const index = segmentAt(list, guideY);
     if (index === segmentIndexRef.current) return;
@@ -657,7 +686,7 @@ export default function StudyCompanion({
     scrollTo(guide, "guide", guide.offsetOf(el) - LANDING_GAP);
     reverseRef.current = null;
     handoffRef.current = { scripture: scripture.top() };
-    // The pager label and the side line name the section landed on (1px inside it, past any rounding).
+    // The pager's label and the side line name the section landed on (1px inside it, past any rounding).
     noteSegment(segments(guide, scripture), guide.offsetOf(el) + 1);
   }, [mode, scriptureBox, scriptureLineOf, chapters, book.slug, passages, guideBox, scrollTo, noteSegment, segments]);
 
@@ -712,7 +741,7 @@ export default function StudyCompanion({
     const closingOnPage = !!closing && !guidePanelRef.current?.contains(closing);
     if (!companion) return null;
     const pageLine = headerBottom() + SECTION_LINE;
-    let readerLine = pageLine + (toolbarRef.current?.offsetHeight ?? 0);
+    let readerLine = pageLine;
     if (mode === "strip") {
       const panel = guidePanelRef.current;
       readerLine =
@@ -792,18 +821,23 @@ export default function StudyCompanion({
 
   // Reader geometry and docking. Declared before the pending-work effect so each commit sizes the reader
   // before anything scrolls. Everything is measured from the live page (the app header, the bottom
-  // navigation, the toolbar row, which may be zero-height, and the viewport), never from constants.
+  // navigation, and the viewport), never from constants. The page's clearance under a two-row header
+  // (--guide-header-clear, see `.guide-header-pager` in globals.css) is kept here too, in the same pass as the
+  // dock, so a header that changes height (with the layout, never with the pager opening) never moves a docked
+  // reader off its dock after the dock was restored. The dock opens and closes the header's pager (syncPager).
   useLayoutEffect(() => {
     const companion = companionRef.current;
     const guidePanel = guidePanelRef.current;
     const scripturePanel = scriptureRef.current;
     if (!companion) return;
     const reset = () => {
-      for (const name of ["--cfm-chrome-top", "--cfm-toolbar-h", "--cfm-vh", "--cfm-bottom-clear"]) {
+      for (const name of ["--cfm-chrome-top", "--cfm-vh", "--cfm-bottom-clear"]) {
         companion.style.removeProperty(name);
       }
       companion.style.marginBottom = "";
+      document.documentElement.style.removeProperty("--guide-header-clear");
       delete companion.dataset.docked;
+      syncPager();
       guidePanel?.removeAttribute("data-pane-scroll");
       scripturePanel?.removeAttribute("data-pane-scroll");
       paneScrollRef.current = { guide: false, scripture: false };
@@ -811,14 +845,14 @@ export default function StudyCompanion({
     };
 
     let chromeTop = 0;
-    let toolbarHeight = 0;
+    let headerClear = -1;
     let pull = 0;
     /** The viewport height the current geometry was measured for. */
     let measuredViewport = -1;
     /** The last evaluated dock state, and whether a viewport resize must restore it. */
     let docked = false;
     let redockAfterResize = false;
-    // Phones dock the whole reader (pager row first) under the app header where one shows. Desktop docks the
+    // Phones dock the whole reader under the app header (which holds its pager). Desktop docks the
     // scripture column at the viewport top, its real clipping edge, the same edge the page-scrolled guide
     // has; the transparent app header floats over both columns alike.
     const readerElement = () => (mode === "strip" ? companion : scripturePanel);
@@ -849,11 +883,33 @@ export default function StudyCompanion({
       paneScrollRef.current = panes;
       if (docked) companion.dataset.docked = "true";
       else delete companion.dataset.docked;
+      syncPager();
       guidePanel?.setAttribute("data-pane-scroll", panes.guide ? "on" : "off");
       scripturePanel?.setAttribute("data-pane-scroll", panes.scripture ? "on" : "off");
     };
     const measure = () => {
       const header = document.querySelector<HTMLElement>(".app-header");
+      const reader = readerElement();
+      const clear = header ? header.offsetTop + header.offsetHeight : -1;
+      // A header that changed height (without the viewport changing) moves the page under it by the change in
+      // clearance below. Whether the reader was docked is read first, against the old dock line: the header
+      // floats over the page, so until the clearance changes the reader has not moved.
+      const wasDocked =
+        redockAfterResize ||
+        (clear !== headerClear &&
+          window.innerHeight === measuredViewport &&
+          reader != null &&
+          isDocked({
+            readerTop: reader.getBoundingClientRect().top,
+            dockTop: dockLine(),
+            scrollTop: window.scrollY,
+            maxScroll: document.documentElement.scrollHeight - window.innerHeight,
+          }));
+      if (clear !== headerClear) {
+        headerClear = clear;
+        if (clear >= 0) document.documentElement.style.setProperty("--guide-header-clear", `${clear}px`);
+        else document.documentElement.style.removeProperty("--guide-header-clear");
+      }
       chromeTop = 0;
       if (header) {
         const style = getComputedStyle(header);
@@ -865,9 +921,7 @@ export default function StudyCompanion({
       const nav = document.querySelector<HTMLElement>('nav[aria-label="Primary mobile navigation"]');
       const bottomClear =
         nav && getComputedStyle(nav).display !== "none" ? Math.max(0, window.innerHeight - nav.getBoundingClientRect().top) : 0;
-      toolbarHeight = toolbarRef.current?.getBoundingClientRect().height ?? 0;
       companion.style.setProperty("--cfm-chrome-top", `${chromeTop}px`);
-      companion.style.setProperty("--cfm-toolbar-h", `${toolbarHeight}px`);
       companion.style.setProperty("--cfm-vh", `${window.innerHeight}px`);
       companion.style.setProperty("--cfm-bottom-clear", `${bottomClear}px`);
       if (mode === "strip") {
@@ -883,12 +937,12 @@ export default function StudyCompanion({
         }
       }
       measuredViewport = window.innerHeight;
-      const reader = readerElement();
       if (reader) {
-        // Now that the reader and the page end match the new viewport, return a reader that was docked to
-        // the dock line. Only the page moves; the panes' own scroll positions are untouched.
+        // Now that the reader, the page's clearance and the page end match the new viewport and header, return
+        // a reader that was docked to the dock line. Only the page moves; the panes' own scroll positions are
+        // untouched. A reader that was not docked stays where it is.
         const target = redockScroll({
-          wasDocked: redockAfterResize,
+          wasDocked,
           readerTop: reader.getBoundingClientRect().top,
           dockTop: dockLine(),
           scrollTop: window.scrollY,
@@ -930,7 +984,6 @@ export default function StudyCompanion({
     window.visualViewport?.addEventListener("resize", onViewportResize);
     const resize = new ResizeObserver(scheduleMeasure);
     resize.observe(companion);
-    if (toolbarRef.current) resize.observe(toolbarRef.current);
     const header = document.querySelector<HTMLElement>(".app-header");
     if (header) resize.observe(header);
     return () => {
@@ -942,7 +995,7 @@ export default function StudyCompanion({
       if (dockFrame) window.cancelAnimationFrame(dockFrame);
       reset();
     };
-  }, [mode]);
+  }, [mode, syncPager]);
 
   // A real resize across the desktop breakpoint: carry the guide's reading position into the new layout,
   // and bring the scripture along where it shows. Nothing scrolls the page or docks the reader. The first
@@ -1196,23 +1249,28 @@ export default function StudyCompanion({
   }, [mode]);
 
   // Phones: the closing sections end the guide side, but nothing is paired with them. Once they reach the
-  // side's reading line, the pager and the swipe to the scripture stand down (data-closing, see the CSS), and
-  // come back as soon as the reader scrolls up into the last chapter again.
+  // side's reading line, the header's pager closes and the swipe to the scripture stands down (data-closing, see
+  // syncPager and the CSS); both come back as soon as the reader scrolls up into the last chapter again.
   useEffect(() => {
     const companion = companionRef.current;
     const panel = guidePanelRef.current;
     const closing = closingRef.current;
     if (!companion) return;
+    const setClosing = (on: boolean) => {
+      if (on === !!companion.dataset.closing) return;
+      if (on) companion.dataset.closing = "true";
+      else delete companion.dataset.closing;
+      syncPager();
+    };
     if (mode !== "strip" || side !== "guide" || !panel || !closing || !panel.contains(closing)) {
-      delete companion.dataset.closing;
+      setClosing(false);
       return;
     }
     let frame = 0;
     const update = () => {
       frame = 0;
       const line = panel.getBoundingClientRect().top + panel.clientHeight * READING_LINE;
-      if (closing.getBoundingClientRect().top <= line) companion.dataset.closing = "true";
-      else delete companion.dataset.closing;
+      setClosing(closing.getBoundingClientRect().top <= line);
     };
     const queue = () => {
       if (!frame) frame = window.requestAnimationFrame(update);
@@ -1224,9 +1282,9 @@ export default function StudyCompanion({
       panel.removeEventListener("scroll", queue);
       window.removeEventListener("resize", queue);
       if (frame) window.cancelAnimationFrame(frame);
-      delete companion.dataset.closing;
+      setClosing(false);
     };
-  }, [mode, side]);
+  }, [mode, side, syncPager]);
 
   const showScripture = useCallback(
     (
@@ -1297,7 +1355,7 @@ export default function StudyCompanion({
     [revealSide, schedule, scrollPage]
   );
 
-  /** A contents entry: the introduction scrolls the page; the reader lands on it below the toolbar. */
+  /** A contents entry: the introduction scrolls the page; the reader lands on it below the header. */
   const navigateToSection = useCallback((id: string) => showGuide(id, { updateHash: true, focus: true }), [showGuide]);
 
   // Scripture previews. This week's chapters are already here; a preview of one of them can also be shown in
@@ -1442,12 +1500,47 @@ export default function StudyCompanion({
     }
   }
 
-  // The guide's controls (Contents, then the chapter reader's Log for the chapter being read), one pill drawn
+  // The guide's controls (on phones the pager between the guide and the scripture, open only while the reader is
+  // docked (syncPager), then Contents, then the chapter reader's Log for the chapter being read), one pill drawn
   // once, in the app header's right side at every width (see `dock`), outside this page: only global styles and
-  // page-independent ones. Log is the notebook's launcher, the button it returns focus to when the one that
-  // opened it is gone. Where the header is narrow both are icons, each keeping its name.
+  // page-independent ones. Log is the notebook's launcher, the button it returns focus to when the one that opened
+  // it is gone. Where the header is narrow Contents and Log are icons, each keeping its name.
   const readerActions = (
     <div role="group" aria-label="Study guide controls" className="reader-toolbar guide-header-actions">
+      {mode === "strip" ? (
+        <div ref={setPagerRef} className="guide-header-pager" role="group" aria-label="Study guide and scripture">
+          <div className="guide-header-pager-track">
+            <div className="guide-header-pager-inner">
+              <button
+                id="cfm-show-guide"
+                type="button"
+                className="guide-header-pager-button"
+                aria-controls="cfm-panel-guide"
+                aria-pressed={side === "guide"}
+                aria-label="Guide"
+                title="Guide"
+                onClick={turnToGuide}
+                onKeyDown={onPagerKeyDown}
+              >
+                <FontAwesomeIcon icon={faScroll} aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+              <button
+                id="cfm-show-scripture"
+                type="button"
+                className="guide-header-pager-button"
+                aria-controls="cfm-panel-scripture"
+                aria-pressed={side === "scripture"}
+                aria-label={`Scripture: ${label}`}
+                title={`Scripture: ${label}`}
+                onClick={() => revealSide("scripture")}
+                onKeyDown={onPagerKeyDown}
+              >
+                <FontAwesomeIcon icon={faBookOpen} aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ContentsOpener onOpen={openContents} />
       <button
         type="button"
@@ -1465,50 +1558,7 @@ export default function StudyCompanion({
     </div>
   );
 
-  // The reader's sticky toolbar row. Phones: the pager row across the top of the whole strip. Desktop: empty and
-  // zero-height at the top of the guide column (the guide's controls are in the app header), so the scripture
-  // column beside it starts level with the guide column.
-  const toolbar = (
-    <div ref={toolbarRef} className={styles.toolbar}>
-      {mode === "strip" ? (
-        <div className={styles.pager} role="group" aria-label="Study guide and scripture">
-          <button
-            id="cfm-show-guide"
-            type="button"
-            className={styles.pagerButton}
-            aria-controls="cfm-panel-guide"
-            aria-pressed={side === "guide"}
-            onClick={turnToGuide}
-            onKeyDown={onPagerKeyDown}
-          >
-            <span aria-hidden="true">‹ </span>Guide
-          </button>
-          <span className={styles.pagerDots} aria-hidden="true">
-            <span data-on={side === "guide" ? "true" : undefined} />
-            <span data-on={side === "scripture" ? "true" : undefined} />
-          </span>
-          <button
-            id="cfm-show-scripture"
-            type="button"
-            className={styles.pagerButton}
-            aria-controls="cfm-panel-scripture"
-            aria-pressed={side === "scripture"}
-            onClick={() => revealSide("scripture")}
-            onKeyDown={onPagerKeyDown}
-          >
-            {label}
-            <span aria-hidden="true"> ›</span>
-          </button>
-          <span className={styles.srOnly} aria-live="polite">
-            {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-
-  // The closing sections: below the paired columns on desktop; at the end of the guide side on phones, under
-  // the reader's own toolbar.
+  // The closing sections: below the paired columns on desktop; at the end of the guide side on phones.
   const closingSections = closingHtml ? (
     <div className={styles.closing}>
       <div
@@ -1540,11 +1590,14 @@ export default function StudyCompanion({
         </div>
       ) : null}
       <div ref={companionRef} className={styles.companion} data-mode={mode}>
-        {mode === "strip" ? toolbar : null}
-
+        {/* In the page, not the header's pager, which is inert while it is closed. */}
+        {mode === "strip" ? (
+          <span className={styles.srOnly} aria-live="polite">
+            {side === "guide" ? "Showing the study guide" : `Showing the scripture, ${label}`}
+          </span>
+        ) : null}
         <div ref={stripRef} className={styles.layout} onScroll={onStripScroll}>
           <section ref={guidePanelRef} id="cfm-panel-guide" aria-label="Study guide" className={styles.guidePanel} inert={guideHidden}>
-            {mode === "columns" ? toolbar : null}
             <div ref={guideRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={guideHtml} />
             {mode === "strip" ? closingSections : null}
             {mode === "strip" ? footer : null}

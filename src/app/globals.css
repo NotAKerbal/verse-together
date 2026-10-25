@@ -1734,6 +1734,110 @@ a.reader-toolbar-crumb:hover {
 }
 
 /*
+  Phones and small tablets (the guide's swipeable strip): the pager between the guide and the scripture sits in the
+  pill before Contents and Log. Above the reader the pill holds only those two; once the reader is docked
+  ([data-open], kept by StudyCompanion) the pager opens and the pill grows to the left, its right edge (and Contents
+  and Log) staying put, and it closes again above the reader and over the guide's closing sections. The pill is in
+  a row of its own, right-aligned, where the navigation shows too (640–899px, and simple mode's wordmark), open or
+  closed, so the header never changes height with it; the page clears both rows (--guide-header-clear, the
+  header's measured bottom, kept by StudyCompanion).
+*/
+@media (max-width: 899.98px) {
+  :root .app-header:has(> .reader-header-slot > .guide-header-actions > .guide-header-pager) {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  :root .app-header > .reader-header-slot:has(> .guide-header-actions > .guide-header-pager) {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  :root:has(.app-header .guide-header-pager) .app-main:not([data-fixed="true"]) {
+    padding-top: calc(var(--guide-header-clear, var(--header-height)) + 1rem);
+  }
+}
+
+/* Closed it takes no width, and cancels the pill's gap after it; it keeps its height, so the pill's never changes. */
+.guide-header-pager {
+  display: grid;
+  flex: 0 1 auto;
+  grid-template-columns: 0fr;
+  min-width: 0;
+  margin-right: -0.375rem;
+  overflow-x: clip;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-columns 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin-right 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 180ms ease,
+    visibility 0s linear 280ms;
+}
+
+.guide-header-pager[data-open] {
+  grid-template-columns: 1fr;
+  margin-right: 0.25rem;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-columns 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin-right 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 180ms ease 60ms,
+    visibility 0s linear;
+}
+
+/* The grid's item, unpadded, so closed it collapses to nothing; the padding and separator are inside it. */
+.guide-header-pager-track {
+  min-width: 0;
+}
+
+/* The space before the separator sets the pager apart from Contents and Log. */
+.guide-header-pager-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-right: 0.625rem;
+  border-right: 1px solid var(--surface-border);
+}
+
+.guide-header-pager-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+  border-radius: 999px;
+  color: var(--foreground-soft);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.guide-header-pager-button:hover {
+  color: var(--foreground);
+}
+
+.guide-header-pager-button[aria-pressed="true"] {
+  background: var(--surface-button-hover);
+  color: var(--foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-header-pager,
+  .guide-header-pager[data-open] {
+    transition: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .guide-header-pager-button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
+/*
   Share mode: <html data-share="true"> while a /share passage page is mounted
   (see src/components/ShareChrome.tsx). Every piece of app chrome steps aside;
   the passage page itself is a full-viewport sheet of plain paper.

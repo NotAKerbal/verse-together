@@ -17,13 +17,15 @@
   strip, guide first, one side per screen width, each side scrolling on its own. There is no switch.
 
   The app header stays transparent over the page, as everywhere else in the app. The reader measures it
-  (and its own toolbar row, zero-height wherever it has nothing to show) for docking and landings.
+  for docking and landings.
 
   The contents sit outside all of this: a rail fixed in the left margin where the margin is wide enough,
-  and a drawer opened from the one Contents button. That button, with Log beside it, is in the guide's
-  controls pill, which StudyCompanion portals into the app header's right side (ReaderHeaderSlot) at every
-  width and in simple mode, outside this page, styled in globals.css (.guide-header-actions), and stays
-  visible beside the rail. The header is fixed on this page at every width, phones included.
+  and a drawer opened from the one Contents button. That button, with Log beside it (and on phones the
+  pager between the guide and the scripture before them), is in the guide's controls pill, which
+  StudyCompanion portals into the app header's right side (ReaderHeaderSlot) at every width and in simple
+  mode, outside this page, styled in globals.css (.guide-header-actions), and stays visible beside the rail.
+  The header is fixed on this page at every width, phones included; on phones the pager opens in the pill
+  only while the reader is docked.
 */
 
 .page {
@@ -244,12 +246,10 @@
 
 /*
   StudyCompanion measures the live page and overrides these on the element: --cfm-chrome-top (the fixed
-  app header's bottom, 0 where it is hidden), --cfm-toolbar-h (the toolbar row's real height, 0 where it is
-  empty; on desktop it covers the guide column only), --cfm-vh (the viewport height) and --cfm-bottom-clear (how much of the viewport the fixed bottom
-  navigation covers). The values here are only the first paint's fallbacks.
+  app header's bottom, 0 where it is hidden), --cfm-vh (the viewport height) and --cfm-bottom-clear (how much
+  of the viewport the fixed bottom navigation covers). The values here are only the first paint's fallbacks.
 */
 .companion {
-  --cfm-toolbar-h: 0px;
   /* Under the app's fixed header, which holds the guide's controls at every width. */
   --cfm-chrome-top: var(--header-height);
   --cfm-bottom-clear: 0px;
@@ -278,27 +278,6 @@
   margin-inline: auto;
 }
 
-/*
-  The reader's sticky toolbar row. It holds only what the reader needs at its top: on phones the pager row
-  across the whole strip (see below); on desktop nothing (the guide's controls are in the app header), so it
-  is empty and zero-height at the top of the guide column, and the scripture column beside it starts level
-  with the guide column's top (and docks at the viewport top, see below). StudyCompanion measures its real
-  height (including zero) for the guide's landings and reading top.
-*/
-.toolbar {
-  position: sticky;
-  top: var(--cfm-chrome-top);
-  z-index: 5;
-  display: flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.companion[data-mode="columns"] .toolbar {
-  width: fit-content;
-}
-
 .backLink:focus-visible,
 .weekNav a:focus-visible,
 .footer a:focus-visible,
@@ -306,7 +285,6 @@
 .contentsExpand:focus-visible,
 .drawerClose:focus-visible,
 .contentsGroups a:focus-visible,
-.pagerButton:focus-visible,
 .guideLink:focus-visible,
 .backToGuide:focus-visible,
 .verseNumber[role="button"]:focus-visible,
@@ -335,10 +313,9 @@
 */
 @media (min-width: 900px) {
   /*
-    The two columns' outer tops are level (the guide column's starts with its toolbar row, zero-height where
-    empty). Inside them, the guide's text and the scripture's text each start this far down (LANDING_GAP in
-    StudyCompanion), so the first chapter headings, and anything a navigation lands on, sit clear of the app
-    header and of the guide's toolbar row.
+    The two columns' outer tops are level. Inside them, the guide's text and the scripture's text each start
+    this far down (LANDING_GAP in StudyCompanion), so the first chapter headings, and anything a navigation
+    lands on, sit clear of the app header.
   */
   .companion[data-mode="columns"] .guidePanel > .guide {
     padding-top: 0.75rem;
@@ -394,30 +371,15 @@
   /*
     The server renders the desktop layout; a phone switches to the strip once it hydrates. Until then the
     phone's first paint shows the guide alone (the desktop columns only apply from 900px): no scripture
-    below it and no desktop toolbar.
+    below it.
   */
-  .companion[data-mode="columns"] .toolbar,
   .companion[data-mode="columns"] .scripturePanel {
     display: none;
   }
 
   .companion[data-mode="strip"] {
-    /* No min-height: a reader taller than the viewport would push its toolbar off screen when docked. */
+    /* No min-height: a reader taller than the viewport would push its top off screen when docked. */
     height: calc(var(--cfm-vh, 100svh) - var(--cfm-chrome-top));
-  }
-
-  /*
-    The pager row spans the reader. It is the docked reader's own top row, above the two sides' scrollers, so
-    no text scrolls under it.
-  */
-  .companion[data-mode="strip"] .toolbar {
-    align-self: stretch;
-    justify-content: space-between;
-    min-height: 3.25rem;
-    padding: 0;
-    background: var(--background);
-    /* A soft edge rather than a rule over the text scrolling beneath. */
-    box-shadow: 0 10px 12px -12px rgb(0 0 0 / 0.28);
   }
 
   .companion[data-mode="strip"] .layout {
@@ -458,68 +420,11 @@
 
   /*
     The closing sections end the guide side, but nothing is paired with them: once they reach its reading
-    line (data-closing, kept by StudyCompanion), the pager steps aside, and the
-    strip no longer swipes over to the scripture. Scrolling back up into the last chapter brings both back.
+    line (data-closing, kept by StudyCompanion), the header's pager closes (StudyCompanion), and the strip no
+    longer swipes over to the scripture. Scrolling back up into the last chapter brings both back.
   */
-  .companion[data-mode="strip"][data-closing] .pager {
-    visibility: hidden;
-  }
-
   .companion[data-mode="strip"][data-closing] .layout {
     overflow-x: hidden;
-  }
-}
-
-.pager {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-}
-
-.pagerButton {
-  min-height: 2.75rem;
-  max-width: 48%;
-  padding: 0 0.2rem;
-  overflow: hidden;
-  font-family: var(--cfm-sans);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--cfm-muted);
-}
-
-.pagerButton[aria-pressed="true"] {
-  color: var(--cfm-ink);
-}
-
-.pagerDots {
-  display: inline-flex;
-  flex-shrink: 0;
-  gap: 0.35rem;
-}
-
-.pagerDots span {
-  width: 0.375rem;
-  height: 0.375rem;
-  border-radius: 999px;
-  background: var(--cfm-rule-strong);
-  transition: background-color 160ms ease, transform 160ms ease;
-}
-
-.pagerDots span[data-on] {
-  background: var(--cfm-rubric);
-  transform: scale(1.25);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pagerDots span {
-    transition: none;
   }
 }
 
@@ -1205,9 +1110,9 @@
   text-wrap: pretty;
 }
 
-/* Native anchor jumps land below the sticky header and toolbar row; inside a phone side, just below its top. */
+/* Native anchor jumps land below the fixed header; inside a phone side, just below its top. */
 .guide [id] {
-  scroll-margin-top: calc(var(--cfm-chrome-top) + var(--cfm-toolbar-h) + 1rem);
+  scroll-margin-top: calc(var(--cfm-chrome-top) + 1rem);
 }
 
 .companion[data-mode="strip"] .guide [id] {
