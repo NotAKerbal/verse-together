@@ -18,6 +18,7 @@ import ReaderSearchButton from "./ReaderSearchButton";
 import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
 import { useBelowLg } from "@/features/notes/useBelowLg";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import { NewNoteLaunchError, useNewNoteLauncher } from "@/features/notes/useNewNoteLauncher";
 import {
   useInsightBuilder,
   type ReaderChapter,
@@ -59,15 +60,32 @@ function headerCrumbs(breadcrumbs: Crumb[], volume: string, book: string) {
 }
 
 /**
- * Opens the shared Log and Notes panel on Log: the desktop panel, or below lg the phone sheet. While the panel shows
- * Log it closes it. Signed out, it asks to sign in.
+ * Opens the shared Log and Notes panel on Log: the desktop panel, or below lg the phone sheet, which opens on a new
+ * note for the chapter (with its Log above it), as the desktop panel's New note does. While the panel shows Log, or
+ * the sheet is open, it closes it. Signed out, it asks to sign in.
  */
-function ReaderLogToggle({ reference }: { reference: string }) {
+function ReaderLogToggle({ reference, source }: { reference: string; source?: ReadingLogOption["source"] }) {
   const { user, promptSignIn } = useAuth();
   const { loading } = useConvexSignedIn();
   const belowLg = useBelowLg();
-  const { isPanelOpen, isSheetOpen, panelView, openPanel, setPanelView, setSheetOpen, closeBuilder } = useInsightBuilder();
+  const { isPanelOpen, isSheetOpen, panelView, openPanel, setPanelView, setSheetOpen, closeBuilder, createJournalNote } =
+    useInsightBuilder();
   const expanded = !!user && (belowLg ? isSheetOpen : isPanelOpen && panelView === "log");
+  const newNote = useNewNoteLauncher({
+    scope: reference,
+    // The header exists before the chapter text registers its source; use the chapter it already represents.
+    create: () => createJournalNote(source ? { source } : undefined),
+    open: () => {
+      setPanelView("notes");
+      setSheetOpen(true);
+    },
+  });
+
+  function openLogOnly() {
+    newNote.dismiss();
+    setPanelView("log");
+    setSheetOpen(true);
+  }
 
   function toggle() {
     if (!user) {
@@ -76,10 +94,7 @@ function ReaderLogToggle({ reference }: { reference: string }) {
     }
     if (belowLg) {
       if (isSheetOpen) setSheetOpen(false);
-      else {
-        setPanelView("log");
-        setSheetOpen(true);
-      }
+      else void newNote.launch();
     } else if (expanded) {
       closeBuilder();
     } else {
@@ -88,19 +103,33 @@ function ReaderLogToggle({ reference }: { reference: string }) {
   }
 
   return (
-    <button
-      type="button"
-      data-notebook-launcher
-      onClick={toggle}
-      disabled={loading}
-      aria-expanded={expanded}
-      aria-label={`Log and notes for ${reference}`}
-      title="Log and notes"
-      className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-log`}
-    >
-      <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
-      <span className="reader-toolbar-log-label">Log</span>
-    </button>
+    <>
+      <button
+        type="button"
+        data-notebook-launcher
+        onClick={toggle}
+        disabled={loading}
+        aria-expanded={expanded}
+        aria-busy={newNote.pending || undefined}
+        aria-label={newNote.pending ? `Starting a new note for ${reference}` : `Log and notes for ${reference}`}
+        title="Log and notes"
+        className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-log${newNote.pending ? " opacity-60" : ""}`}
+      >
+        <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
+        <span className="reader-toolbar-log-label">Log</span>
+      </button>
+      {belowLg && newNote.error && !isSheetOpen
+        ? createPortal(
+            <NewNoteLaunchError
+              message={newNote.error}
+              onRetry={() => void newNote.launch()}
+              onOpenLog={openLogOnly}
+              onDismiss={newNote.dismiss}
+            />,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
@@ -183,7 +212,7 @@ export function ChapterHeader({
         </nav>
       </div>
       <div className="reader-toolbar-group reader-toolbar-actions">
-        <ReaderLogToggle reference={reference} />
+        <ReaderLogToggle reference={reference} source={logOptions[0]?.source} />
         <button
           type="button"
           aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}

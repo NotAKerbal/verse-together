@@ -85,7 +85,7 @@ export default function ChapterReadToggle({ volume, book, chapter, pendingRef }:
         disabled={loading || pending}
         aria-pressed={isRead}
         data-active={isRead ? "true" : "false"}
-        className="surface-button inline-flex min-h-10 items-center gap-2 rounded-full border-2 px-4 text-sm disabled:opacity-60"
+        className="surface-button inline-flex min-h-11 items-center gap-2 rounded-full border-2 px-4 text-sm lg:min-h-10 disabled:opacity-60"
       >
         {isRead ? "Read ✓" : "Mark chapter as read"}
       </button>

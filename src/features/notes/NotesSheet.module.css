@@ -1,0 +1,59 @@
+/*
+  The phone Log sheet: the chapter's Log, then Notes, in one scroll. It fills the visible viewport up to a strip of
+  the dimmed page (tap it to close).
+  With an on-screen keyboard NotesSheet sets --notes-sheet-viewport (the visual viewport's height) and
+  --notes-sheet-keyboard (how far the visual viewport's bottom sits above the layout viewport's), so the sheet rises
+  above the keyboard.
+*/
+.sheet {
+  --notes-sheet-gap: max(2.75rem, calc(env(safe-area-inset-top, 0px) + 1rem));
+  bottom: var(--notes-sheet-keyboard, 0px);
+  height: calc(var(--notes-sheet-viewport, 100dvh) - var(--notes-sheet-gap));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.sheet:not([data-dragging]) {
+  transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Short screens (landscape phones) and an open keyboard keep only a sliver of the page above the sheet. */
+.sheet[data-keyboard] {
+  --notes-sheet-gap: max(0.5rem, env(safe-area-inset-top, 0px));
+  padding-bottom: 0;
+}
+
+@media (max-height: 32rem) {
+  .sheet {
+    --notes-sheet-gap: max(0.5rem, env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet {
+    animation: notes-sheet-in 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .backdrop {
+    animation: notes-sheet-fade 200ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet:not([data-dragging]) {
+    transition: none;
+  }
+}
+
+@keyframes notes-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes notes-sheet-fade {
+  from {
+    opacity: 0;
+  }
+}

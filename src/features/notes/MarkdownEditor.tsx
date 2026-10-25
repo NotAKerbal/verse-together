@@ -135,7 +135,24 @@ export default function MarkdownEditor({ value, onChange, readOnly = false, aria
       }),
     });
     viewRef.current = view;
+
+    // An on-screen keyboard shrinks the visual viewport (and the phone notes sheet with it) without a selection change,
+    // so CodeMirror would leave the caret under the keyboard. Once the layout has followed the resize, bring the
+    // selection back into view through every scrolling ancestor. Only the focused editor reacts.
+    const viewport = window.visualViewport;
+    let frame = 0;
+    function revealSelection() {
+      frame = 0;
+      if (!viewport || viewport.scale > 1.01 || !view.hasFocus) return;
+      view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main) });
+    }
+    function onViewportResize() {
+      if (!frame) frame = window.requestAnimationFrame(revealSelection);
+    }
+    viewport?.addEventListener("resize", onViewportResize);
     return () => {
+      viewport?.removeEventListener("resize", onViewportResize);
+      if (frame) window.cancelAnimationFrame(frame);
       view.destroy();
       viewRef.current = null;
     };

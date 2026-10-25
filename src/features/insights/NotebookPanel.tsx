@@ -19,16 +19,19 @@ export default function NotebookPanel() {
   const belowLg = useBelowLg();
   const onNotesPage = pathname === "/notes" || pathname.startsWith("/notes/");
 
-  // Reader actions ask for the notebook with isMobileOpen. Below lg there is no sheet for them: the note opens
-  // full-screen on /notes (the provider already made it active). Only the phone flag is cleared, so the
-  // desktop panel's remembered state is untouched.
+  // Reader actions ask for the notebook with isMobileOpen (the provider already made the note active). Below lg, a
+  // chapter page opens its Log sheet scrolled to Notes, keeping reading, logging and the note together; elsewhere the
+  // note opens full-screen on /notes. Only the phone flag is cleared, so the desktop panel's remembered state is
+  // untouched.
   useEffect(() => {
     if (!isMobileOpen || belowLg === null) return;
     dismissMobile();
-    if (belowLg && canUseInsights && !onNotesPage) router.push("/notes");
-  }, [isMobileOpen, belowLg, canUseInsights, onNotesPage, dismissMobile, router]);
+    if (!belowLg || !canUseInsights || onNotesPage) return;
+    if (readerChapter) setSheetOpen(true);
+    else router.push("/notes");
+  }, [isMobileOpen, belowLg, canUseInsights, onNotesPage, readerChapter, dismissMobile, setSheetOpen, router]);
 
-  // The phone Log and Notes sheet belongs to a chapter page; leaving it, or widening past lg, closes it.
+  // The phone Log sheet belongs to a chapter page; leaving it, or widening past lg, closes it.
   useEffect(() => {
     if (isSheetOpen && (!readerChapter || belowLg === false)) setSheetOpen(false);
   }, [isSheetOpen, readerChapter, belowLg, setSheetOpen]);
@@ -52,8 +55,14 @@ export default function NotebookPanel() {
     onCreate: createDraft,
   };
   if (belowLg) {
-    return companion && isSheetOpen ? (
-      <NotesSheet {...notesProps} companion={companion} onClose={() => setSheetOpen(false)} />
+    // Reader note actions leave panelView on "notes"; the Log button sets "log".
+    return readerChapter && isSheetOpen ? (
+      <NotesSheet
+        {...notesProps}
+        log={<ChapterLogView chapter={readerChapter} layout="flow" />}
+        revealNotes={panelView === "notes"}
+        onClose={() => setSheetOpen(false)}
+      />
     ) : null;
   }
   return (

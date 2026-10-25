@@ -4,6 +4,7 @@ import {createRoot} from "react-dom/client";
 import NotesSidebar from "../../src/features/notes/NotesSidebar";
 import NotesSheet from "../../src/features/notes/NotesSheet";
 import ChapterLogView from "../../src/features/notes/ChapterLogView";
+import {NewNoteLaunchError,useNewNoteLauncher} from "../../src/features/notes/useNewNoteLauncher";
 import type {ReadingLogAttempt} from "../../src/features/notes/ReadingLogButton";
 import type {ChapterMarkAttempt} from "../../src/features/plans/ChapterReadToggle";
 import JournalWorkspace from "../../src/features/notes/JournalWorkspace";
@@ -61,7 +62,11 @@ function QaApp(){
  const go=useJournalHistory(view,{enabled:true,show:setViewState,select:id=>{if(id!==active&&docs.some(d=>d.id===id))setActive(id);}});
  const act=(action:JournalViewAction)=>go(current=>nextJournalView(current,action));
  const note=view.noteId!==null&&activeDoc?.id===view.noteId?activeDoc:null;
- function create(date:string,fromReader=false){const next={...initial,id:`qa-${Date.now()}`,title:"Untitled note",markdown_body:"",journal_date:date,source:fromReader?source:null,created_at:new Date().toISOString()};setDocs(d=>[...d,next]);setActive(next.id);go({stage:"note",date,noteId:next.id});return next.id;}
+ function create(date:string,fromReader=false,from:JournalNoteDocument["source"]=source){const next={...initial,id:`qa-${Date.now()}`,title:"Untitled note",markdown_body:"",journal_date:date,source:fromReader?from:null,created_at:new Date().toISOString()};setDocs(d=>[...d,next]);setActive(next.id);go({stage:"note",date,noteId:next.id});return next.id;}
+ // The phone Log button starts a note for the current chapter, as the reader's does. ?createDelay=ms slows it and
+ // ?createError makes it fail (the second for the sidebar's New note too).
+ const chapterSource=panelChapters[chapterIndex].logOptions[0].source;
+ const newNote=useNewNoteLauncher({scope:panelChapters[chapterIndex].reference,open:()=>{setPanelView("notes");setSheetOpen(true);},create:async()=>{const params=new URLSearchParams(location.search);await new Promise(r=>setTimeout(r,Number(params.get("createDelay"))||0));if(params.has("createError"))throw new Error("Synthetic create failure.");return create("2026-10-21",true,chapterSource);}});
  const sidebarPane = (
    <>
      <section className="panel-card max-w-lg rounded-[20px] p-6">
@@ -73,18 +78,21 @@ function QaApp(){
      </section>
      {panelMode ? (
        <div className="mt-4 flex flex-wrap items-center gap-2">
-         <button type="button" data-notebook-launcher aria-expanded={layout==="phone"?sheetOpen:panelOpen&&panelView==="log"} aria-label={`Log and notes for ${panelChapters[chapterIndex].reference}`} className="surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm font-bold" onClick={()=>{if(layout==="phone"){if(sheetOpen)setSheetOpen(false);else{setPanelView("log");setSheetOpen(true);}}else if(panelOpen&&panelView==="log")setPanelOpen(false);else{setPanelView("log");setPanelOpen(true);}}}>Log</button>
+         <button type="button" data-notebook-launcher aria-expanded={layout==="phone"?sheetOpen:panelOpen&&panelView==="log"} aria-busy={newNote.pending||undefined} aria-label={newNote.pending?`Starting a new note for ${panelChapters[chapterIndex].reference}`:`Log and notes for ${panelChapters[chapterIndex].reference}`} className={`surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm font-bold${newNote.pending?" opacity-60":""}`} onClick={()=>{if(layout==="phone"){if(sheetOpen)setSheetOpen(false);else void newNote.launch();}else if(panelOpen&&panelView==="log")setPanelOpen(false);else{setPanelView("log");setPanelOpen(true);}}}>Log</button>
          <button type="button" className="surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm" onClick={()=>setChapterIndex(i=>(i+1)%panelChapters.length)}>Go to {panelChapters[(chapterIndex+1)%panelChapters.length].reference}</button>
-         <span className="text-xs text-[color:var(--foreground-muted)]">Synthetic stand-in for the reader header (Log) and chapter navigation.</span>
+         <button type="button" className="surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm" onClick={()=>{setPanelView("notes");if(layout==="phone")setSheetOpen(true);else setPanelOpen(true);}}>Reader note action</button>
+         <span className="text-xs text-[color:var(--foreground-muted)]">Synthetic stand-in for the reader header (Log), chapter navigation, and a reader note action (openBuilder; below lg the sheet opens scrolled to Notes).</span>
          <section aria-label="Synthetic reading history" className="w-full text-sm">
            <h2 className="mt-2 font-bold">Synthetic reading history ({readings.length})</h2>
            <ul>{readings.map(r=>r.kind==="reading"?<li key={r.id} data-qa-reading>{r.source.label} · {r.journal_date}</li>:null)}</ul>
          </section>
        </div>
      ) : null}
+     {panelMode && layout==="phone" && newNote.error && !sheetOpen ? <NewNoteLaunchError message={newNote.error} onRetry={()=>void newNote.launch()} onOpenLog={()=>{newNote.dismiss();setPanelView("log");setSheetOpen(true);}} onDismiss={newNote.dismiss}/> : null}
      {panelMode && layout==="phone" ? (sheetOpen ? <NotesSheet
        onClose={()=>setSheetOpen(false)}
-       companion={{view:panelView,onViewChange:setPanelView,log:<ChapterLogView chapter={panelChapters[chapterIndex]}/>}}
+       log={<ChapterLogView chapter={panelChapters[chapterIndex]} layout="flow"/>}
+       revealNotes={panelView==="notes"}
        activeNoteId={active}
        activeNote={activeDoc}
        notes={docs.map(d => ({
@@ -92,7 +100,7 @@ function QaApp(){
        }))}
        isLoading={false}
        onSelect={async id => { setActive(id); }}
-       onCreate={async () => create("2026-10-21", true)}
+       onCreate={async () => create("2026-10-21", true, chapterSource)}
      /> : null) : <NotesSidebar
        companion={panelMode?{view:panelView,onViewChange:setPanelView,log:<ChapterLogView chapter={panelChapters[chapterIndex]}/>}:undefined}
        isOpen={panelOpen}
@@ -109,7 +117,7 @@ function QaApp(){
          if (new URLSearchParams(location.search).has("createError")) {
            throw new Error("Synthetic create failure. Your current note is safe.");
          }
-         return create("2026-10-21", true);
+         return create("2026-10-21", true, panelMode ? chapterSource : source);
        }}
      />}
    </>

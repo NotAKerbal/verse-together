@@ -249,7 +249,7 @@ export function ReadingLogForm({
         <fieldset className="space-y-1.5">
           <legend className="mb-1 font-bold">What you read</legend>
           {options.map((option, index) => (
-            <label key={`${option.source.href}-${index}`} className="flex items-start gap-2">
+            <label key={`${option.source.href}-${index}`} className="flex items-start gap-3 py-2 lg:gap-2 lg:py-0">
               <input
                 type="radio"
                 name={`${fieldId}-source`}
@@ -258,7 +258,7 @@ export function ReadingLogForm({
                   setChoice(index);
                   setPart(false);
                 }}
-                className="mt-1"
+                className="mt-0.5 h-5 w-5 shrink-0 lg:mt-1 lg:h-auto lg:w-auto"
               />
               <span>
                 <span className="font-semibold">{option.source.label}</span>{" "}
@@ -276,8 +276,13 @@ export function ReadingLogForm({
 
       {partAllowed ? (
         <div className="space-y-2">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={part} onChange={(event) => setPart(event.target.checked)} />
+          <label className="flex min-h-11 items-center gap-3 lg:min-h-0 lg:gap-2">
+            <input
+              type="checkbox"
+              checked={part}
+              onChange={(event) => setPart(event.target.checked)}
+              className="h-5 w-5 shrink-0 lg:h-auto lg:w-auto"
+            />
             Only part of the chapter
           </label>
           {part ? (
@@ -291,7 +296,7 @@ export function ReadingLogForm({
                 max={selected.verseCount}
                 value={verseStart}
                 onChange={(event) => setVerseStart(event.target.value)}
-                className="h-9 w-20 rounded-lg border-2 border-[color:var(--surface-border)] bg-transparent px-2"
+                className="h-11 w-20 rounded-lg border-2 border-[color:var(--surface-border)] bg-transparent px-2 text-base lg:h-9 lg:text-sm"
               />
               <label htmlFor={`${fieldId}-end`}>to</label>
               <input
@@ -302,7 +307,7 @@ export function ReadingLogForm({
                 max={selected.verseCount}
                 value={verseEnd}
                 onChange={(event) => setVerseEnd(event.target.value)}
-                className="h-9 w-20 rounded-lg border-2 border-[color:var(--surface-border)] bg-transparent px-2"
+                className="h-11 w-20 rounded-lg border-2 border-[color:var(--surface-border)] bg-transparent px-2 text-base lg:h-9 lg:text-sm"
               />
             </div>
           ) : null}
@@ -319,7 +324,7 @@ export function ReadingLogForm({
           required
           value={journalDate}
           onChange={(event) => setJournalDate(event.target.value)}
-          className="h-9 rounded-lg border-2 border-[color:var(--surface-border)] bg-transparent px-2"
+          className="h-11 rounded-lg border-2 border-[color:var(--surface-border)] bg-transparent px-2 text-base lg:h-9 lg:text-sm"
         />
       </div>
 
@@ -343,7 +348,7 @@ export function ReadingLogForm({
         <button
           type="submit"
           disabled={submitting || !ready || disabled}
-          className="inline-flex h-9 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] disabled:opacity-50"
+          className="inline-flex h-11 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-5 text-sm lg:h-9 lg:px-4 font-bold text-[color:var(--surface-button-active-text)] disabled:opacity-50"
         >
           {submitting ? "Saving…" : error ? "Try again" : "Log it"}
         </button>
