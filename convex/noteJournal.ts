@@ -113,6 +113,26 @@ export function requestIdProblem(requestId: string): string | null {
   return null;
 }
 
+/**
+ * History keys name one older reading wherever it is stored. A chapterReads row is keyed by its id and read time;
+ * the readingLogs snapshot preserveLegacyChapterRead later takes of that same read carries the same key as its
+ * requestId, so opening either one as an entry hides both. Any other log is keyed by its id.
+ */
+const LEGACY_CHAPTER_READ_PREFIX = "legacy-chapter-read:";
+
+export function chapterReadHistoryKey(row: { _id: string; readAt: number }): string {
+  return `${LEGACY_CHAPTER_READ_PREFIX}${row._id}:${row.readAt}`;
+}
+
+export function readingLogHistoryKey(row: { _id: string; requestId: string }): string {
+  return row.requestId.startsWith(LEGACY_CHAPTER_READ_PREFIX) ? row.requestId : `reading:${row._id}`;
+}
+
+/** History keys share the entry request index; a client request id may not look like one. */
+export function isHistoryKey(key: string): boolean {
+  return key.startsWith(LEGACY_CHAPTER_READ_PREFIX) || key.startsWith("reading:");
+}
+
 /** Reader URL book segment: "1 Nephi" and "1-nephi" both become "1-nephi". */
 function bookUrlSegment(book: string): string {
   return book

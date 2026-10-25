@@ -5,7 +5,7 @@
 
 import { useEffect, useRef } from "react";
 import { Annotation, Compartment, EditorSelection, EditorState, RangeSetBuilder } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { Decoration, EditorView, ViewPlugin, keymap, placeholder as placeholderText, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { headingRanges } from "./markdownHeadings";
@@ -18,6 +18,10 @@ type Props = {
   onChange: (value: string) => void;
   readOnly?: boolean;
   ariaLabel?: string;
+  /** Shown while the document is empty. */
+  placeholder?: string;
+  /** Focus the editor once it has loaded. */
+  autoFocus?: boolean;
 };
 
 /** Marks transactions that mirror an external `value`, so they are not echoed back through onChange. */
@@ -91,14 +95,21 @@ const editorTheme = EditorView.theme({
 
 const readOnlyExtensions = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 
-export default function MarkdownEditor({ value, onChange, readOnly = false, ariaLabel = "Note" }: Props) {
+export default function MarkdownEditor({
+  value,
+  onChange,
+  readOnly = false,
+  ariaLabel = "Note",
+  placeholder,
+  autoFocus = false,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const readOnlyCompartment = useRef(new Compartment());
   const labelCompartment = useRef(new Compartment());
   // Initial values for the one-time setup; later changes arrive through the effects below.
-  const initial = useRef({ value, readOnly, ariaLabel });
+  const initial = useRef({ value, readOnly, ariaLabel, placeholder, autoFocus });
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -108,7 +119,7 @@ export default function MarkdownEditor({ value, onChange, readOnly = false, aria
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const { value: doc, readOnly: startReadOnly, ariaLabel: startLabel } = initial.current;
+    const { value: doc, readOnly: startReadOnly, ariaLabel: startLabel, placeholder: hint, autoFocus: focus } = initial.current;
     const view = new EditorView({
       parent: host,
       state: EditorState.create({
@@ -118,6 +129,7 @@ export default function MarkdownEditor({ value, onChange, readOnly = false, aria
           keymap.of([...defaultKeymap, ...historyKeymap]),
           // Includes the Markdown keymap (list continuation on Enter, markup-aware Backspace).
           markdown(),
+          hint ? placeholderText(hint) : [],
           EditorView.lineWrapping,
           headingMarkers,
           editorTheme,
@@ -135,6 +147,7 @@ export default function MarkdownEditor({ value, onChange, readOnly = false, aria
       }),
     });
     viewRef.current = view;
+    if (focus) view.focus();
 
     // An on-screen keyboard shrinks the visual viewport (and the phone notes sheet with it) without a selection change,
     // so CodeMirror would leave the caret under the keyboard. Once the layout has followed the resize, bring the

@@ -1,12 +1,13 @@
 "use client";
 
 // The /notes page's adapter: the signed-in user's real journal, reading history and active note, fed into
-// the presentational JournalWorkspace. Notes are created and opened through InsightBuilderProvider so the
-// reader's sidebar and this page always agree on which note is current. Which day and note are in view is
+// the presentational JournalWorkspace. Entries are created (one unsaved entry draft, saved as note, reading or both)
+// and opened through InsightBuilderProvider so the reader's panel and this page always agree on which note is
+// current. An older reading opens as an editable entry the first time it is chosen (openReadingEntry). Which day and note are in view is
 // this page's own state (journalView.ts): closing a note only clears the view, and nothing reactive reopens one.
 // An opened note also takes one browser history entry (useJournalHistory), so Back closes it and Forward reopens it.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -15,11 +16,15 @@ import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { useMyReadingLog } from "@/features/plans/useReadingProgress";
 import JournalWorkspace from "./JournalWorkspace";
 import JournalNoteEditor from "./JournalNoteEditor";
-import ReadingLogButton, { type ReadingLogOption } from "./ReadingLogButton";
+import JournalEntryComposer from "./JournalEntryComposer";
+import type { ReadingLogOption } from "./ReadingChip";
+import { restartEntryDraft } from "./entryDraft";
+import { useJournalEntryActions } from "./useJournalEntryActions";
 import {
   localDateKey,
   readingEntryFromRow,
   type JournalEntry,
+  type JournalReadingEntry,
   type NoteSource,
   type ReadingLogRow,
 } from "./journal";
@@ -43,13 +48,16 @@ function sourceKey(source: NoteSource) {
 export default function ConnectedJournalWorkspace() {
   const { user, ready, loading } = useConvexSignedIn();
   const belowLg = useBelowLg();
-  const { drafts, activeDraftId, activeNote, isLoading, switchDraft, createJournalNote } = useInsightBuilder();
+  const { drafts, activeDraftId, activeNote, isLoading, switchDraft, updateEntryDraft } = useInsightBuilder();
+  const { openReadingEntry } = useJournalEntryActions();
   const journal = useQuery(api.insights.listMyJournal, ready ? {} : "skip") as JournalEntry[] | undefined;
   const readingLog = useMyReadingLog() as ReadingLogRow[] | undefined;
 
   const [today] = useState(() => localDateKey());
   const [viewState, setViewState] = useState<JournalViewState>(null);
-  const [creating, setCreating] = useState(false);
+  // The selected day's New note shows the unsaved entry under it until it is saved or closed.
+  const [composing, setComposing] = useState(false);
+  const [openingReading, setOpeningReading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   // Arriving fresh shows the calendar on today; the provider's active note opens only when chosen.
@@ -82,7 +90,8 @@ export default function ConnectedJournalWorkspace() {
   const entries = useMemo<JournalEntry[]>(
     () => [
       ...(journal ?? []).filter((entry) => entry.kind !== "reading"),
-      ...(readingLog ?? []).map((row) => readingEntryFromRow(row, viewerLabel)),
+      // A reading that belongs to an entry is that entry, which the journal already lists: counted and shown once.
+      ...(readingLog ?? []).filter((row) => !row.note_id).map((row) => readingEntryFromRow(row, viewerLabel)),
     ],
     [journal, readingLog, viewerLabel]
   );
@@ -123,22 +132,46 @@ export default function ConnectedJournalWorkspace() {
   // view: the calendar, a day or another note chosen while it was being deleted stays as it is.
   const onNoteDeleted = useCallback((noteId: string) => act({ type: "noteDeleted", noteId }), [act]);
 
+  // A personal note for the day (it is written on this page, so there is no reading source to claim); an unsaved
+  // entry that already holds something is kept as it is.
   const onNewNote = useCallback(
-    async (journalDate: string) => {
-      setCreating(true);
+    (journalDate: string) => {
+      setCreateError(null);
+      updateEntryDraft((draft) => restartEntryDraft(draft, { journalDate, source: null }));
+      setComposing(true);
+    },
+    [updateEntryDraft]
+  );
+  // An untouched entry moves with the selected day.
+  useEffect(() => {
+    if (composing) updateEntryDraft((draft) => restartEntryDraft(draft, { journalDate: selectedDate, source: null }));
+  }, [composing, selectedDate, updateEntryDraft]);
+
+  const onEntrySaved = useCallback(
+    (noteId: string, journalDate: string) => {
+      setComposing(false);
+      // The new entry is the provider's active note; show it, whatever is in view by now.
+      go({ stage: "note", date: journalDate, noteId });
+    },
+    [go]
+  );
+
+  // The first opening makes the reading an editable entry (once, on the server), then it opens like any note.
+  const onOpenReading = useCallback(
+    async (entry: JournalReadingEntry) => {
+      if (openingReading) return;
+      setOpeningReading(true);
       setCreateError(null);
       try {
-        // Written on the Notes page itself, so there is no reading source to claim.
-        const noteId = await createJournalNote({ journalDate, source: null });
-        // The new note becomes the provider's active note; show it, whatever is in view by now.
-        if (noteId) go({ stage: "note", date: journalDate, noteId });
-      } catch (error) {
-        setCreateError(error instanceof Error && error.message ? error.message : "The note could not be created.");
+        const { id } = await openReadingEntry(entry.id);
+        onOpenNote(String(id), entry.journal_date);
+      } catch {
+        setCreateError("This reading couldn't be opened. Check your connection and try again.");
       } finally {
-        setCreating(false);
+        setOpeningReading(false);
       }
     },
-    [createJournalNote, go]
+    [openingReading, openReadingEntry, onOpenNote]
   );
 
   if (loading) {
@@ -158,9 +191,10 @@ export default function ConnectedJournalWorkspace() {
         <AccountControl variant="page" />
         <div className="panel-card mx-auto flex max-w-xl flex-col items-center gap-4 rounded-[1.5rem] px-6 py-8 text-center">
           <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use Notes</h1>
+            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use your journal</h1>
             <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
-              Your notes are kept as a private journal, by day, linked to the chapters and guides you wrote them from.
+              Keep notes and reading together in a private journal, by day, linked to the chapters and guides they
+              came from.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -216,6 +250,8 @@ export default function ConnectedJournalWorkspace() {
       showDate={false}
       onClose={onCloseNote}
       onDeleted={onNoteDeleted}
+      onDateChange={(date) => onOpenNote(openNote.id, date)}
+      readingOptions={logOptions}
     />
   ) : openNoteLoading ? (
     <p role="status" className="text-sm text-[color:var(--foreground-muted)]">
@@ -228,10 +264,28 @@ export default function ConnectedJournalWorkspace() {
   ) : null;
 
   const historyLoaded = journal !== undefined && readingLog !== undefined;
-  const dayActions =
-    historyLoaded && logOptions.length > 0 ? (
-      <ReadingLogButton key={selectedDate} options={logOptions} defaultDate={selectedDate} onLogged={onSelectDate} />
-    ) : null;
+  const dayActions = composing ? (
+    <section aria-label="New entry" className="panel-card rounded-[1.25rem] p-4">
+      <JournalEntryComposer
+        options={logOptions}
+        autoFocus={!belowLg}
+        onSaved={onEntrySaved}
+        heading={
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-display text-base font-extrabold tracking-[-0.02em]">New entry</h3>
+            <button
+              type="button"
+              onClick={() => setComposing(false)}
+              className="surface-button inline-flex h-11 items-center rounded-full border-2 px-4 text-sm font-semibold lg:h-9"
+            >
+              Close
+            </button>
+          </div>
+        }
+      />
+      <p className="mt-2 text-xs text-[color:var(--foreground-muted)]">Closing keeps what you wrote here until you save it.</p>
+    </section>
+  ) : null;
 
   return (
     <JournalWorkspace
@@ -244,10 +298,10 @@ export default function ConnectedJournalWorkspace() {
       onSelectDate={onSelectDate}
       selectedKey={view.noteId !== null ? `note:${view.noteId}` : null}
       onOpenNote={onOpenNote}
+      onOpenReading={(entry) => void onOpenReading(entry)}
       onCloseNote={onCloseNote}
       onShowCalendar={onShowCalendar}
-      onNewNote={(journalDate) => void onNewNote(journalDate)}
-      creating={creating}
+      onNewNote={onNewNote}
       createError={createError}
       notePane={notePane}
       headerAccessory={<AccountControl variant="page" />}

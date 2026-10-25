@@ -7,6 +7,8 @@ import { useInsightBuilder, useNoteOutboxEntry } from "@/features/insights/Insig
 import type { OutboxEntry } from "./journalOutbox";
 import { formatDayHeading, formatTime, type JournalNoteDocument } from "./journal";
 import LazyMarkdownEditor from "./LazyMarkdownEditor";
+import ReadingChip, { type ReadingOption } from "./ReadingChip";
+import { useJournalEntryActions } from "./useJournalEntryActions";
 import NoteMarkdown from "./NoteMarkdown";
 import { NoteSourceLine } from "./NoteSourceLine";
 
@@ -21,7 +23,7 @@ type DeleteStep = "idle" | "confirming" | "deleting" | "failed";
  * "Delete note" and its confirmation. Nothing is deleted until the second, explicit choice; while the request
  * runs the controls hold their place, and a failure keeps the note (and its text) open with a way to retry.
  */
-function DeleteNoteControl({ onDelete }: { onDelete: () => Promise<void> }) {
+function DeleteNoteControl({ onDelete, logsReading }: { onDelete: () => Promise<void>; logsReading: boolean }) {
   const [step, setStep] = useState<DeleteStep>("idle");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
@@ -82,7 +84,9 @@ function DeleteNoteControl({ onDelete }: { onDelete: () => Promise<void> }) {
         Delete this note?
       </p>
       <p className="text-xs text-[color:var(--foreground-muted)]">
-        It will be removed from your notes and calendar. This can&apos;t be undone.
+        {logsReading
+          ? "It and its reading will be removed from your notes, calendar and reading history. Chapters you marked read stay read. This can't be undone."
+          : "It will be removed from your notes and calendar. This can't be undone."}
       </p>
       {step === "failed" ? (
         <p role="alert" className="text-xs font-semibold text-[color:var(--accent-rubric)]">
@@ -165,6 +169,8 @@ export default function JournalNoteEditor({
   showDate = true,
   onClose,
   onDeleted,
+  onDateChange,
+  readingOptions = [],
 }: {
   note: JournalNoteDocument;
   authorLabel?: string;
@@ -177,8 +183,13 @@ export default function JournalNoteEditor({
    * can leave its view. It may arrive after another note was opened, so check that the deleted one is in view.
    */
   onDeleted?: (noteId: string) => void;
+  /** The entry's reading moved it to another day. */
+  onDateChange?: (journalDate: string) => void;
+  /** Other passages the reading chip can switch to (the page in view); the entry's own source is always offered. */
+  readingOptions?: ReadingOption[];
 }) {
   const { journalOutbox, deleteDraft } = useInsightBuilder();
+  const { setEntryReading } = useJournalEntryActions();
   const entry = useNoteOutboxEntry(journalOutbox, note.id);
   const readOnly = note.status !== "draft";
   // Published notes stay: they may be shared, and the server refuses to delete them.
@@ -223,6 +234,7 @@ export default function JournalNoteEditor({
   }, [deleteDraft, noteId, onDeleted]);
 
   const created = new Date(note.created_at).toISOString();
+  const reading = note.reading_at && note.source ? { source: note.source, journalDate: note.journal_date } : null;
 
   return (
     <article className="flex min-h-0 flex-1 flex-col gap-3" aria-label={note.title || "Note"}>
@@ -235,6 +247,20 @@ export default function JournalNoteEditor({
               </p>
             ) : null}
             <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
+            {readOnly && !reading ? null : (
+              <ReadingChip
+                value={reading}
+                options={note.source ? [{ source: note.source }, ...readingOptions] : readingOptions}
+                defaultDate={note.journal_date}
+                // Removing reading checks the saved text, so the chip waits for typing to be saved.
+                disabled={readOnly || (entry !== undefined && entry.status !== "saved")}
+                canRemove={!!text.trim()}
+                onChange={async (next) => {
+                  await setEntryReading(note.id, next);
+                  if (next && next.journalDate !== note.journal_date) onDateChange?.(next.journalDate);
+                }}
+              />
+            )}
           </div>
           {onClose ? (
             <button
@@ -292,7 +318,13 @@ export default function JournalNoteEditor({
             <p className="text-sm text-[color:var(--foreground-muted)]">This note is empty.</p>
           )
         ) : (
-          <LazyMarkdownEditor key={noteId} value={text} onChange={onChange} ariaLabel={note.title || "Note"} />
+          <LazyMarkdownEditor
+            key={noteId}
+            value={text}
+            onChange={onChange}
+            ariaLabel={note.title || "Note"}
+            placeholder={reading ? "Add a note (optional)…" : "Write a note…"}
+          />
         )}
       </div>
 
@@ -308,7 +340,7 @@ export default function JournalNoteEditor({
               />
             )}
           </div>
-          {canDelete ? <DeleteNoteControl onDelete={deleteNote} /> : null}
+          {canDelete ? <DeleteNoteControl onDelete={deleteNote} logsReading={!!note.reading_at} /> : null}
         </footer>
       )}
     </article>

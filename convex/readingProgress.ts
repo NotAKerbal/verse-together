@@ -5,10 +5,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getViewerClerkId, requireClerkId } from "./utils";
 import { normalizeScriptureVolume } from "../src/lib/scriptureVolumes";
 import {
+  chapterReadHistoryKey,
   isJournalDate,
   journalDateFromTimestamp,
   normalizeNoteSource,
   noteSourceValidator,
+  readingLogHistoryKey,
   requestIdProblem,
   scriptureSource,
   type NoteSource,
@@ -29,6 +31,8 @@ type ReadingLogEntry = {
   read_at: string;
   created_at: string;
   request_id: string | null;
+  /** Set when the reading belongs to a journal entry (insightDrafts id), which the journal lists itself. */
+  note_id?: string;
 };
 
 function assertJournalDate(journalDate: string) {
@@ -76,7 +80,8 @@ async function preserveLegacyChapterRead(ctx: MutationCtx, clerkId: string, row:
     (log) => log.origin === "chapter_mark" && log.readAt >= row.readAt && sameChapter(log.source, row)
   );
   if (covered) return;
-  const requestId = `legacy-chapter-read:${row._id}:${row.readAt}`;
+  // The read's history key, so an entry it was already opened as keeps standing for this snapshot too.
+  const requestId = chapterReadHistoryKey(row);
   if (await findLogByRequest(ctx, clerkId, requestId)) return;
   await ctx.db.insert("readingLogs", {
     clerkId,
@@ -258,7 +263,9 @@ export const logReading = mutation({
 /**
  * The signed-in user's reading history, newest first. A chapter's chapterReads row (its latest completion)
  * is included as a legacy entry unless a logged chapter mark already covers that read; earlier rereads that
- * were never logged are not invented.
+ * were never logged are not invented. Journal entries that log reading are included with their note_id. An
+ * older reading opened as an entry, or one whose entry was deleted, is no longer listed on its own; whether a
+ * chapter mark covers a completion is still decided from every stored log.
  */
 export const listMyReadingLog = query({
   args: {},
@@ -274,7 +281,18 @@ export const listMyReadingLog = query({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
       .collect();
 
-    const entries: ReadingLogEntry[] = logs.map((row) => ({
+    const drafts = await ctx.db
+      .query("insightDrafts")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .collect();
+    const deletions = await ctx.db
+      .query("journalEntryDeletions")
+      .withIndex("by_clerk_key", (q) => q.eq("clerkId", clerkId))
+      .collect();
+    const hidden = new Set<string>(deletions.map((row) => row.key));
+    for (const draft of drafts) if (draft.readingHistoryKey) hidden.add(draft.readingHistoryKey);
+
+    const entries: ReadingLogEntry[] = logs.filter((row) => !hidden.has(readingLogHistoryKey(row))).map((row) => ({
       id: row._id,
       kind: "log",
       origin: row.origin,
@@ -288,7 +306,7 @@ export const listMyReadingLog = query({
     const chapterMarks = logs.filter((row) => row.origin === "chapter_mark");
     for (const row of chapterReads) {
       const covered = chapterMarks.some((log) => log.readAt >= row.readAt && sameChapter(log.source, row));
-      if (covered) continue;
+      if (covered || hidden.has(chapterReadHistoryKey(row))) continue;
       entries.push({
         id: row._id,
         kind: "legacy_chapter_read",
@@ -298,6 +316,21 @@ export const listMyReadingLog = query({
         read_at: new Date(row.readAt).toISOString(),
         created_at: new Date(row.readAt).toISOString(),
         request_id: null,
+      });
+    }
+
+    for (const draft of drafts) {
+      if (draft.readingAt === undefined || !draft.source) continue;
+      entries.push({
+        id: draft._id,
+        note_id: draft._id,
+        kind: "log",
+        origin: "manual",
+        source: draft.source,
+        journal_date: draft.journalDate ?? journalDateFromTimestamp(draft.createdAt),
+        read_at: new Date(draft.readingAt).toISOString(),
+        created_at: new Date(draft.createdAt).toISOString(),
+        request_id: draft.entryRequestId ?? null,
       });
     }
 

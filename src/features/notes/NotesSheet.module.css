@@ -1,5 +1,5 @@
 /*
-  The phone Log sheet: the chapter's Log, then Notes, in one scroll. It fills the visible viewport up to a strip of
+  The phone Log sheet: one header row above one scroll (the new entry, or the saved notes). It fills the visible viewport up to a strip of
   the dimmed page (tap it to close).
   With an on-screen keyboard NotesSheet sets --notes-sheet-viewport (the visual viewport's height) and
   --notes-sheet-keyboard (how far the visual viewport's bottom sits above the layout viewport's), so the sheet rises

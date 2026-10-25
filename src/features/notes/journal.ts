@@ -17,6 +17,8 @@ export type JournalNoteEntry = {
   source: NoteSource | null;
   excerpt: string | null;
   markdown_revision: number;
+  /** When the entry also logs reading of its source; null for a note-only entry. */
+  reading_at?: string | null;
   markdown_canonical: boolean;
   read_only: false;
   author_label: string;
@@ -49,6 +51,8 @@ export type ReadingLogRow = {
   read_at: string;
   created_at: string;
   request_id: string | null;
+  /** The journal entry this reading belongs to; the journal lists that entry instead. */
+  note_id?: string;
 };
 
 /** A logged reading, mapped from a ReadingLogRow. */
@@ -96,6 +100,8 @@ export type JournalNoteDocument = {
   markdown_canonical: boolean;
   journal_date: string;
   source: NoteSource | null;
+  /** When the entry also logs reading of its source; null for a note-only entry. */
+  reading_at?: string | null;
   created_at: string;
   updated_at: string;
 };

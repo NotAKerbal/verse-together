@@ -20,7 +20,17 @@ import type { InsightDraft, InsightDraftSummary, InsightVisibility } from "@/lib
 import { isSafeSourceHref, localDateKey, type JournalNoteDocument, type NoteSource } from "@/features/notes/journal";
 import { JournalOutbox, RevisionConflictError, type OutboxEntry } from "@/features/notes/journalOutbox";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
-import type { ReadingLogAttempt, ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import type { ReadingLogOption } from "@/features/notes/ReadingChip";
+import {
+  entryDraftInput,
+  entryDraftProblem,
+  EntryDraftProblem,
+  freshEntryDraft,
+  restartEntryDraft,
+  type EntryDefaults,
+  type EntryDraft,
+  type EntryDraftSaveResult,
+} from "@/features/notes/entryDraft";
 import type { ChapterMarkAttempt } from "@/features/plans/ChapterReadToggle";
 
 /**
@@ -49,7 +59,7 @@ type DictionaryPayload = {
 
 export type NoteSaveStatus = "idle" | "saving" | "saved";
 
-/** The two views of the notes panel. "log" exists only while a chapter page is showing. */
+/** The two views of the notes panel: "log" is the unsaved entry (Log, New note), "notes" the saved ones. */
 export type NotebookPanelView = "log" | "notes";
 
 /** The chapter a chapter page is showing, so the panel's Log view can record it. */
@@ -59,7 +69,7 @@ export type ReaderChapter = {
   chapter: number;
   reference: string;
   logOptions: ReadingLogOption[];
-  /** Log offers the chapter's verses, so it waits for the text. */
+  /** The chapter's text has arrived (its verse count is known). */
   logReady: boolean;
 };
 
@@ -91,12 +101,28 @@ type InsightBuilderContextValue = {
   /** Called once per mounted chapter header; update it as the chapter's details change, unregister on unmount. */
   registerReaderChapter: () => ReaderChapterRegistration;
   /**
-   * The Log view's last unfinished log attempt. It outlives the panel (collapsing it, closing the sheet) so a
-   * retry after an unknown result reuses the request id; cleared when the account changes.
+   * The panel's mark-read toggle's last unfinished attempt. It outlives the panel (collapsing it, closing the
+   * sheet) so a retry after an unknown result reuses the request id; cleared when the account changes.
    */
-  readerLogPendingRef: MutableRefObject<ReadingLogAttempt | null>;
-  /** The same for the Log view's mark-read toggle. */
   readerMarkPendingRef: MutableRefObject<ChapterMarkAttempt | null>;
+  /**
+   * The one unsaved journal entry (Log, New note, a Journal day's New note). It outlives the panel, so closing
+   * and reopening keeps its text; it is cleared when the account changes and once it is saved.
+   */
+  entryDraft: EntryDraft;
+  updateEntryDraft: (change: (draft: EntryDraft) => EntryDraft) => void;
+  /** Starts the draft from these defaults unless it already holds something, and shows it in the panel. */
+  startEntry: (defaults: EntryDefaults) => void;
+  /**
+   * The header's Log: the entry draft for `source` (logging reading of it), in the phone sheet or desktop panel.
+   * Opening is immediate; nothing is stored until the entry is saved.
+   */
+  openLog: (source: NoteSource | null, surface: "sheet" | "panel") => void;
+  /**
+   * Saves the draft as one entry and makes it the active note. Throws EntryDraftProblem before sending anything
+   * incomplete, and the server's error when the save fails (the draft and its request id are kept for a retry).
+   */
+  saveEntryDraft: () => Promise<EntryDraftSaveResult>;
   /** "saving" while any note write is in flight, "saved" right after one lands. */
   saveStatus: NoteSaveStatus;
   lastSavedAt: number | null;
@@ -172,7 +198,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const [readerChapter, setReaderChapter] = useState<ReaderChapter | null>(null);
   const readerChaptersRef = useRef(new Map<number, ReaderChapter>());
   const readerChapterTokenRef = useRef(0);
-  const readerLogPendingRef = useRef<ReadingLogAttempt | null>(null);
   const readerMarkPendingRef = useRef<ChapterMarkAttempt | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [pendingSaves, setPendingSaves] = useState(0);
@@ -219,6 +244,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const reorderBlocksMutation = useMutation(api.insights.reorderBlocks);
   const publishDraftMutation = useMutation(api.insights.publishDraft);
   const createJournalNoteMutation = useMutation(api.insights.createJournalNote);
+  const createJournalEntryMutation = useMutation(api.insights.createJournalEntry);
   const saveJournalNoteMutation = useMutation(api.insights.saveJournalNote);
 
   // Saves go through a ref so the outbox, created once per user, always uses the current mutation and
@@ -230,9 +256,15 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     userIdRef.current = userId;
     saveJournalNoteRef.current = saveJournalNoteMutation;
   }, [userId, saveJournalNoteMutation]);
+  const [entryDraft, setEntryDraft] = useState<EntryDraft>(() => freshEntryDraft());
+  const entryDraftRef = useRef(entryDraft);
   useEffect(() => {
-    readerLogPendingRef.current = null;
+    entryDraftRef.current = entryDraft;
+  }, [entryDraft]);
+  // Another account never sees this one's unsaved entry or reuses its request ids.
+  useEffect(() => {
     readerMarkPendingRef.current = null;
+    setEntryDraft(freshEntryDraft());
   }, [userId]);
   const journalOutbox = useMemo(() => {
     const owner = userId;
@@ -254,7 +286,8 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   // Unsaved note text lives only in this tab, so leaving with some still pending asks first.
   useEffect(() => {
     function onBeforeUnload(event: BeforeUnloadEvent) {
-      if (!journalOutbox.hasUnsaved()) return;
+      const unsavedEntry = entryDraftRef.current.text.trim() !== "";
+      if (!journalOutbox.hasUnsaved() && !unsavedEntry) return;
       journalOutbox.flushAll();
       event.preventDefault();
       event.returnValue = "";
@@ -440,6 +473,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       markdown_canonical: draft.markdown_canonical ?? false,
       journal_date: draft.journal_date ?? draft.created_at.slice(0, 10),
       source: draft.source ?? null,
+      reading_at: draft.reading_at ?? null,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
     };
@@ -478,6 +512,42 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     },
     [canUseInsights, captureCurrentSource, createJournalNoteMutation, setActiveDraftMutation, tracked]
   );
+
+  const updateEntryDraft = useCallback((change: (draft: EntryDraft) => EntryDraft) => setEntryDraft(change), []);
+
+  const startEntry = useCallback((defaults: EntryDefaults) => {
+    setEntryDraft((draft) => restartEntryDraft(draft, defaults));
+    setPanelView("log");
+  }, []);
+
+  const openLog = useCallback((source: NoteSource | null, surface: "sheet" | "panel") => {
+    setEntryDraft((draft) => restartEntryDraft(draft, { source, logReading: !!source }));
+    setPanelView("log");
+    if (surface === "sheet") setSheetOpen(true);
+    else setIsPanelOpen(true);
+  }, []);
+
+  const saveEntryDraft = useCallback(async (): Promise<EntryDraftSaveResult> => {
+    const draft = entryDraftRef.current;
+    const problem = entryDraftProblem(draft);
+    if (problem) throw new EntryDraftProblem(problem);
+    const owner = userIdRef.current;
+    const result = await tracked(createJournalEntryMutation(entryDraftInput(draft)));
+    if (!owner || userIdRef.current !== owner) throw new Error("You were signed out before this entry was saved.");
+    if (!result.id) {
+      // Deleted elsewhere after an earlier attempt landed: keep the text, under a new request, for a new entry.
+      setEntryDraft((current) =>
+        current.requestId === draft.requestId ? { ...current, requestId: freshEntryDraft().requestId } : current
+      );
+      return { id: null, deleted: true };
+    }
+    const id = String(result.id);
+    // Clears only the draft it saved. The next Log or New note starts again from its page.
+    setEntryDraft((current) => (current.requestId === draft.requestId ? freshEntryDraft({ source: draft.source }) : current));
+    setActiveDraftId(id);
+    void setActiveDraftMutation({ draftId: result.id as DraftId }).catch(() => {});
+    return { id };
+  }, [createJournalEntryMutation, setActiveDraftMutation, tracked]);
 
   // Kept for every existing caller (reader, dictionary, notebook). New notes are Markdown journal notes for
   // today, tied to the page they were started from; the title comes from the note's first line, so the
@@ -711,8 +781,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setSheetOpen,
       readerChapter,
       registerReaderChapter,
-      readerLogPendingRef,
       readerMarkPendingRef,
+      entryDraft,
+      updateEntryDraft,
+      startEntry,
+      openLog,
+      saveEntryDraft,
       saveStatus,
       lastSavedAt,
       drafts,
@@ -763,8 +837,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setSheetOpen,
       readerChapter,
       registerReaderChapter,
-      readerLogPendingRef,
       readerMarkPendingRef,
+      entryDraft,
+      updateEntryDraft,
+      startEntry,
+      openLog,
+      saveEntryDraft,
       saveStatus,
       lastSavedAt,
       drafts,

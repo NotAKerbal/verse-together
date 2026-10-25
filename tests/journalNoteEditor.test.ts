@@ -8,6 +8,9 @@ vi.mock("@/features/insights/InsightBuilderProvider", () => ({
   useInsightBuilder: () => ({ journalOutbox: { flush: () => {}, discard: () => {} }, deleteDraft: async () => {} }),
   useNoteOutboxEntry: () => undefined,
 }));
+vi.mock("../src/features/notes/useJournalEntryActions", () => ({
+  useJournalEntryActions: () => ({ setEntryReading: () => Promise.resolve(), openReadingEntry: () => Promise.resolve() }),
+}));
 vi.mock("../src/features/notes/LazyMarkdownEditor", () => ({ default: () => null }));
 
 const { default: JournalNoteEditor } = await import("../src/features/notes/JournalNoteEditor");
@@ -58,5 +61,23 @@ describe("Journal note editor deletion", () => {
   test("published notes offer no deletion", () => {
     const html = renderToStaticMarkup(createElement(JournalNoteEditor, { note: { ...note, status: "published" } }));
     expect(html).not.toContain("Delete note");
+  });
+});
+
+describe("Journal entry reading chip", () => {
+  test("a note-only entry offers Log reading for its source; an entry with reading names what was read", () => {
+    expect(render({})).toContain('aria-label="Log reading"');
+    const logged = render({ note: { ...note, reading_at: "2026-10-20T07:00:00Z" } });
+    expect(logged).toContain('aria-label="Edit reading: 1 Nephi 2"');
+    expect(logged).toContain("Read 1 Nephi 2");
+  });
+
+  test("a personal note without a source or page offers no reading; one on a chapter page can log it", () => {
+    expect(render({ note: { ...note, source: null } })).not.toContain("Log reading");
+    const onPage = render({
+      note: { ...note, source: null },
+      readingOptions: [{ source: { kind: "scripture", label: "Alma 32", href: "/browse/bookofmormon/alma/32" } }],
+    });
+    expect(onPage).toContain('aria-label="Log reading"');
   });
 });

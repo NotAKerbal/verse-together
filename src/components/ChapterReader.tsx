@@ -35,7 +35,7 @@ import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
-import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import type { ReadingLogOption } from "@/features/notes/ReadingChip";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";

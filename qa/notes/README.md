@@ -63,3 +63,11 @@ Note deletion verification (October 25, 2026; `t3/delete-notes`, local working t
 - **Not run** — authenticated browser-to-deployed-Convex deletion, deployment, push or PR creation. Fixture writes remain in memory and reset on reload. Backend functions and schema are unchanged.
 
 The existing history settling window still applies: an action taken before the browser finishes stepping back off a note entry can be superseded by another action during that same traversal (normally a frame, with a one-second fallback). The completed-navigation regression above is covered.
+
+Unified entries integration (October 25, 2026; `t3/enhance-mobile-log-mode`, working tree on `1ae5bd4`): see `docs/unified-journal-entries.md`. The harness now renders the actual `NotesPanelContent` (in `NotesSheet` below 1024px, `NotesSidebar` above), `JournalEntryComposer`, `ReadingChip` and the saved-entry editor. Descriptions above of `ChapterLogView`, `ReadingLogForm`, the Log | Notes switch, `?panel&logFail`, `?createDelay` and `?createError` describe the retired architecture; their results predate this change.
+
+- `?panel`: the synthetic Log button opens the panel at once on an unsaved entry logging the synthetic chapter (nothing is stored until Save entry). Remove the chip for note-only, leave the note empty for reading-only. The panel's Mark chapter as read toggle still records a chapter mark in the synthetic history (`?markFail` still applies). "Go to 1 Nephi 3" moves an untouched entry to that chapter; one with text stays. All notes, New note, the calendar link and close share the one header row.
+- `?entryFail` makes the first entry save land but report an error, so Try again must find the same entry (one card). `?entryDelay=ms` slows saves.
+- Fixtures add an entry with both note and reading (October 21) and a reading-only entry (October 20); October 21's older manual reading and October 19's legacy completion open as editable entries on the calendar page (once; deleting that entry keeps the reading hidden). A calendar day's New note shows the same unsaved entry inline.
+- Deletion fixtures (`?deleteError`, `?deleteError=once`) are unchanged.
+- **Not run** — browser checks of this harness after the integration (parent-owned).

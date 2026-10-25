@@ -252,7 +252,7 @@ describe("Notes workspace stages", () => {
   test("desktop never mounts a note pane while no note is open, even if one is passed, and its empty panel is inert", () => {
     const html = render("desktop", { stage: "day", date: today, noteId: null }, { notePane: createElement("p", null, "EDITOR-PANE") });
     expect(html).not.toContain("EDITOR-PANE");
-    expect(html).toMatch(/<section aria-label="Open note"[^>]*inert=""[^>]*><\/section>/);
+    expect(html).toMatch(/<section aria-label="Open entry"[^>]*inert=""[^>]*><\/section>/);
   });
 
   test("a day without notes shows just its date and New note, with no empty-state box", () => {
@@ -339,5 +339,25 @@ describe("Leaving an open note", () => {
   test("phone keeps its back-to-the-day control in the top bar", () => {
     const html = render("phone", { stage: "note", date: today, noteId: "a" });
     expect(html).toContain('Back to </span><span class="truncate">Wednesday, October 21, 2026');
+  });
+});
+
+describe("unified journal entries in the workspace", () => {
+  test("an entry with note and reading is one card and one count; a reading-only entry is titled by its reading", () => {
+    const both = { ...note("both", "Reading with a thought", "2026-10-15", "2026-10-15T08:00:00Z"), reading_at: "2026-10-15T08:00:00Z" };
+    const readingOnly = { ...note("only", "Untitled note", "2026-10-15", "2026-10-15T09:00:00Z"), reading_at: "2026-10-15T09:00:00Z" };
+    const html = render("desktop", { stage: "day", date: "2026-10-15", noteId: null }, { entries: [both, readingOnly] });
+    expect(countOf(html, "Reading with a thought")).toBe(1);
+    expect(countOf(html, "Reading logged")).toBe(1);
+    expect(html).toContain("Read 1 Nephi 2");
+    expect(html).toContain('aria-label="Thursday, October 15, 2026, 2 entries"');
+    expect(html).not.toMatch(/\d readings?/);
+  });
+
+  test("with onOpenReading an older reading opens as an entry (a button), instead of linking away", () => {
+    const html = render("desktop", { stage: "day", date: today, noteId: null }, { onOpenReading: noop });
+    const reading = cardsOf(html).find((card) => card.includes("Open to add a note or edit"))!;
+    expect(reading).toMatch(/^<button type="button"/);
+    expect(countOf(reading, "<a ")).toBe(0);
   });
 });

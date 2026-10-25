@@ -93,9 +93,9 @@ export default function NotFound() {
                 href="/notes"
                 className="block rounded-[1.2rem] border px-4 py-3 surface-button"
               >
-                <span className="block text-sm font-medium">Notes</span>
+                <span className="block text-sm font-medium">Journal</span>
                 <span className="block text-sm text-foreground/65">
-                  Open your note library and saved reflections.
+                  Open your notes and reading history.
                 </span>
               </Link>
               <Link

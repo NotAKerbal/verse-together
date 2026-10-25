@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
-import { NotesPanelContent, focusNotesLauncher, type NotesPanelNotes } from "./NotesSidebar";
+import { focusNotesLauncher, type NotesPanelFrame } from "./NotesSidebar";
 import styles from "./NotesSheet.module.css";
 
 const FOCUSABLE_SELECTOR =
@@ -19,15 +19,16 @@ const KEYBOARD_MIN_HEIGHT = 80;
 
 /**
  * Below lg, a chapter page's Log: a modal bottom sheet opened by the reader's Log button (or a reader note action),
- * as tall as the screen allows and above an open keyboard. One scroll holds the chapter's Log (`log`) and then Notes,
- * the same list and editor as the desktop sidebar; `revealNotes` opens it scrolled to Notes.
+ * as tall as the screen allows and above an open keyboard. It holds the same panel as the desktop sidebar
+ * (`children`, given the sheet's title id and close button for the panel's one header row).
  */
 export default function NotesSheet({
   onClose,
-  log,
-  revealNotes = false,
-  ...notesProps
-}: NotesPanelNotes & { onClose: () => void; log: ReactNode; revealNotes?: boolean }) {
+  children,
+}: {
+  onClose: () => void;
+  children: (frame: NotesPanelFrame) => ReactNode;
+}) {
   const titleId = useId();
   const sheetRef = useRef<HTMLElement | null>(null);
   const dragStartYRef = useRef<number | null>(null);
@@ -163,20 +164,14 @@ export default function NotesSheet({
         >
           <span className="h-1.5 w-12 rounded-full bg-[color:var(--surface-border)] opacity-50" />
         </div>
-        {/* One header row (the dialog's title, Notes' actions and close) above one scroll of Log, then Notes. */}
-        <NotesPanelContent
-          {...notesProps}
-          sheet={{
-            titleId,
-            log,
-            revealNotes,
-            closeButton: (
-              <button type="button" onClick={onClose} aria-label="Close Log" title="Close" className={CLOSE_BUTTON_CLASS}>
-                <FontAwesomeIcon icon={faXmark} className="h-4 w-4" aria-hidden="true" />
-              </button>
-            ),
-          }}
-        />
+        {children({
+          titleId,
+          closeButton: (
+            <button type="button" onClick={onClose} aria-label="Close Log" title="Close" className={CLOSE_BUTTON_CLASS}>
+              <FontAwesomeIcon icon={faXmark} className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ),
+        })}
       </section>
     </div>
   );
