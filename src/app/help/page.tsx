@@ -16,7 +16,7 @@ export default function HelpPage() {
         <ol className="list-decimal pl-5 text-sm text-[color:var(--foreground-muted)] space-y-1">
           <li>Open scriptures in Browse and tap verses to reveal actions.</li>
           <li>Choose New Note or Add to Note.</li>
-          <li>Open Notes to organize with folders and tags.</li>
+          <li>Open Journal to organize with folders and tags.</li>
           <li>Export one note or bulk export all notes.</li>
         </ol>
       </div>
@@ -42,7 +42,7 @@ export default function HelpPage() {
 
       <div className="flex items-center gap-2">
         <Link href="/notes" className="surface-button rounded-full border px-4 py-2 text-sm">
-          Open Notes
+          Open Journal
         </Link>
         <Link href="/browse" className="surface-button rounded-full border px-4 py-2 text-sm">
           Browse Scriptures

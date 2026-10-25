@@ -29,6 +29,7 @@ type ReadingLogEntry = {
   read_at: string;
   created_at: string;
   request_id: string | null;
+  note_id?: string;
 };
 
 function assertJournalDate(journalDate: string) {
@@ -298,6 +299,26 @@ export const listMyReadingLog = query({
         read_at: new Date(row.readAt).toISOString(),
         created_at: new Date(row.readAt).toISOString(),
         request_id: null,
+      });
+    }
+
+    const drafts = await ctx.db.query("insightDrafts")
+      .withIndex("by_clerk_id", q => q.eq("clerkId", clerkId)).collect();
+    const importedKeys = new Set(drafts.map(draft => draft.readingHistoryKey).filter(Boolean));
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const entry = entries[index];
+      const key = entry.kind === "legacy_chapter_read"
+        ? `legacy-chapter-read:${entry.id}:${new Date(entry.read_at).getTime()}`
+        : entry.request_id?.startsWith("legacy-chapter-read:") ? entry.request_id : `reading:${entry.id}`;
+      if (importedKeys.has(key)) entries.splice(index, 1);
+    }
+    for (const draft of drafts) {
+      if (draft.readingAt === undefined || !draft.source) continue;
+      entries.push({
+        id: draft._id, note_id: draft._id, kind: "log", origin: "manual", source: draft.source,
+        journal_date: draft.journalDate ?? journalDateFromTimestamp(draft.createdAt),
+        read_at: new Date(draft.readingAt).toISOString(), created_at: new Date(draft.createdAt).toISOString(),
+        request_id: draft.entryRequestId ?? null,
       });
     }
 

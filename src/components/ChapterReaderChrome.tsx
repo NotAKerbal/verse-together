@@ -5,7 +5,7 @@
 // ChapterReaderShell draws the same page before the chapter's route has arrived, so opening a chapter shows its
 // page at once and only the text comes in later (fading in; see ChapterReader).
 
-import { faBook, faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Children, Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -15,15 +15,12 @@ import type { Crumb } from "./Breadcrumbs";
 import { ChapterLink, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import { useReaderHeaderDock } from "./ReaderHeaderSlot";
 import ReaderSearchButton from "./ReaderSearchButton";
-import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
-import { useBelowLg } from "@/features/notes/useBelowLg";
-import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import JournalLogButton, { type ReadingLogOption } from "@/features/notes/JournalLogButton";
 import {
   useInsightBuilder,
   type ReaderChapter,
   type ReaderChapterRegistration,
 } from "@/features/insights/InsightBuilderProvider";
-import { useAuth } from "@/lib/auth";
 import type { ChapterChrome } from "@/lib/browseRoutes";
 import { useSimpleMode } from "@/lib/simpleMode";
 
@@ -56,52 +53,6 @@ function headerCrumbs(breadcrumbs: Crumb[], volume: string, book: string) {
     leading: breadcrumbs.slice(0, -1).filter((item) => item.href && item.href !== "/browse" && item.href !== bookHref),
     currentHref: breadcrumbs.find((item) => item.href === bookHref)?.href,
   };
-}
-
-/**
- * Opens the shared Log and Notes panel on Log: the desktop panel, or below lg the phone sheet. While the panel shows
- * Log it closes it. Signed out, it asks to sign in.
- */
-function ReaderLogToggle({ reference }: { reference: string }) {
-  const { user, promptSignIn } = useAuth();
-  const { loading } = useConvexSignedIn();
-  const belowLg = useBelowLg();
-  const { isPanelOpen, isSheetOpen, panelView, openPanel, setPanelView, setSheetOpen, closeBuilder } = useInsightBuilder();
-  const expanded = !!user && (belowLg ? isSheetOpen : isPanelOpen && panelView === "log");
-
-  function toggle() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
-    if (belowLg) {
-      if (isSheetOpen) setSheetOpen(false);
-      else {
-        setPanelView("log");
-        setSheetOpen(true);
-      }
-    } else if (expanded) {
-      closeBuilder();
-    } else {
-      openPanel("log");
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      data-notebook-launcher
-      onClick={toggle}
-      disabled={loading}
-      aria-expanded={expanded}
-      aria-label={`Log and notes for ${reference}`}
-      title="Log and notes"
-      className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-log`}
-    >
-      <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
-      <span className="reader-toolbar-log-label">Log</span>
-    </button>
-  );
 }
 
 /** Keeps the shared panel's Log view on this header's chapter while it is mounted (the latest mounted wins). */
@@ -183,7 +134,7 @@ export function ChapterHeader({
         </nav>
       </div>
       <div className="reader-toolbar-group reader-toolbar-actions">
-        <ReaderLogToggle reference={reference} />
+        <JournalLogButton variant="toolbar" presentation="reader-panel" ariaLabel={`Log ${reference}`} options={logOptions} disabled={!logReady} followLocation />
         <button
           type="button"
           aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}

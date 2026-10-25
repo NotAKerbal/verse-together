@@ -13,9 +13,10 @@ import { api } from "../../../convex/_generated/api";
 import AccountControl from "@/components/AccountControl";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { useMyReadingLog } from "@/features/plans/useReadingProgress";
+import { useJournalEntryActions } from "./useJournalEntryActions";
 import JournalWorkspace from "./JournalWorkspace";
 import JournalNoteEditor from "./JournalNoteEditor";
-import ReadingLogButton, { type ReadingLogOption } from "./ReadingLogButton";
+import JournalLogButton, { type ReadingLogOption } from "./JournalLogButton";
 import {
   localDateKey,
   readingEntryFromRow,
@@ -42,6 +43,7 @@ function sourceKey(source: NoteSource) {
 
 export default function ConnectedJournalWorkspace() {
   const { user, ready, loading } = useConvexSignedIn();
+  const { openReadingEntry } = useJournalEntryActions();
   const belowLg = useBelowLg();
   const { drafts, activeDraftId, activeNote, isLoading, switchDraft, createJournalNote } = useInsightBuilder();
   const journal = useQuery(api.insights.listMyJournal, ready ? {} : "skip") as JournalEntry[] | undefined;
@@ -82,7 +84,7 @@ export default function ConnectedJournalWorkspace() {
   const entries = useMemo<JournalEntry[]>(
     () => [
       ...(journal ?? []).filter((entry) => entry.kind !== "reading"),
-      ...(readingLog ?? []).map((row) => readingEntryFromRow(row, viewerLabel)),
+      ...(readingLog ?? []).filter((row) => !row.note_id).map((row) => readingEntryFromRow(row, viewerLabel)),
     ],
     [journal, readingLog, viewerLabel]
   );
@@ -155,9 +157,9 @@ export default function ConnectedJournalWorkspace() {
         <AccountControl variant="page" />
         <div className="panel-card mx-auto flex max-w-xl flex-col items-center gap-4 rounded-[1.5rem] px-6 py-8 text-center">
           <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use Notes</h1>
+            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use your journal</h1>
             <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
-              Your notes are kept as a private journal, by day, linked to the chapters and guides you wrote them from.
+              Keep notes and reading together in a private journal, organized by day.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -212,6 +214,7 @@ export default function ConnectedJournalWorkspace() {
       authorLabel={authorLabel}
       showDate={false}
       onClose={onCloseNote}
+      onDateChange={date => onOpenNote(openNote.id, date)}
     />
   ) : openNoteLoading ? (
     <p role="status" className="text-sm text-[color:var(--foreground-muted)]">
@@ -224,24 +227,13 @@ export default function ConnectedJournalWorkspace() {
   ) : null;
 
   const historyLoaded = journal !== undefined && readingLog !== undefined;
-  const dayActions = !historyLoaded ? null : logOptions.length > 0 ? (
-    <ReadingLogButton
+  const dayActions = !historyLoaded ? null : (
+    <JournalLogButton
       key={selectedDate}
       options={logOptions}
       defaultDate={selectedDate}
       onLogged={onSelectDate}
     />
-  ) : (
-    <span className="text-xs text-[color:var(--foreground-muted)]">
-      Log reading from{" "}
-      <Link href="/browse" className="font-semibold underline underline-offset-2">
-        Browse
-      </Link>{" "}
-      or{" "}
-      <Link href="/come-follow-me" className="font-semibold underline underline-offset-2">
-        Come, Follow Me
-      </Link>
-    </span>
   );
 
   return (
@@ -255,6 +247,13 @@ export default function ConnectedJournalWorkspace() {
       onSelectDate={onSelectDate}
       selectedKey={view.noteId !== null ? `note:${view.noteId}` : null}
       onOpenNote={onOpenNote}
+      onOpenReading={async (entry) => {
+        setCreateError(null);
+        try {
+          const { id } = await openReadingEntry(entry.id);
+          onOpenNote(id, entry.journal_date);
+        } catch { setCreateError("This entry couldn't be opened. Try again."); }
+      }}
       onCloseNote={onCloseNote}
       onShowCalendar={onShowCalendar}
       onNewNote={(journalDate) => void onNewNote(journalDate)}

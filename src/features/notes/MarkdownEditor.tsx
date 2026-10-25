@@ -5,7 +5,7 @@
 
 import { useEffect, useRef } from "react";
 import { Annotation, Compartment, EditorSelection, EditorState, RangeSetBuilder } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { Decoration, EditorView, ViewPlugin, keymap, placeholder, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { headingRanges } from "./markdownHeadings";
@@ -118,6 +118,7 @@ export default function MarkdownEditor({ value, onChange, readOnly = false, aria
           keymap.of([...defaultKeymap, ...historyKeymap]),
           // Includes the Markdown keymap (list continuation on Enter, markup-aware Backspace).
           markdown(),
+          placeholder("Add a note…"),
           EditorView.lineWrapping,
           headingMarkers,
           editorTheme,

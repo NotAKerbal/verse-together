@@ -17,6 +17,7 @@ import {
   NOTE_MARKDOWN_MAX,
   noteSourceValidator,
   scriptureSource,
+  requestIdProblem,
 } from "./noteJournal";
 
 const insightBlockType = v.union(v.literal("scripture"), v.literal("text"), v.literal("quote"), v.literal("dictionary"));
@@ -254,6 +255,7 @@ export const listMyDrafts = query({
         excerpt: hasCanonicalMarkdown(d) ? markdownExcerpt(d.markdownBody) : draftExcerpt(blocks),
         scripture_refs: draftScriptureRefs(blocks),
         ...journal,
+        reading_at: d.readingAt === undefined ? null : toIso(d.readingAt),
       });
     }
     return rows;
@@ -277,6 +279,7 @@ export const getDraft = query({
       updated_at: toIso(draft.updatedAt),
       last_active_at: toIso(draft.lastActiveAt),
       ...noteJournalFields(draft, blocks),
+      reading_at: draft.readingAt === undefined ? null : toIso(draft.readingAt),
       // The owner sees the real block rows (a retained snapshot once markdown_canonical is true).
       blocks: blocks.map((b) => ({
         ...publicBlock(b),
@@ -436,6 +439,88 @@ export const createJournalNote = mutation({
   },
 });
 
+/** One private entry, with optional note text and optional reading. Retries create it once. */
+export const createJournalEntry = mutation({
+  args: {
+    journalDate: v.string(),
+    source: v.optional(noteSourceValidator),
+    markdownBody: v.string(),
+    logReading: v.boolean(),
+    requestId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    if (!isJournalDate(args.journalDate)) throw new Error("Journal date must be a real YYYY-MM-DD date");
+    const problem = requestIdProblem(args.requestId);
+    if (problem) throw new Error(problem);
+    if (args.markdownBody.length > NOTE_MARKDOWN_MAX) throw new Error("This note is too long");
+    if (!args.logReading && !args.markdownBody.trim()) throw new Error("Add a note or log reading");
+    const source = args.source ? normalizeNoteSource(args.source) : undefined;
+    if (args.logReading && !source) throw new Error("Choose what you read");
+    const existing = await ctx.db.query("insightDrafts")
+      .withIndex("by_clerk_entry_request", q => q.eq("clerkId", clerkId).eq("entryRequestId", args.requestId)).unique();
+    if (existing) return { id: existing._id, duplicate: true };
+    const now = Date.now();
+    const id = await ctx.db.insert("insightDrafts", {
+      clerkId, title: deriveNoteTitle(args.markdownBody), status: "draft", visibility: "private", tags: [],
+      markdownBody: args.markdownBody, markdownRevision: 0, journalDate: args.journalDate, source,
+      readingAt: args.logReading ? now : undefined, entryRequestId: args.requestId,
+      createdAt: now, updatedAt: now, lastActiveAt: now,
+    });
+    return { id, duplicate: false };
+  },
+});
+
+/** Opens an older reading as an editable entry, retaining its original day and reading time. */
+export const openReadingEntry = mutation({
+  args: { readingId: v.union(v.id("readingLogs"), v.id("chapterReads")) },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const row = await ctx.db.get(args.readingId);
+    if (!row || row.clerkId !== clerkId) throw new Error("Reading not found");
+    const historyKey = "requestId" in row
+      ? row.requestId.startsWith("legacy-chapter-read:") ? row.requestId : `reading:${row._id}`
+      : `legacy-chapter-read:${row._id}:${row.readAt}`;
+    const existing = await ctx.db.query("insightDrafts")
+      .withIndex("by_clerk_entry_request", q => q.eq("clerkId", clerkId).eq("entryRequestId", historyKey)).unique();
+    if (existing) return { id: existing._id };
+    const now = Date.now();
+    const id = await ctx.db.insert("insightDrafts", {
+      clerkId, title: DEFAULT_NOTE_TITLE, status: "draft", visibility: "private", tags: [],
+      markdownBody: "", markdownRevision: 0,
+      source: "source" in row ? row.source : scriptureSource(row),
+      journalDate: "journalDate" in row ? row.journalDate : journalDateFromTimestamp(row.readAt),
+      readingAt: row.readAt, readingHistoryKey: historyKey, entryRequestId: historyKey,
+      createdAt: row.readAt, updatedAt: now, lastActiveAt: now,
+    });
+    return { id };
+  },
+});
+
+/** Changes the reading on the same entry without touching its Markdown revision or chapter completion. */
+export const setJournalReading = mutation({
+  args: { draftId: v.id("insightDrafts"), logged: v.boolean(), source: v.optional(noteSourceValidator), journalDate: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const draft = await getDraftOrThrow(ctx, args.draftId, clerkId);
+    if (draft.status !== "draft") throw new Error("Only draft entries can be edited");
+    const blocks = await draftBlocks(ctx, draft._id);
+    const source = args.source ? normalizeNoteSource(args.source) : draft.source ?? inferSourceFromBlocks(blocks);
+    if (args.journalDate !== undefined && !isJournalDate(args.journalDate)) throw new Error("Choose a valid reading date");
+    if (args.logged && !source) throw new Error("This entry has no reading source");
+    if (!args.logged && !noteMarkdown(draft, blocks).trim()) {
+      throw new Error("Add a note before removing the reading");
+    }
+    await ctx.db.patch(draft._id, {
+      source: source ?? undefined,
+      journalDate: args.journalDate ?? draft.journalDate,
+      readingAt: args.logged ? draft.readingAt ?? Date.now() : undefined,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
 /**
  * Stores the note body exactly as given (whitespace and empty bodies included). The first save of an older
  * note makes Markdown canonical; its block rows are kept untouched as a snapshot. A save naming any revision
@@ -516,6 +601,7 @@ export const listMyJournal = query({
         visibility: draft.visibility ?? "private",
         journal_date: fields.journal_date,
         source: fields.source,
+        reading_at: draft.readingAt === undefined ? null : toIso(draft.readingAt),
         excerpt: markdownExcerpt(fields.markdown_body),
         markdown_revision: fields.markdown_revision,
         markdown_canonical: fields.markdown_canonical,

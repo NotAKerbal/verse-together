@@ -59,8 +59,8 @@ function LibraryView() {
           className="simple-hide"
           image={{ src: "/art/browse-notes.webp" }}
           eyebrow="Study journal"
-          title="Notes"
-          description="Your study notes"
+          title="Journal"
+          description="Your notes and reading"
         />
         {LIBRARY_VOLUMES.map((volume) => (
           <BrowseCard

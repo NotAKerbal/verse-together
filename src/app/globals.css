@@ -924,6 +924,19 @@ a.reader-toolbar-crumb:hover {
   gap: 1.5rem;
 }
 
+/* Keep the reader beside its nonmodal Log panel. */
+@media (min-width: 1024px) {
+  :root:not([data-simple="true"]) body:has(dialog[data-reader-log][open]) .app-main {
+    padding-right: 472px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root:not([data-simple="true"]) body:has(dialog[data-reader-log][open]) .app-main {
+    padding-right: 512px;
+  }
+}
+
 .page-section {
   display: flex;
   flex-direction: column;

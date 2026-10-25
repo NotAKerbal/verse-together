@@ -1,7 +1,5 @@
 "use client";
 
-import { faBook } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Link from "next/link";
 import {
   useCallback,
@@ -17,7 +15,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { chapterLogOptions, READER_HEADER_BUTTON_CLASS } from "@/components/ChapterReaderChrome";
+import { chapterLogOptions } from "@/components/ChapterReaderChrome";
 import { useReaderHeaderDock } from "@/components/ReaderHeaderSlot";
 import {
   useInsightBuilder,
@@ -25,10 +23,8 @@ import {
   type ReaderChapterRegistration,
 } from "@/features/insights/InsightBuilderProvider";
 import type { NoteSource } from "@/features/notes/journal";
-import { useBelowLg } from "@/features/notes/useBelowLg";
-import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import JournalLogButton from "@/features/notes/JournalLogButton";
 import { getChapterHref } from "@/features/plans/scriptureCatalog";
-import { useAuth } from "@/lib/auth";
 import {
   decodeFragment,
   localScriptureTarget,
@@ -359,11 +355,7 @@ export default function StudyCompanion({
    * too (see ReaderHeaderSlot and `.guide-header-actions` in globals.css). They have no copies in the page.
    */
   const dock = useReaderHeaderDock(true, true);
-  const { user, promptSignIn } = useAuth();
-  const { loading: logLoading } = useConvexSignedIn();
-  const belowLg = useBelowLg();
-  const { isPanelOpen, isSheetOpen, panelView, openPanel, setPanelView, setSheetOpen, closeBuilder, registerReaderChapter } =
-    useInsightBuilder();
+  const { registerReaderChapter } = useInsightBuilder();
   // The chapter being read, for the shared Log and Notes panel's Log view: the one the guide or the scripture is
   // at, as the pager label names it, and the first chapter until the reader reaches one (the introduction too).
   const logChapter = active?.chapter ?? firstChapter;
@@ -410,8 +402,6 @@ export default function StudyCompanion({
   useEffect(() => {
     readerRegistrationRef.current?.update(readerChapter);
   }, [readerChapter, registerReaderChapter]);
-  // Log shows pressed while it shows the chapter's Log: below lg the phone sheet, else the panel on Log.
-  const isLogOpen = !!user && (belowLg ? isSheetOpen : isPanelOpen && panelView === "log");
   const introHtml = useMemo(() => ({ __html: introductionHtml }), [introductionHtml]);
   const guideHtml = useMemo(() => ({ __html: readerHtml }), [readerHtml]);
   const closingDoc = useMemo(() => ({ __html: closingHtml }), [closingHtml]);
@@ -1422,46 +1412,10 @@ export default function StudyCompanion({
   const highlighted = (chapter: number, verse: number) =>
     active != null && active.chapter === chapter && active.first != null && verse >= active.first && verse <= (active.last ?? active.first);
 
-  // Log opens the shared Log and Notes panel on Log, as the chapter reader's does (ReaderLogToggle): the desktop
-  // panel, or below lg the phone sheet; while it shows Log it closes it. Signed out, it asks to sign in.
-  function onToggleLog() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
-    if (belowLg) {
-      if (isSheetOpen) setSheetOpen(false);
-      else {
-        setPanelView("log");
-        setSheetOpen(true);
-      }
-    } else if (isLogOpen) {
-      closeBuilder();
-    } else {
-      openPanel("log");
-    }
-  }
-
-  // The guide's controls (Contents, then the chapter reader's Log for the chapter being read), one pill drawn
-  // once, in the app header's right side at every width (see `dock`), outside this page: only global styles and
-  // page-independent ones. Log is the notebook's launcher, the button it returns focus to when the one that
-  // opened it is gone. Where the header is narrow both are icons, each keeping its name.
   const readerActions = (
     <div role="group" aria-label="Study guide controls" className="reader-toolbar guide-header-actions">
       <ContentsOpener onOpen={openContents} />
-      <button
-        type="button"
-        data-notebook-launcher=""
-        onClick={onToggleLog}
-        disabled={logLoading}
-        aria-expanded={isLogOpen}
-        aria-label={`Log and notes for ${logReference}`}
-        title="Log and notes"
-        className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-log`}
-      >
-        <FontAwesomeIcon icon={faBook} aria-hidden="true" className="h-3 w-3" />
-        <span className="reader-toolbar-log-label guide-header-label">Log</span>
-      </button>
+      <JournalLogButton variant="toolbar" presentation="reader-panel" ariaLabel={`Log ${logReference}`} options={readerChapter.logOptions} />
     </div>
   );
 

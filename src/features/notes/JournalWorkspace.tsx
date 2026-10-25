@@ -21,6 +21,7 @@ import {
   monthKeyOf,
   shiftMonth,
   type JournalEntry,
+  type JournalReadingEntry,
 } from "./journal";
 import type { JournalStage } from "./journalView";
 import { NoteSourceLine } from "./NoteSourceLine";
@@ -41,6 +42,7 @@ export type JournalWorkspaceProps = {
   /** entryKey() of the open entry. */
   selectedKey: string | null;
   onOpenNote: (noteId: string, journalDate: string) => void;
+  onOpenReading?: (entry: JournalReadingEntry) => void;
   /** Leaves the open note for its day's chooser; the note itself is untouched. */
   onCloseNote: () => void;
   /** Phone: back from a day's entries to the calendar. */
@@ -52,7 +54,7 @@ export type JournalWorkspaceProps = {
   notePane?: ReactNode;
   /** Phone page-level controls at the top right (the account control). Desktop leaves the account to the app header. */
   headerAccessory?: ReactNode;
-  /** Extra actions beside "New note" for the selected day (the reading-log control). */
+  /** The selected day's unified Log control. */
   dayActions?: ReactNode;
 };
 
@@ -64,7 +66,7 @@ const PILL_BUTTON_CLASS =
 const ICON_BUTTON_CLASS =
   "inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]";
 
-type DayCounts = { notes: number; readings: number };
+type DayCounts = { entries: number };
 
 function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
@@ -73,9 +75,8 @@ function plural(count: number, one: string, many: string) {
 function dayLabel(day: string, counts: DayCounts | undefined, today: string) {
   const parts = [formatDayHeading(day)];
   if (day === today) parts.push("today");
-  if (counts?.notes) parts.push(plural(counts.notes, "note", "notes"));
-  if (counts?.readings) parts.push(plural(counts.readings, "reading", "readings"));
-  if (!counts?.notes && !counts?.readings) parts.push("nothing recorded");
+  if (counts?.entries) parts.push(plural(counts.entries, "entry", "entries"));
+  if (!counts?.entries) parts.push("nothing recorded");
   return parts.join(", ");
 }
 
@@ -113,25 +114,9 @@ function DayButton({
     >
       <span aria-hidden="true">{dayNumber}</span>
       <span aria-hidden="true" className="flex h-1.5 items-center gap-1">
-        {counts?.notes ? <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-primary)] ring-1 ring-[color:var(--surface-border)]" /> : null}
-        {counts?.readings ? <span className="h-1.5 w-1.5 rounded-[1px] bg-[color:var(--accent-secondary)]" /> : null}
+        {counts?.entries ? <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-primary)] ring-1 ring-[color:var(--surface-border)]" /> : null}
       </span>
     </button>
-  );
-}
-
-function Legend() {
-  return (
-    <p className="flex items-center gap-3 text-[0.7rem] text-[color:var(--foreground-muted)]">
-      <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[color:var(--accent-primary)] ring-1 ring-[color:var(--surface-border)]" />
-        Notes
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="h-2 w-2 rounded-[1px] bg-[color:var(--accent-secondary)]" />
-        Reading
-      </span>
-    </p>
   );
 }
 
@@ -205,7 +190,6 @@ function MonthCalendar({
           )
         )}
       </div>
-      <Legend />
     </section>
   );
 }
@@ -214,11 +198,13 @@ function EntryRow({
   entry,
   selected,
   onOpenNote,
+  onOpenReading,
   prominent,
 }: {
   entry: JournalEntry;
   selected: boolean;
   onOpenNote: (noteId: string, journalDate: string) => void;
+  onOpenReading?: (entry: JournalReadingEntry) => void;
   /** The chooser's larger cards, which every list uses today; false gives a compact list. */
   prominent: boolean;
 }) {
@@ -238,6 +224,14 @@ function EntryRow({
           <time dateTime={entry.read_at}>{new Date(entry.read_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time>
         </span>
       </>
+    );
+    if (onOpenReading) return (
+      <li className={`rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] ${padding}`}>
+        <button type="button" onClick={() => onOpenReading(entry)} className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]">
+          {reading}
+          <span className="mt-1 block text-xs text-[color:var(--foreground-muted)]">Open entry or add a note</span>
+        </button>
+      </li>
     );
     // The whole card is the link back to what was read; a source that can't be linked safely stays plain text.
     return linked ? (
@@ -320,6 +314,7 @@ export default function JournalWorkspace({
   onSelectDate,
   selectedKey,
   onOpenNote,
+  onOpenReading,
   onCloseNote,
   onShowCalendar,
   onNewNote,
@@ -358,9 +353,8 @@ export default function JournalWorkspace({
   const countsByDay = useMemo(() => {
     const map = new Map<string, DayCounts>();
     for (const entry of entries) {
-      const counts = map.get(entry.journal_date) ?? { notes: 0, readings: 0 };
-      if (entry.kind === "reading") counts.readings += 1;
-      else counts.notes += 1;
+      const counts = map.get(entry.journal_date) ?? { entries: 0 };
+      counts.entries += 1;
       map.set(entry.journal_date, counts);
     }
     return map;
@@ -373,7 +367,7 @@ export default function JournalWorkspace({
         .sort((a, b) => entryTime(a).localeCompare(entryTime(b))),
     [entries, selectedDate]
   );
-  const dayHasNotes = dayEntries.some((entry) => entry.kind === "note");
+  const dayHasEntries = dayEntries.length > 0;
   const dayName = formatDayHeading(selectedDate);
   const isToday = selectedDate === today;
 
@@ -381,11 +375,10 @@ export default function JournalWorkspace({
 
   const dayButtons = (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" onClick={() => onNewNote(selectedDate)} disabled={creating} className={PILL_BUTTON_CLASS}>
+      {dayActions ?? <button type="button" onClick={() => onNewNote(selectedDate)} disabled={creating} className={PILL_BUTTON_CLASS}>
         <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
-        {creating ? "Creating…" : "New note"}
-      </button>
-      {dayActions}
+        {creating ? "Creating…" : "New entry"}
+      </button>}
     </div>
   );
 
@@ -408,7 +401,7 @@ export default function JournalWorkspace({
         <div className="rounded-[1rem] border-2 border-dashed border-[color:var(--surface-border)] px-4 py-5 text-sm text-[color:var(--foreground-muted)]">
           <p>Nothing recorded on this day.</p>
           <p className="mt-1">
-            Start a note here, or read in{" "}
+            Add an entry here, or read in{" "}
             <Link href="/browse" className="font-semibold underline underline-offset-2">
               Browse
             </Link>{" "}
@@ -416,7 +409,7 @@ export default function JournalWorkspace({
             <Link href="/come-follow-me" className="font-semibold underline underline-offset-2">
               Come, Follow Me
             </Link>{" "}
-            and write from there.
+            and use Log in the header.
           </p>
         </div>
       );
@@ -429,6 +422,7 @@ export default function JournalWorkspace({
             entry={entry}
             selected={entryKey(entry) === selectedKey}
             onOpenNote={onOpenNote}
+            onOpenReading={onOpenReading}
             prominent={prominent}
           />
         ))}
@@ -445,7 +439,7 @@ export default function JournalWorkspace({
         tabIndex={-1}
         className="font-display text-xl font-extrabold tracking-[-0.02em] focus:outline-none"
       >
-        {status === "loading" || dayHasNotes ? "Select a note" : "Start a note"}
+        {status === "loading" || dayHasEntries ? "Select an entry" : "Start an entry"}
       </h2>
       <p className="text-sm font-semibold text-[color:var(--foreground-muted)]">
         <time dateTime={selectedDate}>{dayName}</time>
@@ -456,7 +450,7 @@ export default function JournalWorkspace({
 
   const openNoteSection = (className: string) => (
     <section
-      aria-label="Open note"
+      aria-label="Open entry"
       ref={setFocusTarget}
       tabIndex={-1}
       className={`panel-card flex flex-col rounded-[20px] focus:outline-none ${className}`}
@@ -469,7 +463,7 @@ export default function JournalWorkspace({
   // lands on returning to the phone calendar.
   const title = (
     <h1 className="sr-only" ref={isPhone && stage === "calendar" ? setFocusTarget : undefined} tabIndex={-1}>
-      Notes
+      Journal
     </h1>
   );
 
@@ -577,7 +571,7 @@ export default function JournalWorkspace({
           </div>
         </section>
         <section
-          aria-label="Open note"
+          aria-label="Open entry"
           ref={noteOpen ? setFocusTarget : undefined}
           tabIndex={-1}
           inert={!noteOpen}

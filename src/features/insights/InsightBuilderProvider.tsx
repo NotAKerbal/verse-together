@@ -425,6 +425,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       markdown_canonical: draft.markdown_canonical ?? false,
       journal_date: draft.journal_date ?? draft.created_at.slice(0, 10),
       source: draft.source ?? null,
+      reading_at: draft.reading_at ?? null,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
     };

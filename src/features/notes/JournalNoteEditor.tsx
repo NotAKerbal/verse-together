@@ -6,6 +6,8 @@ import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder, useNoteOutboxEntry } from "@/features/insights/InsightBuilderProvider";
 import type { OutboxEntry } from "./journalOutbox";
 import { formatDayHeading, formatTime, type JournalNoteDocument } from "./journal";
+import ReadingChip from "./ReadingChip";
+import { useJournalEntryActions } from "./useJournalEntryActions";
 import LazyMarkdownEditor from "./LazyMarkdownEditor";
 import NoteMarkdown from "./NoteMarkdown";
 import { NoteSourceLine } from "./NoteSourceLine";
@@ -72,6 +74,7 @@ export default function JournalNoteEditor({
   authorLabel = "You",
   showDate = true,
   onClose,
+  onDateChange,
 }: {
   note: JournalNoteDocument;
   authorLabel?: string;
@@ -79,8 +82,10 @@ export default function JournalNoteEditor({
   showDate?: boolean;
   /** Closes the note's view (the X at its upper right); unmounting then saves anything still unsaved. */
   onClose?: () => void;
+  onDateChange?: (date: string) => void;
 }) {
   const { journalOutbox } = useInsightBuilder();
+  const { setEntryReading } = useJournalEntryActions();
   const entry = useNoteOutboxEntry(journalOutbox, note.id);
   const readOnly = note.status !== "draft";
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
@@ -122,14 +127,28 @@ export default function JournalNoteEditor({
   return (
     <article className="flex min-h-0 flex-1 flex-col gap-3" aria-label={note.title || "Note"}>
       <header className="space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            {showDate ? (
-              <p className="pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
-                <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
-              </p>
-            ) : null}
-            <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
+        {showDate ? (
+          <p className="pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
+            <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
+          </p>
+        ) : null}
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} verb="Logged" />
+          </div>
+          <div className="max-w-[50%] shrink-0">
+            <ReadingChip
+              align="end"
+              value={note.reading_at && note.source ? { source: note.source, journalDate: note.journal_date } : null}
+              options={note.source ? [{ source: note.source }] : []}
+              defaultDate={note.journal_date}
+              disabled={readOnly || (entry !== undefined && entry.status !== "saved")}
+              canRemove={!!text.trim()}
+              onChange={async reading => {
+                await setEntryReading(note.id, !!reading, reading ?? undefined);
+                if (reading && reading.journalDate !== note.journal_date) onDateChange?.(reading.journalDate);
+              }}
+            />
           </div>
           {onClose ? (
             <button
@@ -137,7 +156,7 @@ export default function JournalNoteEditor({
               onClick={onClose}
               aria-label="Close note"
               title="Close note"
-              className="-mr-2 -mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+              className="-mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
             >
               <FontAwesomeIcon icon={faXmark} className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -187,7 +206,7 @@ export default function JournalNoteEditor({
             <p className="text-sm text-[color:var(--foreground-muted)]">This note is empty.</p>
           )
         ) : (
-          <LazyMarkdownEditor key={noteId} value={text} onChange={onChange} ariaLabel={note.title || "Note"} />
+          <LazyMarkdownEditor key={noteId} value={text} onChange={onChange} ariaLabel={note.title === "Untitled note" ? "Entry note" : note.title || "Entry note"} />
         )}
       </div>
 

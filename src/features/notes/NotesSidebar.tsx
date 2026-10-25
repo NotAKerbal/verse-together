@@ -27,7 +27,7 @@ export type NotesPanelNotes = {
   notes: InsightDraftSummary[];
   isLoading: boolean;
   onSelect: (id: string) => Promise<void>;
-  onCreate: () => Promise<string | null>;
+  onCreate?: () => Promise<string | null>;
 };
 
 /** On a chapter page the panel holds Log beside Notes; `log` is that chapter's Log view. */
@@ -147,7 +147,7 @@ export function NotesPanelContent({
     setCreating(true);
     setError(null);
     try {
-      const id = await onCreate();
+      const id = await onCreate?.();
       if (id) setBrowsingFor(null);
     } catch (cause) {
       setError(cause instanceof Error && cause.message ? cause.message : "The note could not be created.");
@@ -191,10 +191,10 @@ export function NotesPanelContent({
             </button>
           )}
         </h2>
-        <button type="button" onClick={() => void createNote()} disabled={creating} className={ACTION_BUTTON_CLASS}>
+        {onCreate ? <button type="button" onClick={() => void createNote()} disabled={creating} className={ACTION_BUTTON_CLASS}>
           <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
           {creating ? "Creating…" : "New note"}
-        </button>
+        </button> : null}
         <span aria-hidden="true" className="mx-0.5 h-4 w-px shrink-0 bg-[color:var(--surface-border)]" />
         <div className="flex shrink-0 items-center gap-0.5">
           <Link href="/notes" aria-label="Open Notes calendar" title="Open Notes calendar" className={HEADER_ICON_CLASS}>
@@ -261,19 +261,15 @@ function CollapseNotesButton({ onCollapse, label = "Collapse Notes" }: { onColla
  */
 export default function NotesSidebar({
   isOpen,
-  onToggle,
   onCollapse,
   companion,
   ...notesProps
 }: NotesPanelNotes & {
   isOpen: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   onCollapse: () => void;
   companion?: NotesCompanion;
 }) {
-  const { activeNoteId, activeNote, notes } = notesProps;
-  const activeTitle =
-    notes.find((row) => row.id === activeNoteId)?.title || (activeNote?.id === activeNoteId ? activeNote?.title : null);
   const panelRef = useRef<HTMLElement | null>(null);
   const pillRef = useRef<HTMLButtonElement | null>(null);
   const wasOpen = useRef(isOpen);
@@ -286,21 +282,7 @@ export default function NotesSidebar({
     else focusNotesLauncher();
   }, [isOpen]);
 
-  if (!isOpen) {
-    if (companion) return null;
-    return (
-      <button
-        ref={pillRef}
-        type="button"
-        onClick={onToggle}
-        aria-label={activeTitle ? `Open Notes: ${activeTitle}` : "Open Notes"}
-        className="simple-hide fixed bottom-4 right-4 z-40 hidden h-11 max-w-[16rem] items-center gap-2 rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] pl-1.5 pr-4 text-sm font-bold text-foreground shadow-[var(--surface-shadow-soft)] hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] lg:inline-flex"
-      >
-        <LightbulbBadge size="sm" />
-        <span className="truncate">{activeTitle || "Notes"}</span>
-      </button>
-    );
-  }
+  if (!isOpen) return null;
 
   return (
     <aside

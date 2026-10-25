@@ -8,6 +8,9 @@ vi.mock("@/features/insights/InsightBuilderProvider", () => ({
   useInsightBuilder: () => ({ journalOutbox: { flush: () => {}, discard: () => {} } }),
   useNoteOutboxEntry: () => undefined,
 }));
+vi.mock("../src/features/notes/useJournalEntryActions", () => ({
+  useJournalEntryActions: () => ({ setEntryReading: () => Promise.resolve() }),
+}));
 vi.mock("../src/features/notes/LazyMarkdownEditor", () => ({ default: () => null }));
 
 const { default: JournalNoteEditor } = await import("../src/features/notes/JournalNoteEditor");

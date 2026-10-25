@@ -26,6 +26,7 @@ export type NoteSource = {
 
 /** Markdown fields on every note read path; optional so an older backend still satisfies the types. */
 export type NoteMarkdownFields = {
+  reading_at?: string | null;
   /** Stored Markdown, or a projection of the note's blocks when markdown_canonical is false. */
   markdown_body?: string;
   /** Pass back as expectedRevision when saving. */
@@ -140,6 +141,7 @@ export type JournalEntry =
       source: NoteSource | null;
       excerpt: string | null;
       markdown_revision: number;
+      reading_at?: string | null;
       markdown_canonical: boolean;
       read_only: false;
       author_label: string;
@@ -172,6 +174,7 @@ export type ReadingLogEntry = {
   read_at: string;
   created_at: string;
   request_id: string | null;
+  note_id?: string;
 };
 
 export type AccountData = {

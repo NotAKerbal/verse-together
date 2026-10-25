@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faLightbulb } from "@fortawesome/free-solid-svg-icons";
+import { faBook } from "@fortawesome/free-solid-svg-icons";
 import type { JournalNoteEntry } from "./journal";
 import { NoteSourceLine } from "./NoteSourceLine";
 
@@ -10,7 +10,7 @@ export function JournalNoteCard({
   onOpen,
   prominent = true,
 }: {
-  note: Pick<JournalNoteEntry, "id" | "title" | "status" | "excerpt" | "source" | "created_at"> & { author_label?: string };
+  note: Pick<JournalNoteEntry, "id" | "title" | "status" | "excerpt" | "source" | "created_at" | "reading_at"> & { author_label?: string };
   selected?: boolean;
   onOpen: () => void;
   prominent?: boolean;
@@ -30,14 +30,15 @@ export function JournalNoteCard({
         aria-current={selected ? "true" : undefined}
         className="flex w-full cursor-pointer items-start gap-2 text-left after:absolute after:inset-0 after:rounded-[0.875rem] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[color:var(--accent-secondary)]"
       >
-        <FontAwesomeIcon icon={faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <FontAwesomeIcon icon={faBook} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           {/* line-clamp sets its own display, so no display utility sits beside it. */}
           <span
             className={`line-clamp-2 font-display leading-snug font-extrabold tracking-[-0.02em] wrap-anywhere ${prominent ? "text-[1.12rem]" : "text-[1rem]"}`}
           >
-            {note.title || "Untitled note"}
+            {note.reading_at && !note.excerpt && note.title === "Untitled note" ? note.source?.label || "Reading logged" : note.title || "Entry"}
           </span>
+          {note.reading_at ? <span className="mt-0.5 block text-xs font-semibold text-[color:var(--accent-secondary)]">Reading logged</span> : null}
           {note.excerpt ? (
             <span className="mt-0.5 line-clamp-2 text-xs leading-5 wrap-anywhere text-[color:var(--foreground-muted)]">{note.excerpt}</span>
           ) : null}
@@ -49,7 +50,7 @@ export function JournalNoteCard({
         ) : null}
       </button>
       <div className="mt-1.5 pl-5">
-        <NoteSourceLine source={note.source} authorLabel={note.author_label} time={note.created_at} raiseLink />
+        <NoteSourceLine source={note.source} authorLabel={note.author_label} time={note.created_at} verb="Logged" raiseLink />
       </div>
     </li>
   );

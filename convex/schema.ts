@@ -161,6 +161,11 @@ export default defineSchema({
     // YYYY-MM-DD the note belongs to in the journal.
     journalDate: v.optional(v.string()),
     source: v.optional(noteSourceValidator),
+    // A journal entry may log reading, with or without note text.
+    readingAt: v.optional(v.number()),
+    entryRequestId: v.optional(v.string()),
+    // Links an older reading to its editable entry without deleting the original.
+    readingHistoryKey: v.optional(v.string()),
     // Reserved for a future generated summary heading. Nothing writes it yet.
     summaryHeading: v.optional(v.object({ text: v.string(), updatedAt: v.number() })),
     createdAt: v.number(),
@@ -169,7 +174,8 @@ export default defineSchema({
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_clerk_status", ["clerkId", "status"])
-    .index("by_clerk_last_active", ["clerkId", "lastActiveAt"]),
+    .index("by_clerk_last_active", ["clerkId", "lastActiveAt"])
+    .index("by_clerk_entry_request", ["clerkId", "entryRequestId"]),
 
   insightDraftBlocks: defineTable({
     draftId: v.id("insightDrafts"),

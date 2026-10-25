@@ -18,3 +18,6 @@ Sidebar verification (October 24, 2026; local working tree based on `51d3f46`):
 - **Not run** — authenticated Clerk/Convex integration or deployment. Fixture saves are in memory and do not establish server persistence.
 
 Single-row header refinement (same local working tree): **Passed** targeted ESLint and browser checks in light/dark themes at 1280×800 and 1024×640. The header is 57px tall (56px shorter), its actions stay on one row without overflow, and note switching, creation, calendar link and collapse/reopen still work. The existing build configuration limitation above remains.
+
+
+Unified-entry follow-up: the reader fixture now starts with the panel closed and has the real header Log button. The journal fixture has one Log action for each day. Add `?saveError` to fail the first entry save and verify text retention/retry. New entry writes and reading toggles use `entries.ts`, with synthetic in-memory state only. The earlier floating-trigger and New note checks above describe the previous UI. See [unified journal verification](../../docs/unified-journal-entries.md) for the current behavior and validation limits.
