@@ -100,3 +100,86 @@ export function passagesOverlapping<P extends { chapter: number; first: number; 
   const last = target.last ?? target.first ?? Number.MAX_SAFE_INTEGER;
   return passages.filter((passage) => passage.chapter === target.chapter && passage.first <= last && passage.last >= first);
 }
+
+/**
+ * One chapter of a week's reading, in reading order. `key` is how the guide names it (its passages, chapter
+ * sections, and the scroll sync all use it as their chapter): the chapter's own number in the week's first
+ * book, plus RANGE_BOOK_STRIDE for each book before its own after that, so the same number in two books never
+ * meets. `book` (its name, as the week prints it), `slug`, `volume`, and `chapter` are where it is in the
+ * scripture: its anchors, links, and labels.
+ */
+export type RangeChapter = { key: number; book: string; slug: string; volume: string; chapter: number };
+
+/** More than any book's chapter count, so one book's keys never reach the next one's. */
+export const RANGE_BOOK_STRIDE = 1000;
+
+/** The key of `chapter` in the range's book at `bookIndex` (0 for its first book). */
+export function rangeKey(bookIndex: number, chapter: number): number {
+  return bookIndex * RANGE_BOOK_STRIDE + chapter;
+}
+
+/** The range chapter with this key. */
+export function rangeEntry<E extends RangeChapter>(entries: readonly E[], key: number): E | undefined {
+  return entries.find((entry) => entry.key === key);
+}
+
+/** The range's books in reading order, each with its chapters. */
+export function rangeBooks<E extends RangeChapter>(entries: readonly E[]): E[][] {
+  const books: E[][] = [];
+  for (const entry of entries) {
+    const current = books[books.length - 1];
+    if (current && current[0].slug === entry.slug) current.push(entry);
+    else books.push([entry]);
+  }
+  return books;
+}
+
+/** The scripture-pane anchor of a keyed target, in its own book and chapter; null for a key outside the range. */
+export function rangeAnchor(entries: readonly RangeChapter[], target: ScriptureTarget): string | null {
+  const entry = rangeEntry(entries, target.chapter);
+  return entry ? scriptureAnchor(entry.slug, entry.chapter, target.first, target.last) : null;
+}
+
+/** Element id of one verse of a keyed chapter; null for a key outside the range. */
+export function rangeVerseId(entries: readonly RangeChapter[], key: number, verse: number): string | null {
+  const entry = rangeEntry(entries, key);
+  return entry ? scriptureVerseId(entry.slug, entry.chapter, verse) : null;
+}
+
+/** A scripture-pane anchor of any of the range's chapters, as a keyed target; null for anything else. */
+export function parseRangeAnchor(anchor: string, entries: readonly RangeChapter[]): ScriptureTarget | null {
+  for (const book of rangeBooks(entries)) {
+    const target = parseScriptureAnchor(anchor, book[0].slug);
+    if (!target) continue;
+    const entry = book.find((item) => item.chapter === target.chapter);
+    return entry ? { ...target, chapter: entry.key } : null;
+  }
+  return null;
+}
+
+/**
+ * localScriptureTarget for every book of the range: a link to one of its chapters, as a keyed target. A link to
+ * a chapter the range skips, in any of its books, is null.
+ */
+export function rangeScriptureTarget(href: string | null, entries: readonly RangeChapter[]): ScriptureTarget | null {
+  for (const book of rangeBooks(entries)) {
+    const target = localScriptureTarget(href, book[0], book.map((item) => item.chapter));
+    if (!target) continue;
+    const entry = book.find((item) => item.chapter === target.chapter);
+    return entry ? { ...target, chapter: entry.key } : null;
+  }
+  return null;
+}
+
+/** "Isaiah 50–57", "Jeremiah 1, 2, 3, 7", "Jeremiah 31, 32, 33; Lamentations 1, 3": the range, book by book. */
+export function rangeLabel(entries: readonly RangeChapter[]): string {
+  return rangeBooks(entries)
+    .map((book) => {
+      const numbers = book.map((entry) => entry.chapter);
+      const first = numbers[0];
+      const last = numbers[numbers.length - 1];
+      const span = numbers.length === 1 ? `${first}` : last - first + 1 === numbers.length ? `${first}–${last}` : numbers.join(", ");
+      return `${book[0].book} ${span}`;
+    })
+    .join("; ");
+}
