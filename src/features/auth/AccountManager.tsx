@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown, faPenToSquare } from "@fortawesome/free-solid-svg-icons";
+import styles from "@/app/account/page.module.css";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { SIGN_OUT_FAILED, useAuth } from "@/lib/auth";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../../convex/authEnvironment";
@@ -19,15 +22,17 @@ import {
 type LinkedAccount = { providerId: string };
 type SessionRow = { id: string; userAgent?: string | null; createdAt: Date | string; expiresAt: Date | string };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, summary, children }: { title: string; summary?: React.ReactNode; children: React.ReactNode }) {
   const id = `account-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
   return (
-    <section aria-labelledby={id} className="panel-card space-y-3 rounded-[1.35rem] p-4">
-      <h2 id={id} className="text-base font-semibold">
-        {title}
-      </h2>
-      {children}
-    </section>
+    <details className={styles.accountSection}>
+      <summary className={styles.sectionSummary}>
+        <h2 id={id}>{title}</h2>
+        {summary ? <span className={styles.sectionMeta}>{summary}</span> : null}
+        <FontAwesomeIcon icon={faChevronDown} className={styles.chevron} aria-hidden="true" />
+      </summary>
+      <div className={styles.sectionContent}>{children}</div>
+    </details>
   );
 }
 
@@ -66,7 +71,7 @@ function SignOutButton({ label }: { label: string }) {
     <div className="space-y-2">
       <button
         type="button"
-        className={SECONDARY_BUTTON_CLASS}
+        className={styles.signOut}
         disabled={pending}
         aria-busy={pending}
         onClick={async () => {
@@ -89,7 +94,7 @@ function SignOutButton({ label }: { label: string }) {
   );
 }
 
-export default function AccountManager() {
+export default function AccountManager({ children }: { children?: ReactNode }) {
   const auth = useAuth();
 
   if (!auth.configured) {
@@ -119,8 +124,8 @@ export default function AccountManager() {
   }
   if (!auth.user || !auth.authUser) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm">Sign in to view your account details and manage your session.</p>
+      <div className={styles.notice}>
+        <p className="text-sm">Sign in to sync your study.</p>
         <button
           type="button"
           className={`${PRIMARY_BUTTON_CLASS} w-auto`}
@@ -133,10 +138,10 @@ export default function AccountManager() {
       </div>
     );
   }
-  return <AccountDetails />;
+  return <AccountDetails>{children}</AccountDetails>;
 }
 
-function AccountDetails() {
+function AccountDetails({ children }: { children?: ReactNode }) {
   const auth = useAuth();
   const capabilities = useAuthCapabilities();
   const authUser = auth.authUser!;
@@ -174,77 +179,78 @@ function AccountDetails() {
   const emailPassword = capabilities?.emailPassword === true;
 
   return (
-    <div className="space-y-3">
-      {auth.legacyAccountPending ? (
-        <FormMessage tone="info">
-          We found an earlier Verse Together account with this email that hasn&apos;t been moved over yet. Your earlier
-          notes and highlights will appear here once it&apos;s connected; you don&apos;t need to do anything else.
-        </FormMessage>
-      ) : null}
-      {listError ? (
-        <div className="space-y-2">
-          <FormMessage tone="error">{listError}</FormMessage>
-          <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={() => void loadLists()}>
-            Reload sign-in methods and sessions
-          </button>
-        </div>
-      ) : null}
-
-      <ProfileSection />
-
-      <Section title="Email">
-        <p className="text-sm">
-          <span className="font-semibold">{authUser.email}</span>{" "}
-          <span className="text-[color:var(--foreground-muted)]">
-            {authUser.emailVerified ? "· Confirmed" : "· Not confirmed"}
-          </span>
-        </p>
-        {!authUser.emailVerified && capabilities?.emailDelivery ? <ResendVerification email={authUser.email} /> : null}
-        {!authUser.emailVerified && emailPassword && !capabilities?.emailDelivery ? (
-          <p className="text-xs text-[color:var(--foreground-muted)]">
-            Email confirmation isn&apos;t set up on this site yet, so friends can&apos;t find you by email.
-          </p>
+    <div className={styles.manager}>
+      <div className={styles.profileColumn}>
+        {auth.legacyAccountPending ? (
+          <FormMessage tone="info">
+            We found an earlier Verse Together account with this email that hasn&apos;t been moved over yet. Your earlier
+            notes and highlights will appear here once it&apos;s connected; you don&apos;t need to do anything else.
+          </FormMessage>
         ) : null}
-      </Section>
-
-      <Section title="Sign-in methods">
-        {accounts === null ? (
-          <ListPlaceholder failed={!!listError} />
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {emailPassword ? <li>Email and password: {hasPassword ? "set up" : "not set up"}</li> : null}
-            {!emailPassword || capabilities?.google || hasGoogle ? (
-              <li>Google: {hasGoogle ? "connected" : "not connected"}</li>
-            ) : null}
-          </ul>
-        )}
-        {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
-      </Section>
-
-      {emailPassword ? (
-        <Section title="Password">
-          {accounts === null ? null : hasPassword ? (
-            <ChangePasswordForm onChanged={loadLists} />
-          ) : capabilities?.emailDelivery ? (
-            <p className="text-sm">
-              You sign in without a password.{" "}
-              <Link href="/forgot-password" className="font-semibold underline underline-offset-2">
-                Set a password by email
-              </Link>
+        <div className={styles.profileCard}><ProfileSection /></div>
+        <div className={styles.footer}><SignOutButton label="Sign out" /></div>
+      </div>
+      <div className={styles.settingsColumn}>
+        {listError ? (
+          <div className="space-y-2">
+            <FormMessage tone="error">{listError}</FormMessage>
+            <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={() => void loadLists()}>
+              Reload sign-in methods and sessions
+            </button>
+          </div>
+        ) : null}
+        {!authUser.emailVerified ? <Section title="Email" summary="Not confirmed">
+          <p className="text-sm">
+            <span className="font-semibold">{authUser.email}</span>{" "}
+            <span className="text-[color:var(--foreground-muted)]">
+              {authUser.emailVerified ? "· Confirmed" : "· Not confirmed"}
+            </span>
+          </p>
+          {!authUser.emailVerified && capabilities?.emailDelivery ? <ResendVerification email={authUser.email} /> : null}
+          {!authUser.emailVerified && emailPassword && !capabilities?.emailDelivery ? (
+            <p className="text-xs text-[color:var(--foreground-muted)]">
+              Email confirmation isn&apos;t set up on this site yet, so friends can&apos;t find you by email.
             </p>
+          ) : null}
+        </Section> : null}
+
+        <Section title="Sign-in methods" summary={accounts === null ? (listError ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
+          {accounts === null ? (
+            <ListPlaceholder failed={!!listError} />
           ) : (
-            <p className="text-sm text-[color:var(--foreground-muted)]">You sign in without a password.</p>
+            <ul className="space-y-1 text-sm">
+              {emailPassword ? <li>Email and password: {hasPassword ? "set up" : "not set up"}</li> : null}
+              {!emailPassword || capabilities?.google || hasGoogle ? (
+                <li>Google: {hasGoogle ? "connected" : "not connected"}</li>
+              ) : null}
+            </ul>
           )}
+          {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
         </Section>
-      ) : null}
 
-      <Section title="Sessions">
-        <SessionsPanel sessions={sessions} failed={!!listError} onChanged={loadLists} />
-      </Section>
+        {emailPassword ? (
+          <Section title="Password">
+            {accounts === null ? null : hasPassword ? (
+              <ChangePasswordForm onChanged={loadLists} />
+            ) : capabilities?.emailDelivery ? (
+              <p className="text-sm">
+                You sign in without a password.{" "}
+                <Link href="/forgot-password" className="font-semibold underline underline-offset-2">
+                  Set a password by email
+                </Link>
+              </p>
+            ) : (
+              <p className="text-sm text-[color:var(--foreground-muted)]">You sign in without a password.</p>
+            )}
+          </Section>
+        ) : null}
 
-      <Section title="Sign out">
-        <SignOutButton label="Sign out of this device" />
-      </Section>
+        <Section title="Sessions" summary={sessions === null ? (listError ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
+          <SessionsPanel sessions={sessions} failed={!!listError} onChanged={loadLists} />
+        </Section>
+
+        {children}
+      </div>
     </div>
   );
 }
@@ -287,8 +293,22 @@ function ProfileSection() {
   }
 
   return (
-    <Section title="Profile">
-      <form onSubmit={handleSubmit} className="space-y-3">
+    <details className={styles.profileEditor}>
+      <summary className={styles.profile} aria-label={`Edit profile for ${auth.authUser?.name || "your account"}`}>
+        {auth.user?.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- identity-provider avatar
+          <img className={styles.avatar} src={auth.user.imageUrl} alt="" referrerPolicy="no-referrer" />
+        ) : <span className={styles.guestAvatar} aria-hidden="true">{(auth.authUser?.name || auth.authUser?.email || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase()}</span>}
+        <div className={styles.identity}>
+          <h2>{auth.authUser?.name || "Your account"}</h2>
+          <p>{auth.authUser?.email}</p>
+        </div>
+        <span className={styles.edit}>
+          <span className={styles.editLabel}>Edit profile</span>
+          <FontAwesomeIcon icon={faPenToSquare} className={styles.editIcon} aria-hidden="true" />
+        </span>
+      </summary>
+      <form onSubmit={handleSubmit} className={styles.profileForm}>
         <TextField
           label="Display name"
           name="name"
@@ -303,7 +323,7 @@ function ProfileSection() {
           {pending ? "Saving…" : "Save name"}
         </button>
       </form>
-    </Section>
+    </details>
   );
 }
 

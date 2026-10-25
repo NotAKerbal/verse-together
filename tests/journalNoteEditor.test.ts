@@ -5,7 +5,7 @@ import type { JournalNoteDocument } from "../src/features/notes/journal";
 
 // The editor's outbox and CodeMirror are out of scope here: only its header is checked.
 vi.mock("@/features/insights/InsightBuilderProvider", () => ({
-  useInsightBuilder: () => ({ journalOutbox: { flush: () => {}, discard: () => {} } }),
+  useInsightBuilder: () => ({ journalOutbox: { flush: () => {}, discard: () => {} }, deleteDraft: async () => {} }),
   useNoteOutboxEntry: () => undefined,
 }));
 vi.mock("../src/features/notes/LazyMarkdownEditor", () => ({ default: () => null }));
@@ -43,5 +43,20 @@ describe("Journal note editor header", () => {
     expect(html).toContain(`dateTime="${note.journal_date}"`);
     expect(html).toContain(formatDayHeading(note.journal_date));
     expect(html).not.toContain('aria-label="Close note"');
+  });
+});
+
+describe("Journal note editor deletion", () => {
+  test("drafts and archived notes offer Delete note, without asking until it is chosen", () => {
+    for (const status of ["draft", "archived"] as const) {
+      const html = renderToStaticMarkup(createElement(JournalNoteEditor, { note: { ...note, status } }));
+      expect(html).toContain(">Delete note</button>");
+      expect(html).not.toContain("Delete this note?");
+    }
+  });
+
+  test("published notes offer no deletion", () => {
+    const html = renderToStaticMarkup(createElement(JournalNoteEditor, { note: { ...note, status: "published" } }));
+    expect(html).not.toContain("Delete note");
   });
 });
