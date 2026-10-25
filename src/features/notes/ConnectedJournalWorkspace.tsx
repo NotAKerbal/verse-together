@@ -119,6 +119,9 @@ export default function ConnectedJournalWorkspace() {
   const onSelectDate = useCallback((date: string) => act({ type: "selectDate", date }), [act]);
   const onCloseNote = useCallback(() => act({ type: "closeNote" }), [act]);
   const onShowCalendar = useCallback(() => act({ type: "showCalendar" }), [act]);
+  // A deleted note closes like the X would, stepping back off its history entry, but only if it is still in
+  // view: the calendar, a day or another note chosen while it was being deleted stays as it is.
+  const onNoteDeleted = useCallback((noteId: string) => act({ type: "noteDeleted", noteId }), [act]);
 
   const onNewNote = useCallback(
     async (journalDate: string) => {
@@ -212,6 +215,7 @@ export default function ConnectedJournalWorkspace() {
       authorLabel={authorLabel}
       showDate={false}
       onClose={onCloseNote}
+      onDeleted={onNoteDeleted}
     />
   ) : openNoteLoading ? (
     <p role="status" className="text-sm text-[color:var(--foreground-muted)]">

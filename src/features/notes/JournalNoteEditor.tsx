@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder, useNoteOutboxEntry } from "@/features/insights/InsightBuilderProvider";
 import type { OutboxEntry } from "./journalOutbox";
 import { formatDayHeading, formatTime, type JournalNoteDocument } from "./journal";
@@ -12,6 +12,98 @@ import { NoteSourceLine } from "./NoteSourceLine";
 
 const SMALL_BUTTON_CLASS =
   "surface-button inline-flex h-8 items-center rounded-full border-2 px-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50";
+const DELETE_CONFIRM_CLASS =
+  "inline-flex h-8 items-center rounded-full border-2 border-[color:var(--accent-rubric)] bg-[color:var(--accent-rubric)] px-3 text-xs font-bold text-[color:var(--surface-button-active-text)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-card)] aria-disabled:cursor-wait aria-disabled:opacity-70";
+
+type DeleteStep = "idle" | "confirming" | "deleting" | "failed";
+
+/**
+ * "Delete note" and its confirmation. Nothing is deleted until the second, explicit choice; while the request
+ * runs the controls hold their place, and a failure keeps the note (and its text) open with a way to retry.
+ */
+function DeleteNoteControl({ onDelete }: { onDelete: () => Promise<void> }) {
+  const [step, setStep] = useState<DeleteStep>("idle");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+  const focusTrigger = useRef(false);
+  const titleId = useId();
+  const deleting = step === "deleting";
+
+  useEffect(() => {
+    if (step === "confirming") cancelRef.current?.focus();
+    if (step === "idle" && focusTrigger.current) {
+      focusTrigger.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [step]);
+
+  const cancel = () => {
+    if (deleting) return;
+    focusTrigger.current = true;
+    setStep("idle");
+  };
+
+  const confirm = async () => {
+    if (deleting) return;
+    setStep("deleting");
+    try {
+      await onDelete();
+      // Deleted: the surface closes the note, which unmounts this.
+    } catch {
+      setStep("failed");
+    }
+  };
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    // Handled here, so a surrounding sheet doesn't close on the same key.
+    event.preventDefault();
+    cancel();
+  };
+
+  if (step === "idle") {
+    return (
+      <button ref={triggerRef} type="button" onClick={() => setStep("confirming")} className={`${SMALL_BUTTON_CLASS} gap-1.5`}>
+        <FontAwesomeIcon icon={faTrashCan} className="h-3 w-3" aria-hidden="true" />
+        Delete note
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role="group"
+      aria-labelledby={titleId}
+      aria-busy={deleting}
+      onKeyDown={onKeyDown}
+      className="w-full space-y-2 rounded-[1rem] border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-3 text-sm"
+    >
+      <p id={titleId} className="font-semibold">
+        Delete this note?
+      </p>
+      <p className="text-xs text-[color:var(--foreground-muted)]">
+        It will be removed from your notes and calendar. This can&apos;t be undone.
+      </p>
+      {step === "failed" ? (
+        <p role="alert" className="text-xs font-semibold text-[color:var(--accent-rubric)]">
+          The note couldn&apos;t be deleted. Your text is still here; check your connection and try again.
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {/* aria-disabled rather than disabled keeps focus on it while the request runs. */}
+        <button type="button" aria-disabled={deleting} onClick={() => void confirm()} className={DELETE_CONFIRM_CLASS}>
+          {deleting ? "Deleting…" : step === "failed" ? "Try again" : "Delete note"}
+        </button>
+        <button ref={cancelRef} type="button" disabled={deleting} onClick={cancel} className={SMALL_BUTTON_CLASS}>
+          Cancel
+        </button>
+      </div>
+      <p role="status" className="sr-only">
+        {deleting ? "Deleting note…" : ""}
+      </p>
+    </div>
+  );
+}
 
 function SaveState({
   entry,
@@ -72,6 +164,7 @@ export default function JournalNoteEditor({
   authorLabel = "You",
   showDate = true,
   onClose,
+  onDeleted,
 }: {
   note: JournalNoteDocument;
   authorLabel?: string;
@@ -79,10 +172,17 @@ export default function JournalNoteEditor({
   showDate?: boolean;
   /** Closes the note's view (the X at its upper right); unmounting then saves anything still unsaved. */
   onClose?: () => void;
+  /**
+   * Called once the note has been deleted (the provider has already cleared it as the active note), so the surface
+   * can leave its view. It may arrive after another note was opened, so check that the deleted one is in view.
+   */
+  onDeleted?: (noteId: string) => void;
 }) {
-  const { journalOutbox } = useInsightBuilder();
+  const { journalOutbox, deleteDraft } = useInsightBuilder();
   const entry = useNoteOutboxEntry(journalOutbox, note.id);
   const readOnly = note.status !== "draft";
+  // Published notes stay: they may be shared, and the server refuses to delete them.
+  const canDelete = note.status !== "published";
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const noteId = note.id;
 
@@ -116,6 +216,11 @@ export default function JournalNoteEditor({
       setCopyNotice("Copy failed; select the text in the editor and copy it.");
     }
   }, [journalOutbox, noteId]);
+
+  const deleteNote = useCallback(async () => {
+    await deleteDraft(noteId);
+    onDeleted?.(noteId);
+  }, [deleteDraft, noteId, onDeleted]);
 
   const created = new Date(note.created_at).toISOString();
 
@@ -191,14 +296,19 @@ export default function JournalNoteEditor({
         )}
       </div>
 
-      {readOnly ? null : (
-        <footer className="min-h-6">
-          <SaveState
-            entry={entry}
-            onRetry={() => journalOutbox.retry(noteId)}
-            onCopy={() => void copyText()}
-            copyNotice={copyNotice}
-          />
+      {readOnly && !canDelete ? null : (
+        <footer className="flex min-h-6 flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {readOnly ? null : (
+              <SaveState
+                entry={entry}
+                onRetry={() => journalOutbox.retry(noteId)}
+                onCopy={() => void copyText()}
+                copyNotice={copyNotice}
+              />
+            )}
+          </div>
+          {canDelete ? <DeleteNoteControl onDelete={deleteNote} /> : null}
         </footer>
       )}
     </article>

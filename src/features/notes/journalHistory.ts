@@ -109,6 +109,9 @@ export class JournalHistory {
    * screen at its top), rather than the page moving first and the browser's restore scrolling it again.
    */
   go(from: JournalView, to: JournalView) {
+    // An action that changes nothing (say, a deletion finishing after the person moved elsewhere) returns the
+    // view on screen itself: nothing to show, and no step back off an entry it doesn't own.
+    if (to === from) return;
     const show = () => this.handlers.show(to);
     if (to.stage === "note") {
       show();

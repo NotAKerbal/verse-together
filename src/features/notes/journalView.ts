@@ -23,7 +23,9 @@ export type JournalViewAction =
   | { type: "selectDate"; date: string }
   | { type: "openNote"; noteId: string; date: string }
   | { type: "closeNote" }
-  | { type: "showCalendar" };
+  | { type: "showCalendar" }
+  /** A note's deletion has finished; it may land after the person has moved elsewhere. */
+  | { type: "noteDeleted"; noteId: string };
 
 /** The concrete view to render for the current state and data. */
 export function resolveJournalView(state: JournalViewState, context: JournalViewContext): JournalView {
@@ -50,5 +52,9 @@ export function nextJournalView(view: JournalView, action: JournalViewAction): J
       return { stage: "day", date: view.date, noteId: null };
     case "showCalendar":
       return { stage: "calendar", date: view.date, noteId: null };
+    case "noteDeleted":
+      // Closes the deleted note if it is still the one in view; any other view (the calendar, a day, another
+      // note chosen meanwhile) is returned as it is, which leaves history alone too.
+      return view.stage === "note" && view.noteId === action.noteId ? { stage: "day", date: view.date, noteId: null } : view;
   }
 }
