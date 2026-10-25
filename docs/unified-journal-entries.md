@@ -77,7 +77,10 @@ No existing field changes, and no migration runs.
   the text under a new request id, so saving again makes a new entry.
   - Each create stores `entryRequestFingerprint`, a hash of the content it wrote (`entryContentFingerprint` in
     `convex/noteJournal.ts`: text, day, source, reading).
-  - A retry while the entry is untouched replaces its content and fingerprint.
+  - A retry while the entry is untouched replaces its content and fingerprint. Untouched means no note revision
+    and the entry still holding exactly the fingerprinted content (its current fingerprint is compared, not
+    `updatedAt`), so a reading edit in the create's own millisecond still counts. An entry with no stored
+    fingerprint is treated as edited.
   - Once the entry has been edited (a note revision or a reading change), a retry repeating the fingerprinted
     content, or matching what the entry now holds, returns the entry as a duplicate. Any other retry throws
     `ConvexError({ code: "ENTRY_CONFLICT", id, journalDate })` and changes nothing.

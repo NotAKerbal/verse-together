@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { newBackend, signInAs } from "./convexAuthHarness";
@@ -202,8 +202,6 @@ describe("deleting and retrying unified entries", () => {
   test("a reading edit elsewhere also protects the entry from a changed retry", async () => {
     const { alice } = await setup();
     const first = created(await alice.mutation(api.insights.createJournalEntry, input));
-    // An edit is told apart by its later updatedAt, so let the clock move first.
-    await new Promise((resolve) => setTimeout(resolve, 5));
     await alice.mutation(api.insights.setJournalReading, { draftId: first, logged: true, source: { ...source, verseStart: 1, verseEnd: 2 } });
     expect((await alice.mutation(api.insights.createJournalEntry, input)).id).toBe(first);
     await expect(alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "Added later" })).rejects.toMatchObject({
@@ -212,6 +210,51 @@ describe("deleting and retrying unified entries", () => {
     const doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
     expect(doc.markdown_body).toBe("");
     expect(doc.source).toMatchObject({ verseStart: 1, verseEnd: 2 });
+  });
+
+  test("a reading edit in the create's own millisecond still protects the entry from a changed retry", async () => {
+    const { t, alice } = await setup();
+    // Freeze the clock through create, edit and retry, so the edit's updatedAt can't tell it apart.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-24T12:00:00Z"));
+      const first = created(await alice.mutation(api.insights.createJournalEntry, input));
+      await alice.mutation(api.insights.setJournalReading, {
+        draftId: first,
+        logged: true,
+        source: { ...source, verseStart: 1, verseEnd: 2 },
+        journalDate: "2026-10-23",
+      });
+      const row = (await t.run((ctx) => ctx.db.get(first)))!;
+      expect(row.updatedAt).toBe(row.createdAt);
+      expect(row.markdownRevision).toBe(0);
+
+      await expect(alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "Written here meanwhile" })).rejects.toMatchObject({
+        data: { code: "ENTRY_CONFLICT", id: first, journalDate: "2026-10-23" },
+      });
+      const doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+      expect(doc.markdown_body).toBe("");
+      expect(doc.journal_date).toBe("2026-10-23");
+      expect(doc.source).toMatchObject({ verseStart: 1, verseEnd: 2 });
+      expect(await t.run((ctx) => ctx.db.query("insightDrafts").collect())).toHaveLength(1);
+      // The unchanged retry is still the same save, and leaves the edit alone.
+      expect(await alice.mutation(api.insights.createJournalEntry, input)).toEqual({ id: first, duplicate: true, deleted: false });
+      expect((await alice.query(api.insights.getDraft, { draftId: first }))!.source).toMatchObject({ verseStart: 1, verseEnd: 2 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("an entry without a stored fingerprint is never overwritten by a changed retry", async () => {
+    const { t, alice } = await setup();
+    const first = created(await alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "Older entry" }));
+    await t.run((ctx) => ctx.db.patch(first, { entryRequestFingerprint: undefined }));
+    await expect(alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "Older entry, changed" })).rejects.toMatchObject({
+      data: { code: "ENTRY_CONFLICT", id: first },
+    });
+    // Matching what it holds is still the same save.
+    expect(await alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "Older entry" })).toEqual({ id: first, duplicate: true, deleted: false });
+    expect((await alice.query(api.insights.getDraft, { draftId: first }))!.markdown_body).toBe("Older entry");
   });
 
   test("request ids that look like older-reading keys are refused", async () => {

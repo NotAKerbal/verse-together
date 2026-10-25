@@ -499,7 +499,23 @@ export const createJournalEntry = mutation({
     const fingerprint = entryContentFingerprint({ ...content, logReading: args.logReading });
     const existing = await findEntryByKey(ctx, clerkId, args.requestId);
     if (existing) {
-      const untouched = (existing.markdownRevision ?? 0) === 0 && existing.updatedAt === existing.createdAt;
+      const current =
+        existing.markdownBody !== undefined && existing.journalDate !== undefined
+          ? entryContentFingerprint({
+              markdownBody: existing.markdownBody,
+              journalDate: existing.journalDate,
+              source: existing.source,
+              logReading: existing.readingAt !== undefined,
+            })
+          : null;
+      // Untouched: no note revision, and the entry still holds exactly what this request last wrote. The content is
+      // compared, not the clock, so a reading edit landing in the create's own millisecond still counts as an edit.
+      // An entry without a fingerprint can't show that and is treated as edited.
+      const untouched =
+        (existing.markdownRevision ?? 0) === 0 &&
+        existing.updatedAt === existing.createdAt &&
+        current !== null &&
+        current === existing.entryRequestFingerprint;
       if (untouched && existing.status === "draft") {
         await ctx.db.patch(existing._id, {
           ...content,
@@ -511,15 +527,6 @@ export const createJournalEntry = mutation({
       // Edited since (here or in another window). Repeating what this request last wrote, or matching what the
       // entry now holds, is the same save. Anything else would either drop the caller's changes or overwrite the
       // later edits, so it is refused, naming the entry; the client keeps its text to save as a separate entry.
-      const current =
-        existing.markdownBody !== undefined && existing.journalDate !== undefined
-          ? entryContentFingerprint({
-              markdownBody: existing.markdownBody,
-              journalDate: existing.journalDate,
-              source: existing.source,
-              logReading: existing.readingAt !== undefined,
-            })
-          : null;
       if (fingerprint === existing.entryRequestFingerprint || fingerprint === current) {
         return { id: existing._id, duplicate: true, deleted: false };
       }
