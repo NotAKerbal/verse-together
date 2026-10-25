@@ -19,8 +19,27 @@ export type EntryDraft = {
 /** Why the draft can't be saved yet (nothing was sent). */
 export class EntryDraftProblem extends Error {}
 
-/** A save whose entry had been deleted elsewhere meanwhile: the draft is kept, to be saved again as a new entry. */
-export type EntryDraftSaveResult = { id: string } | { id: null; deleted: true };
+/**
+ * The draft's save, held by the provider rather than by a composer, so closing and reopening the sheet mid-save
+ * still shows it in flight and then its outcome. After anything but `saved`, the draft keeps its text:
+ * - `failed`: the result is unknown, so Try again sends the same request id;
+ * - `deleted`: the entry was deleted elsewhere after an earlier attempt landed;
+ * - `conflict`: the entry (`id`, on `journalDate`) was edited elsewhere after an earlier attempt landed, so this
+ *   text was not added to it;
+ * - `kept`: the entry was saved, but the draft changed while it was saving, and those changes were not in it.
+ * Each of the last three gives the draft a new request id, so saving again makes a separate entry and never
+ * overwrites one.
+ */
+export type EntrySaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  | { status: "failed" }
+  | { status: "deleted" }
+  | { status: "conflict"; id: string; journalDate: string }
+  | { status: "kept"; id: string; journalDate: string };
+
+/** A save that made (or found) the entry `id`; null when it didn't, with the reason in the provider's EntrySaveState. */
+export type EntryDraftSaveResult = { id: string; journalDate: string } | { id: null };
 
 export type EntryDefaults = { source?: NoteSource | null; logReading?: boolean; journalDate?: string };
 
@@ -66,6 +85,29 @@ export function followEntrySource(draft: EntryDraft, source: NoteSource | null):
 
 function sourcePage(source: NoteSource): string {
   return `${source.kind}|${source.href.split(/[?#]/)[0]}`;
+}
+
+/** The same entry content under the same request id: what was sent is what the draft still holds. */
+export function sameEntryDraft(a: EntryDraft, b: EntryDraft): boolean {
+  return (
+    a.requestId === b.requestId &&
+    a.text === b.text &&
+    a.logReading === b.logReading &&
+    a.journalDate === b.journalDate &&
+    JSON.stringify(a.source) === JSON.stringify(b.source)
+  );
+}
+
+/**
+ * The draft after its save of `sent` landed. Only that exact content is cleared (starting again from its source);
+ * a draft changed meanwhile keeps its changes under a new request id ("kept"), unless the change was only the page
+ * following an untouched draft. A draft already replaced by another entry is left alone.
+ */
+export function settleSavedEntryDraft(current: EntryDraft, sent: EntryDraft): { draft: EntryDraft; kept: boolean } {
+  if (current.requestId !== sent.requestId) return { draft: current, kept: false };
+  if (sameEntryDraft(current, sent)) return { draft: freshEntryDraft({ source: sent.source }), kept: false };
+  if (isPristineEntry(current)) return { draft: freshEntryDraft({ source: current.source }), kept: false };
+  return { draft: { ...current, requestId: newRequestId() }, kept: true };
 }
 
 /** Why the draft can't be saved yet, or null. */

@@ -2,11 +2,12 @@
 
 // The unsaved journal entry: a blank note, ready to write in, with its reading chip above it and its day and Save
 // entry below. It can be saved as a note, a reading, or both, as one entry (the provider's saveEntryDraft); the
-// draft itself lives in the provider, so closing the panel or sheet keeps what was typed.
+// draft and its save live in the provider, so closing the panel or sheet keeps what was typed, and reopening it
+// mid-save shows that save (read-only) until it settles.
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
-import { EntryDraftProblem, followEntrySource, withLiveHref } from "./entryDraft";
+import { EntryDraftProblem, followEntrySource, withLiveHref, type EntrySaveState } from "./entryDraft";
 import LazyMarkdownEditor from "./LazyMarkdownEditor";
 import ReadingChip, { type ReadingOption } from "./ReadingChip";
 import { useConvexSignedIn } from "./useConvexSignedIn";
@@ -14,6 +15,26 @@ import { useConvexSignedIn } from "./useConvexSignedIn";
 const SAVE_FAILED = "Your entry wasn't saved. Your text is still here; check your connection and try again.";
 const DELETED_ELSEWHERE =
   "This entry was deleted in another window. Your text is still here: save again to keep it as a new entry.";
+const CHANGED_ELSEWHERE =
+  "This entry was changed in another window after it was first saved, so what's here wasn't added to it. Your text is still here: save it as a new entry, or open the saved one to compare.";
+const KEPT_CHANGES =
+  "Your entry was saved. Changes made while it was saving weren't included and are still here: save them as a new entry, or open the saved one.";
+
+/** What to tell the person about the provider's last save, if anything. */
+function saveNotice(save: EntrySaveState): string | null {
+  switch (save.status) {
+    case "failed":
+      return SAVE_FAILED;
+    case "deleted":
+      return DELETED_ELSEWHERE;
+    case "conflict":
+      return CHANGED_ELSEWHERE;
+    case "kept":
+      return KEPT_CHANGES;
+    default:
+      return null;
+  }
+}
 
 export default function JournalEntryComposer({
   options,
@@ -26,20 +47,22 @@ export default function JournalEntryComposer({
   options: ReadingOption[];
   /** The first option is the page in view: an untouched draft follows it as the page changes. */
   followPage?: boolean;
-  /** The entry was saved (and is now the active note). */
+  /** Show this entry, now the active note: the one just saved, or (Open saved entry) the one a save concerned. */
   onSaved: (id: string, journalDate: string) => void;
   /** Focus the note on opening (desktop; on phones the keyboard waits for a tap). */
   autoFocus?: boolean;
   /** A heading row above the entry, where the surface has none of its own. */
   heading?: ReactNode;
 }) {
-  const { entryDraft: draft, updateEntryDraft, saveEntryDraft } = useInsightBuilder();
+  const { entryDraft: draft, updateEntryDraft, saveEntryDraft, entrySave, openSavedEntry } = useInsightBuilder();
   const { ready } = useConvexSignedIn();
   const fieldId = useId();
-  const [saving, setSaving] = useState(false);
-  // `retry`: the save itself failed, so the same entry is sent again.
-  const [error, setError] = useState<{ message: string; retry: boolean } | null>(null);
-  const busy = useRef(false);
+  // Shared with every composer (and outliving this one), so a reopened sheet shows a save already in flight.
+  const saving = entrySave.status === "saving";
+  // Problems found before anything was sent; the provider's outcome otherwise.
+  const [problem, setProblem] = useState<string | null>(null);
+  const notice = problem ?? saveNotice(entrySave);
+  const detached = entrySave.status === "conflict" || entrySave.status === "kept" || entrySave.status === "deleted";
 
   // An untouched draft follows the page: navigating with the desktop panel open logs the chapter now shown.
   const pageSource = followPage ? (options[0]?.source ?? null) : null;
@@ -52,26 +75,24 @@ export default function JournalEntryComposer({
   const chipOptions = draft.source ? [...options, { source: draft.source }] : options;
 
   async function save() {
-    if (busy.current) return;
+    if (saving) return;
     if (!ready) {
-      setError({ message: "Still connecting to your account. Try again in a moment.", retry: false });
+      setProblem("Still connecting to your account. Try again in a moment.");
       return;
     }
-    const journalDate = draft.journalDate;
-    busy.current = true;
-    setSaving(true);
-    setError(null);
+    setProblem(null);
     try {
       const result = await saveEntryDraft();
-      if (result.id) onSaved(result.id, journalDate);
-      else setError({ message: DELETED_ELSEWHERE, retry: false });
+      if (result.id) onSaved(result.id, result.journalDate);
     } catch (cause) {
-      // A generic message: caught errors (Convex's included) can carry server internals.
-      setError(cause instanceof EntryDraftProblem ? { message: cause.message, retry: false } : { message: SAVE_FAILED, retry: true });
-    } finally {
-      busy.current = false;
-      setSaving(false);
+      // Only EntryDraftProblem rejects (nothing was sent); the provider reports everything else as entrySave.
+      setProblem(cause instanceof EntryDraftProblem ? cause.message : SAVE_FAILED);
     }
+  }
+
+  function openSaved() {
+    const entry = openSavedEntry();
+    if (entry) onSaved(entry.id, entry.journalDate);
   }
 
   return (
@@ -115,10 +136,19 @@ export default function JournalEntryComposer({
             autoFocus={autoFocus}
           />
         </div>
-        {error ? (
-          <p role="alert" className="text-sm font-semibold wrap-anywhere text-[color:var(--accent-rubric)]">
-            {error.message}
-          </p>
+        {notice ? (
+          <div role="alert" className="flex flex-col items-start gap-2">
+            <p className="text-sm font-semibold wrap-anywhere text-[color:var(--accent-rubric)]">{notice}</p>
+            {!problem && (entrySave.status === "conflict" || entrySave.status === "kept") ? (
+              <button
+                type="button"
+                onClick={openSaved}
+                className="surface-button inline-flex h-11 items-center rounded-full border-2 px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] lg:h-9"
+              >
+                Open saved entry
+              </button>
+            ) : null}
+          </div>
         ) : null}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label htmlFor={`${fieldId}-date`} className="min-w-0 space-y-1 text-sm font-semibold">
@@ -140,7 +170,7 @@ export default function JournalEntryComposer({
             disabled={saving || !ready}
             className="inline-flex h-11 shrink-0 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-5 text-sm font-bold text-[color:var(--surface-button-active-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50 lg:h-9 lg:px-4"
           >
-            {saving ? "Saving…" : error?.retry ? "Try again" : "Save entry"}
+            {saving ? "Saving…" : entrySave.status === "failed" ? "Try again" : detached ? "Save as new entry" : "Save entry"}
           </button>
         </div>
       </fieldset>

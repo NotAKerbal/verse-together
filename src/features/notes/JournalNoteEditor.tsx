@@ -12,10 +12,11 @@ import { useJournalEntryActions } from "./useJournalEntryActions";
 import NoteMarkdown from "./NoteMarkdown";
 import { NoteSourceLine } from "./NoteSourceLine";
 
+// 44px touch targets below lg (the phone sheet and journal), the compact size beside the desktop reader.
 const SMALL_BUTTON_CLASS =
-  "surface-button inline-flex h-8 items-center rounded-full border-2 px-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50";
+  "surface-button inline-flex h-11 items-center rounded-full border-2 px-4 text-sm font-bold lg:h-8 lg:px-3 lg:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50";
 const DELETE_CONFIRM_CLASS =
-  "inline-flex h-8 items-center rounded-full border-2 border-[color:var(--accent-rubric)] bg-[color:var(--accent-rubric)] px-3 text-xs font-bold text-[color:var(--surface-button-active-text)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-card)] aria-disabled:cursor-wait aria-disabled:opacity-70";
+  "inline-flex h-11 items-center rounded-full border-2 border-[color:var(--accent-rubric)] bg-[color:var(--accent-rubric)] px-4 text-sm font-bold lg:h-8 lg:px-3 lg:text-xs text-[color:var(--surface-button-active-text)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-card)] aria-disabled:cursor-wait aria-disabled:opacity-70";
 
 type DeleteStep = "idle" | "confirming" | "deleting" | "failed";
 
@@ -268,7 +269,7 @@ export default function JournalNoteEditor({
               onClick={onClose}
               aria-label="Close note"
               title="Close note"
-              className="-mr-2 -mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+              className="-mr-2 -mt-2 inline-flex h-11 w-11 shrink-0 lg:h-9 lg:w-9 items-center justify-center rounded-full text-[color:var(--foreground-muted)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
             >
               <FontAwesomeIcon icon={faXmark} className="h-4 w-4" aria-hidden="true" />
             </button>

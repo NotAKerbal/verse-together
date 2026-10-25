@@ -159,10 +159,59 @@ describe("deleting and retrying unified entries", () => {
     expect(await alice.query(api.insights.listMyJournal, {})).toHaveLength(1);
 
     await alice.mutation(api.insights.saveJournalNote, { draftId: first.id!, markdownBody: "Edited in the entry", expectedRevision: 0 });
-    await alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "A stale retry", logReading: true });
+    await expect(
+      alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "A stale retry", logReading: true })
+    ).rejects.toMatchObject({ data: { code: "ENTRY_CONFLICT", id: first.id } });
     doc = (await alice.query(api.insights.getDraft, { draftId: first.id! }))!;
     expect(doc.markdown_body).toBe("Edited in the entry");
     expect(doc.reading_at).toBeNull();
+    // The content the request last wrote is still the same save.
+    expect(await alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "First words, finished", logReading: false })).toEqual(retried);
+  });
+
+  test("after a lost response and an edit elsewhere, an unchanged retry succeeds and a changed one conflicts", async () => {
+    const { t, alice } = await setup();
+    const sent = { ...input, markdownBody: "Morning thoughts", logReading: true };
+    const first = created(await alice.mutation(api.insights.createJournalEntry, sent));
+    // Another window edits the entry while this one never heard back.
+    await alice.mutation(api.insights.saveJournalNote, { draftId: first, markdownBody: "Morning thoughts, edited elsewhere", expectedRevision: 0 });
+
+    // Nothing new here: the same save, and the other window's edit stays.
+    expect(await alice.mutation(api.insights.createJournalEntry, sent)).toEqual({ id: first, duplicate: true, deleted: false });
+    // Text added here since: refused with the entry named, never overwriting the edit or reporting this text saved.
+    await expect(
+      alice.mutation(api.insights.createJournalEntry, { ...sent, markdownBody: "Morning thoughts and more written here" })
+    ).rejects.toMatchObject({ data: { code: "ENTRY_CONFLICT", id: first, journalDate: input.journalDate } });
+    // A changed day or dropped reading is a change too.
+    for (const change of [{ journalDate: "2026-10-23" }, { logReading: false }]) {
+      await expect(alice.mutation(api.insights.createJournalEntry, { ...sent, ...change })).rejects.toMatchObject({
+        data: { code: "ENTRY_CONFLICT" },
+      });
+    }
+    const doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect(doc.markdown_body).toBe("Morning thoughts, edited elsewhere");
+    expect(doc.journal_date).toBe(input.journalDate);
+    expect(doc.reading_at).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("insightDrafts").collect())).toHaveLength(1);
+    // A retry matching what the entry now holds is the same save as well.
+    expect(
+      await alice.mutation(api.insights.createJournalEntry, { ...sent, markdownBody: "Morning thoughts, edited elsewhere" })
+    ).toEqual({ id: first, duplicate: true, deleted: false });
+  });
+
+  test("a reading edit elsewhere also protects the entry from a changed retry", async () => {
+    const { alice } = await setup();
+    const first = created(await alice.mutation(api.insights.createJournalEntry, input));
+    // An edit is told apart by its later updatedAt, so let the clock move first.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await alice.mutation(api.insights.setJournalReading, { draftId: first, logged: true, source: { ...source, verseStart: 1, verseEnd: 2 } });
+    expect((await alice.mutation(api.insights.createJournalEntry, input)).id).toBe(first);
+    await expect(alice.mutation(api.insights.createJournalEntry, { ...input, markdownBody: "Added later" })).rejects.toMatchObject({
+      data: { code: "ENTRY_CONFLICT", id: first },
+    });
+    const doc = (await alice.query(api.insights.getDraft, { draftId: first }))!;
+    expect(doc.markdown_body).toBe("");
+    expect(doc.source).toMatchObject({ verseStart: 1, verseEnd: 2 });
   });
 
   test("request ids that look like older-reading keys are refused", async () => {

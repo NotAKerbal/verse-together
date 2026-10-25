@@ -222,13 +222,14 @@ export default function ReadingChip({
           )}
           {scripture ? (
             <div className="space-y-3">
+              {/* Unlayered .segmented-control-button outranks plain utilities: 44px below lg, its own size above. */}
               <div role="group" aria-label="Reading range" className="segmented-control flex">
                 <button
                   type="button"
                   aria-pressed={!part}
                   disabled={saving}
                   onClick={() => setPart(false)}
-                  className="segmented-control-button min-h-11 flex-1 lg:min-h-0"
+                  className="segmented-control-button flex-1 max-lg:min-h-11!"
                   data-active={!part}
                 >
                   Whole chapter
@@ -238,7 +239,7 @@ export default function ReadingChip({
                   aria-pressed={part}
                   disabled={saving}
                   onClick={() => setPart(true)}
-                  className="segmented-control-button min-h-11 flex-1 lg:min-h-0"
+                  className="segmented-control-button flex-1 max-lg:min-h-11!"
                   data-active={part}
                 >
                   Verses

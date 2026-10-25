@@ -166,6 +166,9 @@ export default defineSchema({
     readingAt: v.optional(v.number()),
     // The client request that created the entry, so a retried create finds it instead of adding another.
     entryRequestId: v.optional(v.string()),
+    // noteJournal's entryContentFingerprint of the content that request last wrote: a later retry carrying the same
+    // content is the same save; one carrying other content is refused once the entry has been edited since.
+    entryRequestFingerprint: v.optional(v.string()),
     // An older reading opened as this entry (see noteJournal's history keys): the original is kept but no
     // longer listed on its own.
     readingHistoryKey: v.optional(v.string()),

@@ -17,6 +17,7 @@ import {
   NOTE_MARKDOWN_MAX,
   noteSourceValidator,
   chapterReadHistoryKey,
+  entryContentFingerprint,
   isHistoryKey,
   readingLogHistoryKey,
   requestIdProblem,
@@ -465,7 +466,9 @@ export const createJournalNote = mutation({
 /**
  * One private journal entry with note text, reading, or both, created atomically. A retry with the same request
  * id returns the same entry; while nothing has edited that entry since, the retry's content replaces it, so an
- * edit made before retrying a lost response isn't dropped. An entry deleted meanwhile stays deleted.
+ * edit made before retrying a lost response isn't dropped. Once the entry has been edited, a retry with other
+ * content is refused (ENTRY_CONFLICT) rather than overwriting those edits or reporting its own content as saved.
+ * An entry deleted meanwhile stays deleted.
  */
 export const createJournalEntry = mutation({
   args: {
@@ -493,6 +496,7 @@ export const createJournalEntry = mutation({
       journalDate: args.journalDate,
       source,
     };
+    const fingerprint = entryContentFingerprint({ ...content, logReading: args.logReading });
     const existing = await findEntryByKey(ctx, clerkId, args.requestId);
     if (existing) {
       const untouched = (existing.markdownRevision ?? 0) === 0 && existing.updatedAt === existing.createdAt;
@@ -500,9 +504,31 @@ export const createJournalEntry = mutation({
         await ctx.db.patch(existing._id, {
           ...content,
           readingAt: args.logReading ? existing.readingAt ?? existing.createdAt : undefined,
+          entryRequestFingerprint: fingerprint,
         });
+        return { id: existing._id, duplicate: true, deleted: false };
       }
-      return { id: existing._id, duplicate: true, deleted: false };
+      // Edited since (here or in another window). Repeating what this request last wrote, or matching what the
+      // entry now holds, is the same save. Anything else would either drop the caller's changes or overwrite the
+      // later edits, so it is refused, naming the entry; the client keeps its text to save as a separate entry.
+      const current =
+        existing.markdownBody !== undefined && existing.journalDate !== undefined
+          ? entryContentFingerprint({
+              markdownBody: existing.markdownBody,
+              journalDate: existing.journalDate,
+              source: existing.source,
+              logReading: existing.readingAt !== undefined,
+            })
+          : null;
+      if (fingerprint === existing.entryRequestFingerprint || fingerprint === current) {
+        return { id: existing._id, duplicate: true, deleted: false };
+      }
+      throw new ConvexError({
+        code: "ENTRY_CONFLICT",
+        message: "This entry changed since it was first saved",
+        id: existing._id,
+        journalDate: existing.journalDate ?? journalDateFromTimestamp(existing.createdAt),
+      });
     }
     const id = await ctx.db.insert("insightDrafts", {
       clerkId,
@@ -513,6 +539,7 @@ export const createJournalEntry = mutation({
       markdownRevision: 0,
       readingAt: args.logReading ? now : undefined,
       entryRequestId: args.requestId,
+      entryRequestFingerprint: fingerprint,
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
