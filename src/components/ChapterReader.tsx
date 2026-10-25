@@ -33,7 +33,7 @@ import { useSimpleMode } from "@/lib/simpleMode";
 import { getDefaultPreferences, loadPreferences, savePreferences, hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
-import ChapterReadToggle from "@/features/plans/ChapterReadToggle";
+import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
@@ -550,6 +550,7 @@ export default function ChapterReader({
   const { user, getToken, promptSignIn } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
+  useTrackLastPosition(volume, book, chapter);
   const annotationsApi = (api as any).annotations;
   const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
     volume,
@@ -1504,6 +1505,7 @@ export default function ChapterReader({
           <ChapterHeader
             volume={volume}
             book={book}
+            chapter={chapter}
             reference={reference}
             breadcrumbs={breadcrumbs}
             logOptions={readingLogOptions}
@@ -1738,7 +1740,6 @@ export default function ChapterReader({
                         );
                       })}
                     </ol>
-                    <ChapterReadToggle volume={volume} book={book} chapter={chapter} />
                   </>
                 )}
               </ChapterText>

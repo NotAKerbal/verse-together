@@ -1,5 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
-import { auth } from "@clerk/nextjs/server";
+import { getServerViewer } from "@/lib/auth-server";
 import { NextRequest, NextResponse } from "next/server";
 import {
   CHAPTER_INSIGHT_PROMPT_VERSION,
@@ -94,16 +94,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "AI insights are not configured yet." }, { status: 503 });
   }
 
-  const authState = await auth();
-  if (!authState.userId) {
+  const { viewer, token: convexToken } = await getServerViewer();
+  if (!viewer) {
     return NextResponse.json({ error: "Sign in to generate chapter insights." }, { status: 401 });
-  }
-
-  let convexToken: string | null = null;
-  try {
-    convexToken = await authState.getToken({ template: "convex" });
-  } catch (error) {
-    console.warn("Could not get a Convex token for chapter insight caching", error);
   }
 
   try {

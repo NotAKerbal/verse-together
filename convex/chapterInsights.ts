@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { requireClerkId } from "./utils";
 
 const insightSource = v.object({
@@ -84,10 +84,11 @@ export const upsertChapterInsight = mutation({
   },
 });
 
-export const upsertChapterInsightBatch = mutation({
+// Operator-only bulk import (scripts/processChapterInsightsBatch.mjs via `npx convex run`). Internal, so
+// it needs deployment access rather than a user session.
+export const upsertChapterInsightBatch = internalMutation({
   args: { entries: v.array(chapterInsightEntry) },
   handler: async (ctx, { entries }) => {
-    await requireClerkId(ctx);
     const updatedAt = Date.now();
     for (const entry of entries) {
       const existing = await ctx.db

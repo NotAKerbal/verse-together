@@ -122,8 +122,6 @@ if (shouldWrite) {
         "run",
         "chapterInsights:upsertChapterInsightBatch",
         JSON.stringify({ entries: chunk }),
-        "--identity",
-        JSON.stringify({ subject: "chapter-insights-batch-import", issuer: "verse-together" }),
         "--typecheck",
         "disable",
         "--codegen",

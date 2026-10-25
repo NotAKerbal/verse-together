@@ -63,17 +63,24 @@ function ListIcon() {
   );
 }
 
-/** The button that opens the drawer. Hidden by CSS while the rail is showing. */
+/**
+ * The button that opens the drawer: the study guide's one Contents button, in its controls pill
+ * (`.guide-header-actions` in globals.css), which StudyCompanion portals into the app header at every width,
+ * outside this page. It uses only global styles and page-independent ones, and stays visible beside the rail,
+ * opening the drawer there too. Its label hides where the header is narrow; its name stays.
+ */
 export function ContentsOpener({ onOpen }: { onOpen: (opener: HTMLElement) => void }) {
   return (
     <button
       type="button"
-      className={styles.contentsOpener}
+      className="reader-toolbar-button guide-header-contents"
       aria-haspopup="dialog"
+      aria-label="Contents"
+      title="Contents"
       onClick={(event) => onOpen(event.currentTarget)}
     >
       <ListIcon />
-      <span className={styles.contentsOpenerLabel}>Contents</span>
+      <span className="guide-header-label">Contents</span>
     </button>
   );
 }
@@ -174,8 +181,8 @@ function ContentsList({ variant, toc, active, currentChapter, toggled, onToggle,
 /**
  * The guide's contents, outside the reading region. Wide screens: a rail fixed in the page's left margin,
  * which costs the reading region no width; the region centers in the room to its right. Otherwise: a modal
- * drawer opened from a compact Contents button (native <dialog>: Escape closes it, focus stays inside, and
- * returns to the button).
+ * drawer opened from the app header's Contents button (native <dialog>: Escape closes it, focus stays inside,
+ * and returns to the button). That button shows in every layout, so it opens the drawer beside the rail too.
  */
 export default function ContentsNav({ toc, handle, subscribe, getActive, contentLeft, layoutKey, onNavigate }: Props) {
   const active = useSyncExternalStore(subscribe, getActive, () => null);
@@ -185,6 +192,8 @@ export default function ContentsNav({ toc, handle, subscribe, getActive, content
   const drawerListRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const restoreFocusRef = useRef(true);
+  /** Whether the open drawer was opened, or has since been, beside the showing rail (from the header's button). */
+  const besideRailRef = useRef(false);
 
   /** Each contents entry's chapter (or section) row, so the current one can stay expanded. */
   const groupOf = useMemo(() => {
@@ -205,6 +214,8 @@ export default function ContentsNav({ toc, handle, subscribe, getActive, content
         if (!dialog || dialog.open) return;
         openerRef.current = opener;
         restoreFocusRef.current = true;
+        const rail = railRef.current;
+        besideRailRef.current = !!rail && getComputedStyle(rail).display !== "none";
         dialog.showModal();
         // Start at the current section rather than the top of a long list.
         const current = dialog.querySelector<HTMLElement>("[aria-current]");
@@ -217,9 +228,9 @@ export default function ContentsNav({ toc, handle, subscribe, getActive, content
     []
   );
 
-  // Rail: size it to the margin it actually has, and stand it down (the Contents buttons show instead) where
-  // that is too narrow, e.g. with the Notebook panel open. The CSS has already decided the first paint. The
-  // width goes on the page, which centers the reading region beside the rail by the same value.
+  // Rail: size it to the margin it actually has, and stand it down (the header's Contents button opens the
+  // drawer instead) where that is too narrow, e.g. with the Notebook panel open. The CSS has already decided the
+  // first paint. The width goes on the page, which centers the reading region beside the rail by the same value.
   useEffect(() => {
     const rail = railRef.current;
     const page = rail?.parentElement;
@@ -234,9 +245,14 @@ export default function ContentsNav({ toc, handle, subscribe, getActive, content
         delete rail.dataset.blocked;
         page.style.setProperty("--cfm-rail-w", `${Math.min(RAIL_MAX, Math.floor(available))}px`);
       }
-      // A drawer left open while the window widened into the rail layout is no longer needed.
+      // A drawer left open while the window widened into the rail layout is no longer needed. One opened
+      // beside the rail (the header's Contents button stays visible there) was asked for, and stays.
       const dialog = dialogRef.current;
-      if (dialog?.open && getComputedStyle(rail).display !== "none") dialog.close();
+      if (dialog?.open) {
+        const railShowing = getComputedStyle(rail).display !== "none";
+        if (railShowing && !besideRailRef.current) dialog.close();
+        else besideRailRef.current = railShowing;
+      }
     };
     const schedule = () => {
       if (!frame) frame = window.requestAnimationFrame(measure);

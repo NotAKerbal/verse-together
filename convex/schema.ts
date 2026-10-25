@@ -16,7 +16,15 @@ const scriptureResourceCoverage = v.object({
 
 export default defineSchema({
   users: defineTable({
+    // Stable app owner key referenced by every owned table's `clerkId` column. Legacy accounts keep
+    // their Clerk user id here; accounts created after the Better Auth cutover use their Better Auth
+    // user id. The column keeps its legacy name so existing rows and indexes need no rewrite.
     clerkId: v.string(),
+    // Better Auth user id (JWT subject) that is allowed to act as this app user. Set on sign-up for new
+    // accounts, or by the internal admin migration (convex/authMigration.ts) for legacy Clerk accounts.
+    authUserId: v.optional(v.string()),
+    authLinkedAt: v.optional(v.number()),
+    authLinkSource: v.optional(v.union(v.literal("better-auth-signup"), v.literal("admin-migration"))),
     email: v.optional(v.string()),
     displayName: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
@@ -25,7 +33,19 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_clerk_id", ["clerkId"])
+    .index("by_auth_user_id", ["authUserId"])
     .index("by_email", ["email"]),
+
+  // Better Auth rate-limit buckets (convex/authRateLimit.ts). `key` is a SHA-256 of Better Auth's
+  // `ip|path` key; rows past `expiresAt` are dead and pruned as new windows open.
+  authRateLimits: defineTable({
+    key: v.string(),
+    count: v.number(),
+    windowStart: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_expires_at", ["expiresAt"]),
 
   readerPreferences: defineTable({
     clerkId: v.string(),
@@ -95,7 +115,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_created_at", ["createdAt"])
-    .index("by_chapter", ["volume", "book", "chapter"]),
+    .index("by_chapter", ["volume", "book", "chapter"])
+    .index("by_clerk_id", ["clerkId"]),
 
   scriptureComments: defineTable({
     shareId: v.id("scriptureShares"),
@@ -116,7 +137,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_share", ["shareId"])
-    .index("by_share_user_reaction", ["shareId", "clerkId", "reaction"]),
+    .index("by_share_user_reaction", ["shareId", "clerkId", "reaction"])
+    .index("by_clerk_id", ["clerkId"]),
 
   insightDrafts: defineTable({
     clerkId: v.string(),
@@ -615,5 +637,6 @@ export default defineSchema({
   })
     .index("by_volume", ["volume"])
     .index("by_volume_book", ["volume", "book"])
-    .index("by_scope", ["volume", "book", "chapterStart", "chapterEnd"]),
+    .index("by_scope", ["volume", "book", "chapterStart", "chapterEnd"])
+    .index("by_created_by", ["createdByClerkId"]),
 });

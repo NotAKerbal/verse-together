@@ -1,5 +1,7 @@
+import Image from "next/image";
 import BrowseLink from "@/components/BrowseLink";
 import SelectionHeader from "@/components/SelectionHeader";
+import { getScriptureBookArt } from "@/lib/scriptureBookArt";
 
 export type VolumeBookBrowserItem = {
   id: string;
@@ -52,15 +54,21 @@ export default function VolumeBookBrowser({
         </div>
       ) : (
         <ul className="browse-grid">
-          {books.map((book, index) => (
+          {books.map((book) => (
             <li key={book.id}>
               <BrowseLink
                 href={book.href ?? `/browse/${volumeSlug}/${book.id}`}
                 className="panel-card interactive-card group flex h-full items-center gap-4 px-4 py-4"
                 data-tap
               >
-                <div className="icon-chip h-11 w-11 shrink-0 text-[0.78rem] font-extrabold tracking-[0.02em]">
-                  {(index + 1).toString().padStart(2, "0")}
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[color:var(--surface-card-soft)] sm:h-20 sm:w-20">
+                  <Image
+                    src={getScriptureBookArt(volumeSlug, book.id)}
+                    alt=""
+                    width={80}
+                    height={80}
+                    className="h-full w-full object-cover"
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   {book.category ? (

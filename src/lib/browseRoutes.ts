@@ -349,6 +349,22 @@ const BOOK_GROUPS: Record<string, Array<{ label: string; books: string[] }>> = {
     { label: "General Epistles", books: ["james", "1peter", "2peter", "1john", "2john", "3john", "jude"] },
     { label: "Apocalypse", books: ["revelation"] },
   ],
+  bookofmormon: [
+    { label: "Small Plates", books: ["1nephi", "2nephi", "jacob", "enos", "jarom", "omni"] },
+    {
+      label: "Mormon's Record",
+      books: ["wordsofmormon", "mosiah", "alma", "helaman", "3nephi", "4nephi", "mormon"],
+    },
+    { label: "Jaredite Record", books: ["ether"] },
+    { label: "Moroni's Writings", books: ["moroni"] },
+  ],
+  pearl: [
+    { label: "Moses and Abraham", books: ["moses", "abraham"] },
+    {
+      label: "Joseph Smith's Writings",
+      books: ["josephsmithmatthew", "josephsmithhistory", "articlesoffaith"],
+    },
+  ],
 };
 
 const CATEGORY_BY_BOOK = new Map<string, string>(

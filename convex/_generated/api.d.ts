@@ -10,15 +10,23 @@
 
 import type * as annotationRules from "../annotationRules.js";
 import type * as annotations from "../annotations.js";
+import type * as auth from "../auth.js";
+import type * as authEmail from "../authEmail.js";
+import type * as authEnvironment from "../authEnvironment.js";
+import type * as authMigration from "../authMigration.js";
+import type * as authProxy from "../authProxy.js";
+import type * as authRateLimit from "../authRateLimit.js";
 import type * as cache from "../cache.js";
 import type * as chapterInsights from "../chapterInsights.js";
 import type * as crons from "../crons.js";
 import type * as feedCache from "../feedCache.js";
 import type * as feedEpisodes from "../feedEpisodes.js";
 import type * as feedback from "../feedback.js";
+import type * as http from "../http.js";
 import type * as insights from "../insights.js";
 import type * as noteFolders from "../noteFolders.js";
 import type * as noteJournal from "../noteJournal.js";
+import type * as ownership from "../ownership.js";
 import type * as preferences from "../preferences.js";
 import type * as readingPlans from "../readingPlans.js";
 import type * as readingProgress from "../readingProgress.js";
@@ -36,15 +44,23 @@ import type {
 declare const fullApi: ApiFromModules<{
   annotationRules: typeof annotationRules;
   annotations: typeof annotations;
+  auth: typeof auth;
+  authEmail: typeof authEmail;
+  authEnvironment: typeof authEnvironment;
+  authMigration: typeof authMigration;
+  authProxy: typeof authProxy;
+  authRateLimit: typeof authRateLimit;
   cache: typeof cache;
   chapterInsights: typeof chapterInsights;
   crons: typeof crons;
   feedCache: typeof feedCache;
   feedEpisodes: typeof feedEpisodes;
   feedback: typeof feedback;
+  http: typeof http;
   insights: typeof insights;
   noteFolders: typeof noteFolders;
   noteJournal: typeof noteJournal;
+  ownership: typeof ownership;
   preferences: typeof preferences;
   readingPlans: typeof readingPlans;
   readingProgress: typeof readingProgress;
@@ -80,4 +96,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+};

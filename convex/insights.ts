@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId } from "./utils";
 import { normalizeScriptureVolume } from "../src/lib/scriptureVolumes";
 import {
   appendMarkdownChunk,
@@ -88,8 +88,7 @@ function looseBookKey(book: string): string {
 }
 
 async function maybeClerkId(ctx: any): Promise<string | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.subject ?? null;
+  return await getViewerClerkId(ctx);
 }
 
 async function areFriends(ctx: any, a: string, b: string): Promise<boolean> {
@@ -230,7 +229,8 @@ async function appendBlockToMarkdown(ctx: any, draft: any, block: any, now: numb
 export const listMyDrafts = query({
   args: {},
   handler: async (ctx) => {
-    const clerkId = await requireClerkId(ctx);
+    const clerkId = await maybeClerkId(ctx);
+    if (!clerkId) return [];
     const drafts = await ctx.db
       .query("insightDrafts")
       .withIndex("by_clerk_last_active", (q: any) => q.eq("clerkId", clerkId))
@@ -263,7 +263,8 @@ export const listMyDrafts = query({
 export const getDraft = query({
   args: { draftId: v.id("insightDrafts") },
   handler: async (ctx, args) => {
-    const clerkId = await requireClerkId(ctx);
+    const clerkId = await maybeClerkId(ctx);
+    if (!clerkId) return null;
     const draft = await getDraftOrThrow(ctx, args.draftId, clerkId);
     const blocks = await draftBlocks(ctx, args.draftId);
     return {
@@ -352,10 +353,12 @@ export const getSharedDraft = query({
   args: { draftId: v.id("insightDrafts") },
   handler: async (ctx, args) => {
     const draft = await ctx.db.get(args.draftId);
-    if (!draft) throw new Error("Draft not found");
+    if (!draft) return null;
     const viewerClerkId = await maybeClerkId(ctx);
     const visible = await canViewInsight(ctx, draft, viewerClerkId, true);
-    if (!visible) throw new Error("You do not have access to this insight");
+    // An active shared-note subscription can lose access during sign-out or revocation.
+    // Withdraw the content without throwing through the page's React tree.
+    if (!visible) return null;
 
     const author = await ctx.db
       .query("users")
@@ -488,7 +491,9 @@ export const saveJournalNote = mutation({
 export const listMyJournal = query({
   args: {},
   handler: async (ctx) => {
-    const clerkId = await requireClerkId(ctx);
+    // A live subscription re-runs as soon as sign-out deletes the session: answer empty, never throw.
+    const clerkId = await maybeClerkId(ctx);
+    if (!clerkId) return [];
     const me = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))

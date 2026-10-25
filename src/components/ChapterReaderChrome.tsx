@@ -5,9 +5,9 @@
 // ChapterReaderShell draws the same page before the chapter's route has arrived, so opening a chapter shows its
 // page at once and only the text comes in later (fading in; see ChapterReader).
 
-import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
+import { faBook, faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Children, Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Children, Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,15 @@ import type { Crumb } from "./Breadcrumbs";
 import { ChapterLink, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import { useReaderHeaderDock } from "./ReaderHeaderSlot";
 import ReaderSearchButton from "./ReaderSearchButton";
-import ReadingLogButton, { type ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import type { ReadingLogOption } from "@/features/notes/ReadingLogButton";
+import { useBelowLg } from "@/features/notes/useBelowLg";
+import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import {
+  useInsightBuilder,
+  type ReaderChapter,
+  type ReaderChapterRegistration,
+} from "@/features/insights/InsightBuilderProvider";
+import { useAuth } from "@/lib/auth";
 import type { ChapterChrome } from "@/lib/browseRoutes";
 import { useSimpleMode } from "@/lib/simpleMode";
 
@@ -25,6 +33,7 @@ export const READER_HEADER_BUTTON_CLASS = "reader-toolbar-button";
 type ChapterHeaderProps = {
   volume: string;
   book: string;
+  chapter: number;
   reference: string;
   breadcrumbs: Crumb[];
   logOptions: ReadingLogOption[];
@@ -50,6 +59,69 @@ function headerCrumbs(breadcrumbs: Crumb[], volume: string, book: string) {
 }
 
 /**
+ * Opens the shared Log and Notes panel on Log: the desktop panel, or below lg the phone sheet. While the panel shows
+ * Log it closes it. Signed out, it asks to sign in.
+ */
+function ReaderLogToggle({ reference }: { reference: string }) {
+  const { user, promptSignIn } = useAuth();
+  const { loading } = useConvexSignedIn();
+  const belowLg = useBelowLg();
+  const { isPanelOpen, isSheetOpen, panelView, openPanel, setPanelView, setSheetOpen, closeBuilder } = useInsightBuilder();
+  const expanded = !!user && (belowLg ? isSheetOpen : isPanelOpen && panelView === "log");
+
+  function toggle() {
+    if (!user) {
+      void promptSignIn();
+      return;
+    }
+    if (belowLg) {
+      if (isSheetOpen) setSheetOpen(false);
+      else {
+        setPanelView("log");
+        setSheetOpen(true);
+      }
+    } else if (expanded) {
+      closeBuilder();
+    } else {
+      openPanel("log");
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      data-notebook-launcher
+      onClick={toggle}
+      disabled={loading}
+      aria-expanded={expanded}
+      aria-label={`Log and notes for ${reference}`}
+      title="Log and notes"
+      className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-log`}
+    >
+      <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />
+      <span className="reader-toolbar-log-label">Log</span>
+    </button>
+  );
+}
+
+/** Keeps the shared panel's Log view on this header's chapter while it is mounted (the latest mounted wins). */
+function useRegisterReaderChapter(readerChapter: ReaderChapter) {
+  const { registerReaderChapter } = useInsightBuilder();
+  const registrationRef = useRef<ReaderChapterRegistration | null>(null);
+  useEffect(() => {
+    const registration = registerReaderChapter();
+    registrationRef.current = registration;
+    return () => {
+      registrationRef.current = null;
+      registration.unregister();
+    };
+  }, [registerReaderChapter]);
+  useEffect(() => {
+    registrationRef.current?.update(readerChapter);
+  }, [readerChapter, registerReaderChapter]);
+}
+
+/**
  * The chapter's header: search, where the chapter sits, Log, simple mode and reader settings, in a pill matching the
  * floating navigation's. On wide screens it is drawn in the app header, to the right of the navigation (see
  * ReaderHeaderSlot); narrower screens keep it at the top of the page. The loaded reader and the page shown while a
@@ -58,6 +130,7 @@ function headerCrumbs(breadcrumbs: Crumb[], volume: string, book: string) {
 export function ChapterHeader({
   volume,
   book,
+  chapter,
   reference,
   breadcrumbs,
   logOptions,
@@ -71,6 +144,11 @@ export function ChapterHeader({
   const dock = useReaderHeaderDock(!simpleMode && !covered);
   const crumbs = useMemo(() => headerCrumbs(breadcrumbs, volume, book), [breadcrumbs, volume, book]);
   const hasNotes = Children.toArray(children).length > 0;
+  const readerChapter = useMemo<ReaderChapter>(
+    () => ({ volume, book, chapter, reference, logOptions, logReady }),
+    [volume, book, chapter, reference, logOptions, logReady]
+  );
+  useRegisterReaderChapter(readerChapter);
 
   const toolbar = (
     <div role="group" aria-label={`${reference} reader controls`} className="reader-toolbar simple-hide">
@@ -105,14 +183,7 @@ export function ChapterHeader({
         </nav>
       </div>
       <div className="reader-toolbar-group reader-toolbar-actions">
-        <ReadingLogButton
-          variant="toolbar"
-          label="Log"
-          ariaLabel={`Log reading of ${reference}`}
-          followLocation
-          options={logOptions}
-          disabled={!logReady}
-        />
+        <ReaderLogToggle reference={reference} />
         <button
           type="button"
           aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
@@ -256,8 +327,8 @@ export function chapterLogOptions(
 
 /**
  * A chapter's page before its route has arrived: the reader's real header, breadcrumbs, title, and chapter links
- * (all usable), with the text area empty. Controls that need the chapter itself (Log, reader settings) are shown
- * disabled. It never shows another chapter's actions: nothing here belongs to the page it replaces.
+ * (all usable), with the text area empty. Reader settings are shown disabled, and Log's form waits for the text.
+ * It never shows another chapter's actions: nothing here belongs to the page it replaces.
  */
 export function ChapterReaderShell({ chrome }: { chrome: ChapterChrome }) {
   const logOptions = useMemo(() => chapterLogOptions(chrome, chrome.reference, chrome.pathname), [chrome]);
@@ -268,6 +339,7 @@ export function ChapterReaderShell({ chrome }: { chrome: ChapterChrome }) {
           <ChapterHeader
             volume={chrome.volumeSlug}
             book={chrome.book}
+            chapter={chrome.chapter}
             reference={chrome.reference}
             breadcrumbs={chrome.breadcrumbs}
             logOptions={logOptions}

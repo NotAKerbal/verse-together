@@ -1,14 +1,18 @@
 import Link from "next/link";
-import {StrictMode,useEffect,useMemo,useState} from "react";
+import {StrictMode,useEffect,useMemo,useRef,useState} from "react";
 import {createRoot} from "react-dom/client";
 import NotesSidebar from "../../src/features/notes/NotesSidebar";
+import NotesSheet from "../../src/features/notes/NotesSheet";
+import ChapterLogView from "../../src/features/notes/ChapterLogView";
+import type {ReadingLogAttempt} from "../../src/features/notes/ReadingLogButton";
+import type {ChapterMarkAttempt} from "../../src/features/plans/ChapterReadToggle";
 import JournalWorkspace from "../../src/features/notes/JournalWorkspace";
 import ReadingLogButton from "../../src/features/notes/ReadingLogButton";
 import JournalNoteEditor from "../../src/features/notes/JournalNoteEditor";
 import {JournalOutbox} from "../../src/features/notes/journalOutbox";
 import {nextJournalView,resolveJournalView,type JournalViewAction,type JournalViewState} from "../../src/features/notes/journalView";
 import {useJournalHistory} from "../../src/features/notes/useJournalHistory";
-import {QaContext} from "./provider";
+import {QaContext,type NotebookPanelView,type ReaderChapter} from "./provider";
 import type {JournalEntry,JournalNoteDocument} from "../../src/features/notes/journal";
 import "../../src/app/globals.css";
 // Synthetic fixtures only. ?active=none starts with no active note (as if not arriving from the reader's sidebar).
@@ -28,11 +32,20 @@ const fixedEntries:JournalEntry[]=[
  {kind:"reading",id:"qa-reading",journal_date:"2026-10-21",source,reader_label:"QA user",read_at:"2026-10-21T10:00:00Z"},
  {kind:"verse_annotation",id:"qa-annotation",title:null,body:"An older verse note, shown read-only.",journal_date:"2026-10-20",source,highlight_color:null,read_only:true,author_label:"QA user",created_at:"2026-10-20T08:30:00Z",updated_at:"2026-10-20T08:30:00Z"},
 ];
+// ?panel: two synthetic chapters for the reader's combined Log and Notes panel.
+const panelChapters=[2,3].map((chapter,index)=>{const reference=`1 Nephi ${chapter}`;const href=`/browse/bookofmormon/1-nephi/${chapter}`;return {volume:"bookofmormon",book:"1-nephi",chapter,reference,logReady:true,logOptions:[{source:{kind:"scripture" as const,label:reference,href,volume:"bookofmormon",book:"1-nephi",chapter},verseCount:index===0?24:31}]} satisfies ReaderChapter;});
 // Roughly the server's markdownExcerpt: up to 220 characters, then an ellipsis.
 function excerptOf(markdown:string){const rest=markdown.split("\n").slice(1).join(" ").replace(/[#*-]/g,"").replace(/\s+/g," ").trim();return rest.length>220?`${rest.slice(0,220).trimEnd()}...`:rest||null;}
 function QaApp(){
  const [readings,setReadings]=useState<JournalEntry[]>([]);const [docs,setDocs]=useState(()=>new URLSearchParams(location.search).get("empty")==="true"?[]:fixtures);
- const sidebarMode=new URLSearchParams(location.search).has("sidebar");
+ const panelMode=new URLSearchParams(location.search).has("panel");
+ const sidebarMode=panelMode||new URLSearchParams(location.search).has("sidebar");
+ // ?panel stands in for the provider's Log and Notes state and a chapter page's Log button.
+ const [panelView,setPanelView]=useState<NotebookPanelView>("log");
+ const [sheetOpen,setSheetOpen]=useState(false);
+ const [chapterIndex,setChapterIndex]=useState(0);
+ const readerLogPendingRef=useRef<ReadingLogAttempt|null>(null);
+ const readerMarkPendingRef=useRef<ChapterMarkAttempt|null>(null);
  const [panelOpen,setPanelOpen]=useState(true);
  // Stands in for the provider's active note: the only note whose document is "loaded".
  const [active,setActive]=useState<string|null>(()=>new URLSearchParams(location.search).get("active")==="none"?null:initial.id);
@@ -52,13 +65,36 @@ function QaApp(){
  const sidebarPane = (
    <>
      <section className="panel-card max-w-lg rounded-[20px] p-6">
-       <h1 className="font-display text-2xl font-extrabold">1 Nephi 2</h1>
+       <h1 className="font-display text-2xl font-extrabold">{panelMode?panelChapters[chapterIndex].reference:"1 Nephi 2"}</h1>
        <p className="mt-4 font-serif text-lg leading-relaxed">
          And it came to pass that he was obedient unto the word of the Lord, wherefore he did as the Lord commanded him.
        </p>
        <p className="mt-4 text-sm text-[color:var(--foreground-muted)]">Synthetic reader context for the Notes sidebar.</p>
      </section>
-     <NotesSidebar
+     {panelMode ? (
+       <div className="mt-4 flex flex-wrap items-center gap-2">
+         <button type="button" data-notebook-launcher aria-expanded={layout==="phone"?sheetOpen:panelOpen&&panelView==="log"} aria-label={`Log and notes for ${panelChapters[chapterIndex].reference}`} className="surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm font-bold" onClick={()=>{if(layout==="phone"){if(sheetOpen)setSheetOpen(false);else{setPanelView("log");setSheetOpen(true);}}else if(panelOpen&&panelView==="log")setPanelOpen(false);else{setPanelView("log");setPanelOpen(true);}}}>Log</button>
+         <button type="button" className="surface-button inline-flex h-9 items-center rounded-full border-2 px-4 text-sm" onClick={()=>setChapterIndex(i=>(i+1)%panelChapters.length)}>Go to {panelChapters[(chapterIndex+1)%panelChapters.length].reference}</button>
+         <span className="text-xs text-[color:var(--foreground-muted)]">Synthetic stand-in for the reader header (Log) and chapter navigation.</span>
+         <section aria-label="Synthetic reading history" className="w-full text-sm">
+           <h2 className="mt-2 font-bold">Synthetic reading history ({readings.length})</h2>
+           <ul>{readings.map(r=>r.kind==="reading"?<li key={r.id} data-qa-reading>{r.source.label} · {r.journal_date}</li>:null)}</ul>
+         </section>
+       </div>
+     ) : null}
+     {panelMode && layout==="phone" ? (sheetOpen ? <NotesSheet
+       onClose={()=>setSheetOpen(false)}
+       companion={{view:panelView,onViewChange:setPanelView,log:<ChapterLogView chapter={panelChapters[chapterIndex]}/>}}
+       activeNoteId={active}
+       activeNote={activeDoc}
+       notes={docs.map(d => ({
+         ...d, visibility: "private" as const, tags: [], last_active_at: d.updated_at, excerpt: excerptOf(d.markdown_body),
+       }))}
+       isLoading={false}
+       onSelect={async id => { setActive(id); }}
+       onCreate={async () => create("2026-10-21", true)}
+     /> : null) : <NotesSidebar
+       companion={panelMode?{view:panelView,onViewChange:setPanelView,log:<ChapterLogView chapter={panelChapters[chapterIndex]}/>}:undefined}
        isOpen={panelOpen}
        onToggle={() => setPanelOpen(open => !open)}
        onCollapse={() => setPanelOpen(false)}
@@ -75,9 +111,9 @@ function QaApp(){
          }
          return create("2026-10-21", true);
        }}
-     />
+     />}
    </>
  );
- return <QaContext.Provider value={{journalOutbox:outbox}}><div className="app-shell min-h-screen"><header className="app-header hidden sm:block"><div className="shell-container flex items-center justify-between py-4"><span className="brand-wordmark brand-pill text-2xl">Verse<span>Together</span></span><nav className="segmented-control"><Link className="segmented-control-button" href="/browse">Browse</Link><Link className="segmented-control-button" data-active="true" href="/notes">Notes</Link><Link className="segmented-control-button" href="/come-follow-me">Come Follow Me</Link></nav><span className="pill-tag">QA user</span></div></header><main className="mx-auto max-w-[1440px] px-4 pt-3 pb-32 sm:px-8 sm:pt-[calc(var(--header-height)+2rem)] lg:pb-4"><p className="mb-2 text-xs opacity-60">Component QA · synthetic fixtures · no backend connection</p>{sidebarMode?sidebarPane:<JournalWorkspace layout={layout} status="ready" entries={entries} today="2026-10-21" stage={view.stage} selectedDate={view.date} onSelectDate={date=>act({type:"selectDate",date})} selectedKey={view.noteId!==null?`note:${view.noteId}`:null} onOpenNote={(noteId,date)=>{act({type:"openNote",noteId,date});setActive(noteId);}} onCloseNote={()=>act({type:"closeNote"})} onShowCalendar={()=>act({type:"showCalendar"})} onNewNote={create} dayActions={<ReadingLogButton key={view.date} options={[{source,verseCount:24}]} defaultDate={view.date} onLogged={date=>act({type:"selectDate",date})}/>} notePane={note?<JournalNoteEditor key={note.id} note={note} authorLabel="QA user" showDate={false} onClose={()=>act({type:"closeNote"})}/>:undefined}/>}</main><nav className="fixed bottom-3 inset-x-4 z-40 grid grid-cols-3 rounded-full border-2 p-2 shadow-lg sm:hidden" style={{background:"var(--mobile-nav-shell)",borderColor:"var(--surface-border)"}}><Link className="p-3 text-center" href="/browse">Browse</Link><Link className="p-3 text-center" href="/come-follow-me">CFM</Link><Link className="rounded-full p-3 text-center" style={{background:"var(--mobile-nav-active)",color:"var(--mobile-nav-active-text)"}} href="/notes">Notes</Link></nav></div></QaContext.Provider>;
+ return <QaContext.Provider value={{journalOutbox:outbox,readerLogPendingRef,readerMarkPendingRef}}><div className="app-shell min-h-screen"><header className="app-header hidden sm:block"><div className="shell-container flex items-center justify-between py-4"><span className="brand-wordmark brand-pill text-2xl">Verse<span>Together</span></span><nav className="segmented-control"><Link className="segmented-control-button" href="/browse">Browse</Link><Link className="segmented-control-button" data-active="true" href="/notes">Notes</Link><Link className="segmented-control-button" href="/come-follow-me">Come Follow Me</Link></nav><span className="pill-tag">QA user</span></div></header><main className="mx-auto max-w-[1440px] px-4 pt-3 pb-32 sm:px-8 sm:pt-[calc(var(--header-height)+2rem)] lg:pb-4"><p className="mb-2 text-xs opacity-60">Component QA · synthetic fixtures · no backend connection</p>{sidebarMode?sidebarPane:<JournalWorkspace layout={layout} status="ready" entries={entries} today="2026-10-21" stage={view.stage} selectedDate={view.date} onSelectDate={date=>act({type:"selectDate",date})} selectedKey={view.noteId!==null?`note:${view.noteId}`:null} onOpenNote={(noteId,date)=>{act({type:"openNote",noteId,date});setActive(noteId);}} onCloseNote={()=>act({type:"closeNote"})} onShowCalendar={()=>act({type:"showCalendar"})} onNewNote={create} dayActions={<ReadingLogButton key={view.date} options={[{source,verseCount:24}]} defaultDate={view.date} onLogged={date=>act({type:"selectDate",date})}/>} notePane={note?<JournalNoteEditor key={note.id} note={note} authorLabel="QA user" showDate={false} onClose={()=>act({type:"closeNote"})}/>:undefined}/>}</main><nav className="fixed bottom-3 inset-x-4 z-40 grid grid-cols-3 rounded-full border-2 p-2 shadow-lg sm:hidden" style={{background:"var(--mobile-nav-shell)",borderColor:"var(--surface-border)"}}><Link className="p-3 text-center" href="/browse">Browse</Link><Link className="p-3 text-center" href="/come-follow-me">CFM</Link><Link className="rounded-full p-3 text-center" style={{background:"var(--mobile-nav-active)",color:"var(--mobile-nav-active-text)"}} href="/notes">Notes</Link></nav></div></QaContext.Provider>;
 }
 createRoot(document.getElementById("root")!).render(<StrictMode><QaApp/></StrictMode>);
