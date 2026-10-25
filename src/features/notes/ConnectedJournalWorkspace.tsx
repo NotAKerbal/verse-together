@@ -228,25 +228,10 @@ export default function ConnectedJournalWorkspace() {
   ) : null;
 
   const historyLoaded = journal !== undefined && readingLog !== undefined;
-  const dayActions = !historyLoaded ? null : logOptions.length > 0 ? (
-    <ReadingLogButton
-      key={selectedDate}
-      options={logOptions}
-      defaultDate={selectedDate}
-      onLogged={onSelectDate}
-    />
-  ) : (
-    <span className="text-xs text-[color:var(--foreground-muted)]">
-      Log reading from{" "}
-      <Link href="/browse" className="font-semibold underline underline-offset-2">
-        Browse
-      </Link>{" "}
-      or{" "}
-      <Link href="/come-follow-me" className="font-semibold underline underline-offset-2">
-        Come, Follow Me
-      </Link>
-    </span>
-  );
+  const dayActions =
+    historyLoaded && logOptions.length > 0 ? (
+      <ReadingLogButton key={selectedDate} options={logOptions} defaultDate={selectedDate} onLogged={onSelectDate} />
+    ) : null;
 
   return (
     <JournalWorkspace

@@ -373,7 +373,6 @@ export default function JournalWorkspace({
         .sort((a, b) => entryTime(a).localeCompare(entryTime(b))),
     [entries, selectedDate]
   );
-  const dayHasNotes = dayEntries.some((entry) => entry.kind === "note");
   const dayName = formatDayHeading(selectedDate);
   const isToday = selectedDate === today;
 
@@ -403,24 +402,7 @@ export default function JournalWorkspace({
         </p>
       );
     }
-    if (dayEntries.length === 0) {
-      return (
-        <div className="rounded-[1rem] border-2 border-dashed border-[color:var(--surface-border)] px-4 py-5 text-sm text-[color:var(--foreground-muted)]">
-          <p>Nothing recorded on this day.</p>
-          <p className="mt-1">
-            Start a note here, or read in{" "}
-            <Link href="/browse" className="font-semibold underline underline-offset-2">
-              Browse
-            </Link>{" "}
-            or{" "}
-            <Link href="/come-follow-me" className="font-semibold underline underline-offset-2">
-              Come, Follow Me
-            </Link>{" "}
-            and write from there.
-          </p>
-        </div>
-      );
-    }
+    if (dayEntries.length === 0) return null;
     return (
       <ul className={prominent ? "space-y-2.5" : "space-y-2"}>
         {dayEntries.map((entry) => (
@@ -438,21 +420,17 @@ export default function JournalWorkspace({
 
   // The selected day's entries as the main content: where a closed note leaves you, on a phone or desktop.
   const chooserHeader = (
-    <>
-      <h2
-        id={chooserHeadingId}
-        ref={setFocusTarget}
-        tabIndex={-1}
-        className="font-display text-xl font-extrabold tracking-[-0.02em] focus:outline-none"
-      >
-        {status === "loading" || dayHasNotes ? "Select a note" : "Start a note"}
-      </h2>
-      <p className="text-sm font-semibold text-[color:var(--foreground-muted)]">
-        <time dateTime={selectedDate}>{dayName}</time>
-        {todayTag}
-      </p>
-    </>
+    <h2
+      id={chooserHeadingId}
+      ref={setFocusTarget}
+      tabIndex={-1}
+      className="font-display text-xl font-extrabold tracking-[-0.02em] focus:outline-none"
+    >
+      <time dateTime={selectedDate}>{dayName}</time>
+      {todayTag}
+    </h2>
   );
+
 
   const openNoteSection = (className: string) => (
     <section
