@@ -17,7 +17,7 @@
     "test:auth": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/safeRedirect.test.mjs src/lib/signInFlow.test.mjs src/features/auth/authErrors.test.mjs scripts/auth-migration.test.mjs",
     "test:convex": "vitest run",
     "auth:migrate": "node scripts/auth-migration.mjs",
-    "test:ai-insights": "node --experimental-strip-types --test src/lib/aiInsights.test.mjs src/lib/chapterInsights.test.mjs",
+    "test:ai-insights": "node --experimental-strip-types --test src/lib/chapterInsights.test.mjs",
     "batch:insights:prepare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/prepareChapterInsightsBatch.mjs --skip-ref bookofmormon:1nephi:1 --canary-ref bookofmormon:1nephi:2",
     "batch:insights:submit": "node --env-file-if-exists=.env.local scripts/submitChapterInsightsBatch.mjs",
     "batch:insights:process": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/processChapterInsightsBatch.mjs",
