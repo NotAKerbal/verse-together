@@ -13,7 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUser } from "@fortawesome/free-solid-svg-icons";
+import { faGear } from "@fortawesome/free-solid-svg-icons";
 import { SIGN_OUT_FAILED, useAuth } from "@/lib/auth";
 
 type AccountVariant = "header" | "page" | "dock";
@@ -231,7 +231,7 @@ function AccountMenu({ variant }: { variant: AccountVariant }) {
                 </p>
               ) : null}
               <Link href="/account" className={MENU_ITEM_CLASS} onClick={() => setOpen(false)}>
-                Manage account
+                Settings
               </Link>
               <button
                 type="button"
@@ -263,7 +263,7 @@ function AccountMenu({ variant }: { variant: AccountVariant }) {
 }
 
 function AccountControlInner({ variant }: { variant: AccountVariant }) {
-  const { user, authUser, error, loading, promptSignIn, signingIn } = useAuth();
+  const { user, authUser, error, loading } = useAuth();
   const hydrated = useSyncExternalStore(subscribeToHydration, clientHydrationSnapshot, serverHydrationSnapshot);
 
   // Until the session is known, hold the space quietly rather than offering a false Sign in.
@@ -287,21 +287,18 @@ function AccountControlInner({ variant }: { variant: AccountVariant }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => promptSignIn()}
-      disabled={signingIn}
-      aria-busy={signingIn || undefined}
-      className={`${variant === "dock" ? "desktop-nav-account-control" : variant === "page" ? SIGN_IN_PAGE_CLASS : SIGN_IN_HEADER_CLASS} disabled:cursor-wait disabled:opacity-70`}
-      aria-label={variant === "dock" ? (signingIn ? "Signing in…" : "Sign in to sync") : undefined}
-      title={variant === "dock" ? (signingIn ? "Signing in…" : "Sign in to sync") : undefined}
+    <Link
+      href="/account"
+      className={variant === "dock" ? "desktop-nav-account-control" : variant === "page" ? SIGN_IN_PAGE_CLASS : SIGN_IN_HEADER_CLASS}
+      aria-label={variant === "dock" ? "Settings" : undefined}
+      title={variant === "dock" ? "Settings" : undefined}
     >
-      {variant === "dock" ? <FontAwesomeIcon icon={faUser} className="h-4 w-4" aria-hidden="true" /> : signingIn ? "Signing in…" : "Sign in to sync"}
-    </button>
+      {variant === "dock" ? <FontAwesomeIcon icon={faGear} className="h-4 w-4" aria-hidden="true" /> : "Settings"}
+    </Link>
   );
 }
 
-/** The account avatar (manage-account and sign-out menu), or Sign in when signed out. */
+/** The account avatar and menu, or a public Settings link when signed out. */
 export default function AccountControl({ variant = "header" }: Props) {
   if (variant === "page") {
     return (

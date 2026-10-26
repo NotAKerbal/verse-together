@@ -11,29 +11,41 @@ export default function AccountPage() {
   const [simpleMode, setSimpleMode] = useSimpleMode();
 
   return (
-    <section className={styles.shell} aria-label="Account settings">
-      <h1 className="sr-only">Account settings</h1>
-      <AccountManager>
-        <div className={styles.preferences}>
-          <div className={styles.setting}>
-            <div>
-              <span className={styles.settingTitle}>Simple mode</span>
-              <p aria-live="polite">{simpleMode ? "Study tools hidden" : "Study tools visible"} · This device</p>
+    <section className={styles.shell} aria-label="Settings">
+      <h1 className="sr-only">Settings</h1>
+      <div className={styles.manager}>
+        <section className={styles.accountSettings} aria-labelledby="account-settings-title">
+          <h2 id="account-settings-title" className={styles.settingTitle}>Account settings</h2>
+          <AccountManager />
+        </section>
+        <div className={styles.settingsColumn}>
+          <section className={styles.settingsCard} aria-label="General settings">
+            <div className={styles.preferences}>
+              <div className={styles.setting}>
+                <div>
+                  <h2 className={styles.settingTitle}>Simple mode</h2>
+                  <p aria-live="polite">{simpleMode ? "Study tools hidden" : "Study tools visible"} · This device</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={simpleMode}
+                  aria-label="Simple mode"
+                  className={styles.toggle}
+                  onClick={() => setSimpleMode(!simpleMode)}
+                >
+                  <span><FontAwesomeIcon icon={faCheck} aria-hidden="true" /></span>
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={simpleMode}
-              aria-label="Simple mode"
-              className={styles.toggle}
-              onClick={() => setSimpleMode(!simpleMode)}
-            >
-              <span><FontAwesomeIcon icon={faCheck} aria-hidden="true" /></span>
-            </button>
-          </div>
-          <QuickMarkSettings />
+          </section>
+          <section className={styles.settingsCard} aria-labelledby="quick-mark-settings-title">
+            <div className={styles.preferences}>
+              <QuickMarkSettings />
+            </div>
+          </section>
         </div>
-      </AccountManager>
+      </div>
     </section>
   );
 }
