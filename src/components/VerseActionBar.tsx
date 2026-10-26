@@ -30,7 +30,7 @@ type Props = {
   onInsight: () => void;
   onNewInsight: () => void;
   onAnnotation: () => void;
-  onCitations: () => void;
+  onResources: () => void;
   onExplore?: () => void;
   onTranslations?: () => void;
   shareHref?: string | null;
@@ -103,7 +103,7 @@ export default function VerseActionBar({
   selectionReference, selectedText, selectedVerseCount, selectedWord,
   showInsightAction = true, showExplore = false, showTranslations = false,
   actionsEnabled = true, onClear, onInsight, onNewInsight, onAnnotation,
-  onCitations, onExplore, onTranslations, shareHref, targetLabel = "Note",
+  onResources, onExplore, onTranslations, shareHref, targetLabel = "Note",
 }: Props) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
@@ -162,8 +162,8 @@ export default function VerseActionBar({
           <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onAnnotation} disabled={!actionsEnabled}>
             <ActionLabel icon="note" title="Annotate" description={actionsEnabled ? "Mark what matters" : "Sign in to annotate"} />
           </button>
-          <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onCitations}>
-            <ActionLabel icon="book" title="Resources" description="Go a little deeper" />
+          <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onResources}>
+            <ActionLabel icon="book" title="Resources" description="Lessons & more" />
           </button>
           {showTranslations && onTranslations ? (
             <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onTranslations}>
