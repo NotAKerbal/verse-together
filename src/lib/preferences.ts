@@ -1,6 +1,9 @@
 "use client";
 
 import { getReaderPreferences, saveReaderPreferences as saveReaderPreferencesRemote } from "@/lib/appData";
+import { DEFAULT_MARK_PRESETS, normalizeMarkPresets, readMarkPresets, type MarkPreset } from "../../convex/annotationRules";
+
+export type { MarkPreset };
 
 export type ReaderPreferences = {
   showFootnotes: boolean;
@@ -8,6 +11,8 @@ export type ReaderPreferences = {
   fontFamily: "serif" | "sans";
   comparisonView: "inline" | "sideBySide";
   textWidth: ReaderTextWidth;
+  /** The selection menu's mark presets, in order, chosen in account settings (saved apart from the rest). */
+  markPresets: MarkPreset[];
 };
 
 export type ReaderTextWidth = "comfortable" | "wide" | "full";
@@ -28,6 +33,7 @@ export function getDefaultPreferences(): ReaderPreferences {
     fontFamily: "serif",
     comparisonView: "inline",
     textWidth: "comfortable",
+    markPresets: DEFAULT_MARK_PRESETS.map((preset) => ({ ...preset })),
   };
 }
 
@@ -52,7 +58,10 @@ export function writeLocalPreferences(prefs: ReaderPreferences): void {
   }
 }
 
-export function normalizePreferences(input: Partial<ReaderPreferences> | null | undefined): ReaderPreferences {
+export function normalizePreferences(
+  // quickMarks: this device's copy of the earlier quick-mark choice, carried over into presets.
+  input: (Partial<ReaderPreferences> & { quickMarks?: unknown }) | null | undefined
+): ReaderPreferences {
   const base = getDefaultPreferences();
   const showFootnotes = typeof input?.showFootnotes === "boolean" ? input!.showFootnotes : base.showFootnotes;
   const fontScaleRaw = typeof input?.fontScale === "number" ? input!.fontScale : base.fontScale;
@@ -63,7 +72,8 @@ export function normalizePreferences(input: Partial<ReaderPreferences> | null | 
       ? input.comparisonView
       : base.comparisonView;
   const textWidth = normalizeTextWidth(input?.textWidth);
-  return { showFootnotes, fontScale, fontFamily, comparisonView, textWidth };
+  const markPresets = readMarkPresets(input);
+  return { showFootnotes, fontScale, fontFamily, comparisonView, textWidth, markPresets };
 }
 
 export async function loadPreferences(
@@ -81,6 +91,7 @@ export async function loadPreferences(
           fontFamily: data.fontFamily === "sans" ? "sans" : "serif",
           comparisonView: data.comparisonView === "sideBySide" ? "sideBySide" : "inline",
           textWidth: normalizeTextWidth(data.textWidth),
+          markPresets: readMarkPresets(data),
         });
         writeLocalPreferences(prefs);
         return prefs;
@@ -94,12 +105,19 @@ export async function loadPreferences(
   return getDefaultPreferences();
 }
 
+/** Keep this device's copy of the mark presets in step with the account's (after a save, or a fresh read). */
+export function writeLocalMarkPresets(markPresets: MarkPreset[]): void {
+  const current = readLocalPreferences() ?? getDefaultPreferences();
+  writeLocalPreferences({ ...current, markPresets: normalizeMarkPresets(markPresets) ?? [] });
+}
+
 export async function savePreferences(
   userId: string | null | undefined,
   prefs: ReaderPreferences,
   token?: string | null
 ): Promise<void> {
-  writeLocalPreferences(prefs);
+  // A reader-settings save never changes the mark presets: keep this device's copy of the account's choice.
+  writeLocalPreferences({ ...prefs, markPresets: readLocalPreferences()?.markPresets ?? prefs.markPresets });
   if (!userId || !token) return;
   try {
     await saveReaderPreferencesRemote(token, {

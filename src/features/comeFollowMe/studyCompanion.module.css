@@ -411,7 +411,7 @@
   }
 
   /*
-    The verses bleed 0.5rem into their side's left padding (for the annotation mark and highlight tint), and
+    The verses bleed 0.5rem into their side's left padding (for the annotation mark), and
     the passage line sits just outside them; this much padding keeps both inside the side's clipping edge.
   */
   .companion[data-mode="strip"] .scripturePanel {
@@ -517,39 +517,34 @@
 
 /*
   The reader's own annotations (useScriptureAnnotations), color only like the passage line below, so the
-  layout never shifts: a highlight tints the verse (a background image), and any annotation, note or
-  highlight, marks the verse's left edge inside its existing padding.
+  layout never shifts: a highlight or underline is drawn on the verse's words (.verse-mark, globals.css), and
+  any annotation, note or mark, marks the verse's left edge inside its existing padding.
 */
 .verses li[data-annotated] {
   box-shadow: inset 3px 0 0 var(--cfm-annotation-mark, var(--cfm-rubric-line));
 }
 
-.verses li[data-highlight] {
-  background-image: linear-gradient(var(--cfm-annotation-tint), var(--cfm-annotation-tint));
+.verses li[data-highlight="red"] {
+  --cfm-annotation-mark: rgb(226 84 70 / 0.9);
 }
 
 .verses li[data-highlight="yellow"] {
-  --cfm-annotation-tint: rgb(234 196 64 / 0.3);
   --cfm-annotation-mark: rgb(234 196 64 / 0.95);
 }
 
 .verses li[data-highlight="blue"] {
-  --cfm-annotation-tint: rgb(96 150 220 / 0.22);
   --cfm-annotation-mark: rgb(96 150 220 / 0.9);
 }
 
 .verses li[data-highlight="green"] {
-  --cfm-annotation-tint: rgb(52 211 153 / 0.22);
   --cfm-annotation-mark: rgb(52 211 153 / 0.9);
 }
 
 .verses li[data-highlight="pink"] {
-  --cfm-annotation-tint: rgb(244 114 182 / 0.2);
   --cfm-annotation-mark: rgb(244 114 182 / 0.9);
 }
 
 .verses li[data-highlight="purple"] {
-  --cfm-annotation-tint: rgb(167 139 250 / 0.24);
   --cfm-annotation-mark: rgb(167 139 250 / 0.9);
 }
 

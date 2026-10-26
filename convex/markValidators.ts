@@ -1,0 +1,34 @@
+import { v } from "convex/values";
+
+// Validators for verse marks and mark presets, shared by the schema and the functions that take them
+// (the rules themselves: convex/annotationRules.ts).
+
+/** MARK_COLORS: the colors a verse can be highlighted or underlined in. */
+export const markColorValidator = v.union(
+  v.literal("red"),
+  v.literal("yellow"),
+  v.literal("blue"),
+  v.literal("green"),
+  v.literal("pink"),
+  v.literal("purple")
+);
+
+/**
+ * One quick button in the selection menu: a highlight or an underline, in one color, optionally named (up to
+ * MARK_PRESET_NAME_MAX characters once normalized; saveMarkPresets checks).
+ */
+export const markPresetValidator = v.object({
+  kind: v.union(v.literal("highlight"), v.literal("underline")),
+  color: markColorValidator,
+  name: v.optional(v.string()),
+});
+
+/** The earlier quick-mark choice (highlight colors shown, and one uncolored underline), read only to carry it over. */
+export const legacyQuickMarkValidator = v.union(
+  v.literal("yellow"),
+  v.literal("blue"),
+  v.literal("green"),
+  v.literal("pink"),
+  v.literal("purple"),
+  v.literal("underline")
+);

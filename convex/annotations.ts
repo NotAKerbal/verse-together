@@ -4,12 +4,18 @@ import { mutation, query } from "./_generated/server";
 import { getViewerClerkId, requireClerkId } from "./utils";
 import {
   annotationProblem,
+  applyVerseMarks,
+  nextUnderlineColor,
+  savedUnderlineColor,
+  underlineProblem,
+  verseMarksProblem,
   GUIDE_HIGHLIGHTS_PER_GUIDE,
   GUIDE_KEY_PATTERN,
   guideHighlightProblem,
   normalizeAnnotationBody,
   sameGuideAnchor,
 } from "./annotationRules";
+import { markColorValidator } from "./markValidators";
 
 function toIso(ts: number): string {
   return new Date(ts).toISOString();
@@ -39,7 +45,9 @@ export const getChapterAnnotations = query({
       verse: number;
       body: string;
       visibility: "private";
-      highlight_color: "yellow" | "blue" | "green" | "pink" | "purple" | null;
+      highlight_color: "red" | "yellow" | "blue" | "green" | "pink" | "purple" | null;
+      underline: boolean;
+      underline_color: "red" | "yellow" | "blue" | "green" | "pink" | "purple" | null;
       user_id: string;
       is_mine: boolean;
       created_at: string;
@@ -56,6 +64,9 @@ export const getChapterAnnotations = query({
         body: row.body,
         visibility: "private",
         highlight_color: row.highlightColor ?? null,
+        underline: row.underline === true,
+        // Null when not underlined; an underline saved before underlines had colors is red.
+        underline_color: savedUnderlineColor(row),
         user_id: row.clerkId,
         is_mine: isMine,
         created_at: toIso(row.createdAt),
@@ -85,15 +96,12 @@ export const upsertVerseAnnotation = mutation({
     chapter: v.number(),
     verse: v.number(),
     body: v.string(),
-    highlightColor: v.optional(
-      v.union(
-        v.literal("yellow"),
-        v.literal("blue"),
-        v.literal("green"),
-        v.literal("pink"),
-        v.literal("purple")
-      )
-    ),
+    highlightColor: v.optional(markColorValidator),
+    // Omitted by clients from before underlines existed: an update then keeps the verse's saved underline.
+    underline: v.optional(v.boolean()),
+    // Omitted by clients from before underlines had colors: an update then keeps the saved underline's color
+    // (an added underline is red). Naming a color underlines the verse in it.
+    underlineColor: v.optional(markColorValidator),
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
@@ -103,13 +111,9 @@ export const upsertVerseAnnotation = mutation({
       const receipt = await ctx.db.query("deviceStudyImports").withIndex("by_owner_device", q => q.eq("clerkId", clerkId).eq("deviceId", args.deviceImportId)).unique();
       if (receipt) return { id: receipt.recordId };
     }
-    // A note, a highlight, or both; a highlight alone is stored with an empty body.
-    const problem = annotationProblem(args.body, args.highlightColor);
-    if (problem) throw new Error(problem);
-    let body = normalizeAnnotationBody(args.body);
     const existing = await ctx.db
       .query("verseAnnotations")
-      .withIndex("by_user_verse", (q: any) =>
+      .withIndex("by_user_verse", (q) =>
         q
           .eq("clerkId", clerkId)
           .eq("volume", args.volume)
@@ -118,17 +122,33 @@ export const upsertVerseAnnotation = mutation({
           .eq("verse", args.verse)
       )
       .unique();
+    const conflict = underlineProblem(args);
+    if (conflict) throw new Error(conflict);
+    // A device import never replaces a mark the account already has on the verse; it only adds missing ones.
+    const underlineColor =
+      (args.deviceImportId
+        ? savedUnderlineColor(existing) ?? nextUnderlineColor(null, args)
+        : nextUnderlineColor(existing, args)) ?? undefined;
+    const underline = underlineColor !== undefined;
+    // Any mix of a note, a highlight, and an underline; a mark alone is stored with an empty body.
+    const problem = annotationProblem(args.body, args.highlightColor, underline);
+    if (problem) throw new Error(problem);
+    let body = normalizeAnnotationBody(args.body);
     const now = Date.now();
     if (existing) {
+      const highlightColor = args.deviceImportId ? existing.highlightColor ?? args.highlightColor : args.highlightColor;
       if (args.deviceImportId && existing.body && existing.body !== body) {
         body = body ? `${existing.body}\n\n${body}` : existing.body;
-        const mergedProblem = annotationProblem(body, args.highlightColor);
+        const mergedProblem = annotationProblem(body, highlightColor, underline);
         if (mergedProblem) throw new Error(mergedProblem);
       }
       await ctx.db.patch(existing._id, {
         body,
         visibility: "private",
-        highlightColor: args.deviceImportId ? existing.highlightColor ?? args.highlightColor : args.highlightColor,
+        highlightColor,
+        // Stored only when true; patching undefined removes the field.
+        underline: underline || undefined,
+        underlineColor,
         updatedAt: now,
       });
       if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: existing._id });
@@ -143,11 +163,93 @@ export const upsertVerseAnnotation = mutation({
       body,
       visibility: "private",
       highlightColor: args.highlightColor,
+      underline: underline || undefined,
+      underlineColor,
       createdAt: now,
       updatedAt: now,
     });
     if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: id });
     return { id };
+  },
+});
+
+/**
+ * Quick marks from the selection menu: set or remove a highlight and/or an underline (in a color) on each
+ * selected verse in one transaction. Only the named marks change; each verse's note (and any mark not named)
+ * stays exactly as saved, so a stale client can't overwrite a note, and changing an underline's color never
+ * touches the highlight. A verse left with no note and no mark has its row removed.
+ */
+export const setVerseMarks = mutation({
+  args: {
+    volume: v.string(),
+    book: v.string(),
+    chapter: v.number(),
+    verses: v.array(v.number()),
+    // Omitted: leave each verse's highlight as it is. Null: remove it.
+    highlightColor: v.optional(v.union(v.null(), markColorValidator)),
+    // False: remove each verse's underline. True (callers from before underlines had colors): underline each
+    // verse, keeping a saved underline's color, or red.
+    underline: v.optional(v.boolean()),
+    // Underline each verse in this color (adding it, or changing a saved underline's color).
+    underlineColor: v.optional(markColorValidator),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const verses = Array.from(new Set(args.verses));
+    const patch = { highlightColor: args.highlightColor, underline: args.underline, underlineColor: args.underlineColor };
+    const problem = verseMarksProblem(verses, patch);
+    if (problem) throw new Error(problem);
+    const now = Date.now();
+    let changed = 0;
+    for (const verse of verses) {
+      const existing = await ctx.db
+        .query("verseAnnotations")
+        .withIndex("by_user_verse", (q: any) =>
+          q
+            .eq("clerkId", clerkId)
+            .eq("volume", args.volume)
+            .eq("book", args.book)
+            .eq("chapter", args.chapter)
+            .eq("verse", verse)
+        )
+        .unique();
+      const next = applyVerseMarks(existing, patch);
+      if (existing) {
+        if (!next.keep) {
+          await ctx.db.delete(existing._id);
+          changed += 1;
+        } else if (
+          (existing.highlightColor ?? undefined) !== next.highlightColor ||
+          (savedUnderlineColor(existing) ?? undefined) !== next.underlineColor
+        ) {
+          // Patching undefined removes a field: no highlight, or no underline (and so no color), is its absence.
+          await ctx.db.patch(existing._id, {
+            highlightColor: next.highlightColor,
+            underline: next.underline || undefined,
+            underlineColor: next.underlineColor,
+            updatedAt: now,
+          });
+          changed += 1;
+        }
+      } else if (next.keep) {
+        await ctx.db.insert("verseAnnotations", {
+          clerkId,
+          volume: args.volume,
+          book: args.book,
+          chapter: args.chapter,
+          verse,
+          body: "",
+          visibility: "private",
+          highlightColor: next.highlightColor,
+          underline: next.underline || undefined,
+          underlineColor: next.underlineColor,
+          createdAt: now,
+          updatedAt: now,
+        });
+        changed += 1;
+      }
+    }
+    return { changed };
   },
 });
 
