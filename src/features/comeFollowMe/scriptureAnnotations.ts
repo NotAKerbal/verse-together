@@ -2,7 +2,13 @@
 // the identity rules are testable without a DOM.
 
 import { parseScriptureAnchor } from "../../lib/cfm/cfmAnchors.ts";
-import type { ChapterAnnotations, VerseAnnotation } from "../annotations/verseAnnotations.ts";
+import { formatPassageReference } from "../../lib/passageShare.ts";
+import {
+  annotationChapter,
+  type AnnotationChapter,
+  type ChapterAnnotations,
+  type VerseAnnotation,
+} from "../annotations/verseAnnotations.ts";
 
 export type VerseKey = { chapter: number; verse: number };
 
@@ -18,19 +24,58 @@ export function verseFromScriptureId(id: string, slug: string): VerseKey | null 
 }
 
 /**
- * The verse a text selection annotates: the verse it starts in (the standard reader likewise annotates the
- * first selected verse), else the first verse it touches (a selection starting in a chapter heading). Each
- * verse's identity is read from its own element, so a selection running across a chapter boundary
- * annotates the verse where it starts, in that verse's own chapter. `touchedIds` is read lazily, in order.
+ * The verses a text selection in the scripture pane covers, in reading order, from the ids of the verse
+ * elements it selects text in (as the pane lists them). Each verse's identity is read from its own element, so
+ * a selection running across a chapter boundary keeps each verse in its own chapter; chapter headings, ranges,
+ * other books, and repeats are left out. The first is the verse the selection starts in, where the full note
+ * editor opens (the standard reader likewise opens it on the first selected verse).
  */
-export function selectionVerse(startId: string | null, touchedIds: Iterable<string>, slug: string): VerseKey | null {
-  const start = startId ? verseFromScriptureId(startId, slug) : null;
-  if (start) return start;
-  for (const id of touchedIds) {
+export function selectedScriptureVerses(ids: Iterable<string>, slug: string): VerseKey[] {
+  const verses: VerseKey[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
     const verse = verseFromScriptureId(id, slug);
-    if (verse) return verse;
+    if (!verse || seen.has(verseKey(verse.chapter, verse.verse))) continue;
+    seen.add(verseKey(verse.chapter, verse.verse));
+    verses.push(verse);
   }
-  return null;
+  return verses;
+}
+
+/** Selected verses per chapter, in order: a chapter's marks are written together (setVerseMarks takes one chapter). */
+export function versesByChapter(verses: readonly VerseKey[]): Array<{ chapter: number; verses: number[] }> {
+  const out: Array<{ chapter: number; verses: number[] }> = [];
+  for (const { chapter, verse } of verses) {
+    const group = out.find((entry) => entry.chapter === chapter);
+    if (!group) out.push({ chapter, verses: [verse] });
+    else if (!group.verses.includes(verse)) group.verses.push(verse);
+  }
+  return out;
+}
+
+/**
+ * What a quick mark writes for a selection: each chapter's selected verses under that chapter's stored identity
+ * (annotationChapter: the rows the standard reader reads too), so a selection across a chapter break marks each
+ * verse in its own chapter.
+ */
+export function selectionMarkWrites(
+  book: { volume: string; slug: string },
+  verses: readonly VerseKey[]
+): Array<{ target: AnnotationChapter; verses: number[] }> {
+  return versesByChapter(verses).map((group) => ({
+    target: annotationChapter(book.volume, book.slug, group.chapter),
+    verses: group.verses,
+  }));
+}
+
+/** A selection's reference: "Isaiah 53:4–6", or across a chapter break "Isaiah 52:13–15; 53:1–2". */
+export function formatScriptureSelection(bookLabel: string, verses: readonly VerseKey[]): string {
+  return versesByChapter(verses)
+    .map((group, index) => {
+      const reference = formatPassageReference(bookLabel, group.chapter, group.verses);
+      return index === 0 ? reference : reference.slice(bookLabel.length + 1);
+    })
+    .join("; ");
 }
 
 /**

@@ -38,6 +38,7 @@
   --accent-sky: #dfe3dd;
   --accent-sky-soft: #efe9dc;
   --accent-mint: #e4e8d9;
+  --reader-read: #6d8070;
   --accent-note: #f2ead6;
   --accent-coral: #e8c6bb;
   --browse-ink: #1f1d1a;
@@ -99,6 +100,7 @@
   --accent-sky: #2c3331;
   --accent-sky-soft: #26241f;
   --accent-mint: #2a2e25;
+  --reader-read: #9bae9d;
   --accent-note: #2c281d;
   --accent-coral: #4a2c24;
   --browse-ink: #ebe6db;
@@ -1346,6 +1348,77 @@ a.reader-toolbar-crumb:hover {
   text-decoration-color: var(--accent-rubric);
   text-decoration-thickness: 2px;
   text-underline-offset: 0.2em;
+}
+
+.reader-verses {
+  --verse-gap: 0.5rem;
+}
+
+.reader-verse {
+  position: relative;
+}
+
+.reader-verse + .reader-verse {
+  margin-top: var(--verse-gap);
+}
+
+/* Extend each segment across the inter-verse gap so a logged passage reads as one margin line. */
+.reader-verse[data-read="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(-1 * var(--verse-gap));
+  bottom: 0;
+  width: 2px;
+  background: var(--reader-read);
+  pointer-events: none;
+}
+
+.reader-verse[data-read-start="true"]::before {
+  top: 2rem;
+}
+
+.reader-verse[data-read-end="true"]::before {
+  bottom: 0.5rem;
+}
+
+.verse-read-marker {
+  position: absolute;
+  left: -0.75rem;
+  top: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--reader-read);
+  cursor: pointer;
+}
+
+.verse-read-marker:hover {
+  color: var(--foreground);
+}
+
+.verse-read-marker:focus-visible {
+  outline: 2px solid var(--reader-read);
+  outline-offset: 2px;
+}
+
+.verse-read-marker svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+@media (min-width: 640px) {
+  .reader-verses { --verse-gap: 0.75rem; }
+}
+
+@media (pointer: coarse) {
+  .verse-read-marker::after { content: ""; position: absolute; inset: -0.5rem 0; }
 }
 
 /*

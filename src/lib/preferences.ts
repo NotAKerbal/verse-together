@@ -49,12 +49,13 @@ export function readLocalPreferences(): ReaderPreferences | null {
   }
 }
 
-export function writeLocalPreferences(prefs: ReaderPreferences): void {
+export function writeLocalPreferences(prefs: ReaderPreferences): boolean {
   try {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return false;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    return true;
   } catch {
-    // ignore
+    return false;
   }
 }
 
@@ -106,9 +107,9 @@ export async function loadPreferences(
 }
 
 /** Keep this device's copy of the mark presets in step with the account's (after a save, or a fresh read). */
-export function writeLocalMarkPresets(markPresets: MarkPreset[]): void {
+export function writeLocalMarkPresets(markPresets: MarkPreset[]): boolean {
   const current = readLocalPreferences() ?? getDefaultPreferences();
-  writeLocalPreferences({ ...current, markPresets: normalizeMarkPresets(markPresets) ?? [] });
+  return writeLocalPreferences({ ...current, markPresets: normalizeMarkPresets(markPresets) ?? [] });
 }
 
 export async function savePreferences(

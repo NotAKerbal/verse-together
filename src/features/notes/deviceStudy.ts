@@ -7,14 +7,18 @@ import type {
   VerseMarksPatch,
 } from "../annotations/verseAnnotations";
 import { annotationChapter } from "../annotations/verseAnnotations";
-import type { GuideHighlight } from "../comeFollowMe/guideAnchors";
+import type { GuideHighlightRecord } from "../comeFollowMe/guideAnchors";
 import {
   sameGuideAnchor,
   annotationProblem,
+  applyGuidePatch,
   applyVerseMarks,
   DEFAULT_UNDERLINE_COLOR,
   guideHighlightProblem,
+  guidePatchProblem,
   verseMarksProblem,
+  type GuideAnchorFields,
+  type GuideAnnotationPatch,
 } from "../../../convex/annotationRules";
 import { deriveNoteTitle, markdownExcerpt, NOTE_MARKDOWN_MAX } from "../../../convex/noteJournal";
 import { localDateKey, newRequestId, type NoteSource, type JournalEntry } from "./journal";
@@ -25,7 +29,8 @@ export const DEVICE_STUDY_KEY = "vt_device_study_v1";
 type Owned = { owner: string | null };
 export type DeviceNote = InsightDraft & Owned;
 export type DeviceAnnotation = VerseAnnotation & AnnotationVerse & Owned;
-export type DeviceHighlight = GuideHighlight & Owned;
+/** A guest's annotated guide span: rows saved before guide underlines and notes have a highlight alone. */
+export type DeviceHighlight = GuideHighlightRecord & Owned;
 export type DeviceStudy = {
   version: 1;
   notes: DeviceNote[];
@@ -251,26 +256,54 @@ export class DeviceStudyStore {
       return { ...data, annotations };
     });
   }
-  saveHighlight(input: Omit<GuideHighlight, "id" | "updatedAt">) {
-    const problem = guideHighlightProblem(input);
+  /** Highlight a guide span (the first guest API): the span's other marks and note stay as saved. */
+  saveHighlight(input: GuideAnchorFields & { guide: string; highlightColor: MarkColor }) {
+    this.setGuideAnnotation(input, { highlightColor: input.highlightColor });
+  }
+  /**
+   * The guide's selection menu and editor on this device: the account's setGuideAnnotation rule. The span is
+   * this device's span `id`, else the one with this exact anchor, else a new one; only the named fields change,
+   * and a span left with no note and no mark is removed. Returns the span's id, or null once it is removed.
+   */
+  setGuideAnnotation(
+    input: GuideAnchorFields & { guide: string },
+    patch: GuideAnnotationPatch,
+    id?: string,
+  ): { id: string | null } {
+    const problem = guideHighlightProblem(input) ?? guidePatchProblem(patch);
     if (problem) throw new Error(problem);
+    let result: string | null = null;
     this.write((data) => {
-      const existing = data.highlights.find(
-        (row) => row.owner === null && row.guide === input.guide && sameGuideAnchor(row, input),
-      );
-      return {
-        ...data,
-        highlights: [
-          ...data.highlights.filter((row) => row.id !== existing?.id),
-          {
-            ...input,
-            owner: null,
-            id: existing?.id ?? `device-${newRequestId()}`,
-            updatedAt: new Date().toISOString(),
-          },
-        ],
+      const existing =
+        (id ? data.highlights.find((row) => row.id === id && row.owner === null && row.guide === input.guide) : undefined) ??
+        data.highlights.find((row) => row.owner === null && row.guide === input.guide && sameGuideAnchor(row, input));
+      if (id && !existing) throw new Error("Highlight not found on this device.");
+      const next = applyGuidePatch(existing, patch);
+      const rest = data.highlights.filter((row) => row !== existing);
+      if (!next.keep) return { ...data, highlights: rest };
+      const anchor: Omit<GuideHighlightRecord, "id" | "updatedAt"> = {
+        guide: input.guide,
+        part: input.part,
+        startBlock: input.startBlock,
+        startOffset: input.startOffset,
+        endBlock: input.endBlock,
+        endOffset: input.endOffset,
+        exact: input.exact,
+        prefix: input.prefix,
+        suffix: input.suffix,
       };
+      const row: DeviceHighlight = {
+        // A saved span keeps its own anchor; a new one is the selection's.
+        ...(existing ?? { ...anchor, owner: null, id: `device-${newRequestId()}` }),
+        highlightColor: next.highlightColor ?? null,
+        underlineColor: next.underlineColor ?? null,
+        body: next.body,
+        updatedAt: new Date().toISOString(),
+      };
+      result = row.id;
+      return { ...data, highlights: [...rest, row] };
     });
+    return { id: result };
   }
   /** Claim before uploading, so retries after sign-out can never send these records to another account. */
   claim(owner: string) {
@@ -314,6 +347,29 @@ export function annotationImport(row: DeviceAnnotation, owner: string) {
     ...(row.text_marks ? { textMarks: row.text_marks } : {}),
     highlightColor: row.highlight_color ?? undefined,
     underlineColor: row.underline ? (row.underline_color ?? DEFAULT_UNDERLINE_COLOR) : undefined,
+  };
+}
+
+/**
+ * The account import of one claimed device guide span: its anchor, marks, and note. Rows saved before guide
+ * underlines and notes have a highlight alone. The account keeps any mark it already has on the span.
+ */
+export function guideHighlightImport(row: DeviceHighlight, owner: string) {
+  return {
+    deviceImportId: row.id,
+    deviceImportOwner: owner,
+    guide: row.guide,
+    part: row.part,
+    startBlock: row.startBlock,
+    startOffset: row.startOffset,
+    endBlock: row.endBlock,
+    endOffset: row.endOffset,
+    exact: row.exact,
+    prefix: row.prefix,
+    suffix: row.suffix,
+    highlightColor: row.highlightColor ?? undefined,
+    underlineColor: row.underlineColor ?? undefined,
+    body: row.body || undefined,
   };
 }
 

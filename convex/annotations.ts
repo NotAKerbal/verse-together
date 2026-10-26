@@ -13,9 +13,13 @@ import {
   verseMarksProblem,
   GUIDE_HIGHLIGHTS_PER_GUIDE,
   GUIDE_KEY_PATTERN,
+  applyGuidePatch,
   guideHighlightProblem,
+  guidePatchProblem,
+  mergeGuideImport,
   normalizeAnnotationBody,
   sameGuideAnchor,
+  type GuideAnchorFields,
 } from "./annotationRules";
 import { markColorValidator, verseTextMarkValidator, verseTextRangeValidator } from "./markValidators";
 
@@ -292,17 +296,25 @@ export const deleteVerseAnnotation = mutation({
   },
 });
 
-// Study-guide highlights: private spans of a Come, Follow Me guide's prose (anchors: convex/annotationRules.ts).
+// Study-guide annotations: private spans of a Come, Follow Me guide's prose (anchors and rules:
+// convex/annotationRules.ts), each any mix of a highlight, an underline, and a note.
 
-const guideHighlightColor = v.union(
-  v.literal("yellow"),
-  v.literal("blue"),
-  v.literal("green"),
-  v.literal("pink"),
-  v.literal("purple")
-);
+const guideAnchorArgs = {
+  guide: v.string(),
+  part: v.union(v.literal("introduction"), v.literal("reader")),
+  startBlock: v.string(),
+  startOffset: v.number(),
+  endBlock: v.string(),
+  endOffset: v.number(),
+  exact: v.string(),
+  prefix: v.string(),
+  suffix: v.string(),
+};
 
-/** The viewer's own highlights in one guide; nothing at all for a signed-out viewer. */
+/**
+ * The viewer's own annotated spans in one guide; nothing at all for a signed-out viewer. A mark the span
+ * doesn't have is null and a missing note "", so a row from before guide underlines and notes reads the same.
+ */
 export const getGuideHighlights = query({
   args: { guide: v.string() },
   handler: async (ctx, args) => {
@@ -323,27 +335,44 @@ export const getGuideHighlights = query({
       exact: row.exact,
       prefix: row.prefix,
       suffix: row.suffix,
-      highlightColor: row.highlightColor,
+      highlightColor: row.highlightColor ?? null,
+      underlineColor: row.underlineColor ?? null,
+      body: row.body ?? "",
       updatedAt: toIso(row.updatedAt),
     }));
   },
 });
 
-/** Highlight a span; highlighting the same span again changes its color instead of adding a second one. */
+/** The stored fields for a span's annotation: patching undefined removes a field (no mark, no note). */
+function guideAnnotationFields(next: { body: string; highlightColor?: string; underlineColor?: string }) {
+  return { body: next.body || undefined, highlightColor: next.highlightColor, underlineColor: next.underlineColor };
+}
+
+function sameGuideAnnotation(
+  row: { body?: string; highlightColor?: string; underlineColor?: string },
+  next: { body: string; highlightColor?: string; underlineColor?: string }
+) {
+  return (
+    (row.body ?? "") === next.body &&
+    (row.highlightColor ?? undefined) === next.highlightColor &&
+    (row.underlineColor ?? undefined) === next.underlineColor
+  );
+}
+
+/**
+ * Annotate a span (the first API, which only highlighted; a device import also comes through here). Saving the
+ * same span again changes the named fields instead of adding a second span. A device import never replaces
+ * what the account has on the span: it adds missing marks and appends a different note, once per device row.
+ */
 export const saveGuideHighlight = mutation({
   args: {
     deviceImportId: v.optional(v.string()),
     deviceImportOwner: v.optional(v.string()),
-    guide: v.string(),
-    part: v.union(v.literal("introduction"), v.literal("reader")),
-    startBlock: v.string(),
-    startOffset: v.number(),
-    endBlock: v.string(),
-    endOffset: v.number(),
-    exact: v.string(),
-    prefix: v.string(),
-    suffix: v.string(),
-    highlightColor: guideHighlightColor,
+    ...guideAnchorArgs,
+    // Every client from before guide underlines and notes sends one of the first five colors.
+    highlightColor: v.optional(markColorValidator),
+    underlineColor: v.optional(markColorValidator),
+    body: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
@@ -353,7 +382,7 @@ export const saveGuideHighlight = mutation({
       const receipt = await ctx.db.query("deviceStudyImports").withIndex("by_owner_device", q => q.eq("clerkId", clerkId).eq("deviceId", args.deviceImportId)).unique();
       if (receipt) return { id: receipt.recordId };
     }
-    const problem = guideHighlightProblem(args);
+    const problem = guideHighlightProblem(args) ?? guidePatchProblem(args);
     if (problem) throw new Error(problem);
     const rows = await ctx.db
       .query("guideHighlights")
@@ -361,22 +390,107 @@ export const saveGuideHighlight = mutation({
       .collect();
     const now = Date.now();
     const existing = rows.find((row) => sameGuideAnchor(row, args));
+    const incoming = { body: args.body, highlightColor: args.highlightColor, underlineColor: args.underlineColor };
     if (existing) {
-      if (!args.deviceImportId) await ctx.db.patch(existing._id, { highlightColor: args.highlightColor, updatedAt: now });
+      const next = args.deviceImportId ? mergeGuideImport(existing, incoming) : applyGuidePatch(existing, incoming);
+      const bodyProblem = annotationProblem(next.body, next.highlightColor, !!next.underlineColor);
+      if (bodyProblem) throw new Error(bodyProblem);
+      if (!sameGuideAnnotation(existing, next)) {
+        await ctx.db.patch(existing._id, { ...guideAnnotationFields(next), updatedAt: now });
+      }
       if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: existing._id });
       return { id: existing._id };
     }
+    const next = applyGuidePatch(null, incoming);
+    const emptyProblem = annotationProblem(next.body, next.highlightColor, !!next.underlineColor);
+    if (emptyProblem) throw new Error(emptyProblem);
     if (rows.length >= GUIDE_HIGHLIGHTS_PER_GUIDE) throw new Error("Too many highlights in this guide");
-    const { deviceImportId, deviceImportOwner: _deviceImportOwner, ...fields } = args;
-    const id = await ctx.db.insert("guideHighlights", { clerkId, ...fields, createdAt: now, updatedAt: now });
-    if (deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: deviceImportId, recordId: id });
+    const id = await ctx.db.insert("guideHighlights", {
+      clerkId,
+      ...guideAnchor(args),
+      ...guideAnnotationFields(next),
+      createdAt: now,
+      updatedAt: now,
+    });
+    if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: id });
     return { id };
   },
 });
 
-/** Change one of the viewer's guide highlights to another color. */
+function guideAnchor(args: GuideAnchorFields & { guide: string }) {
+  return {
+    guide: args.guide,
+    part: args.part,
+    startBlock: args.startBlock,
+    startOffset: args.startOffset,
+    endBlock: args.endBlock,
+    endOffset: args.endOffset,
+    exact: args.exact,
+    prefix: args.prefix,
+    suffix: args.suffix,
+  };
+}
+
+/**
+ * The guide's selection menu and annotation editor: change one span's note, highlight, and/or underline, leaving
+ * whatever isn't named as saved (a quick mark never touches the note or the other mark). The span is the
+ * viewer's saved one with `highlightId` (whatever its stored anchor; the client found it at the selection),
+ * else the saved one with this exact anchor, else a new one. A span left with no note and no mark is removed.
+ */
+export const setGuideAnnotation = mutation({
+  args: {
+    highlightId: v.optional(v.id("guideHighlights")),
+    ...guideAnchorArgs,
+    body: v.optional(v.string()),
+    highlightColor: v.optional(v.union(v.null(), markColorValidator)),
+    underlineColor: v.optional(v.union(v.null(), markColorValidator)),
+  },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    const patch = { body: args.body, highlightColor: args.highlightColor, underlineColor: args.underlineColor };
+    const problem = guideHighlightProblem(args) ?? guidePatchProblem(patch);
+    if (problem) throw new Error(problem);
+    let existing = null;
+    let count = 0;
+    if (args.highlightId) {
+      existing = await ctx.db.get(args.highlightId);
+      if (!existing || existing.clerkId !== clerkId || existing.guide !== args.guide) throw new Error("Highlight not found");
+    } else {
+      const rows = await ctx.db
+        .query("guideHighlights")
+        .withIndex("by_user_guide", (q) => q.eq("clerkId", clerkId).eq("guide", args.guide))
+        .collect();
+      existing = rows.find((row) => sameGuideAnchor(row, args)) ?? null;
+      count = rows.length;
+    }
+    const next = applyGuidePatch(existing, patch);
+    const now = Date.now();
+    if (existing) {
+      if (!next.keep) {
+        await ctx.db.delete(existing._id);
+        return { id: null };
+      }
+      if (!sameGuideAnnotation(existing, next)) {
+        await ctx.db.patch(existing._id, { ...guideAnnotationFields(next), updatedAt: now });
+      }
+      return { id: existing._id };
+    }
+    if (!next.keep) return { id: null };
+    if (count >= GUIDE_HIGHLIGHTS_PER_GUIDE) throw new Error("Too many highlights in this guide");
+    const id = await ctx.db.insert("guideHighlights", {
+      clerkId,
+      ...guideAnchor(args),
+      ...guideAnnotationFields(next),
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { id };
+  },
+});
+
+/** Change one of the viewer's guide highlights to another color (the first API; notes and underlines stay). */
 export const updateGuideHighlight = mutation({
-  args: { highlightId: v.id("guideHighlights"), highlightColor: guideHighlightColor },
+  args: { highlightId: v.id("guideHighlights"), highlightColor: markColorValidator },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
     const row = await ctx.db.get(args.highlightId);
@@ -386,7 +500,7 @@ export const updateGuideHighlight = mutation({
   },
 });
 
-/** Remove one of the viewer's guide highlights. */
+/** Remove one of the viewer's annotated guide spans: its marks and its note. */
 export const deleteGuideHighlight = mutation({
   args: { highlightId: v.id("guideHighlights") },
   handler: async (ctx, args) => {

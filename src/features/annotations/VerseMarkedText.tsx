@@ -52,5 +52,5 @@ export default function VerseMarkedText({ annotation, children, formatText }: {
       return cloneElement(child, {}, marked(child.props.children));
     });
   }
-  return <span className="verse-mark" data-verse-text="true" {...(marks.length ? null : base)}>{marks.length || formatText ? marked(children) : children}</span>;
+  return <span className="verse-mark" data-verse-text="true" data-verse-source={formatText ? text : undefined} {...(marks.length ? null : base)}>{marks.length || formatText ? marked(children) : children}</span>;
 }

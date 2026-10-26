@@ -208,7 +208,7 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, onC
 const NONE_SWATCH = "h-3 w-3 rounded-full border border-[color:var(--surface-border)]";
 
 /** One mark's color (or none), as a row of pressable choices, each showing how the mark looks. */
-function MarkColorChoice({
+export function MarkColorChoice({
   kind,
   value,
   disabled,

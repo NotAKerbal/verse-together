@@ -89,6 +89,16 @@ describe("reader preferences on this device", () => {
     expect(readLocalPreferences()?.markPresets).toEqual([]);
   });
 
+  test("guest preset edits persist without an account and report blocked device storage", () => {
+    expect(writeLocalMarkPresets([{ ...greenUnderline, name: "Promises" }])).toBe(true);
+    expect(readLocalPreferences()?.markPresets).toEqual([{ ...greenUnderline, name: "Promises" }]);
+    expect(remote.saveReaderPreferences).not.toHaveBeenCalled();
+
+    vi.spyOn(storage, "setItem").mockImplementation(() => { throw new Error("Storage blocked"); });
+    expect(writeLocalMarkPresets([])).toBe(false);
+    expect(readLocalPreferences()?.markPresets).toEqual([{ ...greenUnderline, name: "Promises" }]);
+  });
+
   test("loading from the account reads its presets", async () => {
     remote.getReaderPreferences.mockResolvedValue({
       showFootnotes: true,

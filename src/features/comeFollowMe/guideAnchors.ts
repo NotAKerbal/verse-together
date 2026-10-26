@@ -7,10 +7,16 @@ import {
   GUIDE_BLOCK_PATTERN,
   GUIDE_CONTEXT_LENGTH,
   GUIDE_QUOTE_MAX,
+  MARK_COLORS,
+  applyGuidePatch,
+  isMarkColor,
+  sameGuideAnchor,
   type GuideAnchorFields,
+  type GuideAnnotationPatch,
   type GuidePart,
+  type MarkColor,
 } from "../../../convex/annotationRules.ts";
-import type { HighlightColor } from "../annotations/verseAnnotations.ts";
+import type { SelectionMarks } from "../annotations/verseAnnotations.ts";
 
 /**
  * A guide part's text: the data of its text nodes in document order, joined, and the elements with usable
@@ -18,30 +24,76 @@ import type { HighlightColor } from "../annotations/verseAnnotations.ts";
  */
 export type TextIndex = { text: string; anchors: ReadonlyArray<{ id: string; start: number }> };
 
-/** A stored highlight, as the client uses it. */
-export type GuideHighlight = GuideAnchorFields & { id: string; guide: string; highlightColor: HighlightColor; updatedAt: string };
+/**
+ * A saved guide span, as the client uses it: its anchor and any mix of a highlight, an underline, and a note
+ * (a missing mark is null, a missing note "").
+ */
+export type GuideHighlight = GuideAnchorFields & {
+  id: string;
+  guide: string;
+  highlightColor: MarkColor | null;
+  underlineColor: MarkColor | null;
+  body: string;
+  updatedAt: string;
+};
 
-const COLORS: readonly string[] = ["yellow", "blue", "green", "pink", "purple"];
+/**
+ * A span as stored on this device or answered by a backend: rows from before guide underlines and notes have
+ * a highlight (in one of the first five colors) and nothing else. readGuideHighlight fills in the rest.
+ */
+export type GuideHighlightRecord = Omit<GuideHighlight, "highlightColor" | "underlineColor" | "body"> & {
+  highlightColor?: MarkColor | null;
+  underlineColor?: MarkColor | null;
+  body?: string | null;
+};
 
-/** A query row, checked rather than trusted (an old backend, or a changed one, may answer differently). */
-export function isGuideHighlight(value: unknown): value is GuideHighlight {
-  if (!value || typeof value !== "object") return false;
+/**
+ * A query or device row, checked rather than trusted (an old backend, or a changed one, may answer
+ * differently) and filled in; null when it isn't a span this client can show. A span with no mark and no
+ * note is nothing to show.
+ */
+export function readGuideHighlight(value: unknown): GuideHighlight | null {
+  if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  return (
-    typeof row.id === "string" &&
-    typeof row.guide === "string" &&
-    (row.part === "introduction" || row.part === "reader") &&
-    typeof row.startBlock === "string" &&
-    typeof row.startOffset === "number" &&
-    typeof row.endBlock === "string" &&
-    typeof row.endOffset === "number" &&
-    typeof row.exact === "string" &&
-    typeof row.prefix === "string" &&
-    typeof row.suffix === "string" &&
-    typeof row.highlightColor === "string" &&
-    COLORS.includes(row.highlightColor) &&
-    typeof row.updatedAt === "string"
-  );
+  const color = (field: unknown) => (field == null ? null : isMarkColor(field) ? field : undefined);
+  const highlightColor = color(row.highlightColor);
+  const underlineColor = color(row.underlineColor);
+  const body = row.body == null ? "" : typeof row.body === "string" ? row.body : undefined;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.guide !== "string" ||
+    (row.part !== "introduction" && row.part !== "reader") ||
+    typeof row.startBlock !== "string" ||
+    typeof row.startOffset !== "number" ||
+    typeof row.endBlock !== "string" ||
+    typeof row.endOffset !== "number" ||
+    typeof row.exact !== "string" ||
+    typeof row.prefix !== "string" ||
+    typeof row.suffix !== "string" ||
+    typeof row.updatedAt !== "string" ||
+    highlightColor === undefined ||
+    underlineColor === undefined ||
+    body === undefined ||
+    (!highlightColor && !underlineColor && !body.trim())
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    guide: row.guide,
+    part: row.part,
+    startBlock: row.startBlock,
+    startOffset: row.startOffset,
+    endBlock: row.endBlock,
+    endOffset: row.endOffset,
+    exact: row.exact,
+    prefix: row.prefix,
+    suffix: row.suffix,
+    highlightColor,
+    underlineColor,
+    body,
+    updatedAt: row.updatedAt,
+  };
 }
 
 export function isUsableBlockId(id: string): boolean {
@@ -63,7 +115,10 @@ function blockStart(index: TextIndex, block: string): number | null {
   return index.anchors.find((anchor) => anchor.id === block)?.start ?? null;
 }
 
-export type Described = { ok: true; anchor: Omit<GuideAnchorFields, "part"> } | { ok: false; reason: "empty" | "too-long" };
+/** A span's anchor and where it is in the part's text (trimmed), or why it can't be anchored. */
+export type Described =
+  | { ok: true; anchor: Omit<GuideAnchorFields, "part">; start: number; end: number }
+  | { ok: false; reason: "empty" | "too-long" };
 
 /**
  * The anchor for the text between two positions of a part, trimmed of surrounding whitespace. The end point
@@ -91,6 +146,8 @@ export function describeSpan(index: TextIndex, from: number, to: number): Descri
       prefix: text.slice(Math.max(0, start - GUIDE_CONTEXT_LENGTH), start),
       suffix: text.slice(end, end + GUIDE_CONTEXT_LENGTH),
     },
+    start,
+    end,
   };
 }
 
@@ -174,6 +231,104 @@ export function locate(starts: readonly number[], lengths: readonly number[], po
   if (best < 0) return null;
   const offset = Math.min(lengths[best], Math.max(0, position - starts[best]));
   return { node: best, offset };
+}
+
+/** A saved span where it is in its part's text now (resolveAnchor), as the guide paints it. */
+export type PlacedGuideHighlight = { row: GuideHighlight; start: number; end: number };
+
+/**
+ * What a selection in a part (its trimmed [start, end)) means for the saved spans there:
+ *  - exact: the saved span that is exactly the selected text, which the menu edits (the most recently changed
+ *    one, if older saves left two on the same text);
+ *  - overlapping: every other saved span sharing any of the selected text, in reading order. They are shown
+ *    and can be selected in turn, but a change to the selection never reaches them: marking part of a long
+ *    highlighted passage marks just that part, and never edits the whole passage unasked.
+ */
+export function guideSelectionTargets(
+  placed: readonly PlacedGuideHighlight[],
+  part: GuidePart,
+  start: number,
+  end: number
+): { exact: PlacedGuideHighlight | null; overlapping: PlacedGuideHighlight[] } {
+  let exact: PlacedGuideHighlight | null = null;
+  const touching: PlacedGuideHighlight[] = [];
+  for (const item of placed) {
+    if (item.row.part !== part || item.end <= start || item.start >= end) continue;
+    if (item.start === start && item.end === end && (!exact || item.row.updatedAt > exact.row.updatedAt)) {
+      if (exact) touching.push(exact);
+      exact = item;
+    } else {
+      touching.push(item);
+    }
+  }
+  touching.sort((a, b) => a.start - b.start || a.end - b.end);
+  return { exact, overlapping: touching };
+}
+
+/**
+ * The marks a guide selection has, for the selection menu's mark buttons (presetState): a mark is on (true)
+ * when the selected span itself has it, partly on ("mixed") when only a saved span overlapping the selection
+ * has it, else off. Pressing a mark that is on removes it from the selected span; any other press puts it on
+ * the selected span (so the overlapping span keeps its own marks).
+ */
+export function guideSelectionMarks(
+  exact: GuideHighlight | null | undefined,
+  overlapping: readonly GuideHighlight[]
+): SelectionMarks {
+  const rows = exact ? [exact, ...overlapping] : overlapping;
+  const present = (pick: (row: GuideHighlight) => MarkColor | null) =>
+    MARK_COLORS.filter((color) => rows.some((row) => pick(row) === color));
+  return {
+    highlight: exact?.highlightColor ?? "none",
+    underline: exact?.underlineColor ?? "none",
+    highlights: present((row) => row.highlightColor),
+    underlines: present((row) => row.underlineColor),
+  };
+}
+
+/** A change to a guide span: the saved one `highlightId`, else the one with this exact anchor, else a new one. */
+export type GuideAnnotationTarget = GuideAnchorFields & { guide: string; highlightId?: string };
+
+/**
+ * A guide's spans as they will be once a change saves (for an optimistic update, and the same rule the server
+ * and this device apply): only the named fields change, a span left with nothing is removed, and a new span's id
+ * is a placeholder ("pending:…") until the query refreshes.
+ */
+export function withGuideAnnotation(
+  rows: readonly GuideHighlight[],
+  target: GuideAnnotationTarget,
+  patch: GuideAnnotationPatch,
+  now = new Date().toISOString()
+): GuideHighlight[] {
+  const existing = target.highlightId
+    ? rows.find((row) => row.id === target.highlightId)
+    : rows.find((row) => row.guide === target.guide && sameGuideAnchor(row, target));
+  const next = applyGuidePatch(existing, patch);
+  if (!next.keep) return rows.filter((row) => row !== existing);
+  const fields = {
+    highlightColor: next.highlightColor ?? null,
+    underlineColor: next.underlineColor ?? null,
+    body: next.body,
+    updatedAt: now,
+  };
+  if (existing) return rows.map((row) => (row === existing ? { ...row, ...fields } : row));
+  const { guide, part, startBlock, startOffset, endBlock, endOffset, exact, prefix, suffix } = target;
+  return [
+    ...rows,
+    {
+      id: `pending:${part}:${startBlock}:${startOffset}:${endBlock}:${endOffset}`,
+      guide,
+      part,
+      startBlock,
+      startOffset,
+      endBlock,
+      endOffset,
+      exact,
+      prefix,
+      suffix,
+      ...fields,
+    },
+  ];
 }
 
 export type { GuidePart };

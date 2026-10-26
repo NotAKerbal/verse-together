@@ -63,6 +63,22 @@ export function annotationChapter(volume: string, book: string, chapter: number)
   return { volume: toScriptureVolumeUrlSlug(volume), book, chapter };
 }
 
+/**
+ * A chapter's annotations from this device's rows (a guest's), shaped as the account query answers: only
+ * unclaimed rows of exactly that chapter identity (pass annotationChapter's), whichever reader saved them.
+ */
+export function deviceChapterAnnotations(
+  rows: ReadonlyArray<VerseAnnotation & AnnotationVerse & { owner: string | null }>,
+  target: AnnotationChapter
+): ChapterAnnotations {
+  const by_verse: ChapterAnnotations["by_verse"] = {};
+  for (const row of rows) {
+    if (row.owner !== null || row.volume !== target.volume || row.book !== target.book || row.chapter !== target.chapter) continue;
+    (by_verse[row.verse] ??= []).push(row);
+  }
+  return { by_verse };
+}
+
 /** The viewer's own annotation on each verse of a chapter's query result. */
 export function myAnnotationsByVerse(data: ChapterAnnotations | null | undefined): Map<number, VerseAnnotation> {
   const out = new Map<number, VerseAnnotation>();

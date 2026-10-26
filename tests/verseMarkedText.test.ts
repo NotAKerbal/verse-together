@@ -90,5 +90,5 @@ test("CFM typography uses canonical source offsets even after a double dash", ()
   const annotation = row({ text_marks: [{ start: 9, end: 14, text: "goest", kind: "highlight", color: "green" }] });
   const html = renderToStaticMarkup(createElement(VerseMarkedText,
     { annotation, formatText: value => value.replace(/--/g, "—") } as Parameters<typeof VerseMarkedText>[0], "Thou--he goest"));
-  expect(html).toBe('<span class="verse-mark" data-verse-text="true">Thou—he <span class="verse-mark" data-verse-highlight="green">goest</span></span>');
+  expect(html).toBe('<span class="verse-mark" data-verse-text="true" data-verse-source="Thou--he goest">Thou—he <span class="verse-mark" data-verse-highlight="green">goest</span></span>');
 });
