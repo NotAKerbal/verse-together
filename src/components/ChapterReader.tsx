@@ -6,9 +6,8 @@ import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } 
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
+import VerseResourcesPanel from "./VerseResourcesPanel";
 import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
-import CitationsModal from "./CitationsModal";
-import CitationsSidebarPanel from "./CitationsSidebarPanel";
 import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import {
   ChapterHeader,
@@ -564,7 +563,7 @@ export default function ChapterReader({
   const [animTargetX, setAnimTargetX] = useState<number | null>(null);
   const navHrefRef = useRef<string | null>(null);
   const leavingRef = useRef(false);
-  const [openCitations, setOpenCitations] = useState(false);
+  const [openResources, setOpenResources] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
   const [isPointerSelecting, setIsPointerSelecting] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
@@ -578,7 +577,7 @@ export default function ChapterReader({
   const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
-  const overlayOpen = openCitations || openExplorer;
+  const overlayOpen = openResources || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
@@ -843,7 +842,7 @@ export default function ChapterReader({
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
   const showInsightAction = hasSelection && !canExploreWord;
-  const hasSidebarPanelOpen = openCitations || (openExplorer && canExploreWord);
+  const hasSidebarPanelOpen = openResources || (openExplorer && canExploreWord);
   const selectedBounds = selectionState?.selectedBounds ?? null;
   const selectionPopoverAnchor = selectionState?.anchorRect ?? null;
   const selectionCoversWholeVerses = useMemo(() => {
@@ -924,7 +923,7 @@ export default function ChapterReader({
   }
 
   useEffect(() => {
-    setOpenCitations(false);
+    setOpenResources(false);
     setOpenExplorer(false);
   }, [hasSelection]);
 
@@ -934,6 +933,8 @@ export default function ChapterReader({
     function syncSelectionState() {
       if (customMobileSelectionEnabled || customSelectionActiveRef.current) return;
       const nextSelectionState = getChapterSelectionState(window.getSelection?.() ?? null, verseListRef.current, verses);
+      // Keep the resource context while interacting with its contents; selecting another passage still updates it.
+      if (openResources && !nextSelectionState) return;
       setSelectionState((prev) => {
         if (
           prev?.selectedText === nextSelectionState?.selectedText &&
@@ -966,7 +967,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [customMobileSelectionEnabled, showTapHint, verses]);
+  }, [openResources, customMobileSelectionEnabled, showTapHint, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1171,7 +1172,7 @@ export default function ChapterReader({
         try { setSeenTapToActionsHint(); } catch {}
         setShowTapHint(false);
       }
-      setOpenCitations(false);
+      setOpenResources(false);
       setOpenExplorer(false);
       window.getSelection?.()?.removeAllRanges();
       triggerSelectionHaptic(10);
@@ -1341,15 +1342,9 @@ export default function ChapterReader({
     openBuilder();
   }
 
-  function onOpenCitations() {
-    if (!selectedBounds) return;
-    setOpenExplorer(false);
-    setOpenCitations(true);
-  }
-
   function onOpenExplore() {
     if (!canExploreWord) return;
-    setOpenCitations(false);
+    setOpenResources(false);
     setOpenExplorer(true);
   }
 
@@ -1398,23 +1393,23 @@ export default function ChapterReader({
         }`}
       >
         <aside
-          className={`simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] pr-1 ${
-            openExplorer && canExploreWord
-              ? "h-[calc(100dvh-var(--header-height)-1rem)] overflow-hidden"
-              : "max-h-[calc(100dvh-var(--header-height)-1rem)] overflow-y-auto space-y-3"
+          className={`simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] ${
+            openResources
+              ? "space-y-3"
+              : openExplorer && canExploreWord
+                ? "h-[calc(100dvh-var(--header-height)-1rem)] overflow-hidden pr-1"
+                : "max-h-[calc(100dvh-var(--header-height)-1rem)] overflow-y-auto pr-1 space-y-3"
           }`}
         >
-          {openCitations && selectedBounds ? (
-            <CitationsSidebarPanel
-              open={true}
-              onClose={() => setOpenCitations(false)}
+          {openResources && hasSelection ? (
+            <VerseResourcesPanel
+              key={`${volume}:${book}:${chapter}:${selectedVerses.map((verse) => verse.verse).join(",")}`}
               volume={volume}
               book={book}
               chapter={chapter}
-              verseStart={selectedBounds.start}
-              verseEnd={selectedBounds.end}
-              selectedVerses={selectedVerses.map((verse) => verse.verse)}
-              selectedText={selectedText}
+              verseSpec={selectedVerses.map((verse) => verse.verse).join(",")}
+              reference={formatPassageReference(getBookLabel(volume, book), chapter, selectedVerses.map((verse) => verse.verse))}
+              onClose={() => setOpenResources(false)}
             />
           ) : null}
           {openExplorer && canExploreWord ? (
@@ -1807,7 +1802,7 @@ export default function ChapterReader({
               <div className="text-sm flex items-start gap-3">
                 <div className="text-lg select-none" aria-hidden>Tip</div>
                 <div className="flex-1">
-                  Select passage text to see note, citation, and word study actions.
+                  Select passage text to see note, resource search, and word study actions.
                 </div>
                 <button
                   onClick={() => {
@@ -1821,22 +1816,6 @@ export default function ChapterReader({
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {openCitations && selectedBounds ? (
-        <div className="lg:hidden">
-          <CitationsModal
-            open={true}
-            onClose={() => setOpenCitations(false)}
-            volume={volume}
-            book={book}
-            chapter={chapter}
-            verseStart={selectedBounds.start}
-            verseEnd={selectedBounds.end}
-            selectedVerses={selectedVerses.map((verse) => verse.verse)}
-            selectedText={selectedText}
-          />
         </div>
       ) : null}
 
@@ -1862,7 +1841,7 @@ export default function ChapterReader({
           void onNewNoteFromActions();
         }}
         onAnnotation={onOpenAnnotation}
-        onCitations={onOpenCitations}
+        onResources={() => { setOpenExplorer(false); setOpenResources(true); }}
         onExplore={onOpenExplore}
         shareHref={shareHref}
       />

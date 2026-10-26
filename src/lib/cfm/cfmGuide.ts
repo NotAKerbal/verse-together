@@ -74,6 +74,11 @@ export type GuidePassage = {
 };
 /** The guide's book; `first`/`last` bound its chapters, and `chapters` lists exactly the ones it covers. */
 export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number; chapters: number[] };
+export type GuidePassageResource = {
+  passageId: string;
+  bodyHtml: string;
+  sources: Array<{ title: string; url: string }>;
+};
 export type ParsedGuide = {
   title: string;
   /** The complete guide in source order: exactly `introductionHtml + readerHtml + closingHtml`. */
@@ -92,6 +97,7 @@ export type ParsedGuide = {
   closingHtml: string;
   toc: TocItem[];
   passages: GuidePassage[];
+  passageResources: GuidePassageResource[];
   range: GuideRange | null;
   words: number;
 };
@@ -246,6 +252,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
   validateGuideMarkdown(markdown);
   const toc: TocItem[] = [];
   const passages: GuidePassage[] = [];
+  const passageResources: GuidePassageResource[] = [];
   const counts = new Map<string, number>();
   // Book and chapter of the h2 section being rendered, for local close-reading leads like "**40:1–2, …**".
   let context: { book: string; chapter: string } | null = null;
@@ -462,13 +469,17 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     placedArt.add(art);
     return artFigure(art);
   };
-  const sourcesPanel = (primary: Primary, blocks: Token[]) => {
+  const citedSources = (blocks: Token[]) => {
     const cited = new Map<string, string>();
     parser.walkTokens(blocks, (token) => {
       if (token.type !== "link") return;
       const href = safeHref(token.href);
       if (href && !cited.has(href)) cited.set(href, String(token.text).replace(/[*_]/g, ""));
     });
+    return cited;
+  };
+  const sourcesPanel = (primary: Primary, blocks: Token[]) => {
+    const cited = citedSources(blocks);
     if (!primary.link && cited.size === 0) return "";
     const items = [
       primary.link
@@ -495,13 +506,22 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
       // Keep the trailing thematic break last so the chapter rule still replaces it.
       let end = blocks.length;
       while (end > 1 && (blocks[end - 1].type === "hr" || blocks[end - 1].type === "space")) end--;
+      // Rendering the lead assigns the same passage id used by the lesson's deep links.
+      const passageCount = passages.length;
+      const leadHtml = renderBlocks(blocks.slice(0, 1));
+      const artHtml = artFor(primary);
+      const bodyHtml = renderBlocks(blocks.slice(1, end));
+      if (passages.length > passageCount) {
+        const passage = passages[passageCount];
+        passageResources.push({
+          passageId: passage.id,
+          // The card supplies its own title; a bold run-in lead is part of the insight itself.
+          bodyHtml: (blocks[0]?.type === "heading" ? "" : leadHtml) + artHtml + bodyHtml,
+          sources: Array.from(citedSources(blocks.slice(0, end)), ([url, title]) => ({ title, url })),
+        });
+      }
       // Artwork, when it belongs to this passage, sits right after the verse heading or lead paragraph.
-      html +=
-        renderBlocks(blocks.slice(0, 1)) +
-        artFor(primary) +
-        renderBlocks(blocks.slice(1, end)) +
-        sourcesPanel(primary, blocks.slice(0, end)) +
-        renderBlocks(blocks.slice(end));
+      html += leadHtml + artHtml + bodyHtml + sourcesPanel(primary, blocks.slice(0, end)) + renderBlocks(blocks.slice(end));
       blocks = [];
       primary = null;
     };
@@ -575,6 +595,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     closingHtml,
     toc,
     passages,
+    passageResources,
     range,
     words: markdown.split(/\s+/).length,
   };

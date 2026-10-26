@@ -196,6 +196,17 @@ export function isSafeSourceHref(href: string): boolean {
   return href.startsWith("/") && !href.startsWith("//");
 }
 
+/**
+ * A link written in a note, if it may be followed: same-app paths (the source rule above, so "/\evil.example" is
+ * refused) and http(s)/mailto URLs. Anything else is null and stays plain text.
+ */
+export function safeNoteUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/")) return isSafeSourceHref(trimmed) ? trimmed : null;
+  if (/[\u0000-\u001f\u007f-\u009f\s\\]/.test(trimmed)) return null;
+  return /^(https?:|mailto:)/i.test(trimmed) ? trimmed : null;
+}
+
 export function sourceKindLabel(source: NoteSource): string {
   return source.kind === "scripture" ? "Scripture" : source.kind === "guide" ? "Come, Follow Me" : "Page";
 }
