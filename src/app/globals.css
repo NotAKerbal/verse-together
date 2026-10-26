@@ -1653,6 +1653,7 @@ a.reader-toolbar-crumb:hover {
 */
 .reader-column {
   --reader-backdrop-bleed: 1rem;
+  max-width: 56rem;
   isolation: isolate;
 }
 
@@ -1686,8 +1687,8 @@ a.reader-toolbar-crumb:hover {
 }
 
 /*
-  Text width (Reader settings): comfortable keeps the shell width, wide opens
-  the shell up, full lets the verses run edge to edge.
+  Text width (Reader settings): comfortable keeps a centered reading measure,
+  wide opens the shell up, full lets the verses run edge to edge.
 */
 .reader-column[data-text-width="wide"] {
   max-width: 88rem;
