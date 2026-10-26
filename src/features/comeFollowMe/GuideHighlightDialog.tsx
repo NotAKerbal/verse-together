@@ -19,8 +19,6 @@ type Props = {
   status: "loading" | "ready" | "unavailable";
   /** Whether this browser can show guide highlights at all. */
   supported: boolean;
-  signedIn: boolean;
-  onSignIn: () => void;
   onSave: (color: HighlightColor) => Promise<unknown>;
   onRemove: (() => Promise<unknown>) | null;
   onClose: () => void;
@@ -37,8 +35,6 @@ export default function GuideHighlightDialog({
   current,
   status,
   supported,
-  signedIn,
-  onSignIn,
   onSave,
   onRemove,
   onClose,
@@ -97,13 +93,6 @@ export default function GuideHighlightDialog({
           <p className="text-sm text-foreground/70">This browser can&apos;t show highlights in the guide yet. Try an up-to-date browser.</p>
         ) : problem ? (
           <p className="text-sm text-foreground/70">{problem}</p>
-        ) : !signedIn ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground/70">Sign in to highlight the guide.</p>
-            <button type="button" onClick={onSignIn} className="rounded-md border surface-button px-3 py-2 text-sm">
-              Sign in
-            </button>
-          </div>
         ) : (
           <>
             <div className="space-y-1">

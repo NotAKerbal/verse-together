@@ -3,7 +3,6 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBook } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
-import { useAuth } from "@/lib/auth";
 import { withLiveHref } from "./entryDraft";
 import type { NoteSource } from "./journal";
 import { useBelowLg } from "./useBelowLg";
@@ -14,7 +13,7 @@ import { useConvexSignedIn } from "./useConvexSignedIn";
  * desktop panel) on a blank entry for `source`, logging reading of it unless the person removes it. Nothing is
  * stored until the entry is saved, so opening is immediate and never lands on another page. `source` is the chapter
  * the header stands for, available before the chapter's text has loaded. While Log shows (below lg, while the sheet
- * is open) it closes it. Signed out, it asks to sign in.
+ * is open) it closes it.
  */
 export default function JournalLogButton({
   reference,
@@ -27,17 +26,12 @@ export default function JournalLogButton({
   className: string;
   labelClassName: string;
 }) {
-  const { user, promptSignIn } = useAuth();
   const { loading } = useConvexSignedIn();
   const belowLg = useBelowLg();
   const { isPanelOpen, isSheetOpen, panelView, openLog, setSheetOpen, closeBuilder } = useInsightBuilder();
-  const expanded = !!user && (belowLg ? isSheetOpen : isPanelOpen && panelView === "log");
+  const expanded = belowLg ? isSheetOpen : isPanelOpen && panelView === "log";
 
   function toggle() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
     if (belowLg && isSheetOpen) setSheetOpen(false);
     else if (!belowLg && expanded) closeBuilder();
     else openLog(source ? withLiveHref(source, window.location) : null, belowLg ? "sheet" : "panel");

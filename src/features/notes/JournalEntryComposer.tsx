@@ -55,7 +55,8 @@ export default function JournalEntryComposer({
   heading?: ReactNode;
 }) {
   const { entryDraft: draft, updateEntryDraft, saveEntryDraft, entrySave, openSavedEntry } = useInsightBuilder();
-  const { ready } = useConvexSignedIn();
+  const { user, ready: cloudReady, loading } = useConvexSignedIn();
+  const ready = !loading && (!user || cloudReady);
   const fieldId = useId();
   // Shared with every composer (and outliving this one), so a reopened sheet shows a save already in flight.
   const saving = entrySave.status === "saving";

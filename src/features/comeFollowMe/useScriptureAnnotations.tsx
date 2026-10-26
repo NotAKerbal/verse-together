@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { useQueries } from "convex/react";
 import { useAuth } from "@/lib/auth";
+import { useDeviceStudy } from "../notes/useDeviceStudy";
+import { deviceChapterAnnotations } from "../annotations/useChapterAnnotations";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
 import { annotationChapter, highlightOf } from "@/features/annotations/verseAnnotations";
 import { api } from "../../../convex/_generated/api";
@@ -126,18 +128,20 @@ function SelectionAnnotateButton({
  * edge; nothing is added to the text flow.
  */
 export function useScriptureAnnotations(book: Book, chapters: readonly number[], doc: RefObject<HTMLElement | null>) {
-  const { user, promptSignIn } = useAuth();
+  const { user } = useAuth();
+  const device = useDeviceStudy();
   const queries = useMemo(
     () =>
       Object.fromEntries(
-        chapters.map((chapter) => [
+        (user ? chapters : []).map((chapter) => [
           String(chapter),
           { query: api.annotations.getChapterAnnotations, args: annotationChapter(book.volume, book.slug, chapter) },
         ])
       ),
-    [book.volume, book.slug, chapters]
+    [user, book.volume, book.slug, chapters]
   );
-  const results = useQueries(queries);
+  const remote = useQueries(queries);
+  const results = useMemo(() => user ? remote : Object.fromEntries(chapters.map(chapter => [String(chapter), device.loaded ? deviceChapterAnnotations(device.data.annotations, annotationChapter(book.volume, book.slug, chapter)) : undefined])), [user, remote, chapters, device.loaded, device.data, book.volume, book.slug]);
   const { rows, loaded } = useMemo(() => collectChapterAnnotations(chapters, results), [chapters, results]);
   const [editing, setEditing] = useState<VerseKey | null>(null);
 
@@ -191,10 +195,6 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
       label={`${book.label} ${editing.chapter}:${editing.verse}`}
       rows={rows.get(verseKey(editing.chapter, editing.verse)) ?? []}
       loaded={loaded.has(editing.chapter)}
-      signedIn={!!user}
-      onSignIn={() => {
-        void promptSignIn();
-      }}
       onClose={() => setEditing(null)}
     />
   ) : (

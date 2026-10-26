@@ -78,6 +78,8 @@ export const getChapterAnnotations = query({
 
 export const upsertVerseAnnotation = mutation({
   args: {
+    deviceImportId: v.optional(v.string()),
+    deviceImportOwner: v.optional(v.string()),
     volume: v.string(),
     book: v.string(),
     chapter: v.number(),
@@ -95,10 +97,16 @@ export const upsertVerseAnnotation = mutation({
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
+    if (args.deviceImportId) {
+      if (clerkId !== args.deviceImportOwner) throw new Error("The signed-in account changed before import");
+      if (args.deviceImportId.length > 128) throw new Error("Invalid import id");
+      const receipt = await ctx.db.query("deviceStudyImports").withIndex("by_owner_device", q => q.eq("clerkId", clerkId).eq("deviceId", args.deviceImportId)).unique();
+      if (receipt) return { id: receipt.recordId };
+    }
     // A note, a highlight, or both; a highlight alone is stored with an empty body.
     const problem = annotationProblem(args.body, args.highlightColor);
     if (problem) throw new Error(problem);
-    const body = normalizeAnnotationBody(args.body);
+    let body = normalizeAnnotationBody(args.body);
     const existing = await ctx.db
       .query("verseAnnotations")
       .withIndex("by_user_verse", (q: any) =>
@@ -112,12 +120,18 @@ export const upsertVerseAnnotation = mutation({
       .unique();
     const now = Date.now();
     if (existing) {
+      if (args.deviceImportId && existing.body && existing.body !== body) {
+        body = body ? `${existing.body}\n\n${body}` : existing.body;
+        const mergedProblem = annotationProblem(body, args.highlightColor);
+        if (mergedProblem) throw new Error(mergedProblem);
+      }
       await ctx.db.patch(existing._id, {
         body,
         visibility: "private",
-        highlightColor: args.highlightColor,
+        highlightColor: args.deviceImportId ? existing.highlightColor ?? args.highlightColor : args.highlightColor,
         updatedAt: now,
       });
+      if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: existing._id });
       return { id: existing._id };
     }
     const id = await ctx.db.insert("verseAnnotations", {
@@ -132,6 +146,7 @@ export const upsertVerseAnnotation = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: id });
     return { id };
   },
 });
@@ -189,6 +204,8 @@ export const getGuideHighlights = query({
 /** Highlight a span; highlighting the same span again changes its color instead of adding a second one. */
 export const saveGuideHighlight = mutation({
   args: {
+    deviceImportId: v.optional(v.string()),
+    deviceImportOwner: v.optional(v.string()),
     guide: v.string(),
     part: v.union(v.literal("introduction"), v.literal("reader")),
     startBlock: v.string(),
@@ -202,6 +219,12 @@ export const saveGuideHighlight = mutation({
   },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
+    if (args.deviceImportId) {
+      if (clerkId !== args.deviceImportOwner) throw new Error("The signed-in account changed before import");
+      if (args.deviceImportId.length > 128) throw new Error("Invalid import id");
+      const receipt = await ctx.db.query("deviceStudyImports").withIndex("by_owner_device", q => q.eq("clerkId", clerkId).eq("deviceId", args.deviceImportId)).unique();
+      if (receipt) return { id: receipt.recordId };
+    }
     const problem = guideHighlightProblem(args);
     if (problem) throw new Error(problem);
     const rows = await ctx.db
@@ -211,11 +234,14 @@ export const saveGuideHighlight = mutation({
     const now = Date.now();
     const existing = rows.find((row) => sameGuideAnchor(row, args));
     if (existing) {
-      await ctx.db.patch(existing._id, { highlightColor: args.highlightColor, updatedAt: now });
+      if (!args.deviceImportId) await ctx.db.patch(existing._id, { highlightColor: args.highlightColor, updatedAt: now });
+      if (args.deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceImportId, recordId: existing._id });
       return { id: existing._id };
     }
     if (rows.length >= GUIDE_HIGHLIGHTS_PER_GUIDE) throw new Error("Too many highlights in this guide");
-    const id = await ctx.db.insert("guideHighlights", { clerkId, ...args, createdAt: now, updatedAt: now });
+    const { deviceImportId, deviceImportOwner: _deviceImportOwner, ...fields } = args;
+    const id = await ctx.db.insert("guideHighlights", { clerkId, ...fields, createdAt: now, updatedAt: now });
+    if (deviceImportId) await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: deviceImportId, recordId: id });
     return { id };
   },
 });

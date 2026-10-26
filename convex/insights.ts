@@ -1157,3 +1157,24 @@ export const getPublishedInsightsFeed = query({
     return out;
   },
 });
+
+/** Imports a saved device entry once, keeping its journal day, timestamps and reading together. */
+export const importDeviceNote = mutation({
+  args: { deviceId: v.string(), expectedOwner: v.string(), markdownBody: v.string(), journalDate: v.string(), source: v.optional(noteSourceValidator),
+    createdAt: v.number(), updatedAt: v.number(), readingAt: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const clerkId = await requireClerkId(ctx);
+    if (clerkId !== args.expectedOwner) throw new Error("The signed-in account changed before import");
+    if (requestIdProblem(args.deviceId) || !isJournalDate(args.journalDate) || args.markdownBody.length > NOTE_MARKDOWN_MAX) throw new Error("Invalid device note");
+    const receipt = await ctx.db.query("deviceStudyImports").withIndex("by_owner_device", q => q.eq("clerkId", clerkId).eq("deviceId", args.deviceId)).unique();
+    if (receipt) return { id: ctx.db.normalizeId("insightDrafts", receipt.recordId)! };
+    const source = args.source ? normalizeNoteSource(args.source) : undefined;
+    if (args.readingAt !== undefined && !source) throw new Error("Choose what you read");
+    if (![args.createdAt, args.updatedAt, args.readingAt ?? 0].every(value => Number.isFinite(value) && value >= 0 && value <= Date.now() + 86400000)) throw new Error("Invalid device timestamps");
+    const id = await ctx.db.insert("insightDrafts", { clerkId, status: "draft", visibility: "private", tags: [],
+      title: deriveNoteTitle(args.markdownBody), markdownBody: args.markdownBody, markdownRevision: 0,
+      journalDate: args.journalDate, source, readingAt: args.readingAt, createdAt: args.createdAt, updatedAt: args.updatedAt, lastActiveAt: args.updatedAt });
+    await ctx.db.insert("deviceStudyImports", { clerkId, deviceId: args.deviceId, recordId: id });
+    return { id };
+  },
+});

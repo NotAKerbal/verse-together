@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { deviceStudy } from "../notes/deviceStudy";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -23,8 +25,6 @@ type Props = {
   rows: VerseAnnotation[];
   /** False until the chapter's annotations have loaded: saving before then could overwrite a note unseen. */
   loaded: boolean;
-  signedIn: boolean;
-  onSignIn: () => void;
   onClose: () => void;
 };
 
@@ -32,7 +32,8 @@ type Props = {
  * Add, edit, or delete the viewer's private annotation on one verse: a note, a highlight, or both. A modal
  * <dialog>, so Escape closes it, focus stays inside, and focus returns to whatever opened it.
  */
-export default function VerseAnnotationEditor({ target, label, rows, loaded, signedIn, onSignIn, onClose }: Props) {
+export default function VerseAnnotationEditor({ target, label, rows, loaded, onClose }: Props) {
+  const { user } = useAuth();
   const saveAnnotation = useMutation(api.annotations.upsertVerseAnnotation);
   const removeAnnotation = useMutation(api.annotations.deleteVerseAnnotation);
   const mine = rows.find((row) => row.is_mine) ?? null;
@@ -69,12 +70,14 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
     setSaving(true);
     setError(null);
     try {
-      await saveAnnotation({
-        ...annotationChapter(target.volume, target.book, target.chapter),
-        verse: target.verse,
-        body: text,
-        highlightColor,
-      });
+      if (!user) deviceStudy.saveAnnotation(target, text, highlightColor);
+      else
+        await saveAnnotation({
+          ...annotationChapter(target.volume, target.book, target.chapter),
+          verse: target.verse,
+          body: text,
+          highlightColor,
+        });
       close();
     } catch {
       setError("Couldn't save this annotation. Try again.");
@@ -89,7 +92,8 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
     setError(null);
     try {
       // The query returns row ids as plain strings; they are verseAnnotations ids.
-      await removeAnnotation({ annotationId: mine.id as Id<"verseAnnotations"> });
+      if (!user) deviceStudy.remove("annotations", mine.id);
+      else await removeAnnotation({ annotationId: mine.id as Id<"verseAnnotations"> });
       close();
     } catch {
       setError("Couldn't delete this annotation. Try again.");
@@ -126,85 +130,74 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
             ))}
           </div>
         ) : null}
-        {!signedIn ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground/70">Sign in to add annotations.</p>
-            <button type="button" onClick={onSignIn} className="rounded-md border surface-button px-3 py-2 text-sm">
-              Sign in
-            </button>
-          </div>
-        ) : (
-          <>
-            <textarea
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                setDirty(true);
-              }}
-              disabled={!loaded}
-              rows={4}
-              placeholder="Write a note tied to this verse..."
-              aria-label="Note"
-              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
-            />
-            <div className="space-y-1">
-              <div className="text-sm text-foreground/70">Highlight</div>
-              <div className="flex flex-wrap items-center gap-2">
-                {ANNOTATION_HIGHLIGHT_OPTIONS.map((option) => {
-                  const active = color === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setColor(option.value);
-                        setDirty(true);
-                      }}
-                      disabled={!loaded}
-                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-60 ${
-                        active ? "border-foreground bg-foreground text-background" : "surface-button"
-                      }`}
-                      aria-pressed={active}
-                    >
-                      <span className={`h-3 w-3 rounded-full ${option.swatchClass}`} />
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {!loaded ? <p className="text-sm text-foreground/70">Loading your annotations…</p> : null}
-            {error ? (
-              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-                {error}
-              </p>
-            ) : null}
-            <div className="flex items-center justify-end gap-2">
-              {mine ? (
+        <textarea
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            setDirty(true);
+          }}
+          disabled={!loaded}
+          rows={4}
+          placeholder="Write a note tied to this verse..."
+          aria-label="Note"
+          className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
+        />
+        <div className="space-y-1">
+          <div className="text-sm text-foreground/70">Highlight</div>
+          <div className="flex flex-wrap items-center gap-2">
+            {ANNOTATION_HIGHLIGHT_OPTIONS.map((option) => {
+              const active = color === option.value;
+              return (
                 <button
+                  key={option.value}
                   type="button"
                   onClick={() => {
-                    void onDelete();
+                    setColor(option.value);
+                    setDirty(true);
                   }}
-                  disabled={saving}
-                  className="rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-700 dark:text-red-300 disabled:opacity-60"
+                  disabled={!loaded}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-60 ${
+                    active ? "border-foreground bg-foreground text-background" : "surface-button"
+                  }`}
+                  aria-pressed={active}
                 >
-                  Delete
+                  <span className={`h-3 w-3 rounded-full ${option.swatchClass}`} />
+                  {option.label}
                 </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  void onSave();
-                }}
-                disabled={!canSave}
-                className="rounded-md bg-foreground text-background px-3 py-2 text-sm disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Add annotation"}
-              </button>
-            </div>
-          </>
-        )}
+              );
+            })}
+          </div>
+        </div>
+        {!loaded ? <p className="text-sm text-foreground/70">Loading your annotations…</p> : null}
+        {error ? (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex items-center justify-end gap-2">
+          {mine ? (
+            <button
+              type="button"
+              onClick={() => {
+                void onDelete();
+              }}
+              disabled={saving}
+              className="rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-700 dark:text-red-300 disabled:opacity-60"
+            >
+              Delete
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              void onSave();
+            }}
+            disabled={!canSave}
+            className="rounded-md bg-foreground text-background px-3 py-2 text-sm disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Add annotation"}
+          </button>
+        </div>
       </div>
     </dialog>
   );
