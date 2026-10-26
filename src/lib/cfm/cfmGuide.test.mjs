@@ -35,6 +35,33 @@ const late = parsed.get("2026-10-05-isaiah-50-57");
 const latest = parsed.get("2026-10-12-isaiah-58-66");
 const jeremiah = parsed.get("2026-10-19-jeremiah-1-3-7-16-18-20");
 
+test("scripture-first fragments retain every reader byte, anchor, source, and artwork in source order", () => {
+  for (const guide of parsed.values()) {
+    const reconstructed = guide.readerSections.map((section) => {
+      const item = guide.toc.find((item) => item.id === section.id);
+      const chapter = section.chapter == null ? "" : ` data-chapter="${section.chapter}"`;
+      return `<section class="cfm-section" data-kind="${item.kind}"${chapter} aria-labelledby="${section.id}">\n${section.headingHtml}${section.blocks.map((block) => block.html).join("")}</section>\n`;
+    }).join("");
+    assert.equal(reconstructed, guide.readerHtml);
+    const blocks = guide.readerSections.flatMap((section) => section.blocks);
+    assert.equal(new Set(blocks.map((block) => block.id)).size, blocks.length);
+    assert.deepEqual(blocks.flatMap((block) => block.passage ? [block.passage.id] : []), guide.passages.map((passage) => passage.id));
+  }
+});
+
+test("context previews show the original opening paragraph and keep deeper commentary and sources available", () => {
+  const block = jeremiah.readerSections.flatMap((section) => section.blocks).find((block) => block.passage?.label === "1:4–5");
+  assert.ok(block.previewEnd > 0);
+  const preview = block.html.slice(0, block.previewEnd);
+  const more = block.html.slice(block.previewEnd);
+  assert.match(preview, /Known, Sanctified, Ordained/);
+  assert.match(preview, /The narration shifts to first person/);
+  assert.doesNotMatch(preview, /<strong>Ancient meaning/);
+  assert.match(more, /<strong>Ancient meaning/);
+  assert.match(more, /Latter-day Saint teaching/);
+  assert.match(more, /cfm-sources/);
+});
+
 function decode(text) {
   return text
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))

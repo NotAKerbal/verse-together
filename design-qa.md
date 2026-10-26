@@ -1,3 +1,65 @@
+# Come, Follow Me — scripture-first reader
+
+## Dev integration verification
+
+Rebased the approved redesign onto `origin/dev` at `ffcc2269c77ee71ac652554161569cc70a067d23` before publishing.
+Preserved the newer annotation selectors, guide annotation editor, guest settings, and phrase-level verse
+marks. Scripture rendering now passes original verse text and its display formatter separately, retaining
+the phrase offsets introduced on dev. The source-only redesign remains frontend-only relative to dev.
+
+- **Passed:** 152 Come, Follow Me tests after integration, including the new reader tests.
+- **Passed:** 43 tests across seven focused annotation, phrase-selection, and mark-preset suites.
+- **Passed:** targeted ESLint and diff whitespace checks on the integrated code.
+- **Passed:** integrated production build (`next build --webpack`), including TypeScript and 83 prerendered pages.
+- **Passed:** actual browser checks selecting a single word in scripture and a single word in guide context;
+  both open the current annotation menu with the correct scripture/guide reference. No test marks were saved.
+- The original visual evidence below remains applicable to the unchanged reading layout; its earlier
+  test totals and baseline revision describe the pre-integration verification.
+
+Selected direction: option 2, scripture with expandable context. Verified the uncommitted changes on
+`t3/redesign-scripture-context`, based on `f4cc271`, using this checkout's actual Next.js app at
+`http://127.0.0.1:3146/come-follow-me/2026-10-19` in signed-out device mode.
+
+## Comparison evidence
+
+- Source visual truth: `/home/jeffrey-home/.codex/generated_images/01a179a0-27e5-7e83-9453-5b937f03c1bc/exec-8681cf89-e7f7-4055-b773-0570dd7374eb.png`, 1487 × 1058.
+- Final desktop implementation: `/tmp/cfm-scripture-first/desktop-preview-final.png`, a Firefox Responsive Design Mode capture at 1440 × 1024 CSS pixels, DPR 1. Browser chrome is excluded by Firefox's own viewport screenshot.
+- Final phone implementation: `/tmp/cfm-scripture-first/phone-preview-final.png`, 390 × 844 CSS pixels, DPR 1. Also inspected the initial layout at 320 × 480 and a normal desktop browser viewport.
+- Full-view paired comparison, opened together: `/tmp/cfm-scripture-first/desktop-comparison-final.png`. The reference is normalized to 1440 × 1024; the implementation remains at native density.
+- Focused passage/disclosure comparison, opened together: `/tmp/cfm-scripture-first/passage-comparison-final.png`. Both columns are normalized to 736px width to inspect verse type, context hierarchy, padding, rules, and the full-commentary action.
+- Responsive comparison, opened together: `/tmp/cfm-scripture-first/phone-comparison-final.png`. This is a responsive adaptation check against the desktop concept, not a claim that a mobile reference was supplied.
+- State: light theme, real Jeremiah 1:4–5 text and real published guide content; outer context expanded, full commentary collapsed. Desktop evidence also shows the following passage expanded from the keyboard/navigation check. The implementation is scrolled to the passage; the reference includes chapter front matter. These state differences are excluded from pixel-level comparisons.
+
+## Findings and repair history
+
+- **P1, repaired:** the initial disclosure revealed several paragraphs at once and displaced the next scripture passage. Evidence: `/tmp/cfm-scripture-first/desktop-open.png` and `/tmp/cfm-scripture-first/desktop-comparison.png`. Added the selected design's second disclosure: the original opening paragraph appears first; **Read full commentary** reveals the rest. No text is summarized away or removed. The post-fix paired captures above confirm that the subsequent scripture follows a finite preview again.
+- No actionable P0/P1/P2 findings remain in the final compared content section.
+
+## Fidelity surfaces
+
+- **Fonts/typography — Passed:** existing Palatino/Georgia book-like serif, DM Sans controls, rubric verse numbers, and readable 18–22px scripture hierarchy. Context uses a quieter 17px body and 24px heading. Phone headings wrap naturally.
+- **Spacing/layout — Passed:** one centered 46rem reading measure, passage separators, generous line spacing, native in-place disclosures, and one page scroller at every width. Contents remains available through the existing header drawer. The existing hero and app navigation are intentionally retained. The explanatory concept title from the generated mockup is not product copy.
+- **Colors/tokens — Passed:** existing cream paper, warm ink, rubric-red references, subtle warm context surface, and hairline rules. All new colors use existing theme tokens. Light appearance was visually inspected; dark-mode token inheritance was reviewed in source, not independently exercised.
+- **Images/assets — Passed:** existing wordmark, supplied lesson artwork, and Font Awesome chevrons are reused. No generated screenshot is used as UI, and no replacement artwork or icon system was introduced.
+- **Copy/content — Passed:** original scripture, commentary, citations, sources, illustration credits, and anchor IDs remain available. The preview uses the original opening paragraph rather than the mockup's abbreviated example copy, so it can be taller. Scripture-first ordering preserves every verse once, including around overlapping or half-verse commentary.
+
+## Verification
+
+- **Passed:** `npm run test:cfm` — 144 tests. Includes preservation of every guide reader byte and source anchor, context-preview boundaries, overlapping and half-verse passages, source order, and chapters with no commentary.
+- **Passed:** TypeScript through the final production build; standalone `tsc --noEmit -p .` also passed before the preview-depth refinement.
+- **Passed:** targeted ESLint on the changed TS/TSX files and `git diff --check`.
+- **Passed:** final `next build --webpack` — compilation, TypeScript, and 83 prerendered pages. Reused installed dependencies through an ignored local symlink to avoid another large install. Build logs: `/tmp/cfm-scripture-first/build.log`.
+- **Passed:** actual HTTP-rendered published lessons: Jeremiah 204/204 unique verses, Isaiah 58–66 160/160, Isaiah 50–57 124/124, Isaiah 40–49 242/242; contexts start collapsed. No fake data or QA-only route was used.
+- **Passed:** native Firefox browser checks: open context below the passage; expand/collapse full commentary; phone 390px layout; Contents opens a hidden commentary section and lands on its heading; verse deep links land in the continuous scripture; Shift+Tab reaches the context summary, Space collapses it, and Enter reopens it with a visible focus outline.
+- **Passed:** browser console inspected after interactions: no JavaScript errors visible. Firefox reported unused font/CSS preload warnings during development hot reloads.
+- **Passed by source review:** annotation hooks, device/cloud highlight identities, Log chapter registration and cleanup, scripture cross-reference previews, modified-click behavior, malformed fragment handling, and listener/animation-frame cleanup. Only original guide fragments enter the guide-highlight index; disclosure labels and scripture are excluded.
+- **Not run:** authenticated cloud persistence, deployed browser checks, native phone hardware, and a separate final dark-mode interaction pass. The local build reported missing `CONVEX_SITE_URL` for auth-token resolution; signed-out local reading works and no backend or auth configuration was changed.
+- **Not run:** deployment, PR creation, or merge. The task-owned local app remains running for review.
+
+final result: passed
+
+---
+
 # Guest journal integration — current live verification
 
 Working tree on `t3/notes-homepage-inspiration` after merging `origin/dev` (`e8e3b9f`) in `15e8b8b`. The earlier account-only report below is superseded for signed-out use.

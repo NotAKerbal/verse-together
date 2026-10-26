@@ -4,12 +4,13 @@
 // Changes from the original:
 // - Markdown is validated before rendering (no raw HTML, no images, public http(s) links only), and the
 //   renderer escapes raw HTML and drops unsafe link schemes as a second line of defense.
-// - Passage references inside the guide's own chapter range link to the paired scripture pane
+// - Passage references inside the guide's own chapter range link to the local scripture flow
 //   (`#scripture-isaiah-50-v1-3`) instead of an external page, and are returned as `passages`.
 // - The document title is returned so the page can render it as the h1.
 // - The rendered guide is also returned in three parts, split at its first and after its last chapter
 //   section: the introduction and the closing sections (each read on its own) around the
-//   chapter-by-chapter reader (paired with the scripture).
+//   chapter-by-chapter reader. Structured reader sections expose the same original HTML fragments so the
+//   scripture-first view can disclose commentary beneath its passage without copying or rewriting it.
 // Every source paragraph, list, table, blockquote, heading, and link is still rendered.
 
 import fs from "node:fs";
@@ -79,6 +80,20 @@ export type GuidePassageResource = {
   bodyHtml: string;
   sources: Array<{ title: string; url: string }>;
 };
+/** Original guide fragments, kept in source order for the scripture-first reader and saved highlights. */
+export type GuideContextBlock = {
+  id: string;
+  html: string;
+  passage?: GuidePassage;
+  /** End of the original heading/lead and first paragraph; the rest remains behind a second disclosure. */
+  previewEnd?: number;
+};
+export type GuideReaderSection = {
+  id: string;
+  chapter?: number;
+  headingHtml: string;
+  blocks: GuideContextBlock[];
+};
 export type ParsedGuide = {
   title: string;
   /** The complete guide in source order: exactly `introductionHtml + readerHtml + closingHtml`. */
@@ -93,6 +108,7 @@ export type ParsedGuide = {
    * section the source places between two of them. The whole guide when it has no such chapter section.
    */
   readerHtml: string;
+  readerSections: GuideReaderSection[];
   /** Every section after the last chapter section (synthesis, study plans, sources); empty when none follows. */
   closingHtml: string;
   toc: TocItem[];
@@ -493,13 +509,15 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     const note = cited.size === 0 ? `<p>Commentary is the guide's interpretation.</p>` : "";
     return `<details class="cfm-sources" data-cfm-added="sources"><summary>Sources</summary><ul>${items}</ul>${note}</details>\n`;
   };
-  const render = (group: Token[]) => {
+  const render = (group: Token[], fragments?: Array<Omit<GuideContextBlock, "id">>) => {
     let html = "";
     let blocks: Token[] = [];
     let primary: Primary | null = null;
     const flush = () => {
       if (!primary) {
-        html += renderBlocks(blocks);
+        const fragment = renderBlocks(blocks);
+        html += fragment;
+        if (fragment) fragments?.push({ html: fragment });
         blocks = [];
         return;
       }
@@ -521,7 +539,15 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
         });
       }
       // Artwork, when it belongs to this passage, sits right after the verse heading or lead paragraph.
-      html += leadHtml + artHtml + bodyHtml + sourcesPanel(primary, blocks.slice(0, end)) + renderBlocks(blocks.slice(end));
+      const fragment = leadHtml + artHtml + bodyHtml + sourcesPanel(primary, blocks.slice(0, end)) + renderBlocks(blocks.slice(end));
+      html += fragment;
+      const firstParagraph = blocks[0]?.type === "heading" ? /^<p\b[^>]*>[\s\S]*?<\/p>\n?/.exec(bodyHtml)?.[0] ?? "" : "";
+      const previewEnd = leadHtml.length + artHtml.length + firstParagraph.length;
+      fragments?.push({
+        html: fragment,
+        passage: passages.length > passageCount ? passages[passageCount] : undefined,
+        previewEnd: fragment.slice(previewEnd).trim() ? previewEnd : undefined,
+      });
       blocks = [];
       primary = null;
     };
@@ -540,20 +566,27 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
   const preambleHtml = preamble.some((token) => token.type !== "space")
     ? `<div class="cfm-preamble">\n${render(preamble)}</div>\n`
     : "";
-  const rendered: Array<{ html: string; item: TocItem; paired: boolean }> = [];
+  const rendered: Array<{ html: string; item: TocItem; paired: boolean; reader: GuideReaderSection }> = [];
   for (const group of sections) {
     const first = toc.length;
     const head = group[0] as Tokens.Heading;
     const chapter = CHAPTER.exec(head.text.replace(/[*_]/g, ""));
     context = chapter && findBook(chapter[1]) ? { book: chapter[1], chapter: chapter[2] } : null;
-    const content = render(group);
+    const fragments: Array<Omit<GuideContextBlock, "id">> = [];
+    const content = render(group, fragments);
     const item = toc[first];
     const chapterAttr =
       context && localTarget(context.book, Number(context.chapter)) ? ` data-chapter="${context.chapter}"` : "";
+    const headingHtml = /^<h2\b[^>]*>[\s\S]*?<\/h2>\n?/.exec(fragments[0]?.html ?? "")?.[0] ?? "";
+    const blocks = fragments.flatMap((fragment, index) => {
+      const html = index === 0 ? fragment.html.slice(headingHtml.length) : fragment.html;
+      return html.trim() ? [{ ...fragment, html, id: fragment.passage?.id ?? `${item.id}-context-${index}` }] : [];
+    });
     rendered.push({
       html: `<section class="cfm-section" data-kind="${item.kind}"${chapterAttr} aria-labelledby="${item.id}">\n${content}</section>\n`,
       item,
       paired: chapterAttr !== "",
+      reader: { id: item.id, chapter: chapterAttr ? Number(context?.chapter) : undefined, headingHtml, blocks },
     });
   }
   // The paired reader runs from the first chapter section of the guide's own range (a section the parser has
@@ -592,6 +625,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     html,
     introductionHtml,
     readerHtml,
+    readerSections: firstPaired < 0 ? [] : rendered.slice(firstPaired, lastPaired + 1).map((section) => section.reader),
     closingHtml,
     toc,
     passages,
