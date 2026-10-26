@@ -22,6 +22,35 @@ function storage() {
 }
 
 describe("device study persistence", () => {
+  test("saves guest goals across reloads and tabs without modifying notes or reading", () => {
+    const disk = storage();
+    const first = new DeviceStudyStore(() => disk);
+    first.createNote({ markdownBody: "Keep this thought", source, logReading: true });
+    const notes = first.getSnapshot().notes;
+    first.saveJournalGoals({ studyDays: 6, reflections: 4 });
+    const reopened = new DeviceStudyStore(() => disk);
+    reopened.refresh();
+    expect(reopened.getSnapshot().journalGoals).toEqual({ studyDays: 6, reflections: 4 });
+    expect(reopened.getSnapshot().notes).toEqual(notes);
+    reopened.saveJournalGoals({ studyDays: 2, reflections: 1 });
+    first.refresh();
+    expect(first.getSnapshot().journalGoals).toEqual({ studyDays: 2, reflections: 1 });
+    expect(first.getSnapshot().notes).toEqual(notes);
+    expect(() => first.saveJournalGoals({ studyDays: 8, reflections: 1 })).toThrow();
+    expect(first.getSnapshot().journalGoals).toEqual({ studyDays: 2, reflections: 1 });
+  });
+
+  test("goal storage failure retains the previous targets and existing notes", () => {
+    const disk = storage();
+    const store = new DeviceStudyStore(() => disk);
+    store.createNote({ markdownBody: "Keep this" });
+    store.saveJournalGoals({ studyDays: 5, reflections: 3 });
+    const before = store.getSnapshot();
+    disk.setItem = () => { throw new Error("QuotaExceededError"); };
+    expect(() => store.saveJournalGoals({ studyDays: 7, reflections: 5 })).toThrow("QuotaExceededError");
+    expect(store.getSnapshot()).toBe(before);
+  });
+
   test("creates, edits and reopens one note with its reading, then removes both", () => {
     const disk = storage();
     const first = new DeviceStudyStore(() => disk);

@@ -3,7 +3,7 @@ import type { AnnotationVerse, VerseAnnotation, HighlightColor } from "../annota
 import { annotationChapter } from "../annotations/verseAnnotations";
 import type { GuideHighlight } from "../comeFollowMe/guideAnchors";
 import { sameGuideAnchor, annotationProblem, guideHighlightProblem } from "../../../convex/annotationRules";
-import { deriveNoteTitle, NOTE_MARKDOWN_MAX } from "../../../convex/noteJournal";
+import { deriveNoteTitle, markdownExcerpt, NOTE_MARKDOWN_MAX } from "../../../convex/noteJournal";
 import { localDateKey, newRequestId, type NoteSource, type JournalEntry } from "./journal";
 import { RevisionConflictError } from "./journalOutbox";
 import { journalGoalsProblem, type JournalGoals } from "../../lib/journalGoals";
@@ -227,7 +227,7 @@ export function deviceJournal(data: DeviceStudy): JournalEntry[] {
       status: note.status,
       journal_date: note.journal_date!,
       source: note.source ?? null,
-      excerpt: note.markdown_body?.slice(0, 240) ?? null,
+      excerpt: markdownExcerpt(note.markdown_body ?? ""),
       has_reflection: !!note.markdown_body?.trim(),
       markdown_revision: note.markdown_revision!,
       markdown_canonical: true,

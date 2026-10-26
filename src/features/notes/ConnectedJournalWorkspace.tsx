@@ -305,6 +305,7 @@ export default function ConnectedJournalWorkspace() {
       goalControls={user
         ? { goals: goals ?? DEFAULT_JOURNAL_GOALS, loading: goals === undefined, onSave: saveGoals }
         : { goals: device.data.journalGoals ?? DEFAULT_JOURNAL_GOALS, loading: !device.loaded,
+            saveErrorMessage: "Your goals couldn't be saved on this device. Your changes are still here. Allow browser storage or free some space and try again.",
             onSave: async targets => deviceStudy.saveJournalGoals(targets) }}
     />
     </>

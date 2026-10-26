@@ -12,6 +12,7 @@ export type JournalGoalControls = {
   goals: JournalGoals;
   loading: boolean;
   onSave: (goals: JournalGoals) => Promise<unknown>;
+  saveErrorMessage?: string;
 };
 
 function shortDate(date: string) {
@@ -80,7 +81,9 @@ function GoalStepper({ label, hint, value, max, onChange }: {
   );
 }
 
-function GoalEditor({ goals, onSave, onClose }: { goals: JournalGoals; onSave: JournalGoalControls["onSave"]; onClose: () => void }) {
+function GoalEditor({ goals, onSave, onClose, saveErrorMessage }: {
+  goals: JournalGoals; onSave: JournalGoalControls["onSave"]; onClose: () => void; saveErrorMessage?: string;
+}) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const savingRef = useRef(false);
@@ -112,7 +115,7 @@ function GoalEditor({ goals, onSave, onClose }: { goals: JournalGoals; onSave: J
       await onSave(draft);
       dismiss();
     } catch {
-      setError("Your goals couldn't be saved. Your changes are still here; check your connection and try again.");
+      setError(saveErrorMessage ?? "Your goals couldn't be saved. Your changes are still here; check your connection and try again.");
       savingRef.current = false;
       setSaving(false);
     }
@@ -187,7 +190,8 @@ export function JournalGoalsPanel({ entries, today, status, controls }: {
             <p>{progress.monthStudyDays ? "You're showing up. Keep going." : "A fresh moment to begin."}</p></div>
         </div>}
       </section>
-      {editing && controls ? <GoalEditor goals={controls.goals} onClose={close} onSave={async goals => { await controls.onSave(goals); setSaved(true); }} /> : null}
+      {editing && controls ? <GoalEditor goals={controls.goals} onClose={close} saveErrorMessage={controls.saveErrorMessage}
+        onSave={async goals => { await controls.onSave(goals); setSaved(true); }} /> : null}
     </div>
   );
 }

@@ -1,3 +1,24 @@
+# Guest journal integration — current live verification
+
+Working tree on `t3/notes-homepage-inspiration` after merging `origin/dev` (`e8e3b9f`) in `15e8b8b`. The earlier account-only report below is superseded for signed-out use.
+
+- **Passed:** actual Next.js app at `http://127.0.0.1:3197/notes`, running this checkout with no cloud/backend environment configured and no signed-in account. The existing dev guest notebook implementation is used directly, not the QA harness.
+- **Passed:** Edit goals changed study target 5 → 6, Save succeeded, and a real reload retained 6. Restored the default 5 through the same editor. Notes and reading records remain untouched by target changes.
+- **Passed:** created `Guest mode verification` through Write a reflection / Save entry. Its explicit test text persisted after reload; the actual journal and calendar contain one entry and weekly reflections show 1 / 3. No fixture statistics or injected browser storage were used.
+- **Passed:** actual goal editor opens with saved targets and Cancel restores focus. Guest storage errors now describe browser storage instead of suggesting an account connection.
+- **Passed:** shared markdown excerpt formatting removes the repeated heading from guest previews. Device entries explicitly report whether they contain saved note text.
+- **Passed:** 197 tests across 23 files, including two new tests for guest goal reload/cross-tab persistence, invalid target rejection, storage failure, and preservation of existing notes. A final affected run passed 46 tests in four files. TypeScript, targeted ESLint and diff checks pass.
+- **Passed:** live browser error log empty after clean startup and save/reload checks. An initial generated dev chunk/type cache was malformed; only this checkout's generated `.next/dev` directory was moved to `/tmp/verse-journal-next-dev-ea4208df` and rebuilt. Source, browser data and other app servers were preserved.
+- **Evidence:** real screenshots `/tmp/verse-journal-live-home.png` and `/tmp/verse-journal-live-goals.png`, captured at requested 1540 × 1024 CSS viewport (1525 × 1014 image output). Light theme follows the device's system appearance. The note is explicitly labelled verification content and was saved via the real UI. Screenshots shown directly in the conversation.
+- **Runtime:** actual app left running on port 3197 and its Chrome tab left available. Temporary viewport override reset.
+- **Not run:** authenticated cloud goal save/sync and deployment. Guest notes and goals require neither authentication nor a backend deployment; signed-in cloud features still need their updated schema/functions deployed.
+
+Guest targets are an optional field in the existing version-1 device notebook, so existing local notes need no migration. Account targets remain separate and account-private; guest targets remain on this device.
+
+final result: passed
+
+---
+
 # Journal homepage inspiration — current verification
 
 Approved direction: option 1, amended with Edit goals and its compact editor. Implementation is the working tree on `t3/notes-homepage-inspiration`, based on `df90f5395fa82ff7fabca8d11037fdfe9e40b5c2`.
