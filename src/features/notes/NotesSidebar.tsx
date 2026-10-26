@@ -1,5 +1,7 @@
 "use client";
 
+import DeviceSyncStatus from "./DeviceSyncStatus";
+
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -212,6 +214,7 @@ export function NotesPanelContent({
           <p role="alert" className="px-4 pt-3 text-sm font-semibold wrap-anywhere text-[color:var(--accent-rubric)]">{error}</p>
         ) : null}
         <div ref={contentRef} tabIndex={-1} className="flex flex-col gap-4 p-4 outline-none">
+          <DeviceSyncStatus />
           {body}
         </div>
       </div>

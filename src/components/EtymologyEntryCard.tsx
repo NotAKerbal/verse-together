@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "@/lib/auth";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 type EtymologyItem = {
@@ -11,14 +10,9 @@ type EtymologyItem = {
 };
 
 export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
-  const { user, promptSignIn } = useAuth();
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
 
   async function onAddCardToInsight() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
     await addDictionaryBlock({
       edition: "ETY",
       word: item.word?.trim() || "Etymology",

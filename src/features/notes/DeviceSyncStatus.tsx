@@ -1,0 +1,122 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { useConvexSignedIn } from "./useConvexSignedIn";
+import { deviceStudy } from "./deviceStudy";
+import { useDeviceStudy } from "./useDeviceStudy";
+
+const SyncContext = createContext<{ syncing: boolean; error: string | null; retry: () => void } | null>(null);
+
+/** Mounted once. Claimed records remain on disk until their atomic, idempotent import is acknowledged. */
+export function DeviceSyncProvider({ children }: { children: React.ReactNode }) {
+  const { user, ready } = useConvexSignedIn();
+  const { loaded } = useDeviceStudy();
+  const importNote = useMutation(api.insights.importDeviceNote);
+  const importAnnotation = useMutation(api.annotations.upsertVerseAnnotation);
+  const importHighlight = useMutation(api.annotations.saveGuideHighlight);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const ownerId = user?.id;
+  const ownerRef = useRef(ownerId);
+  useEffect(() => {
+    ownerRef.current = ownerId;
+  }, [ownerId]);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  useEffect(() => {
+    if (!ready || !ownerId || !loaded) return;
+    const owner = ownerId;
+    let cancelled = false;
+    async function sync() {
+      setSyncing(true);
+      setError(null);
+      try {
+        deviceStudy.claim(owner);
+        const data = deviceStudy.getSnapshot();
+        for (const note of data.notes.filter((row) => row.owner === owner)) {
+          if (cancelled || ownerRef.current !== owner) return;
+          await importNote({
+            deviceId: note.id,
+            expectedOwner: owner,
+            markdownBody: note.markdown_body ?? "",
+            journalDate: note.journal_date!,
+            source: note.source ?? undefined,
+            createdAt: Date.parse(note.created_at),
+            updatedAt: Date.parse(note.updated_at),
+            readingAt: note.reading_at ? Date.parse(note.reading_at) : undefined,
+          });
+          deviceStudy.acknowledge("notes", note.id, owner);
+        }
+        for (const row of data.annotations.filter((row) => row.owner === owner)) {
+          if (cancelled || ownerRef.current !== owner) return;
+          await importAnnotation({
+            deviceImportId: row.id,
+            deviceImportOwner: owner,
+            volume: row.volume,
+            book: row.book,
+            chapter: row.chapter,
+            verse: row.verse,
+            body: row.body,
+            highlightColor: row.highlight_color ?? undefined,
+          });
+          deviceStudy.acknowledge("annotations", row.id, owner);
+        }
+        for (const row of data.highlights.filter((row) => row.owner === owner)) {
+          if (cancelled || ownerRef.current !== owner) return;
+          await importHighlight({
+            guide: row.guide,
+            part: row.part,
+            startBlock: row.startBlock,
+            startOffset: row.startOffset,
+            endBlock: row.endBlock,
+            endOffset: row.endOffset,
+            exact: row.exact,
+            prefix: row.prefix,
+            suffix: row.suffix,
+            highlightColor: row.highlightColor,
+            deviceImportId: row.id,
+            deviceImportOwner: owner,
+          });
+          deviceStudy.acknowledge("highlights", row.id, owner);
+        }
+      } catch {
+        if (!cancelled) setError("Some study is still saved on this device and hasn't synced yet.");
+      } finally {
+        if (!cancelled) setSyncing(false);
+      }
+    }
+    void sync();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, ownerId, loaded, attempt, importNote, importAnnotation, importHighlight]);
+  useEffect(() => {
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [retry]);
+  return <SyncContext.Provider value={{ syncing, error, retry }}>{children}</SyncContext.Provider>;
+}
+
+export default function DeviceSyncStatus() {
+  const { user } = useConvexSignedIn();
+  const device = useDeviceStudy();
+  const sync = useContext(SyncContext);
+  return (
+    <div
+      className="text-xs text-[color:var(--foreground-muted)]"
+      role={device.error || sync?.error ? "alert" : "status"}
+    >
+      {device.error ??
+        (!user
+          ? "Your study stays on this device. Sign in to sync across devices."
+          : (sync?.error ?? (sync?.syncing ? "Syncing device study…" : "")))}
+      {user && sync?.error ? (
+        <button type="button" onClick={sync.retry} className="ml-2 underline">
+          Try sync again
+        </button>
+      ) : null}
+    </div>
+  );
+}

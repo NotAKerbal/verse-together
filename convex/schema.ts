@@ -15,6 +15,9 @@ const scriptureResourceCoverage = v.object({
 });
 
 export default defineSchema({
+  // Durable receipts make device imports safe to retry, including after the imported record is deleted.
+  deviceStudyImports: defineTable({ clerkId: v.string(), deviceId: v.string(), recordId: v.string() })
+    .index("by_owner_device", ["clerkId", "deviceId"]),
   users: defineTable({
     // Stable app owner key referenced by every owned table's `clerkId` column. Legacy accounts keep
     // their Clerk user id here; accounts created after the Better Auth cutover use their Better Auth

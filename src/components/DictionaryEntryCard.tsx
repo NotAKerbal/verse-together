@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import DictionaryEntryBody from "@/components/DictionaryEntryBody";
-import { useAuth } from "@/lib/auth";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 type DictionaryEntry = {
@@ -20,15 +19,10 @@ export default function DictionaryEntryCard({
   entry: DictionaryEntry;
   edition: "1828" | "1844" | "1913";
 }) {
-  const { user, promptSignIn } = useAuth();
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
   const dictionaryWord = useMemo(() => entry.word?.trim() || "Dictionary entry", [entry.word]);
 
   async function onAddCardToInsight() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
     await addDictionaryBlock({
       edition,
       word: dictionaryWord,

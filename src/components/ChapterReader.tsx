@@ -48,6 +48,7 @@ import {
 import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
 import { getBookLabel } from "@/features/plans/scriptureCatalog";
+import { useChapterAnnotations } from "@/features/annotations/useChapterAnnotations";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
 import { annotationHighlightClass, highlightOf, type VerseAnnotation } from "@/features/annotations/verseAnnotations";
 import { api } from "../../convex/_generated/api";
@@ -537,16 +538,11 @@ export default function ChapterReader({
     textReady ? overlayTranslations : NO_OVERLAYS
   );
   const overlayList = overlayTranslations.join(",");
-  const { user, getToken, promptSignIn } = useAuth();
+  const { user, getToken } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
   useTrackLastPosition(volume, book, chapter);
-  const annotationsApi = (api as any).annotations;
-  const chapterAnnotationData = useQuery(annotationsApi.getChapterAnnotations, {
-    volume,
-    book,
-    chapter,
-  }) as { by_verse: Record<number, VerseAnnotation[]> } | undefined;
+  const chapterAnnotationData = useChapterAnnotations(volume, book, chapter);
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
@@ -1324,10 +1320,6 @@ export default function ChapterReader({
   }
 
   async function onAddToNote() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
     if (!selectedBounds || !selectionReferenceLabel) return;
     await appendScriptureBlock({
       volume,
@@ -1343,10 +1335,6 @@ export default function ChapterReader({
   }
 
   async function onNewNoteFromActions() {
-    if (!user) {
-      void promptSignIn();
-      return;
-    }
     const createdId = await createDraft("New note");
     if (!createdId) return;
     await switchDraft(createdId);
@@ -1794,10 +1782,6 @@ export default function ChapterReader({
           label={`Verse ${annotationEditorVerse}`}
           rows={annotationsByVerse[annotationEditorVerse] ?? []}
           loaded={chapterAnnotationData !== undefined}
-          signedIn={!!user}
-          onSignIn={() => {
-            void promptSignIn();
-          }}
           onClose={() => setAnnotationEditorVerse(null)}
         />
       ) : null}
@@ -1864,7 +1848,7 @@ export default function ChapterReader({
         showInsightAction={showInsightAction}
         showExplore={canExploreWord}
         targetLabel="Note"
-        actionsEnabled={!!user}
+        actionsEnabled={true}
         onClear={clearSelection}
         onInsight={() => {
           void onAddToNote();

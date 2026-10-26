@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useMutation, useQueries } from "convex/react";
+import { deviceStudy } from "../notes/deviceStudy";
+import { useDeviceStudy } from "../notes/useDeviceStudy";
 import { useAuth } from "@/lib/auth";
 import type { HighlightColor } from "@/features/annotations/verseAnnotations";
 import { api } from "../../../convex/_generated/api";
@@ -290,12 +292,18 @@ export function useGuideHighlights(
   reader: ReadonlyArray<RefObject<HTMLElement | null>>,
   layoutKey: string
 ) {
-  const { user, promptSignIn } = useAuth();
+  const { user } = useAuth();
+  const device = useDeviceStudy();
   const roots = useMemo<Roots>(() => ({ introduction: [introduction], reader }), [introduction, reader]);
   // useQueries rather than useQuery: a backend that doesn't have this query yet answers with an Error
   // instead of throwing, and the guide reads on without highlights.
-  const queries = useMemo(() => ({ highlights: { query: api.annotations.getGuideHighlights, args: { guide } } }), [guide]);
-  const result: unknown = useQueries(queries).highlights;
+  const queries = useMemo(() => {
+    const requests: Parameters<typeof useQueries>[0] = {};
+    if (user) requests.highlights = { query: api.annotations.getGuideHighlights, args: { guide } };
+    return requests;
+  }, [guide, user]);
+  const remote: unknown = useQueries(queries).highlights;
+  const result: unknown = user ? remote : device.loaded ? device.data.highlights.filter(row => row.owner === null && row.guide === guide) : undefined;
   const status: Status = result === undefined ? "loading" : Array.isArray(result) ? "ready" : "unavailable";
   // The rows keep their identity until their content changes, so the page re-rendering (it does, often,
   // while the reader scrolls) never repaints the highlights.
@@ -394,16 +402,15 @@ export function useGuideHighlights(
         current={row.highlightColor}
         status={status}
         supported={highlightsSupported()}
-        signedIn={!!user}
-        onSignIn={() => {
-          void promptSignIn();
-        }}
         onSave={async (highlightColor) => {
-          await updateHighlight({ highlightId, highlightColor });
+          if (!user) {
+            deviceStudy.saveHighlight({ guide: row.guide, part: row.part, startBlock: row.startBlock, startOffset: row.startOffset, endBlock: row.endBlock, endOffset: row.endOffset, exact: row.exact, prefix: row.prefix, suffix: row.suffix, highlightColor });
+          } else await updateHighlight({ highlightId, highlightColor });
           clearSelection();
         }}
         onRemove={async () => {
-          await deleteHighlight({ highlightId });
+          if (!user) deviceStudy.remove("highlights", row.id);
+          else await deleteHighlight({ highlightId });
           clearSelection();
         }}
         onClose={() => setEditing(null)}
@@ -424,13 +431,10 @@ export function useGuideHighlights(
         current={null}
         status={status}
         supported={highlightsSupported()}
-        signedIn={!!user}
-        onSignIn={() => {
-          void promptSignIn();
-        }}
         onSave={async (highlightColor) => {
           if (!described.ok) return;
-          await saveHighlight({ guide, part, ...described.anchor, highlightColor });
+          if (!user) deviceStudy.saveHighlight({ guide, part, ...described.anchor, highlightColor });
+          else await saveHighlight({ guide, part, ...described.anchor, highlightColor });
           clearSelection();
         }}
         onRemove={null}
