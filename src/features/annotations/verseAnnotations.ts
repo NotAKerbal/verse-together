@@ -10,9 +10,12 @@ import {
   type MarkKind,
   type MarkPreset,
   type VerseMarksPatch,
+  type VerseTextMark,
+  type VerseTextRange,
+  matchingTextMarks,
 } from "../../../convex/annotationRules.ts";
 
-export type { MarkColor, MarkKind, MarkPreset, VerseMarksPatch };
+export type { MarkColor, MarkKind, MarkPreset, VerseMarksPatch, VerseTextMark, VerseTextRange };
 export {
   MARK_PRESET_NAME_MAX,
   markPresetKey,
@@ -30,6 +33,7 @@ export type AnnotationMarkColor = "none" | MarkColor;
 /** One row of annotations.getChapterAnnotations. A highlight- or underline-only annotation has an empty body. */
 export type VerseAnnotation = {
   id: string;
+  text_marks?: VerseTextMark[];
   verse: number;
   body: string;
   visibility: "private";
@@ -57,6 +61,22 @@ export type AnnotationVerse = AnnotationChapter & { verse: number };
  */
 export function annotationChapter(volume: string, book: string, chapter: number): AnnotationChapter {
   return { volume: toScriptureVolumeUrlSlug(volume), book, chapter };
+}
+
+/**
+ * A chapter's annotations from this device's rows (a guest's), shaped as the account query answers: only
+ * unclaimed rows of exactly that chapter identity (pass annotationChapter's), whichever reader saved them.
+ */
+export function deviceChapterAnnotations(
+  rows: ReadonlyArray<VerseAnnotation & AnnotationVerse & { owner: string | null }>,
+  target: AnnotationChapter
+): ChapterAnnotations {
+  const by_verse: ChapterAnnotations["by_verse"] = {};
+  for (const row of rows) {
+    if (row.owner !== null || row.volume !== target.volume || row.book !== target.book || row.chapter !== target.chapter) continue;
+    (by_verse[row.verse] ??= []).push(row);
+  }
+  return { by_verse };
 }
 
 /** The viewer's own annotation on each verse of a chapter's query result. */
@@ -134,6 +154,7 @@ export function annotationSummary(annotation: VerseAnnotation | null | undefined
     .filter(Boolean)
     .join(" and ");
   if (annotation?.body) return marks ? `Note with ${marks.toLowerCase()}` : "Note";
+  if (!marks && annotation?.text_marks?.length) return "Selected text marked";
   if (!marks) return "";
   return `${marks.charAt(0)}${marks.slice(1).toLowerCase()}${marks.includes(" and ") ? "" : " only"}`;
 }
@@ -159,9 +180,19 @@ function presentColors(colors: readonly AnnotationMarkColor[]): MarkColor[] {
   return MARK_COLORS.filter((color) => colors.includes(color));
 }
 
-export function selectionMarks(annotations: ReadonlyArray<VerseAnnotation | null | undefined>): SelectionMarks {
-  const highlights = annotations.map(highlightOf);
-  const underlines = annotations.map(underlineColorOf);
+export function selectionMarks(annotations: ReadonlyArray<VerseAnnotation | null | undefined>, ranges?: readonly VerseTextRange[]): SelectionMarks {
+  const colors = (kind: MarkKind): AnnotationMarkColor[] => annotations.flatMap((annotation, index) => {
+    const base = kind === "highlight" ? highlightOf(annotation) : underlineColorOf(annotation);
+    const range = ranges?.[index];
+    if (!range) return [base];
+    const marks = matchingTextMarks(annotation?.text_marks, range.text).filter(m => m.kind === kind);
+    const edges = [...new Set([range.start, range.end, ...marks.flatMap(m => [m.start, m.end])])]
+      .filter(offset => offset >= range.start && offset <= range.end).sort((a, b) => a - b);
+    return edges.slice(0, -1).map((start, i) =>
+      marks.findLast(m => m.start <= start && m.end >= edges[i + 1])?.color ?? base);
+  });
+  const highlights = colors("highlight");
+  const underlines = colors("underline");
   return {
     highlight: sharedColor(highlights),
     underline: sharedColor(underlines),
@@ -210,8 +241,10 @@ export function withVerseMarks(
         highlightColor: mine.highlight_color,
         underline: mine.underline,
         underlineColor: mine.underline_color,
+        textMarks: mine.text_marks,
       },
-      patch
+      patch,
+      patch.ranges?.find(range => range.verse === verse)
     );
     if (!next.keep) {
       if (others.length) byVerse[verse] = others;
@@ -221,6 +254,7 @@ export function withVerseMarks(
     const row: VerseAnnotation = mine
       ? {
           ...mine,
+          ...(next.textMarks ? { text_marks: next.textMarks } : {}),
           highlight_color: next.highlightColor ?? null,
           underline: next.underline,
           underline_color: next.underlineColor ?? null,
@@ -231,6 +265,7 @@ export function withVerseMarks(
           verse,
           body: "",
           visibility: "private",
+          ...(next.textMarks ? { text_marks: next.textMarks } : {}),
           highlight_color: next.highlightColor ?? null,
           underline: next.underline,
           underline_color: next.underlineColor ?? null,

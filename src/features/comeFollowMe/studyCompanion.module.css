@@ -1,31 +1,9 @@
 /*
-  Come, Follow Me study companion, set like the guides at isaacstuff.com/cfm: cream paper, warm ink,
-  rubric red for references and numerals, serif reading type, sans only for small labels, and space
-  instead of boxes. Every color comes from the app theme tokens, so light and dark both apply.
-  Guide HTML from the parser uses cfm-* class names, reached only through :global() under .guide.
-
-  The page reads top to bottom: the page head, then the guide's introduction (front matter and orientation,
-  everything before its first chapter) as ordinary page content, then the chapter-by-chapter reader, then
-  the closing sections (everything after the last chapter), again as ordinary page content, and the footer.
-  From 900px the head, the introduction, the reader, and the closing sections share one centered column as
-  wide as the reader's pair (guide plus gap plus scripture), so all of them have the same outer edges. While
-  the contents rail shows, that column centers in the room to the rail's right rather than in the whole page.
-  On phones the closing sections end the guide side of the strip instead (see .closing).
-
-  Reader from 900px: always the guide and the complete assigned scripture side by side, the scripture a
-  sticky column. Below 900px: the guide and the complete scripture are a native horizontal scroll-snap
-  strip, guide first, one side per screen width, each side scrolling on its own. There is no switch.
-
-  The app header stays transparent over the page, as everywhere else in the app. The reader measures it
-  for docking and landings.
-
-  The contents sit outside all of this: a rail fixed in the left margin where the margin is wide enough,
-  and a drawer opened from the one Contents button. That button, with Log beside it (and on phones the
-  pager between the guide and the scripture before them), is in the guide's controls pill, which
-  StudyCompanion portals into the app header's right side (ReaderHeaderSlot) at every width and in simple
-  mode, outside this page, styled in globals.css (.guide-header-actions), and stays visible beside the rail.
-  The header is fixed on this page at every width, phones included; on phones the pager opens in the pill
-  only while the reader is docked.
+  Come, Follow Me uses the existing cream-paper, warm-ink, rubric-red theme and book-like serif.
+  StudyCompanion renders one continuous scripture column at every width, with native disclosures for
+  passage context, the introduction, and the closing sections. Original guide HTML and anchors are kept
+  inside those disclosures; Contents and Log remain in the app header. Shared guide prose, annotation,
+  contents, and scripture-preview styles follow the scripture-first styles below.
 */
 
 .page {
@@ -46,6 +24,246 @@
   /* The contents rail's width (see .contentsRail); the page also uses it to center beside the rail. */
   --cfm-rail-width: var(--cfm-rail-w, clamp(12rem, calc(50vw - var(--cfm-pair) / 2 - 3rem), 17rem));
   gap: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+/* Scripture-first reader: the same calm reading measure and page scroll on every device. */
+.scriptureFirst,
+.guideOverview,
+.scriptureFirstFooter {
+  width: 100%;
+  max-width: 46rem;
+  margin-inline: auto;
+}
+
+.readerInvitation {
+  margin-bottom: 2rem;
+  font: 400 0.875rem/1.6 var(--cfm-sans);
+  color: var(--cfm-muted);
+}
+
+.readingChapter + .readingChapter {
+  margin-top: clamp(3.5rem, 7vw, 5.5rem);
+  padding-top: 2rem;
+  border-top: 1px solid var(--cfm-rule-strong);
+}
+
+.scriptureFirst [id],
+.guideOverview [id] {
+  scroll-margin-top: calc(var(--header-height) + 1.25rem);
+}
+
+.readingChapterHead.guide {
+  max-width: none;
+  margin-bottom: 1.75rem;
+}
+
+.readingChapterHead.guide :global(h2.cfm-h-chapter),
+.plainChapterTitle {
+  margin: 0;
+  font: 400 clamp(2.25rem, 1.8rem + 1.5vw, 3rem)/1.15 var(--cfm-serif);
+  letter-spacing: -0.025em;
+}
+
+.readingChapterHead.guide :global(.cfm-ch-book),
+.readingChapterHead.guide :global(.cfm-ch-num) {
+  display: inline;
+  margin: 0;
+  color: var(--cfm-ink);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+}
+
+.readingChapterHead.guide :global(.cfm-ch-title) {
+  margin-top: 0.55rem;
+  color: var(--cfm-ink-2);
+  font: 400 clamp(1.25rem, 1.1rem + 0.5vw, 1.6rem)/1.35 var(--cfm-serif);
+  letter-spacing: -0.01em;
+}
+
+.readingChapterHead.guide :global(h2.cfm-h-chapter a.cfm-local:hover .cfm-ch-num) {
+  text-decoration: none;
+}
+
+.readingPassage {
+  margin-top: 1.75rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--cfm-rule);
+}
+
+.contextOnly {
+  margin-top: 0.75rem;
+}
+
+.passageEyebrow {
+  margin-bottom: 0.65rem;
+  color: var(--cfm-rubric);
+  font: 600 0.75rem/1.5 var(--cfm-sans);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.readingVerses.verses {
+  font-size: clamp(1.125rem, 1.04rem + 0.4vw, 1.375rem);
+  line-height: 1.65;
+  padding-inline: 0.25rem;
+}
+
+.readingVerses.verses li {
+  scroll-margin-top: calc(var(--header-height) + 1.25rem);
+}
+
+.contextDisclosure {
+  margin-top: 1rem;
+  border: 1px solid var(--cfm-rule);
+  border-radius: 0.5rem;
+  background: var(--surface-card-soft);
+}
+
+.contextDisclosure > summary,
+.guideOverview > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3rem;
+  padding: 0.7rem 1rem;
+  color: var(--cfm-ink-2);
+  font: 400 0.9375rem/1.5 var(--cfm-sans);
+  list-style: none;
+  cursor: pointer;
+}
+
+.contextDisclosure > summary::-webkit-details-marker,
+.guideOverview > summary::-webkit-details-marker {
+  display: none;
+}
+
+.contextDisclosure > summary:hover,
+.guideOverview > summary:hover {
+  color: var(--cfm-ink);
+}
+
+.contextDisclosure > summary:focus-visible,
+.guideOverview > summary:focus-visible,
+.fullChapterLink a:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 3px;
+  border-radius: 0.25rem;
+}
+
+.contextChevron {
+  width: 0.75rem;
+  flex: 0 0 0.75rem;
+}
+
+.contextDisclosure[open] > summary .contextChevron,
+.guideOverview[open] > summary .contextChevron {
+  transform: rotate(180deg);
+}
+
+.contextBody.guide {
+  max-width: none;
+  margin: 0 1.25rem;
+  padding: 1rem 0 1.25rem;
+  border-top: 1px solid var(--cfm-rule);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+.contextBody.guide > * + * {
+  margin-top: 1em;
+}
+
+.contextFragment > * + * {
+  margin-top: 1em;
+}
+
+.fullCommentary > summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--cfm-rubric);
+  list-style: none;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.fullCommentary > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fullCommentary > summary:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 3px;
+}
+
+.fullCommentary > .contextFragment {
+  margin-top: 0.75rem;
+}
+
+.moreExpanded,
+.fullCommentary[open] > summary .moreCollapsed {
+  display: none;
+}
+
+.fullCommentary[open] > summary .moreExpanded {
+  display: inline;
+}
+
+.contextBody.guide :global(h3.cfm-h-verse) {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+}
+
+.contextBody.guide :global(.cfm-vref) {
+  font-size: 0.7rem;
+}
+
+.guideOverview {
+  border-block: 1px solid var(--cfm-rule);
+}
+
+.guideOverview > summary {
+  padding: 0.85rem 0;
+}
+
+.disclosureHint {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--cfm-muted);
+  font-size: 0.75rem;
+}
+
+.overviewBody.guide {
+  max-width: none;
+  padding-block: 1rem 1.75rem;
+}
+
+.fullChapterLink {
+  margin-top: 1.75rem;
+  color: var(--cfm-muted);
+  font: 400 0.8125rem/1.6 var(--cfm-sans);
+}
+
+.fullChapterLink a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.interChapter {
+  margin-top: 3rem;
+}
+
+.scriptureFirstFooter > .footer {
+  max-width: none;
+  margin-top: 1rem;
+}
+
+@media (max-width: 479px) {
+  .contextBody.guide {
+    margin-inline: 0.9rem;
+  }
 }
 
 /*
@@ -288,7 +506,6 @@
 .guideLink:focus-visible,
 .backToGuide:focus-visible,
 .verseNumber[role="button"]:focus-visible,
-.annotateChip:focus-visible,
 .passageClose:focus-visible,
 .passageAction:focus-visible,
 .passageChapterLink:focus-visible,
@@ -610,29 +827,71 @@
   }
 }
 
-/* The Annotate button beside a text selection in the scripture pane (placed by useScriptureAnnotations). */
-.annotateChip {
-  position: fixed;
-  z-index: 40;
-  display: inline-flex;
-  align-items: center;
-  height: 2.25rem;
-  padding: 0 0.85rem;
-  overflow: hidden;
-  border: 1px solid var(--cfm-rule-strong);
-  border-radius: 999px;
-  background: var(--cfm-panel);
-  box-shadow: var(--surface-shadow-soft);
-  font-family: var(--cfm-sans);
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--cfm-ink);
+/* The scripture pane's and the guide's selection menus (VerseActionBar, fixed to the viewport): no box of their own. */
+.selectionMenu {
+  display: contents;
 }
 
-.annotateChip:hover {
-  color: var(--cfm-rubric);
+/* The saved guide passages a selection overlaps, in the Annotate panel (useGuideHighlights). */
+.savedPassages {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.savedPassage {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+
+.savedPassage:hover:not([aria-current="true"]) {
+  background: var(--surface-card-soft);
+}
+
+.savedPassage:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 2px;
+}
+
+.savedPassage[aria-current="true"] {
+  border-color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--foreground);
+  cursor: default;
+}
+
+.savedPassageMarks {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+}
+
+.savedPassageText {
+  display: grid;
+  min-width: 0;
+}
+
+.savedPassageQuote {
+  overflow: hidden;
+  font-family: var(--cfm-serif, serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.savedPassageSummary {
+  color: var(--foreground-soft);
+  font-size: 11px;
 }
 
 .guideLink {

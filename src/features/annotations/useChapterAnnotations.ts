@@ -4,8 +4,15 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useAuth } from "@/lib/auth";
 import { useDeviceStudy } from "../notes/useDeviceStudy";
-import { annotationChapter, type ChapterAnnotations } from "./verseAnnotations";
+import { annotationChapter, deviceChapterAnnotations, type ChapterAnnotations } from "./verseAnnotations";
 
+export { deviceChapterAnnotations };
+
+/**
+ * One chapter's annotations, for any reader: the account's (a live subscription) when signed in, else this
+ * device's. Either way under annotationChapter's identity, so the Come, Follow Me pane and the standard reader
+ * read the same rows.
+ */
 export function useChapterAnnotations(volume: string, book: string, chapter: number): ChapterAnnotations | undefined {
   const { user } = useAuth();
   const device = useDeviceStudy();
@@ -14,22 +21,4 @@ export function useChapterAnnotations(volume: string, book: string, chapter: num
   if (user) return remote;
   if (!device.loaded) return undefined;
   return deviceChapterAnnotations(device.data.annotations, target);
-}
-
-export function deviceChapterAnnotations(
-  rows: ReturnType<typeof useDeviceStudy>["data"]["annotations"],
-  target: { volume: string; book: string; chapter: number },
-): ChapterAnnotations {
-  const by_verse: ChapterAnnotations["by_verse"] = {};
-  for (const row of rows) {
-    if (
-      row.owner !== null ||
-      row.volume !== target.volume ||
-      row.book !== target.book ||
-      row.chapter !== target.chapter
-    )
-      continue;
-    (by_verse[row.verse] ??= []).push(row);
-  }
-  return { by_verse };
 }

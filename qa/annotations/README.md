@@ -185,3 +185,36 @@ retain colored underlines and let existing account marks take precedence. Accoun
 - **Blocked (existing configuration)** — dev's prior Vercel build at `1e1c10e` failed because
   `CONVEX_AUTOMATIC_DEPLOYMENT=dev:fabulous-dogfish-606` was not configured. A metadata-only read
   showed no dev-branch activation marker or deploy key. No provider settings or secrets were changed.
+
+## Come, Follow Me selection menus and shared scripture annotations
+
+Verified on 2026-10-26 in the local working tree based on `dd17dc6`. Both Come, Follow Me panes now use
+the production `VerseActionBar`. Guide marks and notes belong to an anchored span of guide prose; scripture
+annotations use the same canonical verse identity, guest store, account query, and editor as the chapter reader.
+
+- **Passed** — `npm run test:cfm`: 147 tests, including legacy guide highlight compatibility, span recovery,
+  overlapping passages, and independent mark changes.
+- **Passed** — `npx vitest run --maxWorkers=2`: 33 files / 269 tests. New guide persistence tests cover
+  ownership, validation, old rows, note-only spans, independent marks, deletion, and idempotent guest imports.
+  New scripture sync tests cover both directions for guest and account rows, including canonical `dnc` identities.
+- **Passed** — `npx tsc --noEmit` and `npx tsc --noEmit -p convex/tsconfig.json`.
+- **Passed** — `npm run build`: optimized production compilation, TypeScript, and static page generation.
+- **Passed** — targeted ESLint on the new/changed guide UI, shared selector, shared hooks, device store,
+  import provider, annotation helpers/editor, schema, rules, and regression tests; `git diff --check`.
+- **Failed (existing findings)** — `convex/annotations.ts` retains its four baseline lint errors
+  (`@ts-nocheck` and three `any` usages). `ChapterReader.tsx` retains the previously documented hook lint errors.
+  The initial unrestricted Vitest run timed out on 46 tests during parallel cold imports; the complete rerun
+  with two workers passed without increasing test timeouts.
+- **Passed** — real app in headless Chrome at `http://localhost:3107`, week `2026-09-28`: 20 desktop/phone
+  checks plus four guide-section/drag checks. Guide presets, custom red highlights, visibly painted colored
+  underlines, notes, reload persistence, exact saved-passage targeting, Escape/Back, touch, and dismissal work.
+  Introduction and closing prose also save marks; note-only passages have a dotted underline.
+- **Passed** — two live tabs in one guest browser context: create a scripture highlight, underline, and note
+  in Come, Follow Me; read/edit them in the chapter reader; observe the changes in the open Come, Follow Me
+  tab and after reload; delete in the reader and observe removal in Come, Follow Me. The note editor reopens
+  the same note in either view, and opens empty after deletion.
+- **Not run** — signed-in browser interactions, a live sign-in import, or deployment of the backend schema
+  and mutations. Account persistence/import behavior is covered with the in-memory Convex backend.
+
+Runtime scripts, result logs, and actual application screenshots are in `/tmp/cfm-guide-verify/`. The task's
+browser contexts and local dev server were stopped after verification. No production data was changed.

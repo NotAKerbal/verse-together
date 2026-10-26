@@ -1,6 +1,6 @@
 "use client";
 
-import { faNoteSticky, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faNoteSticky, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
@@ -43,10 +43,14 @@ export default function VerseInsightMarker({
   verse,
   insights,
   onOpen,
+  variant = "note",
+  passageLabel,
 }: {
   verse: number;
   insights: VerseInsightRef[];
   onOpen: (draftId: string) => void;
+  variant?: "note" | "reading";
+  passageLabel?: string;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -54,6 +58,7 @@ export default function VerseInsightMarker({
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({ visibility: "hidden" });
   const titleId = useId();
   const count = insights.length;
+  const isReading = variant === "reading";
 
   // Anchor the picker to the marker; keep it on screen and follow scroll/resize.
   useLayoutEffect(() => {
@@ -121,8 +126,9 @@ export default function VerseInsightMarker({
 
   if (count === 0) return null;
 
-  const label =
-    count === 1
+  const label = isReading
+    ? `Open reading log for ${passageLabel ?? `verse ${verse}`}`
+    : count === 1
       ? `Open your insight "${insights[0].draftTitle}" for verse ${verse}`
       : `Choose one of ${count} of your insights for verse ${verse}`;
 
@@ -134,8 +140,8 @@ export default function VerseInsightMarker({
         aria-label={label}
         aria-haspopup={count > 1 ? "dialog" : undefined}
         aria-expanded={count > 1 ? pickerOpen : undefined}
-        title={count === 1 ? "In one of your insights" : `In ${count} of your insights`}
-        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
+        title={isReading ? "Logged as read" : count === 1 ? "In one of your insights" : `In ${count} of your insights`}
+        className={isReading ? "verse-read-marker" : `inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
           pickerOpen
             ? "bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
             : "bg-[color:var(--accent-sky-soft)] text-foreground hover:shadow-[var(--surface-shadow-soft)]"
@@ -150,7 +156,7 @@ export default function VerseInsightMarker({
           setPickerOpen((prev) => !prev);
         }}
       >
-        <FontAwesomeIcon icon={faNoteSticky} className="h-3.5 w-3.5" />
+        <FontAwesomeIcon icon={isReading ? faCheck : faNoteSticky} className="h-3.5 w-3.5" />
       </button>
       {pickerOpen && typeof document !== "undefined"
         ? createPortal(
@@ -166,13 +172,13 @@ export default function VerseInsightMarker({
               <header className="flex items-center justify-between gap-2 border-b-2 border-[color:var(--surface-border)] bg-[color:var(--accent-sky-soft)] px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] text-foreground">
-                    <FontAwesomeIcon icon={faNoteSticky} className="h-3 w-3" />
+                    <FontAwesomeIcon icon={isReading ? faCheck : faNoteSticky} className="h-3 w-3" />
                   </span>
                   <div className="min-w-0">
                     <div id={titleId} className="truncate font-display text-sm font-extrabold tracking-[-0.02em] text-foreground">
-                      Your insights
+                      {isReading ? "Reading log" : "Your insights"}
                     </div>
-                    <div className="text-[11px] font-semibold text-foreground/65">Verse {verse}</div>
+                    <div className="text-[11px] font-semibold text-foreground/65">{passageLabel ?? `Verse ${verse}`}</div>
                   </div>
                 </div>
                 <button
@@ -199,12 +205,12 @@ export default function VerseInsightMarker({
                         </span>
                         <span className="block text-[11px] text-foreground/60">{formatRange(insight)}</span>
                       </span>
-                      <span
+                      {!isReading ? <span
                         className="shrink-0 rounded-full border-2 border-[color:var(--surface-border)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-foreground"
                         style={{ background: insight.status === "published" ? "var(--accent-mint)" : "var(--accent-note)" }}
                       >
                         {insight.status === "published" ? "Published" : "Draft"}
-                      </span>
+                      </span> : null}
                     </button>
                   </li>
                 ))}

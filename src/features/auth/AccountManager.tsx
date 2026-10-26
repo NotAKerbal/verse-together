@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faPenToSquare } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/app/account/page.module.css";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { SIGN_OUT_FAILED, useAuth } from "@/lib/auth";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../../convex/authEnvironment";
@@ -94,7 +94,7 @@ function SignOutButton({ label }: { label: string }) {
   );
 }
 
-export default function AccountManager({ children }: { children?: ReactNode }) {
+export default function AccountManager() {
   const auth = useAuth();
 
   if (!auth.configured) {
@@ -124,8 +124,8 @@ export default function AccountManager({ children }: { children?: ReactNode }) {
   }
   if (!auth.user || !auth.authUser) {
     return (
-      <div className={styles.notice}>
-        <p className="text-sm">Sign in to sync your study.</p>
+      <div className={`${styles.settingsCard} ${styles.notice}`}>
+        <p className="text-sm">Sign in to manage your account and sync your study. General settings are saved on this device.</p>
         <button
           type="button"
           className={`${PRIMARY_BUTTON_CLASS} w-auto`}
@@ -138,10 +138,10 @@ export default function AccountManager({ children }: { children?: ReactNode }) {
       </div>
     );
   }
-  return <AccountDetails>{children}</AccountDetails>;
+  return <AccountDetails />;
 }
 
-function AccountDetails({ children }: { children?: ReactNode }) {
+function AccountDetails() {
   const auth = useAuth();
   const capabilities = useAuthCapabilities();
   const authUser = auth.authUser!;
@@ -179,7 +179,7 @@ function AccountDetails({ children }: { children?: ReactNode }) {
   const emailPassword = capabilities?.emailPassword === true;
 
   return (
-    <div className={styles.manager}>
+    <div className={styles.accountManager}>
       <div className={styles.profileColumn}>
         {auth.legacyAccountPending ? (
           <FormMessage tone="info">
@@ -191,65 +191,66 @@ function AccountDetails({ children }: { children?: ReactNode }) {
         <div className={styles.footer}><SignOutButton label="Sign out" /></div>
       </div>
       <div className={styles.settingsColumn}>
-        {listError ? (
-          <div className="space-y-2">
-            <FormMessage tone="error">{listError}</FormMessage>
-            <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={() => void loadLists()}>
-              Reload sign-in methods and sessions
-            </button>
-          </div>
-        ) : null}
-        {!authUser.emailVerified ? <Section title="Email" summary="Not confirmed">
-          <p className="text-sm">
-            <span className="font-semibold">{authUser.email}</span>{" "}
-            <span className="text-[color:var(--foreground-muted)]">
-              {authUser.emailVerified ? "· Confirmed" : "· Not confirmed"}
-            </span>
-          </p>
-          {!authUser.emailVerified && capabilities?.emailDelivery ? <ResendVerification email={authUser.email} /> : null}
-          {!authUser.emailVerified && emailPassword && !capabilities?.emailDelivery ? (
-            <p className="text-xs text-[color:var(--foreground-muted)]">
-              Email confirmation isn&apos;t set up on this site yet, so friends can&apos;t find you by email.
-            </p>
+        <div className={styles.settingsCard}>
+          {listError ? (
+            <div className="space-y-2">
+              <FormMessage tone="error">{listError}</FormMessage>
+              <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={() => void loadLists()}>
+                Reload sign-in methods and sessions
+              </button>
+            </div>
           ) : null}
-        </Section> : null}
-
-        <Section title="Sign-in methods" summary={accounts === null ? (listError ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
-          {accounts === null ? (
-            <ListPlaceholder failed={!!listError} />
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {emailPassword ? <li>Email and password: {hasPassword ? "set up" : "not set up"}</li> : null}
-              {!emailPassword || capabilities?.google || hasGoogle ? (
-                <li>Google: {hasGoogle ? "connected" : "not connected"}</li>
-              ) : null}
-            </ul>
-          )}
-          {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
-        </Section>
-
-        {emailPassword ? (
-          <Section title="Password">
-            {accounts === null ? null : hasPassword ? (
-              <ChangePasswordForm onChanged={loadLists} />
-            ) : capabilities?.emailDelivery ? (
-              <p className="text-sm">
-                You sign in without a password.{" "}
-                <Link href="/forgot-password" className="font-semibold underline underline-offset-2">
-                  Set a password by email
-                </Link>
+          {!authUser.emailVerified ? <Section title="Email" summary="Not confirmed">
+            <p className="text-sm">
+              <span className="font-semibold">{authUser.email}</span>{" "}
+              <span className="text-[color:var(--foreground-muted)]">
+                {authUser.emailVerified ? "· Confirmed" : "· Not confirmed"}
+              </span>
+            </p>
+            {!authUser.emailVerified && capabilities?.emailDelivery ? <ResendVerification email={authUser.email} /> : null}
+            {!authUser.emailVerified && emailPassword && !capabilities?.emailDelivery ? (
+              <p className="text-xs text-[color:var(--foreground-muted)]">
+                Email confirmation isn&apos;t set up on this site yet, so friends can&apos;t find you by email.
               </p>
+            ) : null}
+          </Section> : null}
+
+          <Section title="Sign-in methods" summary={accounts === null ? (listError ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
+            {accounts === null ? (
+              <ListPlaceholder failed={!!listError} />
             ) : (
-              <p className="text-sm text-[color:var(--foreground-muted)]">You sign in without a password.</p>
+              <ul className="space-y-1 text-sm">
+                {emailPassword ? <li>Email and password: {hasPassword ? "set up" : "not set up"}</li> : null}
+                {!emailPassword || capabilities?.google || hasGoogle ? (
+                  <li>Google: {hasGoogle ? "connected" : "not connected"}</li>
+                ) : null}
+              </ul>
             )}
+            {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
           </Section>
-        ) : null}
 
-        <Section title="Sessions" summary={sessions === null ? (listError ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
-          <SessionsPanel sessions={sessions} failed={!!listError} onChanged={loadLists} />
-        </Section>
+          {emailPassword ? (
+            <Section title="Password">
+              {accounts === null ? null : hasPassword ? (
+                <ChangePasswordForm onChanged={loadLists} />
+              ) : capabilities?.emailDelivery ? (
+                <p className="text-sm">
+                  You sign in without a password.{" "}
+                  <Link href="/forgot-password" className="font-semibold underline underline-offset-2">
+                    Set a password by email
+                  </Link>
+                </p>
+              ) : (
+                <p className="text-sm text-[color:var(--foreground-muted)]">You sign in without a password.</p>
+              )}
+            </Section>
+          ) : null}
 
-        {children}
+          <Section title="Sessions" summary={sessions === null ? (listError ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
+            <SessionsPanel sessions={sessions} failed={!!listError} onChanged={loadLists} />
+          </Section>
+
+        </div>
       </div>
     </div>
   );

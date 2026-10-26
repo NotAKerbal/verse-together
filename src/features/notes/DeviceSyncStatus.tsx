@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useConvexSignedIn } from "./useConvexSignedIn";
-import { annotationImport, deviceStudy } from "./deviceStudy";
+import { annotationImport, deviceStudy, guideHighlightImport } from "./deviceStudy";
 import { useDeviceStudy } from "./useDeviceStudy";
 
 const SyncContext = createContext<{ syncing: boolean; error: string | null; retry: () => void } | null>(null);
@@ -56,20 +56,7 @@ export function DeviceSyncProvider({ children }: { children: React.ReactNode }) 
         }
         for (const row of data.highlights.filter((row) => row.owner === owner)) {
           if (cancelled || ownerRef.current !== owner) return;
-          await importHighlight({
-            guide: row.guide,
-            part: row.part,
-            startBlock: row.startBlock,
-            startOffset: row.startOffset,
-            endBlock: row.endBlock,
-            endOffset: row.endOffset,
-            exact: row.exact,
-            prefix: row.prefix,
-            suffix: row.suffix,
-            highlightColor: row.highlightColor,
-            deviceImportId: row.id,
-            deviceImportOwner: owner,
-          });
+          await importHighlight(guideHighlightImport(row, owner));
           deviceStudy.acknowledge("highlights", row.id, owner);
         }
       } catch {

@@ -5,9 +5,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import VerseResourcesPanel from "./VerseResourcesPanel";
-import VerseActionBar, { type VerseActionAnchorRect, type VerseQuickMarks } from "./VerseActionBar";
+import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import {
   ChapterHeader,
@@ -35,12 +35,13 @@ import {
   savePreferences,
   hasSeenTapToActionsHint,
   setSeenTapToActionsHint,
-  writeLocalMarkPresets,
 } from "@/lib/preferences";
-import { readMarkPresets } from "../../convex/annotationRules";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
-import { useTrackLastPosition } from "@/features/plans/useReadingProgress";
+import { useMyReadingLog, useTrackLastPosition } from "@/features/plans/useReadingProgress";
+import { chapterReadPassages, hasReaderNote, sourceMatchesChapter } from "@/features/notes/chapterReadStatus";
+import { useJournalEntryActions } from "@/features/notes/useJournalEntryActions";
+import type { JournalEntry, ReadingLogRow } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import type { ReadingLogOption } from "@/features/notes/ReadingChip";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
@@ -56,20 +57,18 @@ import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
 import { getBookLabel } from "@/features/plans/scriptureCatalog";
 import { useChapterAnnotations } from "@/features/annotations/useChapterAnnotations";
-import { deviceStudy } from "@/features/notes/deviceStudy";
+import { useVerseQuickMarks } from "@/features/annotations/useVerseQuickMarks";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
 import VerseMarkedText from "@/features/annotations/VerseMarkedText";
 import {
   annotationChapter,
   annotationHighlightClass,
   highlightOf,
-  quickMarkPatch,
   selectionMarks,
-  withVerseMarks,
-  type ChapterAnnotations,
-  type MarkPreset,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
+import { selectedVerseRanges, restoreVerseRange } from "@/lib/verseSelection";
+import type { VerseTextRange } from "../../convex/annotationRules";
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
@@ -80,6 +79,7 @@ const NO_VERSES: Verse[] = [];
 type SelectedVerse = { verse: number; text: string };
 type ChapterSelectionState = {
   selectedText: string;
+  ranges: VerseTextRange[];
   selectedVerses: SelectedVerse[];
   selectedBounds: { start: number; end: number } | null;
   selectedWord: string;
@@ -156,14 +156,10 @@ function buildSelectionStateFromRange(
     return null;
   }
 
-  const selectedText = range.toString().replace(/\s+/g, " ").trim();
+  const ranges = selectedVerseRanges(range, container);
+  const selectedText = ranges.map(item => item.text.slice(item.start, item.end)).join(" ");
   if (!selectedText) return null;
-
-  const selectedVerseNumbers = Array.from(container.querySelectorAll<HTMLElement>("[data-verse]"))
-    .filter((element) => range.intersectsNode(element))
-    .map((element) => Number(element.dataset.verse))
-    .filter((verseNumber) => Number.isFinite(verseNumber));
-  if (selectedVerseNumbers.length === 0) return null;
+  const selectedVerseNumbers = ranges.map(item => item.verse);
 
   const selectedVerseSet = new Set(selectedVerseNumbers);
   const selectedVerses = verses
@@ -173,6 +169,7 @@ function buildSelectionStateFromRange(
 
   return {
     selectedText,
+    ranges,
     selectedVerses,
     selectedBounds: {
       start: Math.min(...selectedVerseNumbers),
@@ -434,30 +431,35 @@ function renderInlineDiff(
   compareColorClass: string
 ): ReactNode {
   const segments = computeInlineDiffSegments(primaryText, compareText);
+  const tokens = [...primaryText.matchAll(/\S+/g)];
+  let tokenIndex = 0;
+  let sourceOffset = 0;
   return segments.map((segment, index) => {
-    const prefix = index > 0 ? " " : "";
+    tokenIndex += segment.primary.length;
+    // Preserve the source's whitespace exactly; comparison alternatives never contribute to offsets.
+    const lastToken = tokens[tokenIndex - 1];
+    const end = tokenIndex === tokens.length ? primaryText.length
+      : segment.primary.length ? lastToken.index! + lastToken[0].length : sourceOffset;
+    const primary = primaryText.slice(sourceOffset, end);
+    sourceOffset = end;
     if (segment.kind === "equal") {
-      return <span key={`seg-eq-${index}`}>{prefix}{segment.primary.join(" ")}</span>;
+      return <span key={`seg-eq-${index}`}>{primary}</span>;
     }
-    const primaryChanged = segment.primary.join(" ");
     const compareChanged = segment.compare.join(" ");
     return (
       <span key={`seg-change-${index}`} className="inline-flex items-baseline gap-1.5 mx-0.5">
-        {prefix}
-        {primaryChanged ? (
-          <span className={`px-0.5 ${primaryColorClass}`}>
-            {primaryChanged}
-          </span>
+        {primary ? (
+          <span className={`px-0.5 ${primaryColorClass}`}>{primary}</span>
         ) : (
-          <span className="text-foreground/35">-</span>
+          <span data-verse-ignore className="text-foreground/35">-</span>
         )}
-        <span className="text-foreground/40">/</span>
+        <span data-verse-ignore className="text-foreground/40">/</span>
         {compareChanged ? (
-          <span className={`px-0.5 ${compareColorClass}`}>
+          <span data-verse-ignore className={`px-0.5 ${compareColorClass}`}>
             {compareChanged}
           </span>
         ) : (
-          <span className="text-foreground/35">-</span>
+          <span data-verse-ignore className="text-foreground/35">-</span>
         )}
       </span>
     );
@@ -557,36 +559,32 @@ export default function ChapterReader({
     textReady ? overlayTranslations : NO_OVERLAYS
   );
   const overlayList = overlayTranslations.join(",");
-  const { user, getToken, promptSignIn } = useAuth();
+  const { user, getToken } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
-  const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft } = useInsightBuilder();
+  const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
+  const readingLog = useMyReadingLog();
+  const { openReadingEntry } = useJournalEntryActions();
+  const [readingOpenError, setReadingOpenError] = useState<string | null>(null);
+  const readPassages = useMemo(
+    () => chapterReadPassages(readingLog ?? [], { volume, book, chapter }, verses.map(v => v.verse)),
+    [readingLog, volume, book, chapter, verses]
+  );
+  async function openReading(readingId: string) {
+    const reading = readingLog?.find(row => row.id === readingId);
+    if (!reading) return;
+    setReadingOpenError(null);
+    try {
+      const draftId = reading.note_id ?? (await openReadingEntry(reading.id)).id;
+      if (draftId !== activeDraftId) await switchDraft(draftId);
+      openBuilder();
+      if (window.matchMedia("(max-width: 1023px)").matches) setSheetOpen(true);
+    } catch {
+      setReadingOpenError("Couldn't open this reading log. Please try again.");
+    }
+  }
   useTrackLastPosition(volume, book, chapter);
   // The account's annotations when signed in, else this device's (guests study without an account).
   const chapterAnnotationData = useChapterAnnotations(volume, book, chapter);
-  // Quick marks from the selection menu change only the named marks (never a note), and show at once.
-  const saveVerseMarks = useMutation(api.annotations.setVerseMarks).withOptimisticUpdate((store, args) => {
-    const query = { volume: args.volume, book: args.book, chapter: args.chapter };
-    const current = store.getQuery(api.annotations.getChapterAnnotations, query) as ChapterAnnotations | undefined;
-    if (!current) return;
-    store.setQuery(
-      api.annotations.getChapterAnnotations,
-      query,
-      withVerseMarks(current, args.verses, {
-        highlightColor: args.highlightColor,
-        underline: args.underline,
-        underlineColor: args.underlineColor,
-      }) as never
-    );
-  });
-  // The account's mark presets, live (a change in account settings shows here at once); until it loads, this
-  // device's copy from the last read.
-  const accountPreferences = useQuery(api.preferences.getReaderPreferences, convexReady ? {} : "skip");
-  const accountMarkPresets = accountPreferences?.markPresets;
-  useEffect(() => {
-    if (accountMarkPresets) writeLocalMarkPresets(accountMarkPresets);
-  }, [accountMarkPresets]);
-  const [quickMarkPending, setQuickMarkPending] = useState(0);
-  const [quickMarkError, setQuickMarkError] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
@@ -641,9 +639,23 @@ export default function ChapterReader({
     api.insights.listMyScriptureRefsForChapter,
     convexReady ? { volume, book, chapter } : "skip"
   ) as VerseInsightRef[] | undefined;
+  const journalEntries = useQuery(api.insights.listMyJournal, convexReady ? {} : "skip") as JournalEntry[] | undefined;
   const insightRefsByVerse = useMemo(
-    () => groupVerseInsightRefsByVerse(myInsightRefs ?? []),
-    [myInsightRefs]
+    () => {
+      // The excerpt omits a note's heading; use the journal's content flag even for a heading-only note.
+      const reflections = new Map(journalEntries?.flatMap(entry => entry.kind === "note" ? [[entry.id, entry.has_reflection] as const] : []) ?? []);
+      const notes = new Map(drafts.filter(draft => hasReaderNote({ ...draft, has_reflection: reflections.get(draft.id) })).map(draft => [draft.id, draft]));
+      const refs = (myInsightRefs ?? []).filter(ref => notes.has(ref.draftId));
+      // Device notes have no server scripture refs; their explicit verse source supplies the marker.
+      if (!user) for (const draft of notes.values()) {
+        const source = draft.source;
+        if (draft.status === "archived" || !sourceMatchesChapter(source, { volume, book, chapter }) || source?.verseStart === undefined) continue;
+        refs.push({ draftId: draft.id, draftTitle: draft.title, verseStart: source.verseStart,
+          verseEnd: source.verseEnd ?? source.verseStart, status: draft.status });
+      }
+      return groupVerseInsightRefsByVerse(refs);
+    },
+    [myInsightRefs, journalEntries, drafts, user, volume, book, chapter]
   );
 
   // Swipe previews only show the neighbouring chapter's reference, which the catalog already knows.
@@ -735,6 +747,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncCustomMobileSelectionMode);
     };
   }, []);
+
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -868,6 +881,7 @@ export default function ChapterReader({
     }
   }
 
+
   useEffect(() => {
     // Show one-time hint on first use, once there is text to select
     if (!textReady) return;
@@ -961,58 +975,52 @@ export default function ChapterReader({
     return out;
   }, [annotationsByVerse]);
 
+  const selectionRestoreRef = useRef<VerseTextRange[] | null>(null);
+  useLayoutEffect(() => {
+    const ranges = selectionRestoreRef.current;
+    if (!ranges || !verseListRef.current) return;
+    const range = restoreVerseRange(verseListRef.current, ranges);
+    if (range && customMobileSelectionEnabled && customWordRangeRef.current) {
+      const first = ranges[0];
+      const last = ranges[ranges.length - 1];
+      const firstText = first.text.slice(first.start, first.end);
+      const lastText = last.text.slice(last.start, last.end);
+      const firstEnd = first.start + (firstText.match(/^\S+/)?.[0].length ?? firstText.length);
+      const lastStart = last.end - (lastText.match(/\S+$/)?.[0].length ?? lastText.length);
+      const firstWord = restoreVerseRange(verseListRef.current, [{ ...first, end: firstEnd }]);
+      const lastWord = restoreVerseRange(verseListRef.current, [{ ...last, start: lastStart }]);
+      if (firstWord && lastWord) {
+        customWordRangeRef.current = {
+          startWord: { start: { node: firstWord.startContainer, offset: firstWord.startOffset }, end: { node: firstWord.endContainer, offset: firstWord.endOffset } },
+          endWord: { start: { node: lastWord.startContainer, offset: lastWord.startOffset }, end: { node: lastWord.endContainer, offset: lastWord.endOffset } },
+        };
+        setCustomSelectionRects(getHighlightRectsFromRange(range));
+      }
+    } else if (range) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    selectionRestoreRef.current = null;
+  }, [chapterAnnotationData, customMobileSelectionEnabled]);
   const selectionVerses = selectionState?.selectedVerses;
   const selectedVerseNumbers = useMemo(() => (selectionVerses ?? []).map((verse) => verse.verse), [selectionVerses]);
-  const selectedVerseKey = selectedVerseNumbers.join(",");
+  const selectedVerseKey = selectionState?.ranges.map(range => `${range.verse}:${range.start}:${range.end}`).join(",") ?? "";
   const selectedMarks = useMemo(
-    () => selectionMarks(selectedVerseNumbers.map((verse) => myAnnotationByVerse.get(verse))),
-    [selectedVerseNumbers, myAnnotationByVerse]
+    () => selectionMarks(selectedVerseNumbers.map((verse) => myAnnotationByVerse.get(verse)), selectionState?.ranges),
+    [selectedVerseNumbers, myAnnotationByVerse, selectionState?.ranges]
   );
-  // A failed quick mark's message belongs to the selection it was made on.
-  useEffect(() => {
-    setQuickMarkError(null);
-  }, [selectedVerseKey]);
-
-  async function onQuickMark(preset: MarkPreset) {
-    if (chapterAnnotationData === undefined || selectedVerseNumbers.length === 0) return;
-    const patch = quickMarkPatch(preset, selectedMarks);
-    // The same rows the chapter query reads and the full editor writes.
-    const target = annotationChapter(volume, book, chapter);
-    setQuickMarkError(null);
-    if (!user) {
-      // Guests mark on this device (written at once); signing in imports the marks to the account.
-      try {
-        deviceStudy.setVerseMarks(target, selectedVerseNumbers, patch);
-      } catch {
-        setQuickMarkError("Couldn't save that mark on this device. Allow browser storage and try again.");
-      }
-      return;
-    }
-    if (!convexReady) return;
-    setQuickMarkPending((count) => count + 1);
-    try {
-      await saveVerseMarks({ ...target, verses: selectedVerseNumbers, ...patch });
-    } catch {
-      setQuickMarkError("Couldn't save that mark. Try again.");
-    } finally {
-      setQuickMarkPending((count) => count - 1);
-    }
-  }
-
-  const quickMarks: VerseQuickMarks = {
-    // Presets are an account setting: guests (and an account with nothing saved yet) get the defaults.
-    presets: !user || accountPreferences === null ? readMarkPresets(null) : accountMarkPresets ?? prefs.markPresets,
+  const { quickMarks, pending: quickMarkPending } = useVerseQuickMarks({
+    selectionKey: selectedVerseKey,
     marks: selectedMarks,
-    status: (user && !convexReady) || chapterAnnotationData === undefined ? "loading" : "ready",
-    pending: quickMarkPending > 0,
-    error: quickMarkError,
-    onMark: (preset) => {
-      void onQuickMark(preset);
-    },
-    onSignIn: () => {
-      void promptSignIn();
-    },
-  };
+    // The same rows the chapter query reads and the full editor writes.
+    writes: [{ target: annotationChapter(volume, book, chapter), verses: selectedVerseNumbers, ranges: selectionState?.ranges }],
+    loaded: chapterAnnotationData !== undefined,
+    // Until the account's presets load, this device's copy from the last read.
+    fallbackPresets: prefs.markPresets,
+    beforeSave: () => { selectionRestoreRef.current = selectionState?.ranges ?? null; },
+    onSaveError: () => { selectionRestoreRef.current = null; },
+  });
   const noteVerse = selectedBounds?.start ?? null;
   const noteVerseHasNote = noteVerse !== null && !!myAnnotationByVerse.get(noteVerse)?.body;
   // The Annotate panel's note action, which opens the full editor on the first selected verse.
@@ -1027,7 +1035,7 @@ export default function ChapterReader({
     if (!hasSelection) return;
     if (!selectedBounds) return;
     // The optimistic row may not have a server id yet. Wait before opening the full editor.
-    if (quickMarkPending > 0) return;
+    if (quickMarkPending) return;
     setAnnotationEditorVerse(selectedBounds.start);
   }
 
@@ -1040,13 +1048,18 @@ export default function ChapterReader({
     if (typeof document === "undefined") return;
 
     function syncSelectionState() {
-      if (customMobileSelectionEnabled || customSelectionActiveRef.current) return;
+      if (customMobileSelectionEnabled || customSelectionActiveRef.current || selectionRestoreRef.current) return;
       const nextSelectionState = getChapterSelectionState(window.getSelection?.() ?? null, verseListRef.current, verses);
       // Keep the resource context while interacting with its contents; selecting another passage still updates it.
       if (openResources && !nextSelectionState) return;
       setSelectionState((prev) => {
         if (
           prev?.selectedText === nextSelectionState?.selectedText &&
+          prev?.ranges.length === nextSelectionState?.ranges.length &&
+          prev?.ranges.every((range, index) => {
+            const next = nextSelectionState?.ranges[index];
+            return next?.verse === range.verse && next.start === range.start && next.end === range.end && next.text === range.text;
+          }) &&
           prev?.selectedWord === nextSelectionState?.selectedWord &&
           prev?.selectedBounds?.start === nextSelectionState?.selectedBounds?.start &&
           prev?.selectedBounds?.end === nextSelectionState?.selectedBounds?.end &&
@@ -1093,6 +1106,7 @@ export default function ChapterReader({
       window.removeEventListener("pointercancel", finishPointerSelection);
     };
   }, []);
+
 
   useEffect(() => {
     if (!hasSelection || overlayOpen) return;
@@ -1429,6 +1443,7 @@ export default function ChapterReader({
     setSelectionState(null);
   }
 
+
   async function onAddToNote() {
     if (!selectedBounds || !selectionReferenceLabel) return;
     await appendScriptureBlock({
@@ -1620,6 +1635,7 @@ export default function ChapterReader({
           </ChapterHeader>
 
           <h1 className="simple-only reader-simple-title">{reference}</h1>
+          {readingOpenError ? <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">{readingOpenError}</p> : null}
 
           <ChapterTextBoundary resetKey={contentPromise} reference={reference}>
             <Suspense fallback={<ChapterTextPending reference={reference} />}>
@@ -1639,7 +1655,7 @@ export default function ChapterReader({
                         if (target.closest("button, a, input, textarea, select, [role='button']")) return;
                         setIsPointerSelecting(true);
                       }}
-                      className={`space-y-2 sm:space-y-3 ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
+                      className={`reader-verses ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
                       style={{ fontSize: `${prefs.fontScale}rem` }}
                     >
                       {chapterVerses.map((v) => {
@@ -1647,6 +1663,7 @@ export default function ChapterReader({
                         const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
                         const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
                         const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
+                        const readPassage = readPassages.get(v.verse);
                         const isInsightOpen = openStudyPaths.some((path) => path.verse_numbers.includes(v.verse));
                         const verseComparisons = Array.from(compareByTranslation.entries())
                           .map(([translationId, byVerse]) => {
@@ -1670,12 +1687,30 @@ export default function ChapterReader({
                           <li
                             key={v.verse}
                             id={`v-${v.verse}`}
-                            className={`leading-7 rounded-md px-3 py-2 -mx-2 my-2 ${
+                            data-read={readPassage ? "true" : undefined}
+                            data-read-start={readPassage?.start === v.verse ? "true" : undefined}
+                            data-read-end={readPassage?.end === v.verse ? "true" : undefined}
+                            className={`reader-verse leading-7 rounded-md px-3 py-2 -mx-2 ${
                               isJumpHighlighted
                                 ? "bg-[color:var(--accent-sky-soft)] ring-2 ring-[color:var(--surface-border)] transition-colors duration-300"
                                 : ""
                             }`}
                           >
+                            {readPassage?.start === v.verse ? (
+                              <VerseInsightMarker
+                                verse={v.verse}
+                                variant="reading"
+                                passageLabel={readPassage.start === readPassage.end ? `verse ${v.verse}` : `verses ${readPassage.start}–${readPassage.end}`}
+                                insights={readPassage.readings.map((reading: ReadingLogRow) => ({
+                                  draftId: reading.id,
+                                  draftTitle: new Date(reading.read_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+                                  verseStart: reading.source.verseStart ?? chapterVerses[0].verse,
+                                  verseEnd: reading.source.verseEnd ?? reading.source.verseStart ?? chapterVerses[chapterVerses.length - 1].verse,
+                                  status: "draft",
+                                }))}
+                                onOpen={openReading}
+                              />
+                            ) : null}
                             <div className="flex items-start gap-2">
                               <div
                                 className={`min-w-0 flex-1 text-left ${
@@ -1729,19 +1764,17 @@ export default function ChapterReader({
                                   </span>
                                 ) : (
                                   <span className="text-sm leading-6">
-                                  <VerseMarkedText annotation={myVerseAnnotation}>
                                   {verseComparisons.map((comparison, index) => (
                                     <span key={`${v.verse}-${comparison.key}`} className="inline">
                                       {index > 0 ? <span className="mx-2 text-foreground/35">|</span> : null}
-                                      {renderInlineDiff(
+                                      <VerseMarkedText annotation={myVerseAnnotation}>{renderInlineDiff(
                                         v.text,
                                         comparison.compareText,
                                         "text-amber-700 dark:text-amber-300",
                                         comparison.compareColorClass
-                                      )}
+                                      )}</VerseMarkedText>
                                     </span>
                                   ))}
-                                  </VerseMarkedText>
                                   </span>
                                 )}
                               </div>
@@ -1944,8 +1977,8 @@ export default function ChapterReader({
         annotationTitle="Annotate"
         annotationDescription="Highlight, underline, or note"
         noteLabel={noteActionLabel}
-        noteDescription={quickMarkPending > 0 ? "Saving marks…" : "Note and marks together"}
-        annotationDisabled={quickMarkPending > 0}
+        noteDescription={quickMarkPending ? "Saving marks…" : "Note and marks together"}
+        annotationDisabled={quickMarkPending}
         showInsightAction={showInsightAction}
         showExplore={canExploreWord}
         targetLabel="Note"

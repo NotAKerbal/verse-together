@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { positionSelectionPopover } from "@/lib/selectionPopover";
 import MarkSample from "@/features/annotations/MarkSample";
@@ -39,14 +39,18 @@ export type VerseQuickMarks = {
   error?: string | null;
   onMark: (preset: MarkPreset) => void;
   onSignIn: () => void;
+  /** What is selected, for the marks' labels: verses (the default), or a passage of other text (a study guide). */
+  scope?: "verses" | "text";
 };
 
 type Props = {
   visible: boolean;
   anchorRect: VerseActionAnchorRect | null;
   hasSelection: boolean;
-  hasActiveInsight: boolean;
+  hasActiveInsight?: boolean;
   selectionReference: string;
+  /** Which selection the menu is on, when the reference alone doesn't say (two selections can share one). */
+  selectionKey?: string;
   selectedText: string;
   selectedWord?: string;
   /** Without it the top bar holds only the close button. */
@@ -56,6 +60,8 @@ type Props = {
   /** The Annotate panel's note action ("Write a note", "Edit your note"…), which opens the full editor. */
   noteLabel?: string;
   noteDescription?: string;
+  /** More of the Annotate panel, between the marks and the note action (a guide's saved passages there). */
+  annotateExtra?: ReactNode;
   /** The full editor can't open yet (marks are saving); marking stays available. */
   annotationDisabled?: boolean;
   showInsightAction?: boolean;
@@ -63,10 +69,12 @@ type Props = {
   showTranslations?: boolean;
   actionsEnabled?: boolean;
   onClear: () => void;
-  onInsight: () => void;
-  onNewInsight: () => void;
+  /** The insight action shows only with both handlers (and showInsightAction): a reader without insights leaves them out. */
+  onInsight?: () => void;
+  onNewInsight?: () => void;
   onAnnotation: () => void;
-  onResources: () => void;
+  /** Without it there is no Resources action (a reader with no resources panel). */
+  onResources?: () => void;
   onExplore?: () => void;
   onTranslations?: () => void;
   shareHref?: string | null;
@@ -148,7 +156,8 @@ export function markAction(quickMarks: VerseQuickMarks | undefined) {
 }
 
 function markHint(quickMarks: VerseQuickMarks | undefined) {
-  return quickMarks?.status === "signedOut" ? "Sign in to mark verses" : quickMarks?.status === "loading" ? "Loading your marks…" : null;
+  if (quickMarks?.status === "signedOut") return quickMarks.scope === "text" ? "Sign in to mark text" : "Sign in to mark verses";
+  return quickMarks?.status === "loading" ? "Loading your marks…" : null;
 }
 
 function DismissButton({ onClear }: { onClear: () => void }) {
@@ -173,7 +182,7 @@ function QuickMarkBar({ quickMarks, onClear }: { quickMarks?: VerseQuickMarks; o
         <div
           className="selection-quickmarks"
           role="toolbar"
-          aria-label="Quick marks for the selected verses"
+          aria-label={quickMarks.scope === "text" ? "Quick marks for the selected text" : "Quick marks for the selected verses"}
           aria-busy={quickMarks.pending || loading || undefined}
           data-status={status}
           onKeyDown={onToolbarKeyDown}
@@ -206,7 +215,10 @@ function QuickMarkBar({ quickMarks, onClear }: { quickMarks?: VerseQuickMarks; o
   );
 }
 
-function markStateText(state: boolean | "mixed") {
+function markStateText(state: boolean | "mixed", scope: VerseQuickMarks["scope"]) {
+  if (scope === "text") {
+    return state === true ? "On the selected text" : state === "mixed" ? "On a saved passage overlapping it" : "Not on the selected text";
+  }
   return state === true ? "On every selected verse" : state === "mixed" ? "On some selected verses" : "Not on the selected verses";
 }
 
@@ -221,6 +233,7 @@ export function AnnotatePanel({
   noteLabel,
   noteDescription,
   noteDisabled,
+  extra,
   onNote,
   onBack,
   onClear,
@@ -229,6 +242,7 @@ export function AnnotatePanel({
   noteLabel: string;
   noteDescription: string;
   noteDisabled: boolean;
+  extra?: ReactNode;
   onNote: () => void;
   onBack: () => void;
   onClear: () => void;
@@ -325,9 +339,11 @@ export function AnnotatePanel({
               <MarkSample preset={custom} />
               <span>{customAction}</span>
             </button>
-            <span className="selection-annotate-state" aria-live="polite">{markStateText(customState)}</span>
+            <span className="selection-annotate-state" aria-live="polite">{markStateText(customState, quickMarks.scope)}</span>
           </div>
         </section>
+
+        {extra}
 
         <button
           type="button"
@@ -361,14 +377,16 @@ function ActionLabel({ icon, title, description }: {
   );
 }
 
-type CardBodyProps = Omit<Props, "visible" | "anchorRect" | "hasSelection" | "selectedText">;
+type CardBodyProps = Omit<Props, "visible" | "anchorRect" | "hasSelection" | "selectedText" | "selectionReference" | "selectionKey"> & {
+  selectionKey: string;
+};
 
 /**
  * The menu between its header and footer: the actions, or the Annotate panel. Mounted only while the menu
  * shows, so it reopens on the actions; the panel belongs to the selection it was opened on.
  */
 function SelectionCardBody({
-  selectionReference, quickMarks, annotationTitle = "Annotate", annotationDescription = "Mark what matters",
+  selectionKey, quickMarks, annotateExtra, annotationTitle = "Annotate", annotationDescription = "Mark what matters",
   annotationDisabled = false, noteLabel = "Write a note", noteDescription = "Note and marks together",
   hasActiveInsight, selectedWord, showInsightAction = true, showExplore = false, showTranslations = false,
   actionsEnabled = true, onClear, onInsight, onNewInsight, onAnnotation, onResources, onExplore, onTranslations,
@@ -378,8 +396,8 @@ function SelectionCardBody({
   const [annotating, setAnnotating] = useState<string | null>(null);
   const annotateRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
-  if (annotating !== null && annotating !== selectionReference) setAnnotating(null);
-  const panelOpen = !!quickMarks && annotating === selectionReference;
+  if (annotating !== null && annotating !== selectionKey) setAnnotating(null);
+  const panelOpen = !!quickMarks && annotating === selectionKey;
 
   // Back from the panel puts focus on Annotate again.
   useEffect(() => {
@@ -394,7 +412,7 @@ function SelectionCardBody({
       if (!annotationDisabled) onAnnotation();
       return;
     }
-    setAnnotating(selectionReference);
+    setAnnotating(selectionKey);
   }
 
   if (panelOpen) {
@@ -405,6 +423,7 @@ function SelectionCardBody({
           noteLabel={noteLabel}
           noteDescription={noteDescription}
           noteDisabled={!actionsEnabled || annotationDisabled}
+          extra={annotateExtra}
           onNote={onAnnotation}
           onBack={() => {
             returnFocus.current = true;
@@ -428,7 +447,7 @@ function SelectionCardBody({
             <ActionLabel icon="spark" title={`Explore${selectedWord ? ` “${selectedWord}”` : ""}`} description="Meaning & context" />
           </button>
         ) : null}
-        {showInsightAction ? (
+        {showInsightAction && onInsight && onNewInsight ? (
           <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={hasActiveInsight ? onInsight : onNewInsight} disabled={!actionsEnabled}>
             <ActionLabel icon="add" title={hasActiveInsight ? `Add to ${targetLabel}` : `New ${targetLabel}`} description={actionsEnabled ? "Keep your thoughts" : "Sign in to save"} />
           </button>
@@ -443,9 +462,11 @@ function SelectionCardBody({
         >
           <ActionLabel icon="note" title={annotationTitle} description={actionsEnabled ? annotationDescription : "Sign in to annotate"} />
         </button>
-        <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onResources}>
-          <ActionLabel icon="book" title="Resources" description="Lessons & more" />
-        </button>
+        {onResources ? (
+          <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onResources}>
+            <ActionLabel icon="book" title="Resources" description="Lessons & more" />
+          </button>
+        ) : null}
         {showTranslations && onTranslations ? (
           <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onTranslations}>
             <ActionLabel icon="translate" title="Translations" description="Compare the wording" />
@@ -462,7 +483,7 @@ function SelectionCardBody({
 }
 
 export default function VerseActionBar({
-  visible, anchorRect, hasSelection, selectionReference, selectedText, ...cardProps
+  visible, anchorRect, hasSelection, selectionReference, selectionKey, selectedText, ...cardProps
 }: Props) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
@@ -495,7 +516,7 @@ export default function VerseActionBar({
   return (
     <div ref={popoverRef} data-selection-popover="true" className="selection-popover" role="dialog" aria-label="Selection actions" aria-describedby={headingId}>
       <div className="selection-card">
-        <SelectionCardBody selectionReference={selectionReference} {...cardProps} />
+        <SelectionCardBody selectionKey={selectionKey ?? selectionReference} {...cardProps} />
 
         <footer className="selection-card-footer">
           <CopySelection key={selectedText} text={selectedText} />

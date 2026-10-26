@@ -181,10 +181,10 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
       <NoteSourceRegistrar kind={guideSource.kind} label={guideSource.label} href={guideSource.href} />
       <StudyCompanion
         introductionHtml={parsed.introductionHtml}
-        readerHtml={parsed.readerHtml}
+        readerHtml={parsed.readerSections.length ? "" : parsed.readerHtml}
+        readerSections={parsed.readerSections}
         closingHtml={parsed.closingHtml}
         toc={parsed.toc}
-        passages={parsed.passages}
         chapters={chapters}
         weekStart={week.start}
         guideSource={guideSource}

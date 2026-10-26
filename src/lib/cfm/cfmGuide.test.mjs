@@ -52,6 +52,33 @@ const latest = parsed.get("2026-10-12-isaiah-58-66");
 const jeremiah = parsed.get("2026-10-19-jeremiah-1-3-7-16-18-20");
 const mixed = parsed.get("2026-10-26-jeremiah-31-33-36-39-lamentations-1-3");
 
+test("scripture-first fragments retain every reader byte, anchor, source, and artwork in source order", () => {
+  for (const guide of parsed.values()) {
+    const reconstructed = guide.readerSections.map((section) => {
+      const item = guide.toc.find((item) => item.id === section.id);
+      const chapter = section.chapter == null ? "" : ` data-chapter="${section.chapter}"`;
+      return `<section class="cfm-section" data-kind="${item.kind}"${chapter} aria-labelledby="${section.id}">\n${section.headingHtml}${section.blocks.map((block) => block.html).join("")}</section>\n`;
+    }).join("");
+    assert.equal(reconstructed, guide.readerHtml);
+    const blocks = guide.readerSections.flatMap((section) => section.blocks);
+    assert.equal(new Set(blocks.map((block) => block.id)).size, blocks.length);
+    assert.deepEqual(blocks.flatMap((block) => block.passage ? [block.passage.id] : []), guide.passages.map((passage) => passage.id));
+  }
+});
+
+test("context previews show the original opening paragraph and keep deeper commentary and sources available", () => {
+  const block = jeremiah.readerSections.flatMap((section) => section.blocks).find((block) => block.passage?.label === "1:4–5");
+  assert.ok(block.previewEnd > 0);
+  const preview = block.html.slice(0, block.previewEnd);
+  const more = block.html.slice(block.previewEnd);
+  assert.match(preview, /Known, Sanctified, Ordained/);
+  assert.match(preview, /The narration shifts to first person/);
+  assert.doesNotMatch(preview, /<strong>Ancient meaning/);
+  assert.match(more, /<strong>Ancient meaning/);
+  assert.match(more, /Latter-day Saint teaching/);
+  assert.match(more, /cfm-sources/);
+});
+
 function decode(text) {
   return text
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
@@ -922,6 +949,13 @@ test("the October 26 guide pairs Jeremiah 31–33, 36–39 and Lamentations 1, 3
   // Its own range, book by book, in reading order.
   assert.deepEqual(entries.map((entry) => [entry.book, entry.chapter]), MIXED_CHAPTERS);
   assert.deepEqual(mixed.range.chapters, [31, 32, 33, 36, 37, 38, 39, lam1, lam3]);
+  // The scripture-first view uses these keys to attach each book's context to its own chapter.
+  assert.deepEqual(mixed.readerSections.filter((section) => section.chapter != null).map((section) => section.chapter), mixed.range.chapters);
+  for (const section of mixed.readerSections) {
+    for (const block of section.blocks) {
+      if (block.passage) assert.equal(block.passage.chapter, section.chapter, block.id);
+    }
+  }
   // Each of the nine is a chapter in the reader's contents, and paired in reading order.
   for (const entry of entries) {
     const item = mixed.toc.find((toc) => toc.kind === "chapter" && toc.book === entry.book && Number(toc.number) === entry.chapter);

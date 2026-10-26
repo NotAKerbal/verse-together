@@ -54,6 +54,8 @@ type Options = {
   showBesideGuide: (target: PassageTarget, opener: HTMLElement | null) => void;
   /** Return the page to `top`, a window.scrollY the preview recorded when it opened. */
   restoreScroll: (top: number) => void;
+  /** The scripture-first reader opens the passage in the page instead of beside the guide. */
+  showBesideLabel?: string;
 };
 
 /** What opened the preview: focus returns there, and the page to where it was then (its window.scrollY). */
@@ -90,7 +92,7 @@ function noModifiers(event: MouseEvent) {
 }
 
 /** The scripture preview. Returns `open` for the guide's links, and the dialog to render once on the page. */
-export function usePassagePreview({ local, besideGuide, showBesideGuide, restoreScroll }: Options) {
+export function usePassagePreview({ local, besideGuide, showBesideGuide, restoreScroll, showBesideLabel = "Show beside the guide" }: Options) {
   const router = useRouter();
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -408,7 +410,7 @@ export function usePassagePreview({ local, besideGuide, showBesideGuide, restore
                   dismiss(() => showBesideGuide(target, opener));
                 }}
               >
-                Show beside the guide
+                {showBesideLabel}
               </button>
             ) : null}
             <a href={chapterHref(target, selection?.ok !== false)} className={styles.passageChapterLink} onClick={onChapterLink}>

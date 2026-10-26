@@ -11,8 +11,15 @@
 }
 
 .profileColumn,
-.settingsColumn {
+.settingsColumn,
+.accountSettings {
   min-width: 0;
+}
+
+.accountSettings,
+.accountManager {
+  display: grid;
+  gap: .75rem;
 }
 
 .profileColumn {
@@ -21,7 +28,7 @@
 }
 
 .profileCard,
-.settingsColumn {
+.settingsCard {
   border-radius: .9rem;
   background: var(--surface-card);
   box-shadow: var(--surface-shadow-soft);
@@ -29,6 +36,11 @@
 }
 
 .settingsColumn {
+  display: grid;
+  gap: .75rem;
+}
+
+.settingsCard {
   display: grid;
   gap: .25rem;
 }
@@ -248,7 +260,6 @@
   display: grid;
   gap: .5rem;
   padding-block: .5rem;
-  border-top: 1px solid var(--rule);
 }
 
 .quickMarkSetting p {

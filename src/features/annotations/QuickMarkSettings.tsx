@@ -138,25 +138,45 @@ function firstUnused(presets: readonly MarkPreset[]): MarkPreset | null {
 type Focus = { index: number; control: "up" | "down" | "remove" } | "add";
 
 /**
- * Account settings: the mark presets across the top of the reader's selection menu, each a highlight or an
+ * Settings: the mark presets across the top of the reader's selection menu, each a highlight or an
  * underline in one color (a red underline, a yellow highlight, a blue highlight…), in the order they show,
  * each optionally named ("Blessings"). Style and color are picked visually (MarkStylePicker).
- * Saved to the account on their own, so they never reset the reader's other settings; the menu's Annotate
- * action keeps every option whatever is chosen here.
+ * Saved on this device for guests, or to the account on their own, so they never reset other settings; Annotate
+ * keeps every option whatever is chosen here.
  *
  * Changes save one after another, each the whole list: the list shown is the last change made, so quick
  * successive edits (moving a mark up twice) never lose one to a save still in flight.
  */
 export default function QuickMarkSettings() {
-  const { ready } = useConvexSignedIn();
-  const saved = useQuery(api.preferences.getReaderPreferences, ready ? {} : "skip");
+  const { user, ready, loading } = useConvexSignedIn();
+  // Remount when the owner or storage destination changes, cancelling any queued account saves.
+  return <QuickMarkSettingsEditor key={ready ? user!.id : "device"} syncToAccount={ready} sessionLoading={loading} />;
+}
+
+function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAccount: boolean; sessionLoading: boolean }) {
+  const saved = useQuery(api.preferences.getReaderPreferences, syncToAccount ? {} : "skip");
+  const [localPresets, setLocalPresets] = useState<MarkPreset[] | null>(null);
+
+  useEffect(() => {
+    if (syncToAccount) return;
+    function readDevicePresets() {
+      setLocalPresets(readLocalPreferences()?.markPresets ?? DEFAULT_MARK_PRESETS.map((preset) => ({ ...preset })));
+    }
+    // Read browser storage after hydration, then follow changes from other tabs.
+    readDevicePresets();
+    function onStorage(event: StorageEvent) {
+      if (event.key === "reader_prefs_v1" || event.key === null) readDevicePresets();
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [syncToAccount]);
   const save = useMutation(api.preferences.saveMarkPresets).withOptimisticUpdate((store, args) => {
     const current = store.getQuery(api.preferences.getReaderPreferences, {});
     if (current) store.setQuery(api.preferences.getReaderPreferences, {}, { ...current, markPresets: normalizeMarkPresets(args.presets) ?? [] });
   });
-  const loading = saved === undefined;
+  const loading = sessionLoading || (syncToAccount ? saved === undefined : localPresets === null);
   // No saved preferences yet means the reader never chose: the defaults.
-  const savedPresets = readMarkPresets(saved);
+  const savedPresets = syncToAccount ? readMarkPresets(saved) : localPresets ?? DEFAULT_MARK_PRESETS;
   // The list as of the last change, until every save is done (then the account's, live).
   const [draft, setDraft] = useState<MarkPreset[] | null>(null);
   const draftRef = useRef<MarkPreset[] | null>(null);
@@ -192,6 +212,15 @@ export default function QuickMarkSettings() {
     if (loading) return;
     const base = draftRef.current ?? savedPresets;
     if (samePresets(base, next)) return;
+    if (!syncToAccount) {
+      if (!writeLocalMarkPresets(next)) {
+        setError("Couldn't save your quick marks on this device. Allow browser storage and try again.");
+        return;
+      }
+      setLocalPresets(next);
+      setError(null);
+      return;
+    }
     draftRef.current = next;
     setDraft(next);
     setError(null);
@@ -284,17 +313,17 @@ export default function QuickMarkSettings() {
   const summary = loading
     ? "Loading…"
     : presets.length === 0
-      ? "None · Annotate still has every option"
-      : `${presets.length} of ${MARK_PRESETS_MAX} · Your account`;
+      ? `None · Annotate still has every option · ${syncToAccount ? "Your account" : "This device"}`
+      : `${presets.length} of ${MARK_PRESETS_MAX} · ${syncToAccount ? "Your account" : "This device"}`;
   const busy = loading || undefined;
 
   return (
     <div className={styles.quickMarkSetting} ref={listRef}>
       <div className={styles.quickMarkHeader}>
         <div>
-          <span className={styles.settingTitle} id="quick-mark-settings-title">
+          <h2 className={styles.settingTitle} id="quick-mark-settings-title">
             Quick marks
-          </span>
+          </h2>
           <p aria-live="polite">{pending > 0 ? "Saving…" : summary}</p>
         </div>
         <button
