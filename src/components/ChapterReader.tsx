@@ -70,6 +70,8 @@ import {
   type MarkPreset,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
+import { selectedVerseRanges, restoreVerseRange } from "@/lib/verseSelection";
+import type { VerseTextRange } from "../../convex/annotationRules";
 import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
@@ -80,6 +82,7 @@ const NO_VERSES: Verse[] = [];
 type SelectedVerse = { verse: number; text: string };
 type ChapterSelectionState = {
   selectedText: string;
+  ranges: VerseTextRange[];
   selectedVerses: SelectedVerse[];
   selectedBounds: { start: number; end: number } | null;
   selectedWord: string;
@@ -156,14 +159,10 @@ function buildSelectionStateFromRange(
     return null;
   }
 
-  const selectedText = range.toString().replace(/\s+/g, " ").trim();
+  const ranges = selectedVerseRanges(range, container);
+  const selectedText = ranges.map(item => item.text.slice(item.start, item.end)).join(" ");
   if (!selectedText) return null;
-
-  const selectedVerseNumbers = Array.from(container.querySelectorAll<HTMLElement>("[data-verse]"))
-    .filter((element) => range.intersectsNode(element))
-    .map((element) => Number(element.dataset.verse))
-    .filter((verseNumber) => Number.isFinite(verseNumber));
-  if (selectedVerseNumbers.length === 0) return null;
+  const selectedVerseNumbers = ranges.map(item => item.verse);
 
   const selectedVerseSet = new Set(selectedVerseNumbers);
   const selectedVerses = verses
@@ -173,6 +172,7 @@ function buildSelectionStateFromRange(
 
   return {
     selectedText,
+    ranges,
     selectedVerses,
     selectedBounds: {
       start: Math.min(...selectedVerseNumbers),
@@ -434,30 +434,35 @@ function renderInlineDiff(
   compareColorClass: string
 ): ReactNode {
   const segments = computeInlineDiffSegments(primaryText, compareText);
+  const tokens = [...primaryText.matchAll(/\S+/g)];
+  let tokenIndex = 0;
+  let sourceOffset = 0;
   return segments.map((segment, index) => {
-    const prefix = index > 0 ? " " : "";
+    tokenIndex += segment.primary.length;
+    // Preserve the source's whitespace exactly; comparison alternatives never contribute to offsets.
+    const lastToken = tokens[tokenIndex - 1];
+    const end = tokenIndex === tokens.length ? primaryText.length
+      : segment.primary.length ? lastToken.index! + lastToken[0].length : sourceOffset;
+    const primary = primaryText.slice(sourceOffset, end);
+    sourceOffset = end;
     if (segment.kind === "equal") {
-      return <span key={`seg-eq-${index}`}>{prefix}{segment.primary.join(" ")}</span>;
+      return <span key={`seg-eq-${index}`}>{primary}</span>;
     }
-    const primaryChanged = segment.primary.join(" ");
     const compareChanged = segment.compare.join(" ");
     return (
       <span key={`seg-change-${index}`} className="inline-flex items-baseline gap-1.5 mx-0.5">
-        {prefix}
-        {primaryChanged ? (
-          <span className={`px-0.5 ${primaryColorClass}`}>
-            {primaryChanged}
-          </span>
+        {primary ? (
+          <span className={`px-0.5 ${primaryColorClass}`}>{primary}</span>
         ) : (
-          <span className="text-foreground/35">-</span>
+          <span data-verse-ignore className="text-foreground/35">-</span>
         )}
-        <span className="text-foreground/40">/</span>
+        <span data-verse-ignore className="text-foreground/40">/</span>
         {compareChanged ? (
-          <span className={`px-0.5 ${compareColorClass}`}>
+          <span data-verse-ignore className={`px-0.5 ${compareColorClass}`}>
             {compareChanged}
           </span>
         ) : (
-          <span className="text-foreground/35">-</span>
+          <span data-verse-ignore className="text-foreground/35">-</span>
         )}
       </span>
     );
@@ -575,6 +580,7 @@ export default function ChapterReader({
         highlightColor: args.highlightColor,
         underline: args.underline,
         underlineColor: args.underlineColor,
+        ranges: args.ranges,
       }) as never
     );
   });
@@ -961,12 +967,40 @@ export default function ChapterReader({
     return out;
   }, [annotationsByVerse]);
 
+  const selectionRestoreRef = useRef<VerseTextRange[] | null>(null);
+  useLayoutEffect(() => {
+    const ranges = selectionRestoreRef.current;
+    if (!ranges || !verseListRef.current) return;
+    const range = restoreVerseRange(verseListRef.current, ranges);
+    if (range && customMobileSelectionEnabled && customWordRangeRef.current) {
+      const first = ranges[0];
+      const last = ranges[ranges.length - 1];
+      const firstText = first.text.slice(first.start, first.end);
+      const lastText = last.text.slice(last.start, last.end);
+      const firstEnd = first.start + (firstText.match(/^\S+/)?.[0].length ?? firstText.length);
+      const lastStart = last.end - (lastText.match(/\S+$/)?.[0].length ?? lastText.length);
+      const firstWord = restoreVerseRange(verseListRef.current, [{ ...first, end: firstEnd }]);
+      const lastWord = restoreVerseRange(verseListRef.current, [{ ...last, start: lastStart }]);
+      if (firstWord && lastWord) {
+        customWordRangeRef.current = {
+          startWord: { start: { node: firstWord.startContainer, offset: firstWord.startOffset }, end: { node: firstWord.endContainer, offset: firstWord.endOffset } },
+          endWord: { start: { node: lastWord.startContainer, offset: lastWord.startOffset }, end: { node: lastWord.endContainer, offset: lastWord.endOffset } },
+        };
+        setCustomSelectionRects(getHighlightRectsFromRange(range));
+      }
+    } else if (range) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    selectionRestoreRef.current = null;
+  }, [chapterAnnotationData, customMobileSelectionEnabled]);
   const selectionVerses = selectionState?.selectedVerses;
   const selectedVerseNumbers = useMemo(() => (selectionVerses ?? []).map((verse) => verse.verse), [selectionVerses]);
-  const selectedVerseKey = selectedVerseNumbers.join(",");
+  const selectedVerseKey = selectionState?.ranges.map(range => `${range.verse}:${range.start}:${range.end}`).join(",") ?? "";
   const selectedMarks = useMemo(
-    () => selectionMarks(selectedVerseNumbers.map((verse) => myAnnotationByVerse.get(verse))),
-    [selectedVerseNumbers, myAnnotationByVerse]
+    () => selectionMarks(selectedVerseNumbers.map((verse) => myAnnotationByVerse.get(verse)), selectionState?.ranges),
+    [selectedVerseNumbers, myAnnotationByVerse, selectionState?.ranges]
   );
   // A failed quick mark's message belongs to the selection it was made on.
   useEffect(() => {
@@ -975,24 +1009,28 @@ export default function ChapterReader({
 
   async function onQuickMark(preset: MarkPreset) {
     if (chapterAnnotationData === undefined || selectedVerseNumbers.length === 0) return;
-    const patch = quickMarkPatch(preset, selectedMarks);
+    const patch = { ...quickMarkPatch(preset, selectedMarks), ranges: selectionState?.ranges };
     // The same rows the chapter query reads and the full editor writes.
     const target = annotationChapter(volume, book, chapter);
     setQuickMarkError(null);
     if (!user) {
+      selectionRestoreRef.current = selectionState?.ranges ?? null;
       // Guests mark on this device (written at once); signing in imports the marks to the account.
       try {
         deviceStudy.setVerseMarks(target, selectedVerseNumbers, patch);
       } catch {
+        selectionRestoreRef.current = null;
         setQuickMarkError("Couldn't save that mark on this device. Allow browser storage and try again.");
       }
       return;
     }
     if (!convexReady) return;
+    selectionRestoreRef.current = selectionState?.ranges ?? null;
     setQuickMarkPending((count) => count + 1);
     try {
       await saveVerseMarks({ ...target, verses: selectedVerseNumbers, ...patch });
     } catch {
+      selectionRestoreRef.current = null;
       setQuickMarkError("Couldn't save that mark. Try again.");
     } finally {
       setQuickMarkPending((count) => count - 1);
@@ -1040,13 +1078,18 @@ export default function ChapterReader({
     if (typeof document === "undefined") return;
 
     function syncSelectionState() {
-      if (customMobileSelectionEnabled || customSelectionActiveRef.current) return;
+      if (customMobileSelectionEnabled || customSelectionActiveRef.current || selectionRestoreRef.current) return;
       const nextSelectionState = getChapterSelectionState(window.getSelection?.() ?? null, verseListRef.current, verses);
       // Keep the resource context while interacting with its contents; selecting another passage still updates it.
       if (openResources && !nextSelectionState) return;
       setSelectionState((prev) => {
         if (
           prev?.selectedText === nextSelectionState?.selectedText &&
+          prev?.ranges.length === nextSelectionState?.ranges.length &&
+          prev?.ranges.every((range, index) => {
+            const next = nextSelectionState?.ranges[index];
+            return next?.verse === range.verse && next.start === range.start && next.end === range.end && next.text === range.text;
+          }) &&
           prev?.selectedWord === nextSelectionState?.selectedWord &&
           prev?.selectedBounds?.start === nextSelectionState?.selectedBounds?.start &&
           prev?.selectedBounds?.end === nextSelectionState?.selectedBounds?.end &&
@@ -1729,19 +1772,17 @@ export default function ChapterReader({
                                   </span>
                                 ) : (
                                   <span className="text-sm leading-6">
-                                  <VerseMarkedText annotation={myVerseAnnotation}>
                                   {verseComparisons.map((comparison, index) => (
                                     <span key={`${v.verse}-${comparison.key}`} className="inline">
                                       {index > 0 ? <span className="mx-2 text-foreground/35">|</span> : null}
-                                      {renderInlineDiff(
+                                      <VerseMarkedText annotation={myVerseAnnotation}>{renderInlineDiff(
                                         v.text,
                                         comparison.compareText,
                                         "text-amber-700 dark:text-amber-300",
                                         comparison.compareColorClass
-                                      )}
+                                      )}</VerseMarkedText>
                                     </span>
                                   ))}
-                                  </VerseMarkedText>
                                   </span>
                                 )}
                               </div>

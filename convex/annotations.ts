@@ -4,6 +4,8 @@ import { mutation, query } from "./_generated/server";
 import { getViewerClerkId, requireClerkId } from "./utils";
 import {
   annotationProblem,
+  textMarksProblem,
+  mergeTextMarks,
   applyVerseMarks,
   nextUnderlineColor,
   savedUnderlineColor,
@@ -15,7 +17,7 @@ import {
   normalizeAnnotationBody,
   sameGuideAnchor,
 } from "./annotationRules";
-import { markColorValidator } from "./markValidators";
+import { markColorValidator, verseTextMarkValidator, verseTextRangeValidator } from "./markValidators";
 
 function toIso(ts: number): string {
   return new Date(ts).toISOString();
@@ -42,6 +44,7 @@ export const getChapterAnnotations = query({
 
     const byVerse: Record<number, Array<{
       id: string;
+      text_marks?: import("./annotationRules").VerseTextMark[];
       verse: number;
       body: string;
       visibility: "private";
@@ -64,6 +67,7 @@ export const getChapterAnnotations = query({
         body: row.body,
         visibility: "private",
         highlight_color: row.highlightColor ?? null,
+        text_marks: row.textMarks,
         underline: row.underline === true,
         // Null when not underlined; an underline saved before underlines had colors is red.
         underline_color: savedUnderlineColor(row),
@@ -89,6 +93,7 @@ export const getChapterAnnotations = query({
 
 export const upsertVerseAnnotation = mutation({
   args: {
+    textMarks: v.optional(v.array(verseTextMarkValidator)),
     deviceImportId: v.optional(v.string()),
     deviceImportOwner: v.optional(v.string()),
     volume: v.string(),
@@ -130,8 +135,23 @@ export const upsertVerseAnnotation = mutation({
         ? savedUnderlineColor(existing) ?? nextUnderlineColor(null, args)
         : nextUnderlineColor(existing, args)) ?? undefined;
     const underline = underlineColor !== undefined;
-    // Any mix of a note, a highlight, and an underline; a mark alone is stored with an empty body.
-    const problem = annotationProblem(args.body, args.highlightColor, underline);
+    const incomingProblem = textMarksProblem(args.textMarks ?? []);
+    if (incomingProblem) throw new Error(incomingProblem);
+    const textMarks = args.deviceImportId
+      ? mergeTextMarks(existing?.textMarks ?? [], (args.textMarks ?? []).filter(mark =>
+          mark.kind === "highlight" ? !existing?.highlightColor : !savedUnderlineColor(existing)))
+      : existing?.textMarks?.filter(mark => mark.kind === "highlight"
+          ? (existing.highlightColor ?? undefined) === args.highlightColor
+          : savedUnderlineColor(existing) === (underlineColor ?? null)) ?? args.textMarks;
+    const marksProblem = textMarksProblem(textMarks ?? []);
+    if (marksProblem) throw new Error(marksProblem);
+    // A note edit preserves saved text ranges.
+    const problem = annotationProblem(
+      args.deviceImportId ? existing?.body || args.body : args.body,
+      args.deviceImportId ? existing?.highlightColor ?? args.highlightColor : args.highlightColor,
+      underline,
+      textMarks
+    );
     if (problem) throw new Error(problem);
     let body = normalizeAnnotationBody(args.body);
     const now = Date.now();
@@ -139,12 +159,13 @@ export const upsertVerseAnnotation = mutation({
       const highlightColor = args.deviceImportId ? existing.highlightColor ?? args.highlightColor : args.highlightColor;
       if (args.deviceImportId && existing.body && existing.body !== body) {
         body = body ? `${existing.body}\n\n${body}` : existing.body;
-        const mergedProblem = annotationProblem(body, highlightColor, underline);
+        const mergedProblem = annotationProblem(body, highlightColor, underline, textMarks);
         if (mergedProblem) throw new Error(mergedProblem);
       }
       await ctx.db.patch(existing._id, {
         body,
         visibility: "private",
+        textMarks,
         highlightColor,
         // Stored only when true; patching undefined removes the field.
         underline: underline || undefined,
@@ -162,6 +183,7 @@ export const upsertVerseAnnotation = mutation({
       verse: args.verse,
       body,
       visibility: "private",
+      textMarks,
       highlightColor: args.highlightColor,
       underline: underline || undefined,
       underlineColor,
@@ -185,6 +207,7 @@ export const setVerseMarks = mutation({
     book: v.string(),
     chapter: v.number(),
     verses: v.array(v.number()),
+    ranges: v.optional(v.array(verseTextRangeValidator)),
     // Omitted: leave each verse's highlight as it is. Null: remove it.
     highlightColor: v.optional(v.union(v.null(), markColorValidator)),
     // False: remove each verse's underline. True (callers from before underlines had colors): underline each
@@ -196,7 +219,7 @@ export const setVerseMarks = mutation({
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
     const verses = Array.from(new Set(args.verses));
-    const patch = { highlightColor: args.highlightColor, underline: args.underline, underlineColor: args.underlineColor };
+    const patch = { highlightColor: args.highlightColor, underline: args.underline, underlineColor: args.underlineColor, ranges: args.ranges };
     const problem = verseMarksProblem(verses, patch);
     if (problem) throw new Error(problem);
     const now = Date.now();
@@ -213,17 +236,19 @@ export const setVerseMarks = mutation({
             .eq("verse", verse)
         )
         .unique();
-      const next = applyVerseMarks(existing, patch);
+      const next = applyVerseMarks(existing, patch, args.ranges?.find(range => range.verse === verse));
       if (existing) {
         if (!next.keep) {
           await ctx.db.delete(existing._id);
           changed += 1;
         } else if (
           (existing.highlightColor ?? undefined) !== next.highlightColor ||
-          (savedUnderlineColor(existing) ?? undefined) !== next.underlineColor
+          (savedUnderlineColor(existing) ?? undefined) !== next.underlineColor ||
+          JSON.stringify(existing.textMarks) !== JSON.stringify(next.textMarks)
         ) {
           // Patching undefined removes a field: no highlight, or no underline (and so no color), is its absence.
           await ctx.db.patch(existing._id, {
+            textMarks: next.textMarks,
             highlightColor: next.highlightColor,
             underline: next.underline || undefined,
             underlineColor: next.underlineColor,
@@ -240,6 +265,7 @@ export const setVerseMarks = mutation({
           verse,
           body: "",
           visibility: "private",
+          textMarks: next.textMarks,
           highlightColor: next.highlightColor,
           underline: next.underline || undefined,
           underlineColor: next.underlineColor,

@@ -32,3 +32,11 @@ export const legacyQuickMarkValidator = v.union(
   v.literal("purple"),
   v.literal("underline")
 );
+
+export const verseTextMarkValidator = v.object({
+  start: v.number(), end: v.number(), text: v.string(),
+  kind: v.union(v.literal("highlight"), v.literal("underline")), color: markColorValidator,
+});
+export const verseTextRangeValidator = v.object({
+  verse: v.number(), start: v.number(), end: v.number(), text: v.string(),
+});

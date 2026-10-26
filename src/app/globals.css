@@ -1421,6 +1421,7 @@ a.reader-toolbar-crumb:hover {
   background-color: var(--verse-mark-purple);
 }
 
+.verse-mark[data-verse-underline="red"] { --verse-underline: var(--verse-underline-red); }
 .verse-mark[data-verse-underline="yellow"] { --verse-underline: var(--verse-underline-yellow); }
 .verse-mark[data-verse-underline="blue"] { --verse-underline: var(--verse-underline-blue); }
 .verse-mark[data-verse-underline="green"] { --verse-underline: var(--verse-underline-green); }

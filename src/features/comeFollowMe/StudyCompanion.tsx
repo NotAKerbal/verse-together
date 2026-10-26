@@ -1604,7 +1604,7 @@ export default function StudyCompanion({
                           {verse.verse}
                         </span>
                         <span className={styles.srOnly}>Verse {verse.verse}: </span>
-                        {annotations.verseText(entry.chapter, verse.verse, typesetDashes(verse.text))}
+                        {annotations.verseText(entry.chapter, verse.verse, verse.text, typesetDashes)}
                         {(passagesByStart.get(`${entry.chapter}:${verse.verse}`) ?? []).map((passage) => (
                           <a
                             key={passage.id}

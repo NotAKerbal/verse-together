@@ -158,8 +158,8 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
   };
 
   /** A verse's text with the viewer's highlight and underline drawn on its words. */
-  const verseText = (chapter: number, verse: number, children: ReactNode) => (
-    <VerseMarkedText annotation={annotationFor(chapter, verse)}>{children}</VerseMarkedText>
+  const verseText = (chapter: number, verse: number, children: ReactNode, formatText?: (text: string) => string) => (
+    <VerseMarkedText annotation={annotationFor(chapter, verse)} formatText={formatText}>{children}</VerseMarkedText>
   );
 
   const onVerseKeyDown = (event: KeyboardEvent<HTMLElement>, target: VerseKey) => {

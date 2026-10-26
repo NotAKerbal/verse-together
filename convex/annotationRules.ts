@@ -14,11 +14,12 @@ export function normalizeAnnotationBody(body: string): string {
 export function annotationProblem(
   body: string,
   highlightColor: string | null | undefined,
-  underline: boolean | null | undefined = false
+  underline: boolean | null | undefined = false,
+  textMarks: readonly VerseTextMark[] = []
 ): string | null {
   const normalized = normalizeAnnotationBody(body);
   if (normalized.length > ANNOTATION_BODY_MAX) return "Annotation text is too long";
-  if (!normalized && !highlightColor && underline !== true) return "Add a note, a highlight, or an underline";
+  if (!normalized && !highlightColor && underline !== true && !textMarks.length) return "Add a note, a highlight, or an underline";
   return null;
 }
 
@@ -53,6 +54,8 @@ export type VerseMarksPatch = {
   highlightColor?: MarkColor | null;
   underline?: boolean;
   underlineColor?: MarkColor;
+  /** Exact portions of the selected verses; omitted by whole-verse callers. */
+  ranges?: VerseTextRange[];
 };
 
 /** Why a change to a verse's underline contradicts itself, or null if it doesn't. */
@@ -71,6 +74,14 @@ export function verseMarksProblem(verses: readonly number[], patch: VerseMarksPa
   if (verses.length === 0) return "Select a verse to mark";
   if (verses.length > VERSE_MARKS_MAX_VERSES) return "Select fewer verses to mark";
   if (!verses.every((verse) => Number.isInteger(verse) && verse >= 1 && verse <= 1000)) return "Unknown verse";
+  if (patch.ranges !== undefined) {
+    if (patch.ranges.length !== verses.length || new Set(patch.ranges.map(r => r.verse)).size !== verses.length) return "Invalid text selection";
+    for (const range of patch.ranges) {
+      if (!verses.includes(range.verse) || !Number.isInteger(range.start) || !Number.isInteger(range.end) ||
+          range.start < 0 || range.end > range.text.length || range.start >= range.end ||
+          range.text.length > VERSE_TEXT_MAX || !range.text.slice(range.start, range.end).trim()) return "Invalid text selection";
+    }
+  }
   return null;
 }
 
@@ -106,15 +117,92 @@ export function applyVerseMarks(
     highlightColor?: MarkColor | null;
     underline?: boolean | null;
     underlineColor?: MarkColor | null;
+    textMarks?: VerseTextMark[];
   } | null,
-  patch: VerseMarksPatch
-): { highlightColor: MarkColor | undefined; underline: boolean; underlineColor: MarkColor | undefined; keep: boolean } {
+  patch: VerseMarksPatch,
+  range?: VerseTextRange
+): { highlightColor: MarkColor | undefined; underline: boolean; underlineColor: MarkColor | undefined; keep: boolean; textMarks?: VerseTextMark[] } {
+  if (range) return applyTextMarks(existing, patch, range);
   const highlightColor =
     patch.highlightColor === undefined ? existing?.highlightColor ?? undefined : patch.highlightColor ?? undefined;
   const underlineColor = nextUnderlineColor(existing, patch) ?? undefined;
   const underline = underlineColor !== undefined;
-  const keep = !!normalizeAnnotationBody(existing?.body ?? "") || !!highlightColor || underline;
-  return { highlightColor, underline, underlineColor, keep };
+  const textMarks = existing?.textMarks?.filter(mark =>
+    mark.kind === "highlight" ? patch.highlightColor === undefined : patch.underline === undefined && patch.underlineColor === undefined);
+  const keep = !!normalizeAnnotationBody(existing?.body ?? "") || !!highlightColor || underline || !!textMarks?.length;
+  return { highlightColor, underline, underlineColor, keep, ...(existing?.textMarks ? { textMarks } : {}) };
+}
+
+/** Offsets count UTF-16 characters of scripture text only, excluding verse numbers and controls. */
+export type VerseTextRange = { verse: number; start: number; end: number; text: string };
+export type VerseTextMark = { start: number; end: number; text: string; kind: "highlight" | "underline"; color: MarkColor };
+export const VERSE_TEXT_MAX = 20_000;
+export const VERSE_TEXT_MARKS_MAX = 1000;
+
+export function textMarksProblem(marks: readonly VerseTextMark[]): string | null {
+  if (marks.length > VERSE_TEXT_MARKS_MAX) return "Too many marks on this verse";
+  return marks.some(m => !Number.isInteger(m.start) || !Number.isInteger(m.end) || m.start < 0 ||
+    m.end > VERSE_TEXT_MAX || m.end <= m.start || m.end - m.start !== m.text.length ||
+    !m.text.trim() || !isMarkColor(m.color) || (m.kind !== "highlight" && m.kind !== "underline")) ? "Invalid text mark" : null;
+}
+
+/** Never draw a stored range on different words (for example after changing Bible translations). */
+export function matchingTextMarks(marks: readonly VerseTextMark[] | undefined, text: string): VerseTextMark[] {
+  return (marks ?? []).filter(m => m.start >= 0 && m.end <= text.length && text.slice(m.start, m.end) === m.text);
+}
+
+function cutMark(mark: VerseTextMark, start: number, end: number): VerseTextMark[] {
+  const out: VerseTextMark[] = [];
+  if (mark.start < start) out.push({ ...mark, end: start, text: mark.text.slice(0, start - mark.start) });
+  if (mark.end > end) out.push({ ...mark, start: end, text: mark.text.slice(end - mark.start) });
+  return out.filter(m => m.text.trim());
+}
+
+/** Only the requested kind inside the selection changes; split marks at its edges. */
+function applyTextMarks(existing: Parameters<typeof applyVerseMarks>[0], patch: VerseMarksPatch, range: VerseTextRange): ReturnType<typeof applyVerseMarks> {
+  let marks = [...(existing?.textMarks ?? [])];
+  let highlightColor = existing?.highlightColor ?? undefined;
+  let underlineColor = savedUnderlineColor(existing) ?? undefined;
+  for (const kind of ["highlight", "underline"] as const) {
+    const changes = kind === "highlight" ? patch.highlightColor !== undefined : patch.underline !== undefined || patch.underlineColor !== undefined;
+    if (!changes) continue;
+    const base = kind === "highlight" ? highlightColor : underlineColor;
+    if (base) marks.unshift({ start: 0, end: range.text.length, text: range.text, kind, color: base });
+    if (kind === "highlight") highlightColor = undefined;
+    else underlineColor = undefined;
+    marks = marks.flatMap(mark => mark.kind === kind && mark.end > range.start && mark.start < range.end &&
+      range.text.slice(mark.start, mark.end) === mark.text ? cutMark(mark, range.start, range.end) : [mark]);
+    const color = kind === "highlight" ? patch.highlightColor : patch.underline === false ? null : patch.underlineColor ?? base ?? DEFAULT_UNDERLINE_COLOR;
+    if (color) marks.push({ start: range.start, end: range.end, text: range.text.slice(range.start, range.end), kind, color });
+  }
+  marks.sort((a, b) => a.kind.localeCompare(b.kind) || a.start - b.start);
+  // Merge adjacent pieces of the same style to avoid growth on repeated edits.
+  const textMarks: VerseTextMark[] = [];
+  for (const mark of marks) {
+    const last = textMarks[textMarks.length - 1];
+    if (last && last.kind === mark.kind && last.color === mark.color && last.end === mark.start &&
+        range.text.slice(last.start, last.end) === last.text && range.text.slice(mark.start, mark.end) === mark.text) {
+      last.end = mark.end;
+      last.text += mark.text;
+    } else textMarks.push({ ...mark });
+  }
+  const problem = textMarksProblem(textMarks);
+  if (problem) throw new Error(problem);
+  return { highlightColor, underline: !!underlineColor, underlineColor, textMarks,
+    keep: !!normalizeAnnotationBody(existing?.body ?? "") || !!highlightColor || !!underlineColor || !!textMarks.length };
+}
+
+/** Import fills only unmarked portions; existing account styles win overlapping selections. */
+export function mergeTextMarks(existing: readonly VerseTextMark[], incoming: readonly VerseTextMark[]): VerseTextMark[] {
+  const out = [...existing];
+  for (const mark of incoming) {
+    let parts = [mark];
+    for (const saved of out.filter(m => m.kind === mark.kind)) {
+      parts = parts.flatMap(part => saved.end > part.start && saved.start < part.end ? cutMark(part, saved.start, saved.end) : [part]);
+    }
+    out.push(...parts);
+  }
+  return out;
 }
 
 /*

@@ -167,17 +167,22 @@ export class DeviceStudyStore {
   /** The full editor's save: the verse's note, highlight, and underline as given (an omitted mark is none). */
   saveAnnotation(target: AnnotationVerse, body: string, marks: { highlightColor?: MarkColor; underlineColor?: MarkColor } = {}) {
     const { highlightColor, underlineColor } = marks;
-    const problem = annotationProblem(body, highlightColor, underlineColor !== undefined);
-    if (problem) throw new Error(problem);
     const chapter = annotationChapter(target.volume, target.book, target.chapter);
     this.write((data) => {
       const existing = findDeviceAnnotation(data.annotations, chapter, target.verse);
+      // Saving note text keeps spans; deliberately changing a whole-verse style replaces that kind.
+      const textMarks = existing?.text_marks?.filter(mark => mark.kind === "highlight"
+        ? (existing.highlight_color ?? undefined) === highlightColor
+        : (existing.underline ? existing.underline_color ?? DEFAULT_UNDERLINE_COLOR : undefined) === underlineColor);
+      const problem = annotationProblem(body, highlightColor, underlineColor !== undefined, textMarks);
+      if (problem) throw new Error(problem);
       const now = new Date().toISOString();
       const row: DeviceAnnotation = {
         ...chapter,
         verse: target.verse,
         id: existing?.id ?? `device-${newRequestId()}`,
         body,
+        ...(textMarks ? { text_marks: textMarks } : {}),
         highlight_color: highlightColor ?? null,
         underline: underlineColor !== undefined,
         underline_color: underlineColor ?? null,
@@ -212,9 +217,11 @@ export class DeviceStudyStore {
                 highlightColor: existing.highlight_color,
                 underline: existing.underline,
                 underlineColor: existing.underline_color,
+                textMarks: existing.text_marks,
               }
             : null,
           patch,
+          patch.ranges?.find(range => range.verse === verse),
         );
         const rest = annotations.filter((row) => row !== existing);
         if (!next.keep) {
@@ -233,6 +240,7 @@ export class DeviceStudyStore {
             visibility: "private",
             created_at: now,
           }),
+          text_marks: next.textMarks,
           highlight_color: next.highlightColor ?? null,
           underline: next.underline,
           underline_color: next.underlineColor ?? null,
@@ -303,6 +311,7 @@ export function annotationImport(row: DeviceAnnotation, owner: string) {
     chapter: row.chapter,
     verse: row.verse,
     body: row.body,
+    ...(row.text_marks ? { textMarks: row.text_marks } : {}),
     highlightColor: row.highlight_color ?? undefined,
     underlineColor: row.underline ? (row.underline_color ?? DEFAULT_UNDERLINE_COLOR) : undefined,
   };

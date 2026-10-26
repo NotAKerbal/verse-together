@@ -1,7 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { noteSourceValidator } from "./noteJournal";
-import { legacyQuickMarkValidator, markColorValidator, markPresetValidator } from "./markValidators";
+import { legacyQuickMarkValidator, markColorValidator, verseTextMarkValidator, markPresetValidator } from "./markValidators";
 
 const scriptureResourceCoverage = v.object({
   book: v.string(),
@@ -318,6 +318,7 @@ export default defineSchema({
     .index("by_clerk", ["clerkId"]),
 
   verseAnnotations: defineTable({
+    textMarks: v.optional(v.array(verseTextMarkValidator)),
     clerkId: v.string(),
     volume: v.string(),
     book: v.string(),
