@@ -23,10 +23,10 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
   }
 
   return (
-    <article className="rounded-md border border-[color:var(--surface-border)] bg-background/70 p-3 space-y-2">
-      <header className="flex items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <h5 className="text-sm font-semibold">{item.word}</h5>
+    <article className="rounded-md border border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] p-3 space-y-3">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-[1_1_9rem] space-y-1">
+          <h5 className="break-words font-serif text-xl leading-tight">{item.word}</h5>
           <span className="inline-flex rounded-full border border-[color:var(--surface-border)] px-2 py-0.5 text-[11px] text-foreground/70">
             {item.source}
           </span>
@@ -36,13 +36,13 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
           onClick={() => {
             void onAddCardToInsight();
           }}
-          className="shrink-0 rounded-md border border-[color:var(--surface-border)] px-2.5 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+          className="min-h-10 shrink-0 rounded-full border border-[color:var(--surface-border)] px-3 py-2 text-xs font-medium transition-colors hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent-rubric)]"
           title="Add this etymology card to a note"
         >
-          Add card
+          Add to note
         </button>
       </header>
-      <p className="text-sm leading-6">{item.text}</p>
+      <p className="whitespace-pre-line break-words text-sm leading-6">{item.text}</p>
     </article>
   );
 }

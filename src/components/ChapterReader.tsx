@@ -1344,6 +1344,7 @@ export default function ChapterReader({
 
   function onOpenExplore() {
     if (!canExploreWord) return;
+    setOpenResources(false);
     setOpenExplorer(true);
   }
 
@@ -1392,8 +1393,12 @@ export default function ChapterReader({
         }`}
       >
         <aside
-          className={`simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] space-y-3 ${
-            openResources ? "" : "max-h-[calc(100vh-var(--header-height)-1rem)] overflow-y-auto pr-1"
+          className={`simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] ${
+            openResources
+              ? "space-y-3"
+              : openExplorer && canExploreWord
+                ? "h-[calc(100dvh-var(--header-height)-1rem)] overflow-hidden pr-1"
+                : "max-h-[calc(100dvh-var(--header-height)-1rem)] overflow-y-auto pr-1 space-y-3"
           }`}
         >
           {openResources && hasSelection ? (
@@ -1412,6 +1417,7 @@ export default function ChapterReader({
               word={singleSelectedWord}
               panelId="word-study-panel-desktop"
               title="Explore Word"
+              onClose={() => setOpenExplorer(false)}
             />
           ) : null}
         </aside>
@@ -1757,12 +1763,12 @@ export default function ChapterReader({
         <div className="lg:hidden">
           <div className="fixed inset-0 z-50">
             <button aria-label="Close" onClick={() => setOpenExplorer(false)} className="absolute inset-0 bg-black/30" />
-            <div className="absolute bottom-0 left-3 right-3 max-h-[80vh] overflow-hidden rounded-t-2xl border-t border-[color:var(--surface-border)] bg-background p-3 shadow-2xl border-[color:var(--surface-border)] sm:left-4 sm:right-4 sm:p-4">
-              <div className="mb-1 mx-auto h-1 w-10 rounded-full bg-foreground/20" />
+            <div className="absolute inset-0 overflow-hidden bg-background px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
               <WordStudyPanel
                 word={singleSelectedWord}
                 panelId="word-study-panel-mobile"
                 title="Explore Word"
+                onClose={() => setOpenExplorer(false)}
               />
             </div>
           </div>

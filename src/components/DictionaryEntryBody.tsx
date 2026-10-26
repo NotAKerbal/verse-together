@@ -383,7 +383,9 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
         const res = await fetch(`/api/tools/dictionary?term=${encodeURIComponent(seeTerm)}`, {
           cache: "no-store",
         });
+        if (!res.ok) throw new Error("Lookup request failed");
         const json = await res.json();
+        if (!json.ok) throw new Error("Lookup unavailable");
         if (cancelled) return;
         const byEdition = json?.byEdition ?? {};
         setProviderLabels((json?.providerLabels ?? DEFAULT_PROVIDER_LABELS) as typeof DEFAULT_PROVIDER_LABELS);
@@ -420,6 +422,10 @@ export default function DictionaryEntryBody({ entryText }: { entryText: string }
     if (!seeAnchor) return false;
     const rawTerm = (seeAnchor.getAttribute("data-dict-term") || seeAnchor.textContent || "").trim();
     if (!rawTerm) return false;
+    if (rawTerm !== seeTerm) {
+      setLoadingSeeTerm(true);
+      setSeeError(null);
+    }
     setSeeTerm(rawTerm);
     return true;
   }
