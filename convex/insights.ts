@@ -714,6 +714,7 @@ export const listMyJournal = query({
         source: fields.source,
         reading_at: readingAtIso(draft),
         excerpt: markdownExcerpt(fields.markdown_body),
+        has_reflection: !!fields.markdown_body.trim(),
         markdown_revision: fields.markdown_revision,
         markdown_canonical: fields.markdown_canonical,
         read_only: false,

@@ -32,6 +32,7 @@
   --surface-button-active: #1f1d1a;
   --surface-button-active-text: #f6f3ec;
   --accent-primary: #ecdcae;
+  --accent-goal: #947026;
   --accent-secondary: #9a3020;
   --accent-tertiary: #b5523f;
   --accent-sky: #dfe3dd;
@@ -92,6 +93,7 @@
   --surface-button-active: #ebe6db;
   --surface-button-active-text: #181715;
   --accent-primary: #c9ad6a;
+  --accent-goal: #c9ad6a;
   --accent-secondary: #e3907a;
   --accent-tertiary: #e3907a;
   --accent-sky: #2c3331;

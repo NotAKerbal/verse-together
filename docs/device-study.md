@@ -11,3 +11,7 @@ Clearing site data removes local-only study. Account sharing and study plans kee
 Deploy the updated Convex schema and functions with the frontend. No backend deployment was performed for this change.
 
 Validation in this worktree: TypeScript and 184 Vitest tests passed, including storage failures, reload persistence, revisions, deletion, account ownership, import retries, and annotation merging. The existing reader/guide, auth, and browse suites passed. Real-app Chrome QA confirmed signed-out note creation, editing and persistence after reload, reader note-plus-reading saves, and verse annotation/highlight persistence. Live authenticated cross-device sync was not exercised because this checkout has no configured Convex backend.
+
+## Journal goals
+
+The journal homepage works signed out. Weekly study-day and reflection targets are saved in the same device notebook, remain after reload, and never alter recorded notes/readings. Existing device notebooks without targets use five study days and three reflections. Guest targets stay on this device; signing in uses that account's separate private targets. The homepage progress and revisit sections use the current guest or account journal, with no fabricated statistics.

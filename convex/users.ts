@@ -3,6 +3,7 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { authComponent } from "./auth";
 import { findAppUserByAuthUserId, getAuthenticatedAuthUserId } from "./utils";
+import { DEFAULT_JOURNAL_GOALS, journalGoalsProblem } from "../src/lib/journalGoals";
 
 export function normalizeEmail(value: string | null | undefined): string | undefined {
   const email = value?.trim().toLowerCase();
@@ -130,6 +131,31 @@ export const viewer = query({
     if (!authUserId) return null;
     const row = await findAppUserByAuthUserId(ctx, authUserId);
     return row ? viewerPayload(row) : null;
+  },
+});
+
+/** Private weekly targets. Existing accounts get defaults until they choose their own rhythm. */
+export const getJournalGoals = query({
+  args: {},
+  handler: async (ctx) => {
+    const authUserId = await getAuthenticatedAuthUserId(ctx);
+    if (!authUserId) return null;
+    const user = await findAppUserByAuthUserId(ctx, authUserId);
+    return user ? user.journalGoals ?? DEFAULT_JOURNAL_GOALS : null;
+  },
+});
+
+export const saveJournalGoals = mutation({
+  args: { studyDays: v.number(), reflections: v.number() },
+  handler: async (ctx, goals) => {
+    const authUserId = await getAuthenticatedAuthUserId(ctx);
+    if (!authUserId) throw new Error("Unauthorized");
+    const user = await findAppUserByAuthUserId(ctx, authUserId);
+    if (!user) throw new Error("Unauthorized");
+    const problem = journalGoalsProblem(goals);
+    if (problem) throw new Error(problem);
+    await ctx.db.patch(user._id, { journalGoals: goals, updatedAt: Date.now() });
+    return goals;
   },
 });
 

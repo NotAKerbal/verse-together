@@ -32,6 +32,22 @@
   padding: calc(1.25rem + 1px);
 }
 
+.journalHeading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem; padding-top: .6rem; }
+.journalHeading h2 { font-family: var(--font-serif-text); font-size: 1.5rem; font-weight: 400; }
+.journalHeading > span { font-size: .75rem; color: var(--foreground-soft); }
+.emptyDay { padding: 1.5rem 0; border-top: 1px solid var(--surface-border); font-size: .9rem; line-height: 1.6; color: var(--foreground-muted); }
+.entryList { border-top: 1px solid var(--surface-border); }
+.entryList > li { border: 0; border-bottom: 1px solid var(--surface-border); border-radius: 0; box-shadow: none; background: transparent; padding-block: 1.2rem; }
+.entryList > li > button, .entryList > li > a { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.entryList > li:has(> button:hover), .entryList > li:has(> a:hover) { background: var(--surface-card-soft); box-shadow: none; }
+.entryList > li > button:hover, .entryList > li > a:hover { background: transparent; box-shadow: none; }
+.entryList > li > button { gap: 1rem; }
+.entryList [data-note-icon] { width: 3rem; height: 3rem; margin-top: 0; border-radius: 50%; border: 1px solid var(--surface-border); background: var(--surface-card-soft); color: var(--accent-goal); }
+.entryList [data-note-icon] svg { width: 1rem; height: 1rem; }
+.entryList [data-note-title] { font-size: 1.2rem; }
+.entryList [data-note-excerpt] { margin-top: .35rem; font-size: .88rem; line-height: 1.5; }
+.entryList > li > div { padding-left: 4rem; }
+
 .note {
   min-height: 24rem;
 }

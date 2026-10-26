@@ -36,10 +36,13 @@ export function JournalNoteCard({
         aria-current={selected ? "true" : undefined}
         className="flex w-full cursor-pointer items-start gap-2 text-left after:absolute after:inset-0 after:rounded-[0.875rem] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[color:var(--accent-secondary)]"
       >
-        <FontAwesomeIcon icon={reading ? faBookOpen : faLightbulb} className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span data-note-icon className="mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+          <FontAwesomeIcon icon={reading ? faBookOpen : faLightbulb} className="h-3.5 w-3.5" aria-hidden="true" />
+        </span>
         <span className="min-w-0 flex-1">
           {/* line-clamp sets its own display, so no display utility sits beside it. */}
           <span
+            data-note-title
             className={`line-clamp-2 font-display leading-snug font-extrabold tracking-[-0.02em] wrap-anywhere ${prominent ? "text-[1.12rem]" : "text-[1rem]"}`}
           >
             {title}
@@ -48,7 +51,7 @@ export function JournalNoteCard({
             <span className="mt-0.5 block text-xs font-semibold text-[color:var(--accent-secondary)]">Reading logged</span>
           ) : null}
           {note.excerpt ? (
-            <span className="mt-0.5 line-clamp-2 text-xs leading-5 wrap-anywhere text-[color:var(--foreground-muted)]">{note.excerpt}</span>
+            <span data-note-excerpt className="mt-0.5 line-clamp-2 text-xs leading-5 wrap-anywhere text-[color:var(--foreground-muted)]">{note.excerpt}</span>
           ) : null}
         </span>
         {note.status !== "draft" ? (

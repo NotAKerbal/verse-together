@@ -8,7 +8,7 @@
 // An opened note also takes one browser history entry (useJournalHistory), so Back closes it and Forward reopens it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import AccountControl from "@/components/AccountControl";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
@@ -36,7 +36,8 @@ import {
 import { useBelowLg } from "./useBelowLg";
 import { useConvexSignedIn } from "./useConvexSignedIn";
 import { useJournalHistory } from "./useJournalHistory";
-import { deviceJournal } from "./deviceStudy";
+import { DEFAULT_JOURNAL_GOALS } from "@/lib/journalGoals";
+import { deviceJournal, deviceStudy } from "./deviceStudy";
 import { useDeviceStudy } from "./useDeviceStudy";
 import DeviceSyncStatus from "./DeviceSyncStatus";
 
@@ -55,11 +56,24 @@ export default function ConnectedJournalWorkspace() {
   const cloudJournal = useQuery(api.insights.listMyJournal, ready ? {} : "skip") as JournalEntry[] | undefined;
   const journal = useMemo(() => user ? cloudJournal : device.loaded ? deviceJournal(device.data) : undefined, [user, cloudJournal, device.loaded, device.data]);
   const readingLog = useMyReadingLog() as ReadingLogRow[] | undefined;
+  const goals = useQuery(api.users.getJournalGoals, ready ? {} : "skip");
+  const saveGoals = useMutation(api.users.saveJournalGoals);
 
-  const [today] = useState(() => localDateKey());
+  const [today, setToday] = useState(() => localDateKey());
+  // Goals follow the local day even when the journal stays open across midnight or a week boundary.
+  useEffect(() => {
+    const refreshDay = () => setToday(localDateKey());
+    const timer = window.setInterval(refreshDay, 60_000);
+    document.addEventListener("visibilitychange", refreshDay);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshDay);
+    };
+  }, []);
   const [viewState, setViewState] = useState<JournalViewState>(null);
   // The selected day's New note shows the unsaved entry under it until it is saved or closed.
   const [composing, setComposing] = useState(false);
+  const [reflectionPrompt, setReflectionPrompt] = useState<string | null>(null);
   const [openingReading, setOpeningReading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -138,12 +152,14 @@ export default function ConnectedJournalWorkspace() {
   // A personal note for the day (it is written on this page, so there is no reading source to claim); an unsaved
   // entry that already holds something is kept as it is.
   const onNewNote = useCallback(
-    (journalDate: string) => {
+    (journalDate: string, prompt?: string) => {
       setCreateError(null);
+      setReflectionPrompt(prompt ?? null);
       updateEntryDraft((draft) => restartEntryDraft(draft, { journalDate, source: null }));
       setComposing(true);
+      act({ type: "selectDate", date: journalDate });
     },
-    [updateEntryDraft]
+    [updateEntryDraft, act]
   );
   // An untouched entry moves with the selected day.
   useEffect(() => {
@@ -243,6 +259,7 @@ export default function ConnectedJournalWorkspace() {
   const historyLoaded = journal !== undefined && readingLog !== undefined;
   const dayActions = composing ? (
     <section aria-label="New entry" className="panel-card rounded-[1.25rem] p-4">
+      {reflectionPrompt ? <p className="mb-4 font-serif text-lg text-[color:var(--foreground-muted)]">{reflectionPrompt}</p> : null}
       <JournalEntryComposer
         options={logOptions}
         autoFocus={!belowLg}
@@ -266,26 +283,31 @@ export default function ConnectedJournalWorkspace() {
 
   return (
     <>
-      <DeviceSyncStatus />
-      <JournalWorkspace
-        layout={belowLg ? "phone" : "desktop"}
-        status={historyLoaded ? "ready" : "loading"}
-        entries={entries}
-        today={today}
-        stage={view.stage}
-        selectedDate={selectedDate}
-        onSelectDate={onSelectDate}
-        selectedKey={view.noteId !== null ? `note:${view.noteId}` : null}
-        onOpenNote={onOpenNote}
-        onOpenReading={(entry) => void onOpenReading(entry)}
-        onCloseNote={onCloseNote}
-        onShowCalendar={onShowCalendar}
-        onNewNote={onNewNote}
-        createError={createError}
-        notePane={notePane}
-        headerAccessory={<AccountControl variant="page" />}
-        dayActions={dayActions}
-      />
+    <DeviceSyncStatus />
+    <JournalWorkspace
+      layout={belowLg ? "phone" : "desktop"}
+      status={historyLoaded ? "ready" : "loading"}
+      entries={entries}
+      today={today}
+      stage={view.stage}
+      selectedDate={selectedDate}
+      onSelectDate={onSelectDate}
+      selectedKey={view.noteId !== null ? `note:${view.noteId}` : null}
+      onOpenNote={onOpenNote}
+      onOpenReading={(entry) => void onOpenReading(entry)}
+      onCloseNote={onCloseNote}
+      onShowCalendar={onShowCalendar}
+      onNewNote={onNewNote}
+      createError={createError}
+      notePane={notePane}
+      headerAccessory={<AccountControl variant="page" />}
+      dayActions={dayActions}
+      goalControls={user
+        ? { goals: goals ?? DEFAULT_JOURNAL_GOALS, loading: goals === undefined, onSave: saveGoals }
+        : { goals: device.data.journalGoals ?? DEFAULT_JOURNAL_GOALS, loading: !device.loaded,
+            saveErrorMessage: "Your goals couldn't be saved on this device. Your changes are still here. Allow browser storage or free some space and try again.",
+            onSave: async targets => deviceStudy.saveJournalGoals(targets) }}
+    />
     </>
   );
 }
