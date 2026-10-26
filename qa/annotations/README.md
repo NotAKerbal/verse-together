@@ -166,3 +166,22 @@ port 3191 and the persisted isolated local Convex backend on port 3231:
   deployment. These screenshots demonstrate the real local app and live local saves.
 
 The header no longer displays names visually, superseding the named-header description above.
+
+## Integration for development rollout
+
+Merged current dev `1e1c10ef1a5ed165db0a9d4d2e39628b3b45270d` into feature commit
+`81d1f7ed5d7f8fe82f63fe4b6904dd69b589fdac` on October 26, 2026. Resolutions preserve the newer Resources
+panel and guest device-study behavior. Guest quick marks now persist on the device; sign-in imports
+retain colored underlines and let existing account marks take precedence. Account presets remain private.
+
+- **Passed** — integration implementation: full Vitest, 30 files / 253 tests; CFM/helpers, 139 tests;
+  application and Convex TypeScript checks. Targeted lint adds no findings beyond existing exceptions.
+- **Passed** — independent integration rerun, 49 tests across `deviceStudy`, `verseAnnotations`,
+  `markPickers`, `quickMarkPreferences`, and `readerMarkPresets`.
+- **Passed** — production `npm run build`: compilation, TypeScript, and 83 generated pages, including
+  dev's newer Resources endpoint. Staged and unstaged whitespace checks pass.
+- **Not run** — browser interaction after guest-study integration or a live guest sign-in import.
+  Earlier screenshots demonstrate the pre-integration account path.
+- **Blocked (existing configuration)** — dev's prior Vercel build at `1e1c10e` failed because
+  `CONVEX_AUTOMATIC_DEPLOYMENT=dev:fabulous-dogfish-606` was not configured. A metadata-only read
+  showed no dev-branch activation marker or deploy key. No provider settings or secrets were changed.

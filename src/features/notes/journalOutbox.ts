@@ -1,5 +1,5 @@
-// Pending note text, kept in memory for one signed-in user and saved one request at a time per note.
-// Nothing here touches localStorage: private text never leaves the tab except through the save mutation.
+// Pending note text, kept in memory for one owner and saved one request at a time per note.
+// The provider supplies either a device-storage save or an authenticated server mutation.
 //
 // Every save names the revision its text was based on. When the server refuses because the note moved on,
 // the entry stops in "conflict" with the local text intact and waits for the person to choose.

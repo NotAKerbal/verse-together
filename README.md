@@ -71,6 +71,11 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+Vercel builds now use the guarded Convex/frontend workflow in
+[docs/convex-deployment.md](docs/convex-deployment.md). Configure the branch-scoped dev and separate
+production credentials/activation settings before merging it to their release branches; missing settings
+fail those builds. Feature previews and local `npm run build` do not push Convex.
+
 ## Accounts
 
 Sign-in uses Better Auth inside Convex. The current rollout is **Google only**; email/password support is built

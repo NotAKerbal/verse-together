@@ -11,6 +11,8 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: "convex/react", replacement: path.join(root, "qa/annotations/convex.tsx") },
+      // A synthetic signed-in reader, so the editor saves through the fixture mutations (never device storage).
+      { find: "@/lib/auth", replacement: path.join(root, "qa/annotations/auth.ts") },
       { find: "@", replacement: path.join(root, "src") },
     ],
   },

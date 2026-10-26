@@ -66,7 +66,7 @@ type Props = {
   onInsight: () => void;
   onNewInsight: () => void;
   onAnnotation: () => void;
-  onCitations: () => void;
+  onResources: () => void;
   onExplore?: () => void;
   onTranslations?: () => void;
   shareHref?: string | null;
@@ -371,7 +371,7 @@ function SelectionCardBody({
   selectionReference, quickMarks, annotationTitle = "Annotate", annotationDescription = "Mark what matters",
   annotationDisabled = false, noteLabel = "Write a note", noteDescription = "Note and marks together",
   hasActiveInsight, selectedWord, showInsightAction = true, showExplore = false, showTranslations = false,
-  actionsEnabled = true, onClear, onInsight, onNewInsight, onAnnotation, onCitations, onExplore, onTranslations,
+  actionsEnabled = true, onClear, onInsight, onNewInsight, onAnnotation, onResources, onExplore, onTranslations,
   shareHref, targetLabel = "Note",
 }: CardBodyProps) {
   // The selection the Annotate panel is open on, or null: a new selection reopens on the actions.
@@ -443,8 +443,8 @@ function SelectionCardBody({
         >
           <ActionLabel icon="note" title={annotationTitle} description={actionsEnabled ? annotationDescription : "Sign in to annotate"} />
         </button>
-        <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onCitations}>
-          <ActionLabel icon="book" title="Resources" description="Go a little deeper" />
+        <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onResources}>
+          <ActionLabel icon="book" title="Resources" description="Lessons & more" />
         </button>
         {showTranslations && onTranslations ? (
           <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={onTranslations}>

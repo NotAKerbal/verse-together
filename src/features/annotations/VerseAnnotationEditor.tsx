@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { deviceStudy } from "../notes/deviceStudy";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -27,8 +29,6 @@ type Props = {
   rows: VerseAnnotation[];
   /** False until the chapter's annotations have loaded: saving before then could overwrite a note unseen. */
   loaded: boolean;
-  signedIn: boolean;
-  onSignIn: () => void;
   onClose: () => void;
 };
 
@@ -37,7 +37,8 @@ type Props = {
  * mix of them. A modal
  * <dialog>, so Escape closes it, focus stays inside, and focus returns to whatever opened it.
  */
-export default function VerseAnnotationEditor({ target, label, rows, loaded, signedIn, onSignIn, onClose }: Props) {
+export default function VerseAnnotationEditor({ target, label, rows, loaded, onClose }: Props) {
+  const { user } = useAuth();
   const saveAnnotation = useMutation(api.annotations.upsertVerseAnnotation);
   const removeAnnotation = useMutation(api.annotations.deleteVerseAnnotation);
   const mine = rows.find((row) => row.is_mine) ?? null;
@@ -77,14 +78,16 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
     setSaving(true);
     setError(null);
     try {
-      await saveAnnotation({
-        ...annotationChapter(target.volume, target.book, target.chapter),
-        verse: target.verse,
-        body: text,
-        highlightColor,
-        underline,
-        underlineColor: underlineColor === "none" ? undefined : underlineColor,
-      });
+      const marks = { highlightColor, underlineColor: underlineColor === "none" ? undefined : underlineColor };
+      if (!user) deviceStudy.saveAnnotation(target, text, marks);
+      else
+        await saveAnnotation({
+          ...annotationChapter(target.volume, target.book, target.chapter),
+          verse: target.verse,
+          body: text,
+          underline,
+          ...marks,
+        });
       close();
     } catch {
       setError("Couldn't save this annotation. Try again.");
@@ -99,7 +102,8 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
     setError(null);
     try {
       // The query returns row ids as plain strings; they are verseAnnotations ids.
-      await removeAnnotation({ annotationId: mine.id as Id<"verseAnnotations"> });
+      if (!user) deviceStudy.remove("annotations", mine.id);
+      else await removeAnnotation({ annotationId: mine.id as Id<"verseAnnotations"> });
       close();
     } catch {
       setError("Couldn't delete this annotation. Try again.");
@@ -136,77 +140,66 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
             ))}
           </div>
         ) : null}
-        {!signedIn ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground/70">Sign in to add annotations.</p>
-            <button type="button" onClick={onSignIn} className="rounded-md border surface-button px-3 py-2 text-sm">
-              Sign in
+        <textarea
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            setDirty(true);
+          }}
+          disabled={!loaded}
+          rows={4}
+          placeholder="Write a note tied to this verse..."
+          aria-label="Note"
+          className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
+        />
+        <MarkColorChoice
+          kind="highlight"
+          value={color}
+          disabled={!loaded}
+          onChange={(next) => {
+            setColor(next);
+            setDirty(true);
+          }}
+        />
+        <MarkColorChoice
+          kind="underline"
+          value={underlineColor}
+          disabled={!loaded}
+          onChange={(next) => {
+            setUnderlineColor(next);
+            setDirty(true);
+          }}
+        />
+        {!loaded ? <p className="text-sm text-foreground/70">Loading your annotations…</p> : null}
+        {error ? (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex items-center justify-end gap-2">
+          {mine ? (
+            <button
+              type="button"
+              onClick={() => {
+                void onDelete();
+              }}
+              disabled={saving}
+              className="rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-700 dark:text-red-300 disabled:opacity-60"
+            >
+              Delete
             </button>
-          </div>
-        ) : (
-          <>
-            <textarea
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                setDirty(true);
-              }}
-              disabled={!loaded}
-              rows={4}
-              placeholder="Write a note tied to this verse..."
-              aria-label="Note"
-              className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
-            />
-            <MarkColorChoice
-              kind="highlight"
-              value={color}
-              disabled={!loaded}
-              onChange={(next) => {
-                setColor(next);
-                setDirty(true);
-              }}
-            />
-            <MarkColorChoice
-              kind="underline"
-              value={underlineColor}
-              disabled={!loaded}
-              onChange={(next) => {
-                setUnderlineColor(next);
-                setDirty(true);
-              }}
-            />
-            {!loaded ? <p className="text-sm text-foreground/70">Loading your annotations…</p> : null}
-            {error ? (
-              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-                {error}
-              </p>
-            ) : null}
-            <div className="flex items-center justify-end gap-2">
-              {mine ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onDelete();
-                  }}
-                  disabled={saving}
-                  className="rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-700 dark:text-red-300 disabled:opacity-60"
-                >
-                  Delete
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  void onSave();
-                }}
-                disabled={!canSave}
-                className="rounded-md bg-foreground text-background px-3 py-2 text-sm disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Add annotation"}
-              </button>
-            </div>
-          </>
-        )}
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              void onSave();
+            }}
+            disabled={!canSave}
+            className="rounded-md bg-foreground text-background px-3 py-2 text-sm disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Add annotation"}
+          </button>
+        </div>
       </div>
     </dialog>
   );

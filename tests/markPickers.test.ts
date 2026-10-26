@@ -107,7 +107,7 @@ describe("selection menu", () => {
     onInsight: () => {},
     onNewInsight: () => {},
     onAnnotation: () => {},
-    onCitations: () => {},
+    onResources: () => {},
   };
 
   test("every header button is only its mark; a named preset's name and style are in its label and tooltip", () => {

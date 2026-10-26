@@ -50,7 +50,7 @@ function App() {
         </ol>
         {footnoteOpen ? <p role="status">Synthetic footnote opened.</p> : null}
         <output id="saved-state" className="mt-8 block break-all font-mono text-xs">{JSON.stringify(annotation)}</output>
-        {editing ? <VerseAnnotationEditor target={{ volume: "oldtestament", book: "ruth", chapter: 1, verse: 7 }} label="Ruth 1:7" rows={annotation ? [annotation] : []} loaded signedIn onSignIn={() => {}} onClose={() => setEditing(false)} /> : null}
+        {editing ? <VerseAnnotationEditor target={{ volume: "oldtestament", book: "ruth", chapter: 1, verse: 7 }} label="Ruth 1:7" rows={annotation ? [annotation] : []} loaded onClose={() => setEditing(false)} /> : null}
       </main>
     </FixtureMutations>
   );

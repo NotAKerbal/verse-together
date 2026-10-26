@@ -1,22 +1,63 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faBookOpen, faFeather, faTrashCan, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useInsightBuilder, useNoteOutboxEntry } from "@/features/insights/InsightBuilderProvider";
 import type { OutboxEntry } from "./journalOutbox";
-import { formatDayHeading, formatTime, type JournalNoteDocument } from "./journal";
+import {
+  formatDayHeading,
+  formatShortDayHeading,
+  formatTime,
+  isSafeSourceHref,
+  localDateKey,
+  sourceKindLabel,
+  type JournalNoteDocument,
+  type NoteSource,
+} from "./journal";
 import LazyMarkdownEditor from "./LazyMarkdownEditor";
 import ReadingChip, { type ReadingOption } from "./ReadingChip";
 import { useJournalEntryActions } from "./useJournalEntryActions";
 import NoteMarkdown from "./NoteMarkdown";
-import { NoteSourceLine } from "./NoteSourceLine";
 
 // 44px touch targets below lg (the phone sheet and journal), the compact size beside the desktop reader.
 const SMALL_BUTTON_CLASS =
   "surface-button inline-flex h-11 items-center rounded-full border-2 px-4 text-sm font-bold lg:h-8 lg:px-3 lg:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50";
 const DELETE_CONFIRM_CLASS =
   "inline-flex h-11 items-center rounded-full border-2 border-[color:var(--accent-rubric)] bg-[color:var(--accent-rubric)] px-4 text-sm font-bold lg:h-8 lg:px-3 lg:text-xs text-[color:var(--surface-button-active-text)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-card)] aria-disabled:cursor-wait aria-disabled:opacity-70";
+
+const SOURCE_LINK_CLASS =
+  "inline-flex min-h-11 min-w-0 items-center gap-1.5 font-semibold wrap-anywhere text-[color:var(--ink)] underline decoration-[color:var(--rule-strong)] underline-offset-2 hover:decoration-[color:var(--accent-rubric)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] lg:min-h-0";
+const OPEN_SOURCE_CLASS =
+  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[color:var(--foreground-muted)] hover:bg-[color:var(--surface-button-hover)] hover:text-[color:var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] lg:h-9 lg:w-9";
+
+/**
+ * Where the note came from, named once. With a reading the chip already names the passage, so this is just a way
+ * there; without one it is the passage's link, or says the note is personal.
+ */
+function NoteSourceLink({ source, compact }: { source: NoteSource | null; compact: boolean }) {
+  if (!source || !isSafeSourceHref(source.href)) {
+    return compact ? null : <span className="text-xs italic text-[color:var(--foreground-muted)]">Personal note</span>;
+  }
+  const label = `${sourceKindLabel(source)}: ${source.label}`;
+  if (compact) {
+    return (
+      <Link href={source.href} aria-label={`Open ${source.label}`} title={`Open ${label}`} className={OPEN_SOURCE_CLASS}>
+        <FontAwesomeIcon icon={faArrowRight} className="h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
+    );
+  }
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-[color:var(--foreground-muted)]">
+      From
+      <Link href={source.href} title={label} className={SOURCE_LINK_CLASS}>
+        <FontAwesomeIcon icon={source.kind === "guide" ? faFeather : faBookOpen} className="h-2.5 w-2.5" aria-hidden="true" />
+        {source.label}
+      </Link>
+    </span>
+  );
+}
 
 type DeleteStep = "idle" | "confirming" | "deleting" | "failed";
 
@@ -166,7 +207,6 @@ function SaveState({
  */
 export default function JournalNoteEditor({
   note,
-  authorLabel = "You",
   showDate = true,
   onClose,
   onDeleted,
@@ -174,6 +214,7 @@ export default function JournalNoteEditor({
   readingOptions = [],
 }: {
   note: JournalNoteDocument;
+  /** Who wrote it. The journal holds only the viewer's own notes, so the editor doesn't repeat it. */
   authorLabel?: string;
   /** False where the surrounding page already shows the note's day (the Notes calendar). */
   showDate?: boolean;
@@ -235,33 +276,46 @@ export default function JournalNoteEditor({
   }, [deleteDraft, noteId, onDeleted]);
 
   const created = new Date(note.created_at).toISOString();
+  const createdDay = localDateKey(new Date(note.created_at));
   const reading = note.reading_at && note.source ? { source: note.source, journalDate: note.journal_date } : null;
+  const showChip = !readOnly || !!reading;
 
   return (
-    <article className="flex min-h-0 flex-1 flex-col gap-3" aria-label={note.title || "Note"}>
+    <article className="flex flex-1 flex-col gap-3" aria-label={note.title || "Note"}>
       <header className="space-y-1.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1 space-y-1.5">
-            {showDate ? (
-              <p className="pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
-                <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
-              </p>
-            ) : null}
-            <NoteSourceLine source={note.source} authorLabel={authorLabel} time={created} />
-            {readOnly && !reading ? null : (
-              <ReadingChip
-                value={reading}
-                options={note.source ? [{ source: note.source }, ...readingOptions] : readingOptions}
-                defaultDate={note.journal_date}
-                // Removing reading checks the saved text, so the chip waits for typing to be saved.
-                disabled={readOnly || (entry !== undefined && entry.status !== "saved")}
-                canRemove={!!text.trim()}
-                onChange={async (next) => {
-                  await setEntryReading(note.id, next);
-                  if (next && next.journalDate !== note.journal_date) onDateChange?.(next.journalDate);
-                }}
-              />
-            )}
+            {/* The entry's day (unless the page shows it) and when it was written, in one line. */}
+            <p className="flex flex-wrap items-baseline gap-x-1.5 pt-0.5 text-xs font-bold uppercase tracking-[0.08em] text-[color:var(--accent-rubric)]">
+              {showDate ? (
+                <>
+                  <time dateTime={note.journal_date}>{formatDayHeading(note.journal_date)}</time>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
+              <time dateTime={created} className="whitespace-nowrap">
+                {createdDay === note.journal_date
+                  ? formatTime(created)
+                  : `Written ${formatShortDayHeading(createdDay)}, ${formatTime(created)}`}
+              </time>
+            </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {showChip ? (
+                <ReadingChip
+                  value={reading}
+                  options={note.source ? [{ source: note.source }, ...readingOptions] : readingOptions}
+                  defaultDate={note.journal_date}
+                  // Removing reading checks the saved text, so the chip waits for typing to be saved.
+                  disabled={readOnly || (entry !== undefined && entry.status !== "saved")}
+                  canRemove={!!text.trim()}
+                  onChange={async (next) => {
+                    await setEntryReading(note.id, next);
+                    if (next && next.journalDate !== note.journal_date) onDateChange?.(next.journalDate);
+                  }}
+                />
+              ) : null}
+              <NoteSourceLink source={note.source} compact={!!reading} />
+            </div>
           </div>
           {onClose ? (
             <button
@@ -311,7 +365,8 @@ export default function JournalNoteEditor({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1" onBlur={() => journalOutbox.flush(noteId)}>
+      {/* Fills the space between header and footer, so the editor takes clicks there and the footer sits at the bottom. */}
+      <div className="flex flex-1 flex-col" onBlur={() => journalOutbox.flush(noteId)}>
         {readOnly ? (
           text.trim() ? (
             <NoteMarkdown markdown={text} />

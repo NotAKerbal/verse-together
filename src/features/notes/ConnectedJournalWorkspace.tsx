@@ -1,6 +1,6 @@
 "use client";
 
-// The /notes page's adapter: the signed-in user's real journal, reading history and active note, fed into
+// The /notes adapter: device storage when signed out, account journal when signed in, fed into
 // the presentational JournalWorkspace. Entries are created (one unsaved entry draft, saved as note, reading or both)
 // and opened through InsightBuilderProvider so the reader's panel and this page always agree on which note is
 // current. An older reading opens as an editable entry the first time it is chosen (openReadingEntry). Which day and note are in view is
@@ -8,8 +8,7 @@
 // An opened note also takes one browser history entry (useJournalHistory), so Back closes it and Forward reopens it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import AccountControl from "@/components/AccountControl";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
@@ -37,7 +36,10 @@ import {
 import { useBelowLg } from "./useBelowLg";
 import { useConvexSignedIn } from "./useConvexSignedIn";
 import { useJournalHistory } from "./useJournalHistory";
-import SignInLink from "@/features/auth/SignInLink";
+import { DEFAULT_JOURNAL_GOALS } from "@/lib/journalGoals";
+import { deviceJournal, deviceStudy } from "./deviceStudy";
+import { useDeviceStudy } from "./useDeviceStudy";
+import DeviceSyncStatus from "./DeviceSyncStatus";
 
 const MAX_LOG_CHOICES = 8;
 
@@ -50,13 +52,28 @@ export default function ConnectedJournalWorkspace() {
   const belowLg = useBelowLg();
   const { drafts, activeDraftId, activeNote, isLoading, switchDraft, updateEntryDraft } = useInsightBuilder();
   const { openReadingEntry } = useJournalEntryActions();
-  const journal = useQuery(api.insights.listMyJournal, ready ? {} : "skip") as JournalEntry[] | undefined;
+  const device = useDeviceStudy();
+  const cloudJournal = useQuery(api.insights.listMyJournal, ready ? {} : "skip") as JournalEntry[] | undefined;
+  const journal = useMemo(() => user ? cloudJournal : device.loaded ? deviceJournal(device.data) : undefined, [user, cloudJournal, device.loaded, device.data]);
   const readingLog = useMyReadingLog() as ReadingLogRow[] | undefined;
+  const goals = useQuery(api.users.getJournalGoals, ready ? {} : "skip");
+  const saveGoals = useMutation(api.users.saveJournalGoals);
 
-  const [today] = useState(() => localDateKey());
+  const [today, setToday] = useState(() => localDateKey());
+  // Goals follow the local day even when the journal stays open across midnight or a week boundary.
+  useEffect(() => {
+    const refreshDay = () => setToday(localDateKey());
+    const timer = window.setInterval(refreshDay, 60_000);
+    document.addEventListener("visibilitychange", refreshDay);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshDay);
+    };
+  }, []);
   const [viewState, setViewState] = useState<JournalViewState>(null);
   // The selected day's New note shows the unsaved entry under it until it is saved or closed.
   const [composing, setComposing] = useState(false);
+  const [reflectionPrompt, setReflectionPrompt] = useState<string | null>(null);
   const [openingReading, setOpeningReading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -76,7 +93,7 @@ export default function ConnectedJournalWorkspace() {
     },
     [activeDraftId, drafts, switchDraft]
   );
-  const go = useJournalHistory(view, { enabled: ready && !isLoading, show: setViewState, select: selectFromHistory });
+  const go = useJournalHistory(view, { enabled: (ready || !user && device.loaded) && !isLoading, show: setViewState, select: selectFromHistory });
   // Every action starts from the view on screen, so arriving and then acting never depends on stale state.
   const act = useCallback((action: JournalViewAction) => go((current) => nextJournalView(current, action)), [go]);
 
@@ -135,12 +152,14 @@ export default function ConnectedJournalWorkspace() {
   // A personal note for the day (it is written on this page, so there is no reading source to claim); an unsaved
   // entry that already holds something is kept as it is.
   const onNewNote = useCallback(
-    (journalDate: string) => {
+    (journalDate: string, prompt?: string) => {
       setCreateError(null);
+      setReflectionPrompt(prompt ?? null);
       updateEntryDraft((draft) => restartEntryDraft(draft, { journalDate, source: null }));
       setComposing(true);
+      act({ type: "selectDate", date: journalDate });
     },
-    [updateEntryDraft]
+    [updateEntryDraft, act]
   );
   // An untouched entry moves with the selected day.
   useEffect(() => {
@@ -185,34 +204,8 @@ export default function ConnectedJournalWorkspace() {
     );
   }
 
-  if (!user) {
-    return (
-      <>
-        <AccountControl variant="page" />
-        <div className="panel-card mx-auto flex max-w-xl flex-col items-center gap-4 rounded-[1.5rem] px-6 py-8 text-center">
-          <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em]">Sign in to use your journal</h1>
-            <p className="mt-2 text-sm text-[color:var(--foreground-muted)]">
-              Keep notes and reading together in a private journal, by day, linked to the chapters and guides they
-              came from.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Link href="/browse" className="surface-button inline-flex h-10 items-center rounded-full border-2 px-4 text-sm">
-              Browse scriptures
-            </Link>
-            <SignInLink
-              returnTo="/notes"
-              className="inline-flex h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
-            />
-          </div>
-        </div>
-      </>
-    );
-  }
-
   // Signed in, but Convex finished without accepting the session (offline, or the token was refused).
-  if (!ready) {
+  if (user && !ready) {
     return (
       <>
         <AccountControl variant="page" />
@@ -266,6 +259,7 @@ export default function ConnectedJournalWorkspace() {
   const historyLoaded = journal !== undefined && readingLog !== undefined;
   const dayActions = composing ? (
     <section aria-label="New entry" className="panel-card rounded-[1.25rem] p-4">
+      {reflectionPrompt ? <p className="mb-4 font-serif text-lg text-[color:var(--foreground-muted)]">{reflectionPrompt}</p> : null}
       <JournalEntryComposer
         options={logOptions}
         autoFocus={!belowLg}
@@ -288,6 +282,8 @@ export default function ConnectedJournalWorkspace() {
   ) : null;
 
   return (
+    <>
+    <DeviceSyncStatus />
     <JournalWorkspace
       layout={belowLg ? "phone" : "desktop"}
       status={historyLoaded ? "ready" : "loading"}
@@ -306,6 +302,12 @@ export default function ConnectedJournalWorkspace() {
       notePane={notePane}
       headerAccessory={<AccountControl variant="page" />}
       dayActions={dayActions}
+      goalControls={user
+        ? { goals: goals ?? DEFAULT_JOURNAL_GOALS, loading: goals === undefined, onSave: saveGoals }
+        : { goals: device.data.journalGoals ?? DEFAULT_JOURNAL_GOALS, loading: !device.loaded,
+            saveErrorMessage: "Your goals couldn't be saved on this device. Your changes are still here. Allow browser storage or free some space and try again.",
+            onSave: async targets => deviceStudy.saveJournalGoals(targets) }}
     />
+    </>
   );
 }
