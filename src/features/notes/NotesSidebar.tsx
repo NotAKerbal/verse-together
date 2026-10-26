@@ -208,12 +208,13 @@ export function NotesPanelContent({
         </Link>
         {frame.closeButton}
       </header>
-      {/* One scroll for everything below the header, so nothing is cut off by an inner scroller. */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {/* One scroll for everything below the header, so nothing is cut off by an inner scroller. The content fills at
+          least its height, so an open note's footer (Delete note) sits at the bottom rather than under a short editor. */}
+      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
         {error ? (
-          <p role="alert" className="px-4 pt-3 text-sm font-semibold wrap-anywhere text-[color:var(--accent-rubric)]">{error}</p>
+          <p role="alert" className="shrink-0 px-4 pt-3 text-sm font-semibold wrap-anywhere text-[color:var(--accent-rubric)]">{error}</p>
         ) : null}
-        <div ref={contentRef} tabIndex={-1} className="flex flex-col gap-4 p-4 outline-none">
+        <div ref={contentRef} tabIndex={-1} className="flex flex-1 flex-col gap-4 p-4 outline-none">
           <DeviceSyncStatus />
           {body}
         </div>

@@ -1,18 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
-import { isSafeSourceHref } from "./journal";
+import ReactMarkdown, { type Components } from "react-markdown";
+import { isSafeSourceHref, safeNoteUrl } from "./journal";
 
 // Raw HTML in notes is never rendered (react-markdown escapes it unless a rehype-raw plugin is added, and none
-// is). Links keep only same-app paths (the same rule as note sources, so "/\evil.example" is refused) and
-// http(s)/mailto URLs; anything else is dropped to plain text.
+// is). Links keep only what safeNoteUrl allows, the same rule the editor uses; anything else is dropped to plain text.
 function safeUrl(url: string): string {
-  const trimmed = url.trim();
-  if (trimmed.startsWith("/")) return isSafeSourceHref(trimmed) ? trimmed : "";
-  if (/[\u0000-\u001f\u007f-\u009f\s\\]/.test(trimmed)) return "";
-  if (/^(https?:|mailto:)/i.test(trimmed)) return defaultUrlTransform(trimmed);
-  return "";
+  return safeNoteUrl(url) ?? "";
 }
 
 const components: Components = {
