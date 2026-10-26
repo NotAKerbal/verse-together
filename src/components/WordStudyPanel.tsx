@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import DictionaryEntryCard from "@/components/DictionaryEntryCard";
 import EtymologyEntryCard from "@/components/EtymologyEntryCard";
 
@@ -8,9 +8,9 @@ type Props = {
   word: string;
   panelId?: string;
   title?: string;
+  onClose?: () => void;
 };
 
-type StudyTab = "dict" | "ety";
 type DictionaryEdition = "1828" | "1844" | "1913";
 type DictionaryEntry = {
   id: string;
@@ -20,165 +20,145 @@ type DictionaryEntry = {
   entryText: string;
   pronounce: string | null;
 };
-type DictionaryGroup = { edition: DictionaryEdition; rows: DictionaryEntry[] };
 type EtymologyItem = { id: string; source: string; word: string; text: string };
-
-const DEFAULT_PROVIDER_LABELS: Record<DictionaryEdition, string> = {
-  "1828": "Merriam-Webster",
-  "1844": "Unavailable",
-  "1913": "Free Dictionary API",
+type DictionaryPayload = {
+  ok: boolean;
+  enabled: boolean;
+  byEdition?: Partial<Record<DictionaryEdition, { entries: DictionaryEntry[] } | null>>;
+  etymology?: { items: EtymologyItem[] };
 };
+type LookupState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; payload: DictionaryPayload };
 
-export default function WordStudyPanel({ word, panelId, title = "Word Study" }: Props) {
-  const normalizedWord = word.trim().toLowerCase();
-  const [tab, setTab] = useState<StudyTab>("dict");
-  const [dictEnabled, setDictEnabled] = useState(false);
-  const [entries1828, setEntries1828] = useState<DictionaryEntry[]>([]);
-  const [entries1844, setEntries1844] = useState<DictionaryEntry[]>([]);
-  const [entries1913, setEntries1913] = useState<DictionaryEntry[]>([]);
-  const [providerLabels, setProviderLabels] = useState<Record<DictionaryEdition, string>>(DEFAULT_PROVIDER_LABELS);
-  const [etymologyItems, setEtymologyItems] = useState<EtymologyItem[]>([]);
+const EDITIONS: DictionaryEdition[] = ["1828", "1844", "1913"];
+
+export default function WordStudyPanel(props: Props) {
+  const word = props.word.trim().toLowerCase();
+  if (!word) return null;
+  // A new selection starts with a fresh loading state, never the previous word's results.
+  return <WordStudyLookup key={word} {...props} word={word} />;
+}
+
+function WordStudyLookup({ word, panelId, title = "Word Study", onClose }: Props) {
+  const [lookup, setLookup] = useState<LookupState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    setTab("dict");
-  }, [normalizedWord]);
-
-  useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function loadEntries() {
-      if (!normalizedWord) {
-        setDictEnabled(false);
-        setEntries1828([]);
-        setEntries1844([]);
-        setEntries1913([]);
-        setEtymologyItems([]);
-        return;
-      }
-
       try {
-        const response = await fetch(`/api/tools/dictionary?term=${encodeURIComponent(normalizedWord)}`, { cache: "no-store" });
-        const payload = await response.json();
-
-        if (cancelled) return;
-
-        const inAppEnabled = !!payload.enabled;
-        const next1828 = (payload.byEdition?.["1828"]?.entries ?? []) as DictionaryEntry[];
-        const next1844 = (payload.byEdition?.["1844"]?.entries ?? []) as DictionaryEntry[];
-        const next1913 = (payload.byEdition?.["1913"]?.entries ?? []) as DictionaryEntry[];
-
-        setDictEnabled(inAppEnabled);
-        setEntries1828(inAppEnabled ? next1828 : []);
-        setEntries1844(inAppEnabled ? next1844 : []);
-        setEntries1913(inAppEnabled ? next1913 : []);
-        setEtymologyItems((payload.etymology?.items ?? []) as EtymologyItem[]);
-        setProviderLabels((payload.providerLabels ?? DEFAULT_PROVIDER_LABELS) as Record<DictionaryEdition, string>);
+        const response = await fetch(`/api/tools/dictionary?term=${encodeURIComponent(word)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Lookup request failed");
+        const payload = (await response.json()) as DictionaryPayload;
+        if (!payload.ok || !payload.enabled) throw new Error("Lookup unavailable");
+        if (!controller.signal.aborted) setLookup({ status: "ready", payload });
       } catch {
-        if (cancelled) return;
-        setDictEnabled(false);
-        setEntries1828([]);
-        setEntries1844([]);
-        setEntries1913([]);
-        setEtymologyItems([]);
+        if (!controller.signal.aborted) setLookup({ status: "error" });
       }
     }
 
     void loadEntries();
+    return () => controller.abort();
+  }, [word, attempt]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [normalizedWord]);
-
-  const hasDictionaryEntries = dictEnabled && (entries1828.length > 0 || entries1844.length > 0 || entries1913.length > 0);
+  const payload = lookup.status === "ready" ? lookup.payload : null;
+  const dictionaryGroups = EDITIONS.map((edition) => ({
+    edition,
+    rows: payload?.byEdition?.[edition]?.entries ?? [],
+  })).filter((group) => group.rows.length > 0);
+  const etymologyItems = payload?.etymology?.items ?? [];
+  const hasDictionaryEntries = dictionaryGroups.length > 0;
   const hasEtymologyEntries = etymologyItems.length > 0;
-  const availableTabs = useMemo(() => {
-    const next: StudyTab[] = [];
-    if (hasDictionaryEntries) next.push("dict");
-    if (hasEtymologyEntries) next.push("ety");
-    return next;
-  }, [hasDictionaryEntries, hasEtymologyEntries]);
 
-  useEffect(() => {
-    if (availableTabs.length === 0) return;
-    if (!availableTabs.includes(tab)) {
-      setTab(availableTabs[0]);
-    }
-  }, [availableTabs, tab]);
-
-  if (!normalizedWord) return null;
+  function retryLookup() {
+    setLookup({ status: "loading" });
+    setAttempt((previous) => previous + 1);
+  }
 
   return (
-    <div id={panelId} data-word-study-panel="true" className="rounded-lg border border-[color:var(--surface-border)] bg-background/60 p-3 border-[color:var(--surface-border)]">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <div className="text-sm text-foreground/65">{normalizedWord}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          {availableTabs.length > 1 ? (
-            <div className="segmented-control" role="tablist" aria-label="Word study sources">
-              <button
-                type="button"
-                onClick={() => setTab("dict")}
-                className="segmented-control-button px-2.5 text-sm"
-                data-active={tab === "dict"}
-                disabled={!hasDictionaryEntries}
-              >
-                Dictionary
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("ety")}
-                className="segmented-control-button px-2.5 text-sm"
-                data-active={tab === "ety"}
-                disabled={!hasEtymologyEntries}
-              >
-                Etymology
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+    <section
+      id={panelId}
+      data-word-study-panel="true"
+      aria-label={`${title}: ${word}`}
+      className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-card)]"
+    >
+      {onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close word study"
+          className="absolute right-2 top-3 z-10 flex size-9 items-center justify-center rounded-full bg-[color:var(--surface-card)] text-[color:var(--foreground-muted)] transition-colors hover:bg-[color:var(--surface-button-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent-rubric)]"
+        >
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+      ) : null}
 
-      <div className="mt-3 rounded-md border border-[color:var(--surface-border)] bg-black/5 border-[color:var(--surface-border)] dark:bg-white/5">
-        {tab === "ety" && hasEtymologyEntries ? (
-          <div className="max-h-[40vh] overflow-y-auto p-3 space-y-3">
-            {etymologyItems.map((item) => (
-              <EtymologyEntryCard key={item.id} item={item} />
-            ))}
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="Dictionary and etymology"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--accent-rubric)]"
+      >
+        {lookup.status === "loading" ? (
+          <div className="space-y-4 p-4" role="status">
+            <p className="flex items-center gap-2 pr-10 text-sm text-[color:var(--foreground-muted)]">
+              <span aria-hidden="true" className="size-3.5 rounded-full border-2 border-[color:var(--surface-border)] border-t-[color:var(--accent-rubric)] motion-safe:animate-spin" />
+              Looking up {word}…
+            </p>
+            <div aria-hidden="true" className="space-y-2 motion-safe:animate-pulse">
+              <div className="h-3 w-2/5 rounded bg-[color:var(--surface-card-soft)]" />
+              <div className="h-3 w-full rounded bg-[color:var(--surface-card-soft)]" />
+              <div className="h-3 w-4/5 rounded bg-[color:var(--surface-card-soft)]" />
+            </div>
           </div>
-        ) : hasDictionaryEntries ? (
-          <div className="max-h-[40vh] overflow-y-auto p-3 space-y-3">
-            {([
-              { edition: "1828", rows: entries1828 },
-              { edition: "1844", rows: entries1844 },
-              { edition: "1913", rows: entries1913 },
-            ] as DictionaryGroup[])
-              .filter((group) => group.rows.length > 0)
-              .map((group) => (
-                <section key={group.edition} className="space-y-2">
-                  <h4 className="text-xs font-semibold tracking-wide text-foreground/60">
-                    {providerLabels[group.edition] || "Dictionary Source"}
-                  </h4>
+        ) : lookup.status === "error" ? (
+          <div className="space-y-3 p-4" role="status">
+            <div className="space-y-1">
+              <p className="pr-10 text-sm font-medium">We couldn’t load this word.</p>
+              <p className="text-sm leading-6 text-[color:var(--foreground-muted)]">Check your connection and try again.</p>
+            </div>
+            <button type="button" onClick={retryLookup} className="surface-button min-h-10 rounded-full border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent-rubric)]">Try again</button>
+          </div>
+        ) : hasDictionaryEntries || hasEtymologyEntries ? (
+          <div className="space-y-6 p-4">
+            <section aria-label="Dictionary" className="space-y-3">
+              <h4 className="pr-10 font-serif text-xl">Dictionary</h4>
+              {hasDictionaryEntries ? dictionaryGroups.map((group) => (
+                <div key={group.edition} className="space-y-2">
                   {group.rows.map((entry) => (
                     <DictionaryEntryCard key={entry.id} entry={entry} edition={group.edition} />
                   ))}
-                </section>
-              ))}
-          </div>
-        ) : hasEtymologyEntries ? (
-          <div className="max-h-[40vh] overflow-y-auto p-3 space-y-3">
-            {etymologyItems.map((item) => (
-              <EtymologyEntryCard key={item.id} item={item} />
-            ))}
+                </div>
+              )) : (
+                <p className="text-sm leading-6 text-[color:var(--foreground-muted)]">Our sources don’t have a definition for this word.</p>
+              )}
+            </section>
+            <section aria-label="Etymology" className="space-y-3">
+              <h4 className="font-serif text-xl">Etymology</h4>
+              {hasEtymologyEntries ? etymologyItems.map((item) => (
+                <EtymologyEntryCard key={item.id} item={item} />
+              )) : (
+                <p className="text-sm leading-6 text-[color:var(--foreground-muted)]">Our sources don’t have a word history for this word.</p>
+              )}
+            </section>
           </div>
         ) : (
-          <div className="p-3 text-sm text-foreground/60">
-            No dictionary or etymology entries found for this word.
+          <div className="space-y-1 p-4" role="status">
+            <p className="pr-10 text-sm font-medium">No entry available for this word.</p>
+            <p className="text-sm leading-6 text-[color:var(--foreground-muted)]">
+              Our sources don’t have an entry for this word. Try selecting its base form or another word in the passage.
+            </p>
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
