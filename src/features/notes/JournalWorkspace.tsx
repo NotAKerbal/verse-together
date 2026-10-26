@@ -26,6 +26,7 @@ import {
 import type { JournalStage } from "./journalView";
 import { NoteSourceLine } from "./NoteSourceLine";
 import { JournalNoteCard } from "./JournalNoteCard";
+import { JournalGoalsPanel, JournalInvitation, JournalRevisit, type JournalGoalControls } from "./JournalHomeSections";
 import styles from "./JournalWorkspace.module.css";
 
 export type JournalWorkspaceProps = {
@@ -51,7 +52,8 @@ export type JournalWorkspaceProps = {
   onCloseNote: () => void;
   /** Phone: back from a day's entries to the calendar. */
   onShowCalendar: () => void;
-  onNewNote: (journalDate: string) => void;
+  onNewNote: (journalDate: string, prompt?: string) => void;
+  goalControls?: JournalGoalControls;
   creating?: boolean;
   createError?: string | null;
   /** The open note's editor, shown while stage is "note"; it must belong to selectedDate. */
@@ -132,6 +134,7 @@ function MonthCalendar({
   selectedDate,
   onSelectDate,
   compact,
+  framed = true,
 }: {
   month: string;
   onMonth: (month: string) => void;
@@ -141,11 +144,12 @@ function MonthCalendar({
   onSelectDate: (day: string) => void;
   /** Desktop's shorter day cells, so the rest of the page sits higher. */
   compact: boolean;
+  framed?: boolean;
 }) {
   const cells = monthGrid(month);
   return (
     // A card like the chooser's and the note's (the phone's is p-4, as its note is), sized to the month.
-    <section aria-label="Calendar" className={`panel-card space-y-1.5 rounded-[20px] ${compact ? "p-5" : "p-4"}`}>
+    <section aria-label="Calendar" className={`${framed ? "panel-card rounded-[20px]" : ""} space-y-1.5 ${compact ? "p-5" : "p-4"}`}>
       <div className="flex items-center gap-1.5">
         <h2 className="min-w-0 flex-1 font-display text-lg font-extrabold tracking-[-0.02em]" aria-live="polite">
           {formatMonthHeading(month)}
@@ -334,6 +338,7 @@ export default function JournalWorkspace({
   notePane,
   headerAccessory,
   dayActions,
+  goalControls,
 }: JournalWorkspaceProps) {
   const [month, setMonth] = useState(() => monthKeyOf(selectedDate));
   // Follow a selection made from outside (Today, opening a note from another day) to its month.
@@ -352,6 +357,11 @@ export default function JournalWorkspace({
   const chooserRegion = useRef<HTMLElement | null>(null);
   const chooserScroll = useRef<HTMLDivElement | null>(null);
   const chooserHeadingId = useId();
+  const composerRegion = useRef<HTMLDivElement>(null);
+  const composing = !!dayActions;
+  useEffect(() => {
+    if (composing) composerRegion.current?.scrollIntoView({ block: "nearest" });
+  }, [composing]);
   // Desktop shows the same chooser for "calendar" and "day", so only opening or closing a note changes it.
   useStageFocus(isPhone ? stage : noteOpen ? "note" : "chooser", isPhone, focusTarget, chooserRegion);
   // The desktop chooser outlives opening and closing a note, and so would its scroll: focusing a card low in the
@@ -385,11 +395,11 @@ export default function JournalWorkspace({
 
   const dayButtons = (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" onClick={() => onNewNote(selectedDate)} disabled={creating} className={PILL_BUTTON_CLASS}>
+      {noteOpen ? <button type="button" onClick={() => onNewNote(selectedDate)} disabled={creating} className={PILL_BUTTON_CLASS}>
         <FontAwesomeIcon icon={faPlus} className="h-3 w-3" aria-hidden="true" />
         {creating ? "Creating…" : "New note"}
-      </button>
-      {dayActions ? <div className="basis-full">{dayActions}</div> : null}
+      </button> : null}
+      {dayActions ? <div ref={composerRegion} className="basis-full">{dayActions}</div> : null}
     </div>
   );
 
@@ -407,9 +417,9 @@ export default function JournalWorkspace({
         </p>
       );
     }
-    if (dayEntries.length === 0) return null;
+    if (dayEntries.length === 0) return <p className={styles.emptyDay}>Nothing recorded for this day yet. A sentence is enough to begin.</p>;
     return (
-      <ul className={prominent ? "space-y-2.5" : "space-y-2"}>
+      <ul className={noteOpen ? "space-y-2.5" : styles.entryList}>
         {dayEntries.map((entry) => (
           <EntryRow
             key={entryKey(entry)}
@@ -436,6 +446,12 @@ export default function JournalWorkspace({
       {todayTag}
     </h2>
   );
+
+  const invitation = <JournalInvitation date={selectedDate} onWrite={onNewNote} disabled={creating || composing} />;
+  const goals = <JournalGoalsPanel entries={entries} today={today} status={status} controls={goalControls} />;
+  const journalHeading = <div className={styles.journalHeading}><h2>{isToday ? "Today’s journal" : "This day’s journal"}</h2>
+    {status === "ready" ? <span>{plural(dayEntries.length, "entry", "entries")}</span> : null}</div>;
+  const revisit = status === "ready" ? <JournalRevisit entries={entries} date={selectedDate < today ? selectedDate : today} onOpen={onOpenNote} /> : null;
 
 
   const openNoteSection = (className: string) => (
@@ -479,12 +495,18 @@ export default function JournalWorkspace({
           <section aria-labelledby={chooserHeadingId} className="space-y-3">
             <div className="space-y-2">
               {chooserHeader}
-              {dayButtons}
             </div>
+            {invitation}
+            {dayButtons}
             {dayError}
+            {journalHeading}
             {dayBody(true)}
+            {revisit}
           </section>
         ) : (
+          <>
+          {invitation}
+          <div className="panel-card rounded-xl">
           <MonthCalendar
             month={month}
             onMonth={setMonth}
@@ -493,7 +515,12 @@ export default function JournalWorkspace({
             selectedDate={selectedDate}
             onSelectDate={onSelectDate}
             compact={false}
+            framed={false}
           />
+          {goals}
+          </div>
+          {revisit}
+          </>
         )}
       </div>
     );
@@ -509,7 +536,7 @@ export default function JournalWorkspace({
         data-note-open={noteOpen ? "" : undefined}
         className={`${styles.stage} min-h-0 lg:h-[calc(100dvh-var(--header-height)-3.1rem)] lg:min-h-[30rem]`}
       >
-        <div className={styles.calendar} inert={noteOpen}>
+        <div className={`panel-card rounded-xl ${styles.calendar}`} inert={noteOpen}>
           <MonthCalendar
             month={month}
             onMonth={setMonth}
@@ -518,7 +545,9 @@ export default function JournalWorkspace({
             selectedDate={selectedDate}
             onSelectDate={onSelectDate}
             compact
+            framed={false}
           />
+          {goals}
         </div>
         <section
           ref={chooserRegion}
@@ -554,10 +583,14 @@ export default function JournalWorkspace({
               ) : (
                 chooserHeader
               )}
-              {dayButtons}
+              {noteOpen ? dayButtons : null}
             </div>
+            {!noteOpen ? invitation : null}
+            {!noteOpen ? dayButtons : null}
             {dayError}
+            {!noteOpen ? journalHeading : null}
             {dayBody(true)}
+            {!noteOpen ? revisit : null}
           </div>
         </section>
         <section

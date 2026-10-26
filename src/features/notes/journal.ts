@@ -16,6 +16,8 @@ export type JournalNoteEntry = {
   journal_date: string;
   source: NoteSource | null;
   excerpt: string | null;
+  /** Distinguishes named reading-only entries from notes with actual saved text. */
+  has_reflection?: boolean;
   markdown_revision: number;
   /** When the entry also logs reading of its source; null for a note-only entry. */
   reading_at?: string | null;

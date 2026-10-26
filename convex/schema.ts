@@ -29,6 +29,7 @@ export default defineSchema({
     displayName: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
     isAdmin: v.optional(v.boolean()),
+    journalGoals: v.optional(v.object({ studyDays: v.number(), reflections: v.number() })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
