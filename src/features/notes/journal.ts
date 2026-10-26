@@ -16,6 +16,8 @@ export type JournalNoteEntry = {
   journal_date: string;
   source: NoteSource | null;
   excerpt: string | null;
+  /** Distinguishes named reading-only entries from notes with actual saved text. */
+  has_reflection?: boolean;
   markdown_revision: number;
   /** When the entry also logs reading of its source; null for a note-only entry. */
   reading_at?: string | null;
@@ -194,6 +196,17 @@ export function isSafeSourceHref(href: string): boolean {
   if (!href || href.length > 2048) return false;
   if (/[\u0000-\u001f\u007f-\u009f\s\\‎‏‪-‮⁦-⁩]/.test(href)) return false;
   return href.startsWith("/") && !href.startsWith("//");
+}
+
+/**
+ * A link written in a note, if it may be followed: same-app paths (the source rule above, so "/\evil.example" is
+ * refused) and http(s)/mailto URLs. Anything else is null and stays plain text.
+ */
+export function safeNoteUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/")) return isSafeSourceHref(trimmed) ? trimmed : null;
+  if (/[\u0000-\u001f\u007f-\u009f\s\\]/.test(trimmed)) return null;
+  return /^(https?:|mailto:)/i.test(trimmed) ? trimmed : null;
 }
 
 export function sourceKindLabel(source: NoteSource): string {

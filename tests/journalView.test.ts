@@ -208,7 +208,8 @@ describe("Notes workspace stages", () => {
     expect(html).toContain("Morning thought");
     expect(html).toContain("Evening question");
     expect(html).toContain('href="/browse/bookofmormon/1-nephi/2"');
-    expect(html).not.toContain("Another day");
+    expect(cardsOf(html).join("")).not.toContain("Another day");
+    expect(html).toContain('aria-label="A thought worth revisiting"');
     expect(html).toContain("Back to </span><span class=\"truncate\">Calendar");
   });
 
@@ -255,11 +256,12 @@ describe("Notes workspace stages", () => {
     expect(html).toMatch(/<section aria-label="Open entry"[^>]*inert=""[^>]*><\/section>/);
   });
 
-  test("a day without notes shows just its date and New note, with no empty-state box", () => {
+  test("a day without notes offers an invitation to write, an honest empty state and no invented entries", () => {
     const html = render("desktop", { stage: "day", date: "2026-10-05", noteId: null });
     expect(html).toMatch(/<h2 id="[^"]+"[^>]*><time dateTime="2026-10-05">/);
-    expect(html).toContain("New note");
-    expect(html).not.toContain("Nothing recorded on this day.");
+    expect(html).toContain("Write a reflection");
+    expect(html).toContain("Nothing recorded for this day yet.");
+    expect(cardsOf(html)).toHaveLength(0);
   });
 });
 

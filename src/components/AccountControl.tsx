@@ -37,7 +37,7 @@ type Props = {
 const SIGN_IN_HEADER_CLASS =
   "inline-flex min-h-10 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-4 py-1.5 text-sm font-bold text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]";
 
-// Secondary style: the signed-out pages already lead with their own primary Sign in button.
+// Page controls use the quieter button style.
 const SIGN_IN_PAGE_CLASS =
   "surface-button inline-flex min-h-11 items-center rounded-full border-2 px-4 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]";
 
@@ -293,10 +293,10 @@ function AccountControlInner({ variant }: { variant: AccountVariant }) {
       disabled={signingIn}
       aria-busy={signingIn || undefined}
       className={`${variant === "dock" ? "desktop-nav-account-control" : variant === "page" ? SIGN_IN_PAGE_CLASS : SIGN_IN_HEADER_CLASS} disabled:cursor-wait disabled:opacity-70`}
-      aria-label={variant === "dock" ? (signingIn ? "Signing in…" : "Sign in") : undefined}
-      title={variant === "dock" ? (signingIn ? "Signing in…" : "Sign in") : undefined}
+      aria-label={variant === "dock" ? (signingIn ? "Signing in…" : "Sign in to sync") : undefined}
+      title={variant === "dock" ? (signingIn ? "Signing in…" : "Sign in to sync") : undefined}
     >
-      {variant === "dock" ? <FontAwesomeIcon icon={faUser} className="h-4 w-4" aria-hidden="true" /> : signingIn ? "Signing in…" : "Sign in"}
+      {variant === "dock" ? <FontAwesomeIcon icon={faUser} className="h-4 w-4" aria-hidden="true" /> : signingIn ? "Signing in…" : "Sign in to sync"}
     </button>
   );
 }

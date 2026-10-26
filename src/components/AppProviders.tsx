@@ -1,10 +1,11 @@
 "use client";
 
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { ConvexReactClient } from "convex/react";
+import { ConvexReactClient, ConvexProviderWithAuth } from "convex/react";
 import { ComponentProps, PropsWithChildren, useMemo } from "react";
 import { AppHeaderSlotProvider } from "@/components/AppHeaderSlot";
 import { InsightBuilderProvider } from "@/features/insights/InsightBuilderProvider";
+import { DeviceSyncProvider } from "@/features/notes/DeviceSyncStatus";
 import NotebookPanel from "@/features/insights/NotebookPanel";
 import { authClient } from "@/lib/auth-client";
 import { AppAuthProvider, UnconfiguredAuthProvider } from "@/lib/auth";
@@ -15,15 +16,23 @@ import { AppAuthProvider, UnconfiguredAuthProvider } from "@/lib/auth";
 // pinning an older better-auth patch release.
 const providerAuthClient = authClient as unknown as ComponentProps<typeof ConvexBetterAuthProvider>["authClient"];
 
+const localAuth = { isLoading: false, isAuthenticated: false, fetchAccessToken: async () => null };
+function useLocalAuth() {
+  return localAuth;
+}
+
 function ConvexAuthProviders({ children }: PropsWithChildren) {
   const convex = useMemo(() => {
     const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-    if (!url) return null;
-    return new ConvexReactClient(url);
+    return new ConvexReactClient(url || "http://127.0.0.1:1", { skipConvexDeploymentUrlCheck: !url });
   }, []);
 
-  if (!convex) {
-    return <UnconfiguredAuthProvider>{children}</UnconfiguredAuthProvider>;
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
+    return (
+      <ConvexProviderWithAuth client={convex} useAuth={useLocalAuth}>
+        <UnconfiguredAuthProvider>{children}</UnconfiguredAuthProvider>
+      </ConvexProviderWithAuth>
+    );
   }
 
   return (
@@ -36,10 +45,12 @@ function ConvexAuthProviders({ children }: PropsWithChildren) {
 export default function AppProviders({ children }: PropsWithChildren) {
   return (
     <ConvexAuthProviders>
-      <InsightBuilderProvider>
-        <AppHeaderSlotProvider>{children}</AppHeaderSlotProvider>
-        <NotebookPanel />
-      </InsightBuilderProvider>
+      <DeviceSyncProvider>
+        <InsightBuilderProvider>
+          <AppHeaderSlotProvider>{children}</AppHeaderSlotProvider>
+          <NotebookPanel />
+        </InsightBuilderProvider>
+      </DeviceSyncProvider>
     </ConvexAuthProviders>
   );
 }

@@ -3,10 +3,13 @@
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { useAuth } from "@/lib/auth";
+import { deviceStudy } from "./deviceStudy";
 import type { ReadingDetails } from "./ReadingChip";
 
-/** Server actions on saved journal entries' reading. Creating entries goes through the provider's entry draft. */
+/** Storage actions on saved journal entries' reading. Creating entries goes through the provider's entry draft. */
 export function useJournalEntryActions() {
+  const { user } = useAuth();
   const openReading = useMutation(api.insights.openReadingEntry);
   const setReading = useMutation(api.insights.setJournalReading);
   return {
@@ -14,7 +17,7 @@ export function useJournalEntryActions() {
     openReadingEntry: (readingId: string) =>
       openReading({ readingId: readingId as Id<"readingLogs"> | Id<"chapterReads"> }),
     setEntryReading: (draftId: string, reading: ReadingDetails | null) =>
-      setReading({
+      !user ? Promise.resolve(deviceStudy.setReading(draftId, reading)) : setReading({
         draftId: draftId as Id<"insightDrafts">,
         logged: !!reading,
         source: reading?.source,

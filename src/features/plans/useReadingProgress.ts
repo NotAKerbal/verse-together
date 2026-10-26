@@ -8,6 +8,8 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import { localDateKey, newRequestId, type NoteSource } from "@/features/notes/journal";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import { useDeviceStudy } from "@/features/notes/useDeviceStudy";
+import type { ReadingLogRow } from "@/features/notes/journal";
 import type { ChapterRef } from "./scriptureCatalog";
 import type { PlanStepInput, PlanTemplate } from "./planSchedule";
 import type { PlanSelection } from "./planScope";
@@ -54,8 +56,15 @@ export function usePlan(planId: string | null) {
 
 /** The signed-in user's reading history, newest first; `undefined` while loading or signed out. */
 export function useMyReadingLog() {
-  const { ready } = useConvexSignedIn();
-  return useQuery(api.readingProgress.listMyReadingLog, ready ? {} : "skip");
+  const { user, ready } = useConvexSignedIn();
+  const device = useDeviceStudy();
+  const remote = useQuery(api.readingProgress.listMyReadingLog, ready ? {} : "skip");
+  if (user) return remote;
+  if (!device.loaded) return undefined;
+  return device.data.notes.filter(note => note.owner === null && note.reading_at && note.source).map((note): ReadingLogRow => ({
+    id: note.id, kind: "log", origin: "manual", source: note.source!, journal_date: note.journal_date!, read_at: note.reading_at!,
+    created_at: note.created_at, request_id: note.id, note_id: note.id,
+  }));
 }
 
 export function useReadingProgressActions() {

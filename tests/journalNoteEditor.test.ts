@@ -49,6 +49,34 @@ describe("Journal note editor header", () => {
   });
 });
 
+describe("Journal note editor metadata", () => {
+  const occurrences = (html: string, text: string) => html.split(text).length - 1;
+
+  test("an entry with reading names its passage once, on the chip, with a separate way to open it", () => {
+    const html = render({ note: { ...note, reading_at: "2026-10-20T07:00:00Z" } });
+    expect(occurrences(html, ">1 Nephi 2<")).toBe(0);
+    expect(html).toContain("Read 1 Nephi 2");
+    expect(html).toContain('aria-label="Open 1 Nephi 2"');
+    expect(html).toContain('href="/browse/bookofmormon/1-nephi/2#v-3"');
+    expect(html).not.toContain("wrote");
+  });
+
+  test("a note-only entry links its source once beside Log reading; a personal note says so", () => {
+    const html = render({});
+    expect(occurrences(html, "1 Nephi 2</a>")).toBe(1);
+    expect(html).toContain('aria-label="Log reading"');
+    expect(render({ note: { ...note, source: null } })).toContain("Personal note");
+  });
+
+  test("the time it was written shares the day's line, naming its own day when that differs", () => {
+    const sameDay = render({ note: { ...note, created_at: "2026-10-20T12:00:00" } });
+    expect(sameDay).toContain('dateTime="2026-10-20"');
+    expect(sameDay).not.toContain("Written");
+    const otherDay = render({ note: { ...note, created_at: "2026-10-22T12:00:00" } });
+    expect(otherDay).toContain("Written ");
+  });
+});
+
 describe("Journal note editor deletion", () => {
   test("drafts and archived notes offer Delete note, without asking until it is chosen", () => {
     for (const status of ["draft", "archived"] as const) {

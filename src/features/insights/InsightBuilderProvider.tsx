@@ -27,6 +27,8 @@ import {
   type EntryDraftSaveResult,
   type EntrySaveState,
 } from "@/features/notes/entryDraft";
+import { deviceStudy } from "@/features/notes/deviceStudy";
+import { useDeviceStudy } from "@/features/notes/useDeviceStudy";
 import { useEntryDraftStore, type CreateJournalEntry } from "@/features/notes/useEntryDraftStore";
 
 /**
@@ -184,9 +186,11 @@ type BlockId = Id<"insightDraftBlocks">;
 export function InsightBuilderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
-  const canUseInsights = !!user;
+  const canUseInsights = true;
+  const device = useDeviceStudy();
+  const localNotes = useMemo(() => device.data.notes.filter(note => note.owner === null), [device.data]);
   // Per-user queries wait until Convex has accepted the session token, not just the app session.
-  const canQuery = canUseInsights && convexReady;
+  const canQuery = !!user && convexReady;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelView, setPanelView] = useState<NotebookPanelView>("notes");
@@ -198,21 +202,22 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const [pendingSaves, setPendingSaves] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const activeDraftStorageKey = useMemo(
-    () => (user?.id ? `${ACTIVE_DRAFT_STORAGE_PREFIX}:${user.id}` : null),
+    () => `${ACTIVE_DRAFT_STORAGE_PREFIX}:${user?.id ?? "device"}`,
     [user?.id]
   );
-  const panelStorageKey = useMemo(() => (user?.id ? `${PANEL_OPEN_STORAGE_PREFIX}:${user.id}` : null), [user?.id]);
+  const panelStorageKey = useMemo(() => `${PANEL_OPEN_STORAGE_PREFIX}:${user?.id ?? "device"}`, [user?.id]);
   const hasRestoredActiveDraftRef = useRef(false);
   const hasRestoredPanelRef = useRef(false);
 
-  const draftRows = useQuery(api.insights.listMyDrafts, canQuery ? {} : "skip") as
+  const cloudDraftRows = useQuery(api.insights.listMyDrafts, canQuery ? {} : "skip") as
     | InsightDraftSummary[]
     | undefined;
+  const draftRows = user ? cloudDraftRows : device.loaded ? localNotes : undefined;
   // getDraft fails once its note is gone (deleted here or elsewhere). useQueries reports that instead of throwing
   // during render, so a missing note reads as unavailable, like any other note that can't be opened.
   const activeDraftQuery = useMemo(() => {
     const queries: Parameters<typeof useQueries>[0] = {};
-    if (canQuery && activeDraftId) {
+    if (canQuery && activeDraftId && !activeDraftId.startsWith("device-")) {
       queries.draft = { query: api.insights.getDraft, args: { draftId: activeDraftId as DraftId } };
     }
     return queries;
@@ -221,7 +226,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   // The note being deleted stays on screen until its deletion settles: the server's answer to the delete and
   // its subscription's failure arrive together, a moment before the active note can be cleared.
   const [deletingDraft, setDeletingDraft] = useState<InsightDraft | null>(null);
-  const activeDraft =
+  const activeDraft = !user ? localNotes.find(note => note.id === activeDraftId) ?? null :
     activeDraftResult instanceof Error
       ? deletingDraft && deletingDraft.id === activeDraftId
         ? deletingDraft
@@ -254,6 +259,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const journalOutbox = useMemo(() => {
     const owner = userId;
     return new JournalOutbox(async (noteId, markdownBody, expectedRevision) => {
+      if (!owner && userIdRef.current === null) return deviceStudy.saveNote(noteId, markdownBody, expectedRevision);
       if (!owner || userIdRef.current !== owner) throw new Error("You were signed out before this note was saved.");
       try {
         const result = await saveJournalNoteRef.current({ draftId: noteId as DraftId, markdownBody, expectedRevision });
@@ -304,15 +310,15 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   }, []);
 
   const drafts = draftRows ?? NO_DRAFTS;
-  const isLoading = canUseInsights && (draftRows === undefined || (activeDraftId !== null && activeDraft === undefined));
+  const isLoading = draftRows === undefined || (activeDraftId !== null && activeDraft === undefined);
 
   useEffect(() => {
+    setActiveDraftId(null);
     hasRestoredActiveDraftRef.current = false;
     hasRestoredPanelRef.current = false;
   }, [activeDraftStorageKey]);
 
   useEffect(() => {
-    if (!canUseInsights) return;
     if (!activeDraftStorageKey || !panelStorageKey) return;
     if (draftRows === undefined) return;
     if (hasRestoredActiveDraftRef.current) return;
@@ -363,12 +369,6 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   }, [isPanelOpen, panelStorageKey]);
 
   useEffect(() => {
-    if (!canUseInsights) {
-      setActiveDraftId(null);
-      setIsMobileOpen(false);
-      setSheetOpen(false);
-      return;
-    }
     if (draftRows === undefined) return;
     if (!activeDraftId) return;
     if (draftRows.some((d) => d.id === activeDraftId)) return;
@@ -467,9 +467,8 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const createJournalNote = useCallback(
     async (options?: { journalDate?: string; source?: NoteSource | null }) => {
-      if (!canUseInsights) return null;
       const source = options?.source === undefined ? captureCurrentSource() : options.source;
-      const created = await tracked(
+      const created = await tracked(!user ? Promise.resolve(deviceStudy.createNote({ journalDate: options?.journalDate, source: source ?? undefined })) :
         createJournalNoteMutation({
           journalDate: options?.journalDate ?? localDateKey(),
           source: source ?? undefined,
@@ -479,25 +478,25 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       setActiveDraftId(id);
       setPanelView("notes");
       setIsPanelOpen(true);
-      await setActiveDraftMutation({ draftId: created.id as DraftId });
+      if (user) await setActiveDraftMutation({ draftId: created.id as DraftId });
       return id;
     },
-    [canUseInsights, captureCurrentSource, createJournalNoteMutation, setActiveDraftMutation, tracked]
+    [user, captureCurrentSource, createJournalNoteMutation, setActiveDraftMutation, tracked]
   );
 
   const createEntry = useCallback<CreateJournalEntry>(
     async (input) => {
-      const result = await tracked(createJournalEntryMutation(input));
+      const result = await tracked<{ id: string | null }>(!user ? Promise.resolve(deviceStudy.createNote(input)) : createJournalEntryMutation(input));
       return { id: result.id === null ? null : String(result.id) };
     },
-    [createJournalEntryMutation, tracked]
+    [user, createJournalEntryMutation, tracked]
   );
   const activateEntry = useCallback(
     (id: string) => {
       setActiveDraftId(id);
-      void setActiveDraftMutation({ draftId: id as DraftId }).catch(() => {});
+      if (user) void setActiveDraftMutation({ draftId: id as DraftId }).catch(() => {});
     },
-    [setActiveDraftMutation]
+    [user, setActiveDraftMutation]
   );
   const {
     entryDraft,
@@ -553,9 +552,9 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   const switchDraft = useCallback(
     async (draftId: string) => {
       setActiveDraftId(draftId);
-      await setActiveDraftMutation({ draftId: draftId as DraftId });
+      if (user) await setActiveDraftMutation({ draftId: draftId as DraftId });
     },
-    [setActiveDraftMutation]
+    [user, setActiveDraftMutation]
   );
 
   const clearActiveDraft = useCallback(() => {
@@ -575,14 +574,14 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     async (draftId: string) => {
       if (activeDraft && activeDraft.id === draftId) setDeletingDraft(activeDraft);
       try {
-        await journalOutbox.remove(draftId, () => tracked(deleteDraftMutation({ draftId: draftId as DraftId })));
+        await journalOutbox.remove(draftId, () => tracked<unknown>(!user ? Promise.resolve(deviceStudy.remove("notes", draftId)) : deleteDraftMutation({ draftId: draftId as DraftId })));
         // Another note may have been chosen while this one was being deleted; that one stays active.
         setActiveDraftId((current) => (current === draftId ? null : current));
       } finally {
         setDeletingDraft((current) => (current?.id === draftId ? null : current));
       }
     },
-    [activeDraft, deleteDraftMutation, journalOutbox, tracked]
+    [user, activeDraft, deleteDraftMutation, journalOutbox, tracked]
   );
 
   const saveDraftSettings = useCallback(
@@ -599,8 +598,21 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [saveDraftSettingsMutation, tracked]
   );
 
+  const appendLocalText = useCallback(async (text: string) => {
+    const id = await ensureActiveDraftId();
+    if (!id) return;
+    const note = deviceStudy.getSnapshot().notes.find(row => row.id === id);
+    if (!note) throw new Error("Note not found on this device.");
+    const pending = journalOutbox.get(id);
+    const body = pending?.text ?? note.markdown_body ?? "";
+    journalOutbox.edit(id, [body, text].filter(Boolean).join("\n\n"), note.markdown_revision ?? 0);
+    journalOutbox.flush(id);
+    openBuilder();
+  }, [ensureActiveDraftId, journalOutbox, openBuilder]);
+
   const addTextBlock = useCallback(
     async (text?: string) => {
+      if (!user) return appendLocalText(text ?? "");
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
       await tracked(
@@ -612,11 +624,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       );
       openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
+    [user, appendLocalText, addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const addQuoteBlock = useCallback(
     async (text?: string, linkUrl?: string, options?: { highlightText?: string; highlightWordIndices?: number[] }) => {
+      if (!user) return appendLocalText(`> ${(text ?? "").replace(/\n/g, "\n> ")}`);
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
       await tracked(
@@ -631,11 +644,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       );
       openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
+    [user, appendLocalText, addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const appendScriptureBlock = useCallback(
     async (payload: ScripturePayload) => {
+      if (!user) return appendLocalText(`> ${(payload.text ?? "").replace(/\n/g, "\n> ")}\n\n${payload.reference}`);
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
       await tracked(
@@ -652,11 +666,12 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       );
       openBuilder();
     },
-    [appendScriptureBlockMutation, ensureActiveDraftId, openBuilder, tracked]
+    [user, appendLocalText, appendScriptureBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const addDictionaryBlock = useCallback(
     async (payload: DictionaryPayload) => {
+      if (!user) return appendLocalText(`### ${payload.word}\n\n${payload.entryText}`);
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
       await tracked(
@@ -674,7 +689,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       );
       openBuilder();
     },
-    [addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
+    [user, appendLocalText, addBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
   const updateBlock = useCallback(

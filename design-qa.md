@@ -1,3 +1,75 @@
+# Guest journal integration — current live verification
+
+Working tree on `t3/notes-homepage-inspiration` after merging `origin/dev` (`e8e3b9f`) in `15e8b8b`. The earlier account-only report below is superseded for signed-out use.
+
+- **Passed:** actual Next.js app at `http://127.0.0.1:3197/notes`, running this checkout with no cloud/backend environment configured and no signed-in account. The existing dev guest notebook implementation is used directly, not the QA harness.
+- **Passed:** Edit goals changed study target 5 → 6, Save succeeded, and a real reload retained 6. Restored the default 5 through the same editor. Notes and reading records remain untouched by target changes.
+- **Passed:** created `Guest mode verification` through Write a reflection / Save entry. Its explicit test text persisted after reload; the actual journal and calendar contain one entry and weekly reflections show 1 / 3. No fixture statistics or injected browser storage were used.
+- **Passed:** actual goal editor opens with saved targets and Cancel restores focus. Guest storage errors now describe browser storage instead of suggesting an account connection.
+- **Passed:** shared markdown excerpt formatting removes the repeated heading from guest previews. Device entries explicitly report whether they contain saved note text.
+- **Passed:** 197 tests across 23 files, including two new tests for guest goal reload/cross-tab persistence, invalid target rejection, storage failure, and preservation of existing notes. A final affected run passed 46 tests in four files. TypeScript, targeted ESLint and diff checks pass.
+- **Passed:** live browser error log empty after clean startup and save/reload checks. An initial generated dev chunk/type cache was malformed; only this checkout's generated `.next/dev` directory was moved to `/tmp/verse-journal-next-dev-ea4208df` and rebuilt. Source, browser data and other app servers were preserved.
+- **Evidence:** real screenshots `/tmp/verse-journal-live-home.png` and `/tmp/verse-journal-live-goals.png`, captured at requested 1540 × 1024 CSS viewport (1525 × 1014 image output). Light theme follows the device's system appearance. The note is explicitly labelled verification content and was saved via the real UI. Screenshots shown directly in the conversation.
+- **Runtime:** actual app left running on port 3197 and its Chrome tab left available. Temporary viewport override reset.
+- **Not run:** authenticated cloud goal save/sync and deployment. Guest notes and goals require neither authentication nor a backend deployment; signed-in cloud features still need their updated schema/functions deployed.
+
+Guest targets are an optional field in the existing version-1 device notebook, so existing local notes need no migration. Account targets remain separate and account-private; guest targets remain on this device.
+
+final result: passed
+
+---
+
+# Journal homepage inspiration — current verification
+
+Approved direction: option 1, amended with Edit goals and its compact editor. Implementation is the working tree on `t3/notes-homepage-inspiration`, based on `df90f5395fa82ff7fabca8d11037fdfe9e40b5c2`.
+
+## Comparison evidence
+
+- Source homepage: `/home/jeffrey-home/.codex/generated_images/01a17674-58c0-7480-bacb-668d0cf98517/exec-101eb507-c163-4a1b-8cf1-e0f98a14c643.png` (1538 × 1022).
+- Source editor: same directory, `exec-7b93f4f5-8cf8-48ad-ae19-dc4c557e610a.png` (1537 × 1023).
+- Browser-rendered implementation: `/tmp/journal-home-desktop-final.png` and `/tmp/journal-goal-dialog-desktop-final.png` (1525 × 1014), requested CSS viewport 1540 × 1024, DPR 1. Browser capture excludes its scrollbar edges. No density conversion was needed.
+- Full-view paired comparisons, opened together: `/tmp/journal-home-comparison.png` and `/tmp/journal-dialog-comparison.png`. Source and implementation are independently scaled to 1000px wide with aspect ratio preserved for the comparison sheet.
+- Focused goal typography/progress comparison: `/tmp/journal-goals-comparison.png`, original-size source and implementation crops.
+- Phone evidence: `/tmp/journal-home-mobile.png`, `/tmp/journal-goal-dialog-mobile.png`, `/tmp/journal-goal-dialog-320-final.png`; requested viewports 390 × 844 and 320 × 568.
+
+The browser used the repository's actual JournalWorkspace, goal editor, composer, note editor and history hook in `qa/notes`, with clearly labelled synthetic fixtures. This verifies rendered components and interactions, not deployed persistence. The source shows Oct 25 with two sample entries; the harness uses Oct 21 with seven existing test entries, including unusually long titles, a reading-only entry and a combined note/reading. These data differences and the harness header are intentional. Existing production navigation is retained.
+
+## Findings and repairs
+
+- **P2, repaired:** initial light-mode goal icons/progress were too pale. Added a theme-aware goal color: dark mode retains the approved gold; light mode uses a darker gold. Light/dark controls were inspected after repair.
+- **P2, repaired:** the initial homepage retained small card icons and 12px excerpts. Homepage rows now use gold icon circles, 19.2px serif titles and 14.08px excerpts. The reader's existing compact cards retain their appearance. Final paired homepage evidence includes the repaired rows.
+- **P2, repaired:** at 320 × 568 the editor footer initially fell below the dialog viewport. The footer is now sticky; final measurements place both 44px buttons at y=487–531, inside the 568px viewport. The form can scroll without losing its actions.
+- **Accessibility repair:** focus starts on Cancel; Escape/Cancel discard unsaved targets and restore Edit goals. Save keeps focus while pending; failed saves preserve changed values and offer retry.
+- No actionable P0/P1/P2 visual findings remain in the tested components.
+
+## Fidelity review
+
+- **Fonts/typography — Passed:** existing Palatino/Georgia display stack and app UI stack reused. Serif hero and section headings, legible note excerpts and restrained metadata retain the approved hierarchy. Real labels wrap on narrow screens.
+- **Spacing/layout — Passed:** calendar and goals share a left surface; the right surface contains invitation, dated journal and an actual older reflection. The existing desktop panel movement and phone calendar/day/note stages remain. More entries scroll rather than compressing the content. On phones the invitation precedes calendar/goals.
+- **Colors/tokens — Passed:** existing warm charcoal, ivory, terracotta and border tokens retained. Goal gold has a separate light-mode contrast value. The hero uses readable ivory text and a darkened painterly image.
+- **Images/assets — Passed:** custom dawn valley generated from the selected visual using built-in Image Gen, inspected and saved to `public/art/journal-dawn.webp` (2200 × 715). Live text and controls overlay a text-free asset. Existing Font Awesome icons are reused; no placeholder imagery or new icon system.
+- **Copy/content — Passed:** inspiration and prompt cycling implemented. Counts come from the journal; zero/empty days are described honestly. Revisit contains an actual earlier note. Study counts deduplicate days; reading-only entries do not inflate reflection counts. The metric says days of study so logged guide reading is accurately described. Production contains no sample statistics or concept labels.
+
+## Verification
+
+- **Passed:** `npm run test:notes` — 188 tests in 22 files. Includes authenticated ownership, revoked/unlinked session rejection, invalid target rejection, persisted target reads from a fresh session, and unchanged journal history after goal edits.
+- **Passed:** final affected-suite run — 63 tests in five files, after entry-row and dialog refinements.
+- **Passed:** `npx tsc --noEmit -p .`; targeted ESLint on changed frontend/backend/test files; `git diff --check`.
+- **Passed:** production build using the project's existing public development Convex URLs: compile, TypeScript and all 82 prerendered pages. This command does not deploy functions or frontend assets.
+- **Passed:** Chrome component checks: prompt cycling; creating/typing/saving a reflection; opening the actual older note via Revisit; desktop note/day navigation; mobile day/calendar navigation; goal Cancel/Escape/focus restoration; changing a goal; simulated save failure keeping the edited value; successful retry with unchanged recorded progress. Runtime error log empty after interactions.
+- **Passed:** dark desktop, light desktop, 390px and 320px phone layouts. No page horizontal overflow in measured phone view; all dialog icon/action buttons are 44px high. Tiny-phone dialog actions stay in view.
+- **Passed by source review:** hook cleanup, per-account authenticated goal query/mutation, server and client integer/range validation, loading/empty states, local-day rollover, retained note history and reduced-motion CSS. Goals default to five study days and three reflections; valid ranges are 1–7 and 1–21.
+- **Not run:** deployed authenticated browser → Convex goal persistence. Backend/schema changes are implemented and exercised by authenticated in-memory Convex tests, but have not been deployed. Deploy Convex functions/schema before serving this frontend against the shared backend, then verify Save goals and reload with a real account.
+- **Not run:** production deployment, PR creation, native-device keyboards and whole-repository ESLint. Prior reports below document pre-existing whole-repository lint failures.
+
+The current visual/component QA result does not imply deployed end-to-end verification. The remaining release step is backend deployment followed by authenticated goal-save/reload verification.
+
+final result: passed
+
+---
+
+# Earlier verification records
+
 # Notes calendar card verification
 
 ## Current refinement and recovery
