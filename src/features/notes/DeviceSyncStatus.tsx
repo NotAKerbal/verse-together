@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useConvexSignedIn } from "./useConvexSignedIn";
-import { deviceStudy } from "./deviceStudy";
+import { annotationImport, deviceStudy } from "./deviceStudy";
 import { useDeviceStudy } from "./useDeviceStudy";
 
 const SyncContext = createContext<{ syncing: boolean; error: string | null; retry: () => void } | null>(null);
@@ -51,16 +51,7 @@ export function DeviceSyncProvider({ children }: { children: React.ReactNode }) 
         }
         for (const row of data.annotations.filter((row) => row.owner === owner)) {
           if (cancelled || ownerRef.current !== owner) return;
-          await importAnnotation({
-            deviceImportId: row.id,
-            deviceImportOwner: owner,
-            volume: row.volume,
-            book: row.book,
-            chapter: row.chapter,
-            verse: row.verse,
-            body: row.body,
-            highlightColor: row.highlight_color ?? undefined,
-          });
+          await importAnnotation(annotationImport(row, owner));
           deviceStudy.acknowledge("annotations", row.id, owner);
         }
         for (const row of data.highlights.filter((row) => row.owner === owner)) {

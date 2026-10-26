@@ -1,8 +1,21 @@
 import type { InsightDraft } from "../../lib/appData";
-import type { AnnotationVerse, VerseAnnotation, HighlightColor } from "../annotations/verseAnnotations";
+import type {
+  AnnotationChapter,
+  AnnotationVerse,
+  MarkColor,
+  VerseAnnotation,
+  VerseMarksPatch,
+} from "../annotations/verseAnnotations";
 import { annotationChapter } from "../annotations/verseAnnotations";
 import type { GuideHighlight } from "../comeFollowMe/guideAnchors";
-import { sameGuideAnchor, annotationProblem, guideHighlightProblem } from "../../../convex/annotationRules";
+import {
+  sameGuideAnchor,
+  annotationProblem,
+  applyVerseMarks,
+  DEFAULT_UNDERLINE_COLOR,
+  guideHighlightProblem,
+  verseMarksProblem,
+} from "../../../convex/annotationRules";
 import { deriveNoteTitle, markdownExcerpt, NOTE_MARKDOWN_MAX } from "../../../convex/noteJournal";
 import { localDateKey, newRequestId, type NoteSource, type JournalEntry } from "./journal";
 import { RevisionConflictError } from "./journalOutbox";
@@ -151,19 +164,14 @@ export class DeviceStudyStore {
   remove(kind: "notes" | "annotations" | "highlights", id: string) {
     this.write((data) => ({ ...data, [kind]: data[kind].filter((row) => row.id !== id || row.owner !== null) }));
   }
-  saveAnnotation(target: AnnotationVerse, body: string, highlightColor?: HighlightColor) {
-    const problem = annotationProblem(body, highlightColor);
+  /** The full editor's save: the verse's note, highlight, and underline as given (an omitted mark is none). */
+  saveAnnotation(target: AnnotationVerse, body: string, marks: { highlightColor?: MarkColor; underlineColor?: MarkColor } = {}) {
+    const { highlightColor, underlineColor } = marks;
+    const problem = annotationProblem(body, highlightColor, underlineColor !== undefined);
     if (problem) throw new Error(problem);
     const chapter = annotationChapter(target.volume, target.book, target.chapter);
     this.write((data) => {
-      const existing = data.annotations.find(
-        (row) =>
-          row.owner === null &&
-          row.volume === chapter.volume &&
-          row.book === chapter.book &&
-          row.chapter === chapter.chapter &&
-          row.verse === target.verse,
-      );
+      const existing = findDeviceAnnotation(data.annotations, chapter, target.verse);
       const now = new Date().toISOString();
       const row: DeviceAnnotation = {
         ...chapter,
@@ -171,6 +179,8 @@ export class DeviceStudyStore {
         id: existing?.id ?? `device-${newRequestId()}`,
         body,
         highlight_color: highlightColor ?? null,
+        underline: underlineColor !== undefined,
+        underline_color: underlineColor ?? null,
         user_id: "device",
         owner: null,
         is_mine: true,
@@ -179,6 +189,58 @@ export class DeviceStudyStore {
         updated_at: now,
       };
       return { ...data, annotations: [...data.annotations.filter((item) => item.id !== row.id), row] };
+    });
+  }
+  /**
+   * Quick marks on this device: the account's setVerseMarks rule. Only the named marks change; each verse's
+   * note stays as saved, and a verse left with no note and no mark is removed.
+   */
+  setVerseMarks(target: AnnotationChapter, verses: readonly number[], patch: VerseMarksPatch) {
+    const unique = Array.from(new Set(verses));
+    const problem = verseMarksProblem(unique, patch);
+    if (problem) throw new Error(problem);
+    const chapter = annotationChapter(target.volume, target.book, target.chapter);
+    this.write((data) => {
+      const now = new Date().toISOString();
+      let annotations = data.annotations;
+      for (const verse of unique) {
+        const existing = findDeviceAnnotation(annotations, chapter, verse);
+        const next = applyVerseMarks(
+          existing
+            ? {
+                body: existing.body,
+                highlightColor: existing.highlight_color,
+                underline: existing.underline,
+                underlineColor: existing.underline_color,
+              }
+            : null,
+          patch,
+        );
+        const rest = annotations.filter((row) => row !== existing);
+        if (!next.keep) {
+          annotations = rest;
+          continue;
+        }
+        const row: DeviceAnnotation = {
+          ...(existing ?? {
+            ...chapter,
+            verse,
+            id: `device-${newRequestId()}`,
+            body: "",
+            user_id: "device",
+            owner: null,
+            is_mine: true,
+            visibility: "private",
+            created_at: now,
+          }),
+          highlight_color: next.highlightColor ?? null,
+          underline: next.underline,
+          underline_color: next.underlineColor ?? null,
+          updated_at: now,
+        };
+        annotations = [...rest, row];
+      }
+      return { ...data, annotations };
     });
   }
   saveHighlight(input: Omit<GuideHighlight, "id" | "updatedAt">) {
@@ -214,6 +276,36 @@ export class DeviceStudyStore {
   acknowledge(kind: "notes" | "annotations" | "highlights", id: string, owner: string) {
     this.write((data) => ({ ...data, [kind]: data[kind].filter((row) => row.id !== id || row.owner !== owner) }));
   }
+}
+
+/** This device's own (unclaimed) annotation on a verse. */
+function findDeviceAnnotation(rows: DeviceAnnotation[], chapter: AnnotationChapter, verse: number) {
+  return rows.find(
+    (row) =>
+      row.owner === null &&
+      row.volume === chapter.volume &&
+      row.book === chapter.book &&
+      row.chapter === chapter.chapter &&
+      row.verse === verse,
+  );
+}
+
+/**
+ * The account import of one claimed device annotation: its note, highlight, and underline (in its color). The
+ * account keeps any mark it already has on the verse; rows saved before guest underlines have none.
+ */
+export function annotationImport(row: DeviceAnnotation, owner: string) {
+  return {
+    deviceImportId: row.id,
+    deviceImportOwner: owner,
+    volume: row.volume,
+    book: row.book,
+    chapter: row.chapter,
+    verse: row.verse,
+    body: row.body,
+    highlightColor: row.highlight_color ?? undefined,
+    underlineColor: row.underline ? (row.underline_color ?? DEFAULT_UNDERLINE_COLOR) : undefined,
+  };
 }
 
 export const deviceStudy = new DeviceStudyStore(() => window.localStorage);

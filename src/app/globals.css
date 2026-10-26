@@ -1349,6 +1349,230 @@ a.reader-toolbar-crumb:hover {
 }
 
 /*
+  The reader's own verse marks (VerseMarkedText), in both the chapter reader and the Come, Follow Me
+  scripture pane: a highlight colors the words themselves and an underline runs under them in its own
+  color, each on every wrapped line (box-decoration-break), alone or together. No padding or border, so
+  marking a verse never moves its text.
+*/
+:root {
+  --verse-mark-red: rgba(226, 84, 70, 0.26);
+  --verse-mark-yellow: rgba(240, 200, 64, 0.46);
+  --verse-mark-blue: rgba(110, 165, 230, 0.34);
+  --verse-mark-green: rgba(64, 196, 136, 0.3);
+  --verse-mark-pink: rgba(240, 120, 182, 0.3);
+  --verse-mark-purple: rgba(164, 134, 248, 0.32);
+  /* Underlines, strong enough to read under text; red is the rubric underline every underline once was. */
+  --verse-underline-red: var(--accent-rubric);
+  --verse-underline-yellow: #c99a06;
+  --verse-underline-blue: #2f6fc0;
+  --verse-underline-green: #1f8a5a;
+  --verse-underline-pink: #c93d86;
+  --verse-underline-purple: #7650d8;
+  /* Opaque versions for color pickers. */
+  --verse-swatch-red: #e2574c;
+  --verse-swatch-yellow: #ecc94b;
+  --verse-swatch-blue: #6ea5e6;
+  --verse-swatch-green: #4cc58f;
+  --verse-swatch-pink: #ef7fb8;
+  --verse-swatch-purple: #a38af2;
+}
+
+[data-theme="dark"] {
+  --verse-mark-red: rgba(226, 96, 80, 0.32);
+  --verse-mark-yellow: rgba(214, 178, 56, 0.34);
+  --verse-mark-blue: rgba(96, 150, 220, 0.34);
+  --verse-mark-green: rgba(52, 186, 128, 0.3);
+  --verse-mark-pink: rgba(232, 104, 166, 0.32);
+  --verse-mark-purple: rgba(156, 126, 244, 0.36);
+  --verse-underline-yellow: #e6c14d;
+  --verse-underline-blue: #7fb0ee;
+  --verse-underline-green: #5fd09c;
+  --verse-underline-pink: #f08cc0;
+  --verse-underline-purple: #b29df6;
+}
+
+.verse-mark {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  border-radius: 0.15em;
+}
+
+.verse-mark[data-verse-highlight="red"] {
+  background-color: var(--verse-mark-red);
+}
+
+.verse-mark[data-verse-highlight="yellow"] {
+  background-color: var(--verse-mark-yellow);
+}
+
+.verse-mark[data-verse-highlight="blue"] {
+  background-color: var(--verse-mark-blue);
+}
+
+.verse-mark[data-verse-highlight="green"] {
+  background-color: var(--verse-mark-green);
+}
+
+.verse-mark[data-verse-highlight="pink"] {
+  background-color: var(--verse-mark-pink);
+}
+
+.verse-mark[data-verse-highlight="purple"] {
+  background-color: var(--verse-mark-purple);
+}
+
+.verse-mark[data-verse-underline="yellow"] { --verse-underline: var(--verse-underline-yellow); }
+.verse-mark[data-verse-underline="blue"] { --verse-underline: var(--verse-underline-blue); }
+.verse-mark[data-verse-underline="green"] { --verse-underline: var(--verse-underline-green); }
+.verse-mark[data-verse-underline="pink"] { --verse-underline: var(--verse-underline-pink); }
+.verse-mark[data-verse-underline="purple"] { --verse-underline: var(--verse-underline-purple); }
+
+/* Decorations don't reach into atomic inlines (the comparison view's changed-word groups), so they repeat it. */
+.verse-mark[data-verse-underline],
+.verse-mark[data-verse-underline] :where(.inline-flex, .inline-block) {
+  text-decoration-line: underline;
+  text-decoration-color: var(--verse-underline, var(--verse-underline-red));
+  text-decoration-thickness: max(1.5px, 0.08em);
+  text-underline-offset: 0.22em;
+}
+
+@media (forced-colors: active) {
+  .verse-mark[data-verse-highlight] {
+    forced-color-adjust: none;
+    background-color: Mark;
+    color: MarkText;
+  }
+
+  .verse-mark[data-verse-underline],
+  .verse-mark[data-verse-underline] :where(.inline-flex, .inline-block) {
+    text-decoration-color: CanvasText;
+  }
+
+}
+
+/*
+  A mark's sample (MarkSample): a letter as the mark would look on a verse. A highlight tints a chip behind
+  it; an underline runs under it in its color. Used by the selection menu, the annotation editor, and the
+  quick-mark settings, so a "yellow highlight" and a "yellow underline" never look alike.
+*/
+.mark-sample {
+  --mark-highlight: var(--verse-mark-yellow);
+  --mark-swatch: var(--verse-swatch-yellow);
+  --mark-underline: var(--verse-underline-yellow);
+  display: inline-flex;
+  width: 1.6em;
+  height: 1.6em;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.3em;
+  color: var(--foreground);
+  font-family: var(--font-serif-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.mark-sample[data-color="red"] { --mark-highlight: var(--verse-mark-red); --mark-swatch: var(--verse-swatch-red); --mark-underline: var(--verse-underline-red); }
+.mark-sample[data-color="blue"] { --mark-highlight: var(--verse-mark-blue); --mark-swatch: var(--verse-swatch-blue); --mark-underline: var(--verse-underline-blue); }
+.mark-sample[data-color="green"] { --mark-highlight: var(--verse-mark-green); --mark-swatch: var(--verse-swatch-green); --mark-underline: var(--verse-underline-green); }
+.mark-sample[data-color="pink"] { --mark-highlight: var(--verse-mark-pink); --mark-swatch: var(--verse-swatch-pink); --mark-underline: var(--verse-underline-pink); }
+.mark-sample[data-color="purple"] { --mark-highlight: var(--verse-mark-purple); --mark-swatch: var(--verse-swatch-purple); --mark-underline: var(--verse-underline-purple); }
+
+.mark-sample[data-kind="highlight"] {
+  background-color: var(--mark-highlight);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mark-swatch) 70%, transparent);
+}
+
+.mark-sample[data-kind="underline"] {
+  text-decoration-line: underline;
+  text-decoration-color: var(--mark-underline);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 3px;
+}
+
+@media (forced-colors: active) {
+  .mark-sample[data-kind="highlight"] { forced-color-adjust: none; background-color: Mark; color: MarkText; box-shadow: none; }
+  .mark-sample[data-kind="underline"] { text-decoration-color: CanvasText; }
+}
+
+/*
+  A mark's style, picked visually (MarkStylePicker): highlight or underline, each shown as it marks a letter,
+  and the six mark colors as swatches drawn the way the chosen kind marks (a dot for a highlight, a rule for
+  an underline). Used by account settings and the selection menu's Annotate panel.
+*/
+.mark-picker { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.mark-picker-kinds,
+.mark-picker-colors { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
+.mark-picker-kind {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 3px;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  color: var(--foreground-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.mark-picker-kind .mark-sample { font-size: 13px; }
+.mark-picker-kind[aria-checked="true"] { border-color: var(--foreground); background: var(--surface-card-soft); box-shadow: inset 0 0 0 1px var(--foreground); color: var(--foreground); }
+
+.mark-picker-color {
+  --mark-picker-swatch: var(--verse-swatch-yellow);
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.mark-picker-color[data-color="red"] { --mark-picker-swatch: var(--verse-swatch-red); }
+.mark-picker-color[data-color="blue"] { --mark-picker-swatch: var(--verse-swatch-blue); }
+.mark-picker-color[data-color="green"] { --mark-picker-swatch: var(--verse-swatch-green); }
+.mark-picker-color[data-color="pink"] { --mark-picker-swatch: var(--verse-swatch-pink); }
+.mark-picker-color[data-color="purple"] { --mark-picker-swatch: var(--verse-swatch-purple); }
+
+.mark-picker-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--mark-picker-swatch);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.mark-picker[data-kind="underline"] .mark-picker-swatch { width: 22px; height: 5px; border-radius: 3px; box-shadow: none; }
+
+:is(.mark-picker-kind, .mark-picker-color):hover:not([aria-disabled="true"]) { background: var(--surface-card-soft); }
+.mark-picker-color[aria-checked="true"] { background: var(--surface-card-soft); box-shadow: inset 0 0 0 2px var(--foreground); }
+.mark-picker [role="radio"][aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
+.mark-picker[aria-disabled="true"] [role="radio"] { cursor: progress; }
+.mark-picker [role="radio"]:focus-visible { outline: 2px solid var(--accent-rubric); outline-offset: 1px; }
+
+@media (forced-colors: active) {
+  .mark-picker-swatch { forced-color-adjust: none; }
+  .mark-picker [role="radio"][aria-checked="true"] { outline: 2px solid Highlight; outline-offset: 1px; }
+}
+
+/* A shared passage is plain paper: the reader's private marks stay off it. */
+:root[data-share="true"] .verse-mark {
+  background-color: transparent;
+}
+
+:root[data-share="true"] .verse-mark,
+:root[data-share="true"] .verse-mark :where(.inline-flex, .inline-block) {
+  text-decoration-line: none;
+}
+
+/*
   The reader column sits on plain paper: a backdrop the color of the page,
   feathered at every edge so the dotted grid fades away around the text.
   It bleeds only as far as the main gutter so it never widens the page.
@@ -2048,32 +2272,54 @@ a.reader-toolbar-crumb:hover {
 
 .selection-popover[data-placement="bottom"] .selection-card { transform-origin: top center; }
 
-.selection-card-header {
+/* Top row: the reader's mark presets (account settings choose them) and the close button. */
+.selection-quickbar {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 12px 8px 18px;
+  gap: 8px;
+  padding: 6px 6px 2px 10px;
 }
 
-.selection-eyebrow {
-  margin: 0 0 3px;
-  color: var(--accent-rubric);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.11em;
-  line-height: 1.4;
-  text-transform: uppercase;
+.selection-quickmarks {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
 }
 
-.selection-reference {
+/* With no presets chosen in account settings, only the close button is left, at the right. */
+.selection-quickbar[data-empty="true"] { justify-content: flex-end; padding-block: 2px 0; }
+
+.selection-quickmarks[aria-busy="true"] { cursor: progress; }
+
+.selection-preset {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.selection-preset:hover:not([aria-disabled="true"]) { background: var(--surface-card-soft); }
+.selection-quickmarks[data-status="loading"] .selection-preset { opacity: 0.55; cursor: progress; }
+
+/* Every selected verse has this mark: a full ring. Only some do: a thin one. */
+.selection-preset[aria-pressed="true"] { background: var(--surface-card-soft); box-shadow: inset 0 0 0 2px var(--foreground); }
+.selection-preset[aria-pressed="mixed"] { box-shadow: inset 0 0 0 1px var(--foreground-soft); }
+
+.selection-quick-error {
   margin: 0;
-  font-family: var(--font-serif-text);
-  font-size: 21px;
-  font-weight: 500;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+  padding: 0 18px 4px;
+  color: var(--accent-rubric);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .selection-dismiss {
@@ -2090,6 +2336,85 @@ a.reader-toolbar-crumb:hover {
 
 .selection-dismiss svg { width: 17px; height: 17px; }
 .selection-dismiss:hover { background: var(--surface-card-soft); color: var(--foreground); }
+
+/* The Annotate panel: in the menu, in place of its actions (Back returns to them). */
+.selection-annotate { display: flex; min-height: 0; flex-direction: column; }
+.selection-annotate-bar { justify-content: flex-start; padding-inline-start: 6px; }
+
+.selection-back {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--foreground-soft);
+  cursor: pointer;
+}
+
+.selection-back svg { width: 19px; height: 19px; }
+.selection-back:hover { background: var(--surface-card-soft); color: var(--foreground); }
+
+.selection-annotate-title { flex: 1; min-width: 0; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
+
+.selection-annotate-body {
+  display: grid;
+  gap: 14px;
+  padding: 2px 14px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.selection-annotate-body[aria-busy="true"] { cursor: progress; }
+.selection-annotate-section { display: grid; min-width: 0; gap: 7px; }
+
+.selection-annotate-label {
+  margin: 0;
+  color: var(--foreground-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.selection-annotate-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.selection-annotate-preset,
+.selection-annotate-apply {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 5px;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.selection-annotate-preset-label { min-width: 0; overflow-wrap: anywhere; }
+.selection-annotate-preset:hover:not([aria-disabled="true"]),
+.selection-annotate-apply:hover:not([aria-disabled="true"]) { background: var(--surface-card-soft); }
+.selection-annotate-preset[aria-pressed="true"] { background: var(--surface-card-soft); box-shadow: inset 0 0 0 1px var(--foreground); border-color: var(--foreground); }
+.selection-annotate-preset[aria-pressed="mixed"] { border-color: var(--foreground-soft); }
+
+.selection-annotate-apply-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.selection-annotate-apply { border-color: var(--foreground-soft); font-weight: 600; }
+.selection-annotate-state { color: var(--foreground-soft); font-size: 11px; line-height: 1.35; }
+
+.selection-annotate-body[data-status="loading"] :is(.selection-annotate-preset, .selection-annotate-apply) { opacity: 0.55; cursor: progress; }
+.selection-annotate-empty { margin: 0; color: var(--foreground-soft); font-size: 12px; line-height: 1.4; }
+
+.selection-annotate-note { min-height: 58px; border-color: var(--surface-border); }
+.selection-annotate-note[aria-disabled="true"] { color: var(--foreground-soft); cursor: not-allowed; }
+.selection-annotate-note[aria-disabled="true"]:hover { background: transparent; border-color: var(--surface-border); }
+.selection-annotate-note[aria-disabled="true"]:hover .selection-action-icon { transform: none; color: inherit; }
 
 .selection-actions {
   display: grid;
@@ -2169,8 +2494,7 @@ a.reader-toolbar-crumb:hover {
 .selection-copy svg { width: 15px; height: 15px; }
 .selection-copy:hover { color: var(--accent-rubric); }
 .selection-copy[data-notice="copied"] { color: var(--accent-rubric); }
-.selection-word-count { color: var(--foreground-soft); font-size: 11px; white-space: nowrap; }
-.selection-escape kbd { font: inherit; }
+.selection-footer-reference { min-width: 0; margin: 0; font-family: var(--font-serif-text); font-size: 15px; font-weight: 500; line-height: 1.3; text-align: right; overflow-wrap: anywhere; }
 
 .selection-popover :is(button, a):focus-visible { outline: 2px solid var(--accent-rubric); outline-offset: -2px; }
 
@@ -2197,15 +2521,16 @@ a.reader-toolbar-crumb:hover {
 
 @media (max-width: 639px) {
   .selection-popover { max-height: calc(100dvh - 188px); }
+  .selection-annotate-body { padding-inline: 10px; }
   .selection-action { gap: 8px; padding-inline: 8px; }
   .selection-action-icon { width: 30px; height: 30px; border-radius: 9px; }
   .selection-action-title { font-size: 12px; }
   .selection-action-description { font-size: 10px; }
-  .selection-escape { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .selection-popover, .selection-action, .selection-action-icon { transition: none; }
+  .selection-popover, .selection-action, .selection-action-icon, .selection-preset,
+  .selection-annotate-preset, .selection-annotate-apply, .mark-picker-kind, .mark-picker-color { transition: none; }
   .selection-card { animation: none; }
   .selection-action:hover:not(:disabled) .selection-action-icon { transform: none; }
 }
