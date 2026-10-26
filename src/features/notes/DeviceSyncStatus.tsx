@@ -103,15 +103,14 @@ export default function DeviceSyncStatus() {
   const { user } = useConvexSignedIn();
   const device = useDeviceStudy();
   const sync = useContext(SyncContext);
+  const message = device.error ?? (user ? sync?.error ?? (sync?.syncing ? "Syncing device study…" : null) : null);
+  if (!message) return null;
   return (
     <div
       className="text-xs text-[color:var(--foreground-muted)]"
       role={device.error || sync?.error ? "alert" : "status"}
     >
-      {device.error ??
-        (!user
-          ? "Your study stays on this device. Sign in to sync across devices."
-          : (sync?.error ?? (sync?.syncing ? "Syncing device study…" : "")))}
+      {message}
       {user && sync?.error ? (
         <button type="button" onClick={sync.retry} className="ml-2 underline">
           Try sync again
