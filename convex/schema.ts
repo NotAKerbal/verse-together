@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { noteSourceValidator } from "./noteJournal";
+import { legacyQuickMarkValidator, markColorValidator, markPresetValidator } from "./markValidators";
 
 const scriptureResourceCoverage = v.object({
   book: v.string(),
@@ -54,6 +55,11 @@ export default defineSchema({
     fontFamily: v.union(v.literal("serif"), v.literal("sans")),
     comparisonView: v.optional(v.union(v.literal("inline"), v.literal("sideBySide"))),
     textWidth: v.optional(v.union(v.literal("comfortable"), v.literal("wide"), v.literal("full"))),
+    // The selection menu's mark presets, in order (convex/annotationRules.ts); absent means the defaults, and
+    // an empty list means none.
+    markPresets: v.optional(v.array(markPresetValidator)),
+    // The earlier quick-mark choice, kept only so readMarkPresets can carry it over until presets are saved.
+    quickMarks: v.optional(v.array(legacyQuickMarkValidator)),
     updatedAt: v.number(),
   }).index("by_clerk_id", ["clerkId"]),
 
@@ -315,15 +321,12 @@ export default defineSchema({
     verse: v.number(),
     body: v.string(),
     visibility: v.union(v.literal("private"), v.literal("public")),
-    highlightColor: v.optional(
-      v.union(
-        v.literal("yellow"),
-        v.literal("blue"),
-        v.literal("green"),
-        v.literal("pink"),
-        v.literal("purple")
-      )
-    ),
+    highlightColor: v.optional(markColorValidator),
+    // Absent on rows saved before underlines existed, and whenever the verse isn't underlined.
+    underline: v.optional(v.boolean()),
+    // The underline's color, only while underlined; an underline saved without one (before underlines had
+    // colors) is red.
+    underlineColor: v.optional(markColorValidator),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

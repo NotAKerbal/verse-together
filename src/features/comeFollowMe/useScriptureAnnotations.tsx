@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode, type 
 import { useQueries } from "convex/react";
 import { useAuth } from "@/lib/auth";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
-import { annotationChapter, highlightOf } from "@/features/annotations/verseAnnotations";
+import VerseMarkedText from "@/features/annotations/VerseMarkedText";
+import { annotationChapter, highlightOf, underlineColorOf } from "@/features/annotations/verseAnnotations";
 import { api } from "../../../convex/_generated/api";
 import { collectChapterAnnotations, selectionVerse, verseKey, type VerseKey } from "./scriptureAnnotations";
 import styles from "./studyCompanion.module.css";
@@ -119,11 +120,11 @@ function SelectionAnnotateButton({
 }
 
 /**
- * The viewer's private verse annotations (notes and highlights) in the Come, Follow Me scripture pane: the
- * same rows, identities, and editor as the standard chapter reader. A verse is annotated from its verse
- * number (a button: click, tap, or Enter/Space, with the arrow keys moving between verses) or from a text
- * selection in the pane (an Annotate button beside it). Annotations only color the verse and mark its
- * edge; nothing is added to the text flow.
+ * The viewer's private verse annotations (notes, highlights, underlines) in the Come, Follow Me scripture
+ * pane: the same rows, identities, editor, and text marks as the standard chapter reader. A verse is
+ * annotated from its verse number (a button: click, tap, or Enter/Space, with the arrow keys moving between
+ * verses) or from a text selection in the pane (an Annotate button beside it). A highlight or underline marks
+ * the verse's words (verseText), and any annotation marks the verse's edge; nothing is added to the text flow.
  */
 export function useScriptureAnnotations(book: Book, chapters: readonly number[], doc: RefObject<HTMLElement | null>) {
   const { user, promptSignIn } = useAuth();
@@ -143,7 +144,7 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
 
   const annotationFor = (chapter: number, verse: number) => rows.get(verseKey(chapter, verse))?.find((row) => row.is_mine);
 
-  /** Attributes for a verse's <li>: color only (a background and an inset edge mark), never layout. */
+  /** Attributes for a verse's <li>: color only (an inset edge mark in the highlight's color), never layout. */
   const verseAttributes = (chapter: number, verse: number) => {
     const mine = annotationFor(chapter, verse);
     return {
@@ -151,6 +152,11 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
       "data-highlight": mine?.highlight_color ?? undefined,
     };
   };
+
+  /** A verse's text with the viewer's highlight and underline drawn on its words. */
+  const verseText = (chapter: number, verse: number, children: ReactNode) => (
+    <VerseMarkedText annotation={annotationFor(chapter, verse)}>{children}</VerseMarkedText>
+  );
 
   const onVerseKeyDown = (event: KeyboardEvent<HTMLElement>, target: VerseKey) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -173,7 +179,12 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
   const verseNumberProps = (chapter: number, verse: number, tabStop: boolean) => {
     const mine = annotationFor(chapter, verse);
     const color = highlightOf(mine);
-    const state = mine ? (color !== "none" ? `, highlighted ${color}` : "") + (mine.body ? ", has your note" : "") : "";
+    const underline = underlineColorOf(mine);
+    const state = mine
+      ? (color !== "none" ? `, highlighted ${color}` : "") +
+        (underline !== "none" ? `, underlined ${underline}` : "") +
+        (mine.body ? ", has your note" : "")
+      : "";
     return {
       role: "button",
       tabIndex: tabStop ? 0 : -1,
@@ -201,5 +212,5 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
     <SelectionAnnotateButton doc={doc} book={book} onOpen={setEditing} />
   );
 
-  return { verseAttributes, verseNumberProps, layer };
+  return { verseAttributes, verseNumberProps, verseText, layer };
 }

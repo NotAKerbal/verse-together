@@ -3,6 +3,7 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck } from "@fortawesome/free-solid-svg-icons";
 import AccountManager from "@/features/auth/AccountManager";
+import QuickMarkSettings from "@/features/annotations/QuickMarkSettings";
 import { useSimpleMode } from "@/lib/simpleMode";
 import styles from "./page.module.css";
 
@@ -30,6 +31,7 @@ export default function AccountPage() {
               <span><FontAwesomeIcon icon={faCheck} aria-hidden="true" /></span>
             </button>
           </div>
+          <QuickMarkSettings />
         </div>
       </AccountManager>
     </section>

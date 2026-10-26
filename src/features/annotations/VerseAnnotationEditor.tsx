@@ -5,12 +5,16 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { annotationProblem } from "../../../convex/annotationRules";
+import MarkSample from "./MarkSample";
 import {
-  ANNOTATION_HIGHLIGHT_OPTIONS,
+  MARK_COLOR_OPTIONS,
   annotationChapter,
+  annotationSummary,
   highlightOf,
-  type AnnotationHighlightColor,
+  underlineColorOf,
+  type AnnotationMarkColor,
   type AnnotationVerse,
+  type MarkKind,
   type VerseAnnotation,
 } from "./verseAnnotations";
 
@@ -29,7 +33,8 @@ type Props = {
 };
 
 /**
- * Add, edit, or delete the viewer's private annotation on one verse: a note, a highlight, or both. A modal
+ * Add, edit, or delete the viewer's private annotation on one verse: a note, a highlight, an underline, or any
+ * mix of them. A modal
  * <dialog>, so Escape closes it, focus stays inside, and focus returns to whatever opened it.
  */
 export default function VerseAnnotationEditor({ target, label, rows, loaded, signedIn, onSignIn, onClose }: Props) {
@@ -37,7 +42,8 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
   const removeAnnotation = useMutation(api.annotations.deleteVerseAnnotation);
   const mine = rows.find((row) => row.is_mine) ?? null;
   const [text, setText] = useState(mine?.body ?? "");
-  const [color, setColor] = useState<AnnotationHighlightColor>(highlightOf(mine));
+  const [color, setColor] = useState<AnnotationMarkColor>(highlightOf(mine));
+  const [underlineColor, setUnderlineColor] = useState<AnnotationMarkColor>(underlineColorOf(mine));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -53,6 +59,7 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
     setSeededFrom(savedVersion);
     setText(mine?.body ?? "");
     setColor(highlightOf(mine));
+    setUnderlineColor(underlineColorOf(mine));
   }
 
   useEffect(() => {
@@ -62,7 +69,8 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
 
   const close = () => dialogRef.current?.close();
   const highlightColor = color === "none" ? undefined : color;
-  const canSave = loaded && !saving && annotationProblem(text, highlightColor) === null;
+  const underline = underlineColor !== "none";
+  const canSave = loaded && !saving && annotationProblem(text, highlightColor, underline) === null;
 
   async function onSave() {
     if (!canSave) return;
@@ -74,6 +82,8 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
         verse: target.verse,
         body: text,
         highlightColor,
+        underline,
+        underlineColor: underlineColor === "none" ? undefined : underlineColor,
       });
       close();
     } catch {
@@ -120,7 +130,7 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
               <div key={row.id} className="rounded border surface-card px-2 py-1.5">
                 <div className="text-[11px] text-foreground/60">{row.is_mine ? "You" : "Saved note"}</div>
                 <div className="mt-0.5 whitespace-pre-wrap">
-                  {row.body || <span className="text-foreground/60">Highlight only</span>}
+                  {row.body || <span className="text-foreground/60">{annotationSummary(row)}</span>}
                 </div>
               </div>
             ))}
@@ -147,32 +157,24 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
               aria-label="Note"
               className="w-full rounded-md border surface-card-soft bg-transparent px-3 py-2 text-sm"
             />
-            <div className="space-y-1">
-              <div className="text-sm text-foreground/70">Highlight</div>
-              <div className="flex flex-wrap items-center gap-2">
-                {ANNOTATION_HIGHLIGHT_OPTIONS.map((option) => {
-                  const active = color === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setColor(option.value);
-                        setDirty(true);
-                      }}
-                      disabled={!loaded}
-                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-60 ${
-                        active ? "border-foreground bg-foreground text-background" : "surface-button"
-                      }`}
-                      aria-pressed={active}
-                    >
-                      <span className={`h-3 w-3 rounded-full ${option.swatchClass}`} />
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <MarkColorChoice
+              kind="highlight"
+              value={color}
+              disabled={!loaded}
+              onChange={(next) => {
+                setColor(next);
+                setDirty(true);
+              }}
+            />
+            <MarkColorChoice
+              kind="underline"
+              value={underlineColor}
+              disabled={!loaded}
+              onChange={(next) => {
+                setUnderlineColor(next);
+                setDirty(true);
+              }}
+            />
             {!loaded ? <p className="text-sm text-foreground/70">Loading your annotations…</p> : null}
             {error ? (
               <p role="alert" className="text-sm text-red-700 dark:text-red-300">
@@ -207,5 +209,56 @@ export default function VerseAnnotationEditor({ target, label, rows, loaded, sig
         )}
       </div>
     </dialog>
+  );
+}
+
+const NONE_SWATCH = "h-3 w-3 rounded-full border border-[color:var(--surface-border)]";
+
+/** One mark's color (or none), as a row of pressable choices, each showing how the mark looks. */
+function MarkColorChoice({
+  kind,
+  value,
+  disabled,
+  onChange,
+}: {
+  kind: MarkKind;
+  value: AnnotationMarkColor;
+  disabled: boolean;
+  onChange: (color: AnnotationMarkColor) => void;
+}) {
+  const title = kind === "highlight" ? "Highlight" : "Underline";
+  const labelId = useId();
+  const options: Array<{ value: AnnotationMarkColor; label: string }> = [{ value: "none", label: "None" }, ...MARK_COLOR_OPTIONS];
+  return (
+    <div className="space-y-1">
+      <div id={labelId} className="text-sm text-foreground/70">
+        {title}
+      </div>
+      <div role="group" aria-labelledby={labelId} className="flex flex-wrap items-center gap-2">
+        {options.map((option) => {
+          const active = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              disabled={disabled}
+              aria-label={option.value === "none" ? `No ${kind}` : `${option.label} ${kind}`}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-60 ${
+                active ? "border-foreground bg-foreground/[0.06] ring-1 ring-foreground" : "surface-button"
+              }`}
+              aria-pressed={active}
+            >
+              {option.value === "none" ? (
+                <span className={NONE_SWATCH} aria-hidden="true" />
+              ) : (
+                <MarkSample preset={{ kind, color: option.value }} />
+              )}
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

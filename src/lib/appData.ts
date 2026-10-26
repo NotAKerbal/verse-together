@@ -1,4 +1,5 @@
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
+import type { MarkPreset } from "../../convex/annotationRules";
 
 export type InsightBlockType = "scripture" | "text" | "quote" | "dictionary";
 export type InsightVisibility = "private" | "friends" | "link" | "public";
@@ -157,7 +158,7 @@ export type JournalEntry =
       body: string;
       journal_date: string;
       source: NoteSource;
-      highlight_color: "yellow" | "blue" | "green" | "pink" | "purple" | null;
+      highlight_color: "red" | "yellow" | "blue" | "green" | "pink" | "purple" | null;
       read_only: true;
       author_label: string;
       created_at: string;
@@ -195,6 +196,8 @@ export type ReaderPreferences = {
   fontFamily: "serif" | "sans";
   comparisonView: "inline" | "sideBySide";
   textWidth?: "comfortable" | "wide" | "full";
+  /** Read-only here: saved by preferences.saveMarkPresets, never by saveReaderPreferences. */
+  markPresets?: MarkPreset[];
 };
 
 export type WatchedFeedEpisode = {
@@ -502,7 +505,7 @@ export async function getReaderPreferences(token?: string | null): Promise<Reade
   return await convexQuery("preferences:getReaderPreferences", {}, token ?? undefined);
 }
 
-export async function saveReaderPreferences(token: string, prefs: ReaderPreferences) {
+export async function saveReaderPreferences(token: string, prefs: Omit<ReaderPreferences, "markPresets">) {
   return await convexMutation("preferences:saveReaderPreferences", prefs, token);
 }
 

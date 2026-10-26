@@ -24,6 +24,7 @@ import type * as feedEpisodes from "../feedEpisodes.js";
 import type * as feedback from "../feedback.js";
 import type * as http from "../http.js";
 import type * as insights from "../insights.js";
+import type * as markValidators from "../markValidators.js";
 import type * as noteFolders from "../noteFolders.js";
 import type * as noteJournal from "../noteJournal.js";
 import type * as ownership from "../ownership.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   feedback: typeof feedback;
   http: typeof http;
   insights: typeof insights;
+  markValidators: typeof markValidators;
   noteFolders: typeof noteFolders;
   noteJournal: typeof noteJournal;
   ownership: typeof ownership;
