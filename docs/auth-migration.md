@@ -551,8 +551,10 @@ Development configuration is scoped as follows:
   URLs and provide the matching proxy secret. Other Preview branches and Production do not inherit them.
 * The Google OAuth client must allow
   `https://scripture-sharing-dev.vercel.app/api/auth/callback/google` before switching the dev aliases.
-* Build the frontend first, then deploy the reviewed Convex functions explicitly to this development
-  deployment and switch the development aliases. The repo build command does not deploy Convex.
+* This rollout built the frontend first, then explicitly deployed the reviewed Convex functions to
+  development and switched the development aliases. For subsequent releases, see
+  [automatic deployment setup](convex-deployment.md): Vercel uses a guarded combined build after
+  per-environment activation; local `npm run build` still does not deploy Convex.
 * Existing Clerk sessions will require Google sign-in. Existing content is retained under its original
   owner IDs; accessing legacy content still requires an explicit verified mapping from §3. No Clerk
   accounts or content are automatically linked by email during deployment.

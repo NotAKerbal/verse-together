@@ -9,6 +9,8 @@
     "dev": "portless run next dev --webpack",
     "dev:local": "next dev --webpack",
     "build": "next build --turbopack",
+    "build:vercel": "node scripts/vercel-build.mjs",
+    "test:deploy": "node --test scripts/vercel-build.test.mjs",
     "start": "next start",
     "lint": "eslint",
     "test:cfm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/comeFollowMe.test.mjs src/lib/cfm/cfmGuide.test.mjs src/lib/cfm/verseResources.test.mjs src/features/comeFollowMe/scrollSync.test.mjs src/features/comeFollowMe/readerDock.test.mjs src/features/comeFollowMe/scriptureAnnotations.test.mjs src/features/annotations/verseAnnotations.test.mjs src/features/comeFollowMe/guideAnchors.test.mjs src/features/comeFollowMe/companionPanes.test.mjs src/features/comeFollowMe/passagePreview.test.mjs src/features/comeFollowMe/lessons.test.mjs",
