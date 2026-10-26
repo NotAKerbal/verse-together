@@ -288,7 +288,6 @@
 .guideLink:focus-visible,
 .backToGuide:focus-visible,
 .verseNumber[role="button"]:focus-visible,
-.annotateChip:focus-visible,
 .passageClose:focus-visible,
 .passageAction:focus-visible,
 .passageChapterLink:focus-visible,
@@ -605,29 +604,71 @@
   }
 }
 
-/* The Annotate button beside a text selection in the scripture pane (placed by useScriptureAnnotations). */
-.annotateChip {
-  position: fixed;
-  z-index: 40;
-  display: inline-flex;
-  align-items: center;
-  height: 2.25rem;
-  padding: 0 0.85rem;
-  overflow: hidden;
-  border: 1px solid var(--cfm-rule-strong);
-  border-radius: 999px;
-  background: var(--cfm-panel);
-  box-shadow: var(--surface-shadow-soft);
-  font-family: var(--cfm-sans);
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--cfm-ink);
+/* The scripture pane's and the guide's selection menus (VerseActionBar, fixed to the viewport): no box of their own. */
+.selectionMenu {
+  display: contents;
 }
 
-.annotateChip:hover {
-  color: var(--cfm-rubric);
+/* The saved guide passages a selection overlaps, in the Annotate panel (useGuideHighlights). */
+.savedPassages {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.savedPassage {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+
+.savedPassage:hover:not([aria-current="true"]) {
+  background: var(--surface-card-soft);
+}
+
+.savedPassage:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 2px;
+}
+
+.savedPassage[aria-current="true"] {
+  border-color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--foreground);
+  cursor: default;
+}
+
+.savedPassageMarks {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+}
+
+.savedPassageText {
+  display: grid;
+  min-width: 0;
+}
+
+.savedPassageQuote {
+  overflow: hidden;
+  font-family: var(--cfm-serif, serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.savedPassageSummary {
+  color: var(--foreground-soft);
+  font-size: 11px;
 }
 
 .guideLink {

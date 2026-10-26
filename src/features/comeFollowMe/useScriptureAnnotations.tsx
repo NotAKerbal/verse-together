@@ -1,131 +1,157 @@
 "use client";
 
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { useQueries } from "convex/react";
+import VerseActionBar, { type VerseActionAnchorRect } from "@/components/VerseActionBar";
 import { useAuth } from "@/lib/auth";
+import { getDefaultPreferences, readLocalPreferences } from "@/lib/preferences";
 import { useDeviceStudy } from "../notes/useDeviceStudy";
 import { deviceChapterAnnotations } from "../annotations/useChapterAnnotations";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
 import VerseMarkedText from "@/features/annotations/VerseMarkedText";
-import { annotationChapter, highlightOf, underlineColorOf } from "@/features/annotations/verseAnnotations";
+import { useVerseQuickMarks } from "@/features/annotations/useVerseQuickMarks";
+import {
+  annotationChapter,
+  highlightOf,
+  selectionMarks,
+  underlineColorOf,
+  type VerseAnnotation,
+} from "@/features/annotations/verseAnnotations";
 import { api } from "../../../convex/_generated/api";
-import { collectChapterAnnotations, selectionVerse, verseKey, type VerseKey } from "./scriptureAnnotations";
+import {
+  collectChapterAnnotations,
+  formatScriptureSelection,
+  selectedScriptureVerses,
+  selectionMarkWrites,
+  verseKey,
+  type VerseKey,
+} from "./scriptureAnnotations";
 import styles from "./studyCompanion.module.css";
+import { useHeldSelection } from "./useHeldSelection";
 
 type Book = { label: string; slug: string; volume: string };
 
-/** Where the selection's Annotate button sits (viewport px), and which verse it annotates. */
-type Chip = VerseKey & { top: number; right: number };
+/** A text selection in the scripture pane: the verses it covers (in reading order), its text, and where it is. */
+type ScriptureSelection = { verses: VerseKey[]; text: string; anchor: VerseActionAnchorRect };
 
-const CHIP_HEIGHT = 36;
-const CHIP_MAX_WIDTH = 240;
-const CHIP_GAP = 8;
-/** Touch browsers clear a selection as a tap on the button begins; keep the button long enough to take the tap. */
-const CHIP_LINGER_MS = 400;
+const NO_VERSES: VerseKey[] = [];
 
 const VERSE_BUTTON = "[data-annotate-verse]";
 
-function sameChip(a: Chip | null, b: Chip | null) {
-  return a === b || (!!a && !!b && a.chapter === b.chapter && a.verse === b.verse && a.top === b.top && a.right === b.right);
+/** Whether a range selects any text inside an element (not just its edge, as a drag from a verse's end does). */
+function selectsTextIn(range: Range, element: Element) {
+  if (!range.intersectsNode(element)) return false;
+  const part = document.createRange();
+  part.selectNodeContents(element);
+  if (range.compareBoundaryPoints(Range.START_TO_START, part) > 0) part.setStart(range.startContainer, range.startOffset);
+  if (range.compareBoundaryPoints(Range.END_TO_END, part) < 0) part.setEnd(range.endContainer, range.endOffset);
+  return part.toString().trim() !== "";
+}
+
+function readSelection(root: HTMLElement, range: Range, slug: string): ScriptureSelection | null {
+  // Only a selection wholly inside the pane: one reaching into the guide or the page is not about verses.
+  if (!root.contains(range.commonAncestorContainer)) return null;
+  const text = range.toString().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const ids = function* () {
+    for (const li of root.querySelectorAll<HTMLElement>("li[id]")) if (selectsTextIn(range, li)) yield li.id;
+  };
+  const verses = selectedScriptureVerses(ids(), slug);
+  const rect = Array.from(range.getClientRects()).find((each) => each.width > 0 || each.height > 0);
+  if (!verses.length || !rect) return null;
+  const { top, left, right, bottom, width, height } = rect;
+  return { verses, text, anchor: { top, left, right, bottom, width, height } };
+}
+
+function sameSelection(a: ScriptureSelection, b: ScriptureSelection) {
+  if (a === b) return true;
+  if (a.text !== b.text || a.verses.length !== b.verses.length) return false;
+  const anchorKeys = ["top", "left", "width", "height"] as const;
+  return (
+    a.verses.every((verse, index) => verse.chapter === b.verses[index].chapter && verse.verse === b.verses[index].verse) &&
+    anchorKeys.every((key) => a.anchor[key] === b.anchor[key])
+  );
 }
 
 /**
- * An Annotate button beside a text selection in the scripture pane, for the verse the selection starts in.
- * Its own component, so following a selection while the panes scroll re-renders only this button.
+ * The selection menu (the standard reader's VerseActionBar) beside a text selection in the scripture pane: the
+ * reader's quick marks for every selected verse, across a chapter break too, the Annotate panel (any style
+ * and color, and the full note editor on the first selected verse), and Copy. Insights and Resources are the
+ * standard reader's and aren't offered here. Its own component, so following a selection re-renders only the menu.
  */
-function SelectionAnnotateButton({
+function ScriptureSelectionMenu({
   doc,
   book,
-  onOpen,
+  rows,
+  loaded,
+  onNote,
 }: {
   doc: RefObject<HTMLElement | null>;
   book: Book;
-  onOpen: (verse: VerseKey) => void;
+  rows: ReadonlyMap<string, VerseAnnotation[]>;
+  loaded: ReadonlySet<number>;
+  onNote: (verse: VerseKey) => void;
 }) {
-  const [chip, setChip] = useState<Chip | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Until the account's presets load, this device's copy of them (the menu shows only after a selection, in the browser).
+  const [fallbackPresets] = useState(() => (readLocalPreferences() ?? getDefaultPreferences()).markPresets);
+  const contains = useCallback((node: Node) => !!doc.current?.contains(node), [doc]);
+  const read = useCallback(
+    (range: Range) => (doc.current ? readSelection(doc.current, range, book.slug) : null),
+    [doc, book.slug]
+  );
+  const { selection, clear } = useHeldSelection({ menuRef, contains, read, same: sameSelection }, book.slug);
 
-  useEffect(() => {
-    let frame = 0;
-    let hideTimer = 0;
-    const hide = () => {
-      if (hideTimer) return;
-      hideTimer = window.setTimeout(() => {
-        hideTimer = 0;
-        setChip(null);
-      }, CHIP_LINGER_MS);
-    };
-    const measure = () => {
-      frame = 0;
-      const root = doc.current;
-      const selection = document.getSelection();
-      const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
-      // Only a selection wholly inside the pane: one reaching into the guide or the page is not about a verse.
-      if (!root || !range || !root.contains(range.commonAncestorContainer) || !range.toString().trim()) {
-        hide();
-        return;
-      }
-      const startNode = range.startContainer;
-      const startElement = startNode instanceof Element ? startNode : startNode.parentElement;
-      const startVerse = startElement?.closest<HTMLElement>("li[id]");
-      const touched = function* () {
-        for (const li of root.querySelectorAll<HTMLElement>("li[id]")) if (range.intersectsNode(li)) yield li.id;
-      };
-      const verse = selectionVerse(startVerse && root.contains(startVerse) ? startVerse.id : null, touched(), book.slug);
-      const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
-      const last = rects[rects.length - 1];
-      if (!verse || !last) {
-        hide();
-        return;
-      }
-      window.clearTimeout(hideTimer);
-      hideTimer = 0;
-      // Below the selection's end, else above its start; right-aligned to its end and kept on screen.
-      const below = last.bottom + CHIP_GAP;
-      const top =
-        below + CHIP_HEIGHT <= window.innerHeight - CHIP_GAP ? below : Math.max(CHIP_GAP, rects[0].top - CHIP_GAP - CHIP_HEIGHT);
-      const right = Math.min(
-        Math.max(CHIP_GAP, window.innerWidth - last.right),
-        Math.max(CHIP_GAP, window.innerWidth - CHIP_GAP - CHIP_MAX_WIDTH)
-      );
-      const next = { ...verse, top: Math.round(top), right: Math.round(right) };
-      setChip((previous) => (sameChip(previous, next) ? previous : next));
-    };
-    const schedule = () => {
-      if (!frame) frame = window.requestAnimationFrame(measure);
-    };
-    document.addEventListener("selectionchange", schedule);
-    // Any scroller moving (the page, a pane, the strip) carries the selection with it.
-    window.addEventListener("scroll", schedule, { capture: true, passive: true });
-    window.addEventListener("resize", schedule);
-    return () => {
-      document.removeEventListener("selectionchange", schedule);
-      window.removeEventListener("scroll", schedule, { capture: true });
-      window.removeEventListener("resize", schedule);
-      if (frame) window.cancelAnimationFrame(frame);
-      window.clearTimeout(hideTimer);
-    };
-  }, [book.slug, doc]);
+  const verses = selection?.verses ?? NO_VERSES;
+  const mine = (verse: VerseKey) => rows.get(verseKey(verse.chapter, verse.verse))?.find((row) => row.is_mine);
+  const marks = selectionMarks(verses.map(mine));
+  const writes = selectionMarkWrites(book, verses);
+  const { quickMarks, pending } = useVerseQuickMarks({
+    selectionKey: verses.map((verse) => verseKey(verse.chapter, verse.verse)).join(","),
+    marks,
+    writes,
+    loaded: verses.length > 0 && verses.every((verse) => loaded.has(verse.chapter)),
+    fallbackPresets,
+  });
 
-  if (!chip) return null;
+  const noteVerse = verses[0] ?? null;
+  const noteLabel =
+    verses.length > 1 && noteVerse
+      ? `Note on ${writes.length > 1 ? `${noteVerse.chapter}:${noteVerse.verse}` : `verse ${noteVerse.verse}`}`
+      : noteVerse && mine(noteVerse)?.body
+        ? "Edit your note"
+        : "Write a note";
+
   return (
-    <button
-      type="button"
-      className={styles.annotateChip}
-      style={{ top: chip.top, right: chip.right, maxWidth: CHIP_MAX_WIDTH }}
-      // Keep the selection while pressing the button.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => onOpen({ chapter: chip.chapter, verse: chip.verse })}
-    >
-      Annotate {book.label} {chip.chapter}:{chip.verse}
-    </button>
+    <div ref={menuRef} className={styles.selectionMenu}>
+      <VerseActionBar
+        visible={!!selection}
+        anchorRect={selection?.anchor ?? null}
+        hasSelection={!!selection}
+        selectionReference={formatScriptureSelection(book.label, verses)}
+        selectedText={selection?.text ?? ""}
+        quickMarks={quickMarks}
+        annotationTitle="Annotate"
+        annotationDescription="Highlight, underline, or note"
+        noteLabel={noteLabel}
+        noteDescription={pending ? "Saving marks…" : "Note and marks together"}
+        // The optimistic row may not have a server id yet: the full editor waits for the save.
+        annotationDisabled={pending}
+        showInsightAction={false}
+        onClear={clear}
+        onAnnotation={() => {
+          if (noteVerse && !pending) onNote(noteVerse);
+        }}
+      />
+    </div>
   );
 }
 
 /**
  * The viewer's private verse annotations (notes, highlights, underlines) in the Come, Follow Me scripture
- * pane: the same rows, identities, editor, and text marks as the standard chapter reader. A verse is
- * annotated from its verse number (a button: click, tap, or Enter/Space, with the arrow keys moving between
- * verses) or from a text selection in the pane (an Annotate button beside it). A highlight or underline marks
+ * pane: the same rows, identities, editor, text marks, and selection menu as the standard chapter reader. A
+ * verse is annotated from its verse number (a button: click, tap, or Enter/Space, with the arrow keys moving
+ * between verses), and selected verses from the selection menu (quick marks, or the full editor). A highlight or underline marks
  * the verse's words (verseText), and any annotation marks the verse's edge; nothing is added to the text flow.
  */
 export function useScriptureAnnotations(book: Book, chapters: readonly number[], doc: RefObject<HTMLElement | null>) {
@@ -209,7 +235,7 @@ export function useScriptureAnnotations(book: Book, chapters: readonly number[],
       onClose={() => setEditing(null)}
     />
   ) : (
-    <SelectionAnnotateButton doc={doc} book={book} onOpen={setEditing} />
+    <ScriptureSelectionMenu doc={doc} book={book} rows={rows} loaded={loaded} onNote={setEditing} />
   );
 
   return { verseAttributes, verseNumberProps, verseText, layer };

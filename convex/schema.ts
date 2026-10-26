@@ -338,8 +338,9 @@ export default defineSchema({
     .index("by_chapter_verse", ["volume", "book", "chapter", "verse"])
     .index("by_user_verse", ["clerkId", "volume", "book", "chapter", "verse"]),
 
-  // A private highlight on a span of a Come, Follow Me guide's prose (see convex/annotationRules.ts for the
-  // anchor). Separate from verseAnnotations: guide text is not a verse.
+  // A private annotation on a span of a Come, Follow Me guide's prose (see convex/annotationRules.ts for the
+  // anchor): any mix of a highlight, an underline, and a note, like a verse annotation. Separate from
+  // verseAnnotations: guide text is not a verse. Named for the highlight that was all it held at first.
   guideHighlights: defineTable({
     clerkId: v.string(),
     guide: v.string(),
@@ -351,13 +352,13 @@ export default defineSchema({
     exact: v.string(),
     prefix: v.string(),
     suffix: v.string(),
-    highlightColor: v.union(
-      v.literal("yellow"),
-      v.literal("blue"),
-      v.literal("green"),
-      v.literal("pink"),
-      v.literal("purple")
-    ),
+    // Every row from before guide underlines and notes has one of the first five colors; absent when the span
+    // is underlined or has a note but isn't highlighted.
+    highlightColor: v.optional(markColorValidator),
+    // Absent whenever the span isn't underlined.
+    underlineColor: v.optional(markColorValidator),
+    // The private note (normalized as a verse note is); absent when there is none.
+    body: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_user_guide", ["clerkId", "guide"]),

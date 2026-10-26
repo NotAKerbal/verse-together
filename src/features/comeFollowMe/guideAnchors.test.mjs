@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { guideHighlightProblem, sameGuideAnchor } from "../../../convex/annotationRules.ts";
-import { describeSpan, isGuideHighlight, locate, resolveAnchor } from "./guideAnchors.ts";
+import {
+  applyGuidePatch,
+  guideHighlightProblem,
+  guidePatchProblem,
+  mergeGuideImport,
+  sameGuideAnchor,
+} from "../../../convex/annotationRules.ts";
+import { presetState, quickMarkPatch } from "../annotations/verseAnnotations.ts";
+import {
+  describeSpan,
+  guideSelectionMarks,
+  guideSelectionTargets,
+  locate,
+  readGuideHighlight,
+  resolveAnchor,
+  withGuideAnnotation,
+} from "./guideAnchors.ts";
 
 /** A part's text index from [blockId | null, text] pieces, the way the live guide's text nodes join up. */
 function build(pieces) {
@@ -234,24 +249,163 @@ test("the server accepts only well-formed guide anchors and treats the same span
   assert.equal(sameGuideAnchor(valid, { ...valid, part: "introduction" }), false);
 });
 
-test("query rows are checked before use", () => {
-  const row = {
-    id: "h1",
-    guide: "2026-10-05",
-    part: "introduction",
-    startBlock: "",
-    startOffset: 0,
-    endBlock: "",
-    endOffset: 4,
-    exact: "Text",
-    prefix: "",
-    suffix: " more",
-    highlightColor: "green",
-    updatedAt: "2026-10-05T00:00:00.000Z",
+const savedRow = {
+  id: "h1",
+  guide: "2026-10-05",
+  part: "introduction",
+  startBlock: "",
+  startOffset: 0,
+  endBlock: "",
+  endOffset: 4,
+  exact: "Text",
+  prefix: "",
+  suffix: " more",
+  highlightColor: "green",
+  updatedAt: "2026-10-05T00:00:00.000Z",
+};
+
+test("query and device rows are checked before use, and old highlight-only rows still read", () => {
+  // A row saved before guide underlines and notes: a highlight alone, no other fields at all.
+  assert.deepEqual(readGuideHighlight(savedRow), { ...savedRow, underlineColor: null, body: "" });
+  // The new shape, with any shared color (red included), an underline, a note, or nothing but a note.
+  assert.deepEqual(readGuideHighlight({ ...savedRow, highlightColor: "red", underlineColor: "blue", body: "Why" }), {
+    ...savedRow,
+    highlightColor: "red",
+    underlineColor: "blue",
+    body: "Why",
+  });
+  assert.equal(readGuideHighlight({ ...savedRow, highlightColor: null, underlineColor: null, body: "A note" })?.body, "A note");
+  assert.equal(readGuideHighlight({ ...savedRow, highlightColor: null, underlineColor: "purple" })?.underlineColor, "purple");
+  // Nothing to show, or not a row this client understands.
+  assert.equal(readGuideHighlight({ ...savedRow, highlightColor: null }), null);
+  assert.equal(readGuideHighlight({ ...savedRow, highlightColor: "orange" }), null);
+  assert.equal(readGuideHighlight({ ...savedRow, underlineColor: 3 }), null);
+  assert.equal(readGuideHighlight({ ...savedRow, body: 4 }), null);
+  assert.equal(readGuideHighlight({ ...savedRow, part: "scripture" }), null);
+  assert.equal(readGuideHighlight({ ...savedRow, exact: undefined }), null);
+  assert.equal(readGuideHighlight(null), null);
+});
+
+test("a described span reports its trimmed boundaries, which resolve back to exactly the selected text", () => {
+  const index = build([["a", "  Comfort ye, "], ["b", "my people.  "]]);
+  const from = 0;
+  const to = index.text.length;
+  const described = describeSpan(index, from, to);
+  assert.equal(described.ok, true);
+  assert.equal(index.text.slice(described.start, described.end), "Comfort ye, my people.");
+  assert.equal(described.anchor.exact, "Comfort ye, my people.");
+  assert.deepEqual(resolveAnchor(index, described.anchor), { start: described.start, end: described.end });
+  // Spans ending at a block boundary stay in their block, starting one stays in the next.
+  const second = describeSpan(index, index.text.indexOf("my"), index.text.length);
+  assert.equal(second.anchor.startBlock, "b");
+  assert.equal(second.anchor.startOffset, 0);
+});
+
+function placed(id, start, end, fields = {}) {
+  return {
+    row: { ...savedRow, id, part: "reader", highlightColor: null, underlineColor: null, body: "", ...fields },
+    start,
+    end,
   };
-  assert.equal(isGuideHighlight(row), true);
-  assert.equal(isGuideHighlight({ ...row, highlightColor: "red" }), false);
-  assert.equal(isGuideHighlight({ ...row, part: "scripture" }), false);
-  assert.equal(isGuideHighlight({ ...row, exact: undefined }), false);
-  assert.equal(isGuideHighlight(null), false);
+}
+
+test("a selection edits only the saved span that is exactly it; overlapping spans are listed, never expanded into", () => {
+  const passage = placed("passage", 0, 100, { highlightColor: "yellow", body: "Whole passage note" });
+  const phrase = placed("phrase", 20, 30, { underlineColor: "red" });
+  const elsewhere = placed("elsewhere", 200, 220, { highlightColor: "blue" });
+  const intro = placed("intro", 20, 30, { highlightColor: "green" });
+  intro.row.part = "introduction";
+  const all = [passage, phrase, elsewhere, intro];
+
+  // A phrase inside a long highlighted passage: the passage overlaps, nothing is the selection itself.
+  let targets = guideSelectionTargets(all, "reader", 40, 50);
+  assert.equal(targets.exact, null);
+  assert.deepEqual(targets.overlapping.map((item) => item.row.id), ["passage"]);
+  // Exactly a saved span: that one is edited; the passage around it only overlaps.
+  targets = guideSelectionTargets(all, "reader", 20, 30);
+  assert.equal(targets.exact.row.id, "phrase");
+  assert.deepEqual(targets.overlapping.map((item) => item.row.id), ["passage"]);
+  // Touching end to end is not overlapping; another part never counts.
+  targets = guideSelectionTargets(all, "reader", 100, 200);
+  assert.equal(targets.exact, null);
+  assert.deepEqual(targets.overlapping, []);
+  // Two saves on the same text (older clients): the most recent is edited, the other is listed.
+  const older = placed("older", 20, 30, { highlightColor: "pink" });
+  older.row.updatedAt = "2026-01-01T00:00:00.000Z";
+  const newer = placed("newer", 20, 30, { highlightColor: "purple" });
+  newer.row.updatedAt = "2026-12-01T00:00:00.000Z";
+  targets = guideSelectionTargets([older, newer], "reader", 20, 30);
+  assert.equal(targets.exact.row.id, "newer");
+  assert.deepEqual(targets.overlapping.map((item) => item.row.id), ["older"]);
+});
+
+test("mark buttons: on for the selected span's own marks, partly on for an overlapping span's, and a press only changes the selected span", () => {
+  const exact = { ...savedRow, highlightColor: "yellow", underlineColor: null, body: "Keep" };
+  const around = { ...savedRow, id: "around", highlightColor: "blue", underlineColor: "red", body: "" };
+  const marks = guideSelectionMarks(exact, [around]);
+  assert.equal(presetState({ kind: "highlight", color: "yellow" }, marks), true);
+  assert.equal(presetState({ kind: "highlight", color: "blue" }, marks), "mixed");
+  assert.equal(presetState({ kind: "underline", color: "red" }, marks), "mixed");
+  assert.equal(presetState({ kind: "underline", color: "green" }, marks), false);
+  // Yellow is on: pressing it removes it. Red underline is only on the overlapping span: pressing puts it on this one.
+  assert.deepEqual(quickMarkPatch({ kind: "highlight", color: "yellow" }, marks), { highlightColor: null });
+  assert.deepEqual(quickMarkPatch({ kind: "underline", color: "red" }, marks), { underlineColor: "red" });
+  // No saved span at the selection, nothing around it.
+  const none = guideSelectionMarks(null, []);
+  assert.deepEqual(none, { highlight: "none", underline: "none", highlights: [], underlines: [] });
+});
+
+test("marks toggle independently, never erase the note or the other mark, and an emptied span is removed", () => {
+  let next = applyGuidePatch(null, { underlineColor: "red" });
+  assert.deepEqual(next, { body: "", highlightColor: undefined, underlineColor: "red", keep: true });
+  next = applyGuidePatch({ body: "My note", highlightColor: "yellow", underlineColor: null }, { underlineColor: "green" });
+  assert.deepEqual(next, { body: "My note", highlightColor: "yellow", underlineColor: "green", keep: true });
+  next = applyGuidePatch({ body: "My note", highlightColor: "yellow", underlineColor: "green" }, { highlightColor: null });
+  assert.deepEqual(next, { body: "My note", highlightColor: undefined, underlineColor: "green", keep: true });
+  // A note kept exactly as saved (an imported note's paragraph break included) when only a mark changes.
+  assert.equal(applyGuidePatch({ body: "One\n\nTwo", highlightColor: "red" }, { highlightColor: "blue" }).body, "One\n\nTwo");
+  // The editor names all three; a note alone is kept; nothing at all is not.
+  assert.equal(applyGuidePatch({ highlightColor: "red" }, { body: "  Only   a note ", highlightColor: null, underlineColor: null }).body, "Only a note");
+  assert.equal(applyGuidePatch({ highlightColor: "red" }, { highlightColor: null }).keep, false);
+  assert.equal(applyGuidePatch({ body: "", underlineColor: "red" }, { underlineColor: null }).keep, false);
+  assert.equal(guidePatchProblem({}), "Choose a highlight, an underline, or a note");
+  assert.equal(guidePatchProblem({ body: "x".repeat(1201) }), "Annotation text is too long");
+  assert.equal(guidePatchProblem({ highlightColor: null }), null);
+});
+
+test("an optimistic change updates the right span, adds a pending one, and removes an emptied one", () => {
+  const anchor = { guide: savedRow.guide, part: "introduction", startBlock: "", startOffset: 0, endBlock: "", endOffset: 4, exact: "Text", prefix: "", suffix: " more" };
+  const legacy = readGuideHighlight(savedRow);
+  const other = { ...legacy, id: "h2", startOffset: 10, endOffset: 14, highlightColor: "pink" };
+  const now = "2026-10-26T00:00:00.000Z";
+  // By anchor: the legacy highlight gains an underline and keeps its green highlight.
+  let rows = withGuideAnnotation([legacy, other], anchor, { underlineColor: "red" }, now);
+  assert.deepEqual(rows[0], { ...legacy, underlineColor: "red", updatedAt: now });
+  assert.equal(rows[1], other);
+  // By id: whatever its stored anchor, only that span changes.
+  rows = withGuideAnnotation(rows, { ...anchor, startOffset: 99, highlightId: "h2" }, { body: "Note" }, now);
+  assert.equal(rows[1].body, "Note");
+  assert.equal(rows[1].highlightColor, "pink");
+  // A new span is a placeholder until the server answers.
+  const fresh = { ...anchor, startOffset: 20, endOffset: 24 };
+  rows = withGuideAnnotation(rows, fresh, { highlightColor: "red" }, now);
+  assert.equal(rows.length, 3);
+  assert.ok(rows[2].id.startsWith("pending:"));
+  assert.deepEqual([rows[2].highlightColor, rows[2].underlineColor, rows[2].body], ["red", null, ""]);
+  // Taking off the last mark removes the span.
+  rows = withGuideAnnotation(rows, fresh, { highlightColor: null }, now);
+  assert.equal(rows.length, 2);
+});
+
+test("a device import keeps the account's marks, adds missing ones, and appends a different note once", () => {
+  assert.deepEqual(
+    mergeGuideImport({ body: "", highlightColor: "blue" }, { highlightColor: "yellow", underlineColor: "red", body: "Device" }),
+    { body: "Device", highlightColor: "blue", underlineColor: "red" }
+  );
+  assert.deepEqual(mergeGuideImport({ body: "Account", underlineColor: "green" }, { body: "Account" }), {
+    body: "Account",
+    highlightColor: undefined,
+    underlineColor: "green",
+  });
+  assert.equal(mergeGuideImport({ body: "Account" }, { body: "Device" }).body, "Account\n\nDevice");
 });

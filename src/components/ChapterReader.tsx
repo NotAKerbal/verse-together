@@ -5,9 +5,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import VerseResourcesPanel from "./VerseResourcesPanel";
-import VerseActionBar, { type VerseActionAnchorRect, type VerseQuickMarks } from "./VerseActionBar";
+import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import {
   ChapterHeader,
@@ -35,9 +35,7 @@ import {
   savePreferences,
   hasSeenTapToActionsHint,
   setSeenTapToActionsHint,
-  writeLocalMarkPresets,
 } from "@/lib/preferences";
-import { readMarkPresets } from "../../convex/annotationRules";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/plans/useReadingProgress";
@@ -59,18 +57,14 @@ import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
 import { getBookLabel } from "@/features/plans/scriptureCatalog";
 import { useChapterAnnotations } from "@/features/annotations/useChapterAnnotations";
-import { deviceStudy } from "@/features/notes/deviceStudy";
+import { useVerseQuickMarks } from "@/features/annotations/useVerseQuickMarks";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
 import VerseMarkedText from "@/features/annotations/VerseMarkedText";
 import {
   annotationChapter,
   annotationHighlightClass,
   highlightOf,
-  quickMarkPatch,
   selectionMarks,
-  withVerseMarks,
-  type ChapterAnnotations,
-  type MarkPreset,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
 import { api } from "../../convex/_generated/api";
@@ -560,7 +554,7 @@ export default function ChapterReader({
     textReady ? overlayTranslations : NO_OVERLAYS
   );
   const overlayList = overlayTranslations.join(",");
-  const { user, getToken, promptSignIn } = useAuth();
+  const { user, getToken } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
   const readingLog = useMyReadingLog();
@@ -586,30 +580,6 @@ export default function ChapterReader({
   useTrackLastPosition(volume, book, chapter);
   // The account's annotations when signed in, else this device's (guests study without an account).
   const chapterAnnotationData = useChapterAnnotations(volume, book, chapter);
-  // Quick marks from the selection menu change only the named marks (never a note), and show at once.
-  const saveVerseMarks = useMutation(api.annotations.setVerseMarks).withOptimisticUpdate((store, args) => {
-    const query = { volume: args.volume, book: args.book, chapter: args.chapter };
-    const current = store.getQuery(api.annotations.getChapterAnnotations, query) as ChapterAnnotations | undefined;
-    if (!current) return;
-    store.setQuery(
-      api.annotations.getChapterAnnotations,
-      query,
-      withVerseMarks(current, args.verses, {
-        highlightColor: args.highlightColor,
-        underline: args.underline,
-        underlineColor: args.underlineColor,
-      }) as never
-    );
-  });
-  // The account's mark presets, live (a change in account settings shows here at once); until it loads, this
-  // device's copy from the last read.
-  const accountPreferences = useQuery(api.preferences.getReaderPreferences, convexReady ? {} : "skip");
-  const accountMarkPresets = accountPreferences?.markPresets;
-  useEffect(() => {
-    if (accountMarkPresets) writeLocalMarkPresets(accountMarkPresets);
-  }, [accountMarkPresets]);
-  const [quickMarkPending, setQuickMarkPending] = useState(0);
-  const [quickMarkError, setQuickMarkError] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
@@ -1000,56 +970,19 @@ export default function ChapterReader({
 
   const selectionVerses = selectionState?.selectedVerses;
   const selectedVerseNumbers = useMemo(() => (selectionVerses ?? []).map((verse) => verse.verse), [selectionVerses]);
-  const selectedVerseKey = selectedVerseNumbers.join(",");
   const selectedMarks = useMemo(
     () => selectionMarks(selectedVerseNumbers.map((verse) => myAnnotationByVerse.get(verse))),
     [selectedVerseNumbers, myAnnotationByVerse]
   );
-  // A failed quick mark's message belongs to the selection it was made on.
-  useEffect(() => {
-    setQuickMarkError(null);
-  }, [selectedVerseKey]);
-
-  async function onQuickMark(preset: MarkPreset) {
-    if (chapterAnnotationData === undefined || selectedVerseNumbers.length === 0) return;
-    const patch = quickMarkPatch(preset, selectedMarks);
-    // The same rows the chapter query reads and the full editor writes.
-    const target = annotationChapter(volume, book, chapter);
-    setQuickMarkError(null);
-    if (!user) {
-      // Guests mark on this device (written at once); signing in imports the marks to the account.
-      try {
-        deviceStudy.setVerseMarks(target, selectedVerseNumbers, patch);
-      } catch {
-        setQuickMarkError("Couldn't save that mark on this device. Allow browser storage and try again.");
-      }
-      return;
-    }
-    if (!convexReady) return;
-    setQuickMarkPending((count) => count + 1);
-    try {
-      await saveVerseMarks({ ...target, verses: selectedVerseNumbers, ...patch });
-    } catch {
-      setQuickMarkError("Couldn't save that mark. Try again.");
-    } finally {
-      setQuickMarkPending((count) => count - 1);
-    }
-  }
-
-  const quickMarks: VerseQuickMarks = {
-    // Presets are an account setting: guests (and an account with nothing saved yet) get the defaults.
-    presets: !user || accountPreferences === null ? readMarkPresets(null) : accountMarkPresets ?? prefs.markPresets,
+  const { quickMarks, pending: quickMarkPending } = useVerseQuickMarks({
+    selectionKey: selectedVerseNumbers.join(","),
     marks: selectedMarks,
-    status: (user && !convexReady) || chapterAnnotationData === undefined ? "loading" : "ready",
-    pending: quickMarkPending > 0,
-    error: quickMarkError,
-    onMark: (preset) => {
-      void onQuickMark(preset);
-    },
-    onSignIn: () => {
-      void promptSignIn();
-    },
-  };
+    // The same rows the chapter query reads and the full editor writes.
+    writes: [{ target: annotationChapter(volume, book, chapter), verses: selectedVerseNumbers }],
+    loaded: chapterAnnotationData !== undefined,
+    // Until the account's presets load, this device's copy from the last read.
+    fallbackPresets: prefs.markPresets,
+  });
   const noteVerse = selectedBounds?.start ?? null;
   const noteVerseHasNote = noteVerse !== null && !!myAnnotationByVerse.get(noteVerse)?.body;
   // The Annotate panel's note action, which opens the full editor on the first selected verse.
@@ -1064,7 +997,7 @@ export default function ChapterReader({
     if (!hasSelection) return;
     if (!selectedBounds) return;
     // The optimistic row may not have a server id yet. Wait before opening the full editor.
-    if (quickMarkPending > 0) return;
+    if (quickMarkPending) return;
     setAnnotationEditorVerse(selectedBounds.start);
   }
 
@@ -2001,8 +1934,8 @@ export default function ChapterReader({
         annotationTitle="Annotate"
         annotationDescription="Highlight, underline, or note"
         noteLabel={noteActionLabel}
-        noteDescription={quickMarkPending > 0 ? "Saving marks…" : "Note and marks together"}
-        annotationDisabled={quickMarkPending > 0}
+        noteDescription={quickMarkPending ? "Saving marks…" : "Note and marks together"}
+        annotationDisabled={quickMarkPending}
         showInsightAction={showInsightAction}
         showExplore={canExploreWord}
         targetLabel="Note"

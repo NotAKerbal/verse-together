@@ -23,8 +23,8 @@ export function annotationProblem(
 }
 
 /**
- * The colors a verse can be marked in, highlight or underline alike, in palette order. Red is the rubric
- * underline every underline had before underlines had colors. (Study-guide highlights keep their own palette.)
+ * The colors a verse or a span of study-guide prose can be marked in, highlight or underline alike, in palette
+ * order. Red is the rubric underline every underline had before underlines had colors.
  */
 export const MARK_COLORS = ["red", "yellow", "blue", "green", "pink", "purple"] as const;
 export type MarkColor = (typeof MARK_COLORS)[number];
@@ -290,6 +290,76 @@ export function guideHighlightProblem(input: GuideAnchorFields & { guide: string
     return "Invalid anchor";
   }
   return null;
+}
+
+/*
+  A saved guide span (a guideHighlights row, named for what it first held) is annotated like a verse: any mix of
+  a highlight, an underline (each in any MarkColor), and a private note. Rows from before underlines and notes
+  in the guide hold a highlight alone, in one of the first five colors; every field below is optional on them.
+*/
+
+/**
+ * A change to one guide span's annotation, leaving everything not named as it is (as VerseMarksPatch does for
+ * verses): a quick mark names one mark, and the full editor names all three.
+ *  - body: the note ("" removes it).
+ *  - highlightColor / underlineColor: a color, or null to remove that mark.
+ */
+export type GuideAnnotationPatch = {
+  body?: string;
+  highlightColor?: MarkColor | null;
+  underlineColor?: MarkColor | null;
+};
+
+export type GuideAnnotationFields = {
+  body?: string | null;
+  highlightColor?: MarkColor | null;
+  underlineColor?: MarkColor | null;
+};
+
+/** Why a change to a guide span's annotation can't be applied, or null if it can. */
+export function guidePatchProblem(patch: GuideAnnotationPatch): string | null {
+  if (patch.body === undefined && patch.highlightColor === undefined && patch.underlineColor === undefined) {
+    return "Choose a highlight, an underline, or a note";
+  }
+  if (patch.body !== undefined && normalizeAnnotationBody(patch.body).length > ANNOTATION_BODY_MAX) {
+    return "Annotation text is too long";
+  }
+  return null;
+}
+
+/**
+ * A guide span's annotation after a change: its note, highlight, and underline, and whether anything is left to
+ * keep (a span with no note and no mark is removed, as an empty verse annotation is).
+ */
+export function applyGuidePatch(
+  existing: GuideAnnotationFields | null | undefined,
+  patch: GuideAnnotationPatch
+): { body: string; highlightColor: MarkColor | undefined; underlineColor: MarkColor | undefined; keep: boolean } {
+  // An omitted note is left exactly as saved (an imported one keeps its paragraph break).
+  const body = patch.body === undefined ? existing?.body ?? "" : normalizeAnnotationBody(patch.body);
+  const highlightColor =
+    patch.highlightColor === undefined ? existing?.highlightColor ?? undefined : patch.highlightColor ?? undefined;
+  const underlineColor =
+    patch.underlineColor === undefined ? existing?.underlineColor ?? undefined : patch.underlineColor ?? undefined;
+  return { body, highlightColor, underlineColor, keep: !!body.trim() || !!highlightColor || !!underlineColor };
+}
+
+/**
+ * A device's guide annotation imported into the account's row on the same span: the account keeps any mark it
+ * already has (the device only adds missing ones), and a different device note is appended to the account's
+ * once (the import receipt makes a retry a no-op), as verse imports do.
+ */
+export function mergeGuideImport(
+  existing: GuideAnnotationFields,
+  incoming: GuideAnnotationFields
+): { body: string; highlightColor: MarkColor | undefined; underlineColor: MarkColor | undefined } {
+  const saved = normalizeAnnotationBody(existing.body ?? "");
+  const added = normalizeAnnotationBody(incoming.body ?? "");
+  return {
+    body: saved && added && saved !== added ? `${saved}\n\n${added}` : saved || added,
+    highlightColor: existing.highlightColor ?? incoming.highlightColor ?? undefined,
+    underlineColor: existing.underlineColor ?? incoming.underlineColor ?? undefined,
+  };
 }
 
 /** Whether two guide highlights anchor the same selected text (a save then updates rather than duplicates). */
