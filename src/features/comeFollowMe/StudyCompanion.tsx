@@ -214,11 +214,11 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
       {annotations.layer}
       {guideHighlights.layer}
       {preview.layer}
+      {/* The introduction and closing sections remain visible and share the scripture's reading width. */}
       {introductionHtml ? (
-        <details className={styles.guideOverview}>
-          <summary><Chevron /><span>Before you read<span className={styles.disclosureHint}>Historical background and this week&apos;s insights</span></span></summary>
-          <div ref={introRef} className={`${styles.guide} ${styles.overviewBody}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: introductionHtml }} />
-        </details>
+        <div className={styles.introduction}>
+          <div ref={introRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: introductionHtml }} />
+        </div>
       ) : null}
       <div ref={scriptureDocRef} className={styles.scriptureFirst} aria-label="Scripture with expandable context">
         <p className={styles.readerInvitation}>Read the scriptures. Open the context as you go.</p>
@@ -260,8 +260,12 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
           );
         })}
       </div>
-      <div className={styles.scriptureFirstFooter}>
-        {closingHtml ? <details className={styles.guideOverview}><summary><Chevron /><span>More from this guide<span className={styles.disclosureHint}>Connections, study questions, and sources</span></span></summary><div ref={closingRef} className={`${styles.guide} ${styles.closingGuide} ${styles.overviewBody}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: closingHtml }} /></details> : null}
+      <div className={styles.afterReader}>
+        {closingHtml ? (
+          <div className={styles.closing}>
+            <div ref={closingRef} className={`${styles.guide} ${styles.closingGuide}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: closingHtml }} />
+          </div>
+        ) : null}
         {footer}
       </div>
       {dock.slot ? createPortal(actions, dock.slot) : null}
