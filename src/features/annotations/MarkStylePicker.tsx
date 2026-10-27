@@ -3,7 +3,9 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { MARK_COLORS, MARK_KINDS, type MarkColor, type MarkKind } from "../../../convex/annotationRules";
 import MarkSample from "./MarkSample";
-import { MARK_COLOR_LABELS } from "./verseAnnotations";
+import { markColorLabel } from "./verseAnnotations";
+import CustomMarkColor from "./CustomMarkColor";
+import { customMarkStyle, isCustomMarkColor } from "./markColors";
 
 export type MarkStyle = { kind: MarkKind; color: MarkColor };
 
@@ -53,13 +55,14 @@ function onRadioKeyDown(event: KeyboardEvent<HTMLElement>) {
 
 /**
  * A visual choice of a mark's style: highlight or underline (each shown as it marks a letter), and one of the
- * six mark colors (swatches drawn as the chosen kind: a chip for a highlight, a rule for an underline). Two
+ * preset or custom colors (swatches drawn as the chosen kind: a chip for a highlight, a rule for an underline). Two
  * radio groups, so a screen reader hears "Underline, radio button, checked, 2 of 2".
  */
 export default function MarkStylePicker({ value, onChange, label, unavailable, disabled = false, keepSelection = false, className }: Props) {
   const reason = (style: MarkStyle) => unavailable?.(style) ?? null;
   const firstColor = (kind: MarkKind) => MARK_COLORS.find((color) => !reason({ kind, color })) ?? null;
   const onMouseDown = keepSelection ? preserveSelection : undefined;
+  const colors: readonly MarkColor[] = isCustomMarkColor(value.color) ? [...MARK_COLORS, value.color] : MARK_COLORS;
 
   function pickKind(kind: MarkKind) {
     if (disabled || kind === value.kind) return;
@@ -79,7 +82,7 @@ export default function MarkStylePicker({ value, onChange, label, unavailable, d
       <div className="mark-picker-kinds" role="radiogroup" aria-label={`${label} style`} aria-disabled={disabled || undefined} onKeyDown={onRadioKeyDown}>
         {MARK_KINDS.map((kind) => {
           const checked = kind === value.kind;
-          const blocked = !checked && !firstColor(kind);
+          const blocked = !checked && !!reason({ kind, color: value.color }) && !firstColor(kind);
           return (
             <button
               key={kind}
@@ -100,7 +103,7 @@ export default function MarkStylePicker({ value, onChange, label, unavailable, d
         })}
       </div>
       <div className="mark-picker-colors" role="radiogroup" aria-label={`${label} color`} aria-disabled={disabled || undefined} onKeyDown={onRadioKeyDown}>
-        {MARK_COLORS.map((color) => {
+        {colors.map((color) => {
           const checked = color === value.color;
           const why = checked ? null : reason({ kind: value.kind, color });
           return (
@@ -110,11 +113,12 @@ export default function MarkStylePicker({ value, onChange, label, unavailable, d
               role="radio"
               className="mark-picker-color"
               data-color={color}
-              aria-label={why ? `${MARK_COLOR_LABELS[color]}, ${why}` : MARK_COLOR_LABELS[color]}
+              style={customMarkStyle(color)}
+              aria-label={why ? `${markColorLabel(color)}, ${why}` : markColorLabel(color)}
               aria-checked={checked}
               aria-disabled={disabled || !!why || undefined}
               tabIndex={checked ? 0 : -1}
-              title={why ? `${MARK_COLOR_LABELS[color]}: ${why}` : MARK_COLOR_LABELS[color]}
+              title={why ? `${markColorLabel(color)}: ${why}` : markColorLabel(color)}
               onMouseDown={onMouseDown}
               onClick={() => pickColor(color)}
             >
@@ -123,6 +127,7 @@ export default function MarkStylePicker({ value, onChange, label, unavailable, d
           );
         })}
       </div>
+      <CustomMarkColor value={value.color} onChange={pickColor} label={label} disabled={disabled} keepSelection={keepSelection} unavailable={color => reason({ kind: value.kind, color })} />
     </div>
   );
 }

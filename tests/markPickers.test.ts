@@ -58,6 +58,18 @@ function tags(html: string, pattern: RegExp) {
 }
 
 describe("MarkStylePicker", () => {
+  test("a saved custom color is selected, previewed, and editable", () => {
+    const html = renderToStaticMarkup(createElement(MarkStylePicker, {
+      value: { kind: "underline", color: "#12ab89" }, onChange: () => {}, label: "Mark",
+    }));
+    const checked = tags(html, /aria-checked="true"/);
+    expect(checked[1]).toContain('aria-label="#12AB89"');
+    expect(checked[1]).toContain('--mark-picker-swatch:#12ab89');
+    expect(html).toContain('type="color"');
+    expect(html).toContain('aria-label="Mark custom color"');
+    expect(html).toContain('value="#12ab89"');
+    expect(html).not.toContain("undefined underline");
+  });
   test("two radio groups, the chosen style and color checked and the only stops for Tab", () => {
     const html = renderToStaticMarkup(
       createElement(MarkStylePicker, { value: { kind: "underline", color: "blue" }, onChange: () => {}, label: "Quick mark 2" })
@@ -207,7 +219,7 @@ describe("account quick-mark settings", () => {
     convex.saved = { showFootnotes: true, fontScale: 1, fontFamily: "serif", comparisonView: "inline", markPresets: [blessings, redUnderline] };
     const html = renderToStaticMarkup(createElement(QuickMarkSettings));
     expect(html).not.toContain("<select");
-    const names = tags(html, /<input/);
+    const names = tags(html, /<input[^>]*type="text"/);
     expect(names).toHaveLength(3); // two presets and the add row
     expect(names[0]).toContain('aria-label="Quick mark 1 name"');
     expect(names[0]).toContain('value="Blessings"');

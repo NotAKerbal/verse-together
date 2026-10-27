@@ -4,6 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { getViewerClerkId, requireClerkId } from "./utils";
 import {
   annotationProblem,
+  markColorsProblem,
   textMarksProblem,
   mergeTextMarks,
   applyVerseMarks,
@@ -493,6 +494,8 @@ export const updateGuideHighlight = mutation({
   args: { highlightId: v.id("guideHighlights"), highlightColor: markColorValidator },
   handler: async (ctx, args) => {
     const clerkId = await requireClerkId(ctx);
+    const problem = markColorsProblem(args.highlightColor);
+    if (problem) throw new Error(problem);
     const row = await ctx.db.get(args.highlightId);
     if (!row || row.clerkId !== clerkId) throw new Error("Highlight not found");
     await ctx.db.patch(args.highlightId, { highlightColor: args.highlightColor, updatedAt: Date.now() });

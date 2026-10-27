@@ -8,8 +8,11 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { annotationProblem } from "../../../convex/annotationRules";
 import MarkSample from "./MarkSample";
+import CustomMarkColor from "./CustomMarkColor";
+import { isCustomMarkColor } from "./markColors";
 import {
   MARK_COLOR_OPTIONS,
+  markColorLabel,
   annotationChapter,
   annotationSummary,
   highlightOf,
@@ -222,6 +225,7 @@ export function MarkColorChoice({
   const title = kind === "highlight" ? "Highlight" : "Underline";
   const labelId = useId();
   const options: Array<{ value: AnnotationMarkColor; label: string }> = [{ value: "none", label: "None" }, ...MARK_COLOR_OPTIONS];
+  if (isCustomMarkColor(value)) options.push({ value, label: markColorLabel(value) });
   return (
     <div className="space-y-1">
       <div id={labelId} className="text-sm text-foreground/70">
@@ -251,6 +255,7 @@ export function MarkColorChoice({
             </button>
           );
         })}
+        <CustomMarkColor value={value} onChange={onChange} label={title} disabled={disabled} />
       </div>
     </div>
   );

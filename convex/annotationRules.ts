@@ -17,6 +17,8 @@ export function annotationProblem(
   underline: boolean | null | undefined = false,
   textMarks: readonly VerseTextMark[] = []
 ): string | null {
+  const colorProblem = markColorsProblem(highlightColor);
+  if (colorProblem) return colorProblem;
   const normalized = normalizeAnnotationBody(body);
   if (normalized.length > ANNOTATION_BODY_MAX) return "Annotation text is too long";
   if (!normalized && !highlightColor && underline !== true && !textMarks.length) return "Add a note, a highlight, or an underline";
@@ -28,7 +30,7 @@ export function annotationProblem(
  * order. Red is the rubric underline every underline had before underlines had colors.
  */
 export const MARK_COLORS = ["red", "yellow", "blue", "green", "pink", "purple"] as const;
-export type MarkColor = (typeof MARK_COLORS)[number];
+export type MarkColor = (typeof MARK_COLORS)[number] | `#${string}`;
 /** @deprecated The verse mark palette is MarkColor; kept for callers that name the old type. */
 export type VerseHighlightColor = MarkColor;
 
@@ -36,7 +38,12 @@ export type VerseHighlightColor = MarkColor;
 export const DEFAULT_UNDERLINE_COLOR: MarkColor = "red";
 
 export function isMarkColor(value: unknown): value is MarkColor {
-  return typeof value === "string" && (MARK_COLORS as readonly string[]).includes(value);
+  return typeof value === "string" && ((MARK_COLORS as readonly string[]).includes(value) || /^#[0-9a-f]{6}$/.test(value));
+}
+
+/** Schema strings are checked here before any mark is written. Hex colors use lowercase RRGGBB. */
+export function markColorsProblem(...colors: unknown[]): string | null {
+  return colors.some(color => color != null && !isMarkColor(color)) ? "Invalid mark color" : null;
 }
 
 /** The longest chapter (Psalm 119) has 176 verses; one quick-mark change never needs more. */
@@ -60,12 +67,16 @@ export type VerseMarksPatch = {
 
 /** Why a change to a verse's underline contradicts itself, or null if it doesn't. */
 export function underlineProblem(patch: Pick<VerseMarksPatch, "underline" | "underlineColor">): string | null {
+  const problem = markColorsProblem(patch.underlineColor);
+  if (problem) return problem;
   if (patch.underline === false && patch.underlineColor !== undefined) return "An underline that is off has no color";
   return null;
 }
 
 /** Why a quick-mark change can't be applied, or null if it can. */
 export function verseMarksProblem(verses: readonly number[], patch: VerseMarksPatch): string | null {
+  const colors = markColorsProblem(patch.highlightColor, patch.underlineColor);
+  if (colors) return colors;
   if (patch.highlightColor === undefined && patch.underline === undefined && patch.underlineColor === undefined) {
     return "Choose a highlight or an underline";
   }
@@ -219,7 +230,7 @@ export type MarkKind = (typeof MARK_KINDS)[number];
 /** name: absent when unnamed (the defaults, and every preset from before names), never empty. */
 export type MarkPreset = { kind: MarkKind; color: MarkColor; name?: string };
 
-/** Every kind-and-color pair once. */
+/** Keep the selection menu manageable, including custom colors. */
 export const MARK_PRESETS_MAX = MARK_KINDS.length * MARK_COLORS.length;
 
 /** A preset name is a short label, shown on its button beside the mark. */
@@ -261,6 +272,7 @@ export function normalizeMarkPresetName(value: unknown): string | undefined {
 
 /** Why a sent list of presets can't be saved, or null if it can (repeated pairs are fine: they are dropped). */
 export function markPresetsProblem(presets: readonly MarkPreset[]): string | null {
+  if (presets.some(preset => !isMarkPreset(preset))) return "Invalid mark color or style";
   if (presets.length > MARK_PRESETS_MAX) return `Choose up to ${MARK_PRESETS_MAX} quick marks`;
   if (presets.some((preset) => (normalizeMarkPresetName(preset.name)?.length ?? 0) > MARK_PRESET_NAME_MAX)) {
     return `Keep each quick mark name to ${MARK_PRESET_NAME_MAX} characters`;
@@ -406,6 +418,8 @@ export type GuideAnnotationFields = {
 
 /** Why a change to a guide span's annotation can't be applied, or null if it can. */
 export function guidePatchProblem(patch: GuideAnnotationPatch): string | null {
+  const colors = markColorsProblem(patch.highlightColor, patch.underlineColor);
+  if (colors) return colors;
   if (patch.body === undefined && patch.highlightColor === undefined && patch.underlineColor === undefined) {
     return "Choose a highlight, an underline, or a note";
   }
