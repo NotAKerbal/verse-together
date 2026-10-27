@@ -15,6 +15,8 @@ import VerseActionBar, { type VerseActionAnchorRect, type VerseQuickMarks } from
 import MarkSample from "@/features/annotations/MarkSample";
 import { useMarkPresets } from "@/features/annotations/useVerseQuickMarks";
 import { markPresetLabel, quickMarkPatch, type MarkColor } from "@/features/annotations/verseAnnotations";
+import type { NoteSource } from "@/features/notes/journal";
+import { quotedExcerpt } from "@/features/notes/noteExcerpts";
 import { useAuth } from "@/lib/auth";
 import { getDefaultPreferences, readLocalPreferences } from "@/lib/preferences";
 import { MARK_COLORS, type GuideAnnotationPatch } from "../../../convex/annotationRules";
@@ -40,16 +42,17 @@ import {
   type TextIndex,
 } from "./guideAnchors";
 import styles from "./studyCompanion.module.css";
+import { useAddToNote } from "./useAddToNote";
 import { useHeldSelection } from "./useHeldSelection";
 
 /*
   Study-guide annotations: select any of the guide's prose (the introduction, the reader's guide side, or the
   closing sections) and the same selection menu as the scripture pane's opens beside it: the reader's quick
-  marks, the Annotate panel (any highlight or underline color, and a note), and Copy. A mark or note belongs to
-  exactly the selected text. Marks are painted with the CSS Custom Highlight API (backgrounds for highlights,
-  text decorations for underlines), which marks DOM ranges without touching the guide's markup: its text
-  nodes, links, ids, and every measured position stay exactly as they are. Browsers without that API read the
-  guide as before and are told guide marks can't show there.
+  marks, Add to note, the Annotate panel (any highlight or underline color, and a note), and Copy. A mark or
+  note belongs to exactly the selected text. Marks are painted with the CSS Custom Highlight API (backgrounds
+  for highlights, text decorations for underlines), which marks DOM ranges without touching the guide's
+  markup: its text nodes, links, ids, and every measured position stay exactly as they are. Browsers without
+  that API read the guide as before and are told guide marks can't show there.
 
   A part can be rendered in more than one element: the closing sections were once the end of the reader's
   guide, and are still the "reader" part, read as one text after it. So highlights saved before they moved
@@ -345,12 +348,14 @@ type GuideEditing = { part: GuidePart; described: Extract<Described, { ok: true 
 
 /**
  * The selection menu (the shared VerseActionBar) beside a text selection in the guide's prose: the reader's
- * quick marks and the Annotate panel (any style and color, the saved passages the selection overlaps, and the
- * full note editor), and Copy. Insights, Resources, and the scripture actions aren't the guide's and aren't
- * offered. Its own component, so following a selection re-renders only the menu.
+ * quick marks, Add to note (the selected text, linked to its place in the lesson), the Annotate panel (any style
+ * and color, the saved passages the selection overlaps, and the full note editor), and Copy. Resources and the
+ * scripture actions aren't the guide's and aren't offered. Its own component, so following a selection
+ * re-renders only the menu.
  */
 function GuideSelectionMenu({
   guide,
+  noteSource,
   roots,
   rows,
   status,
@@ -358,6 +363,7 @@ function GuideSelectionMenu({
   onEdit,
 }: {
   guide: string;
+  noteSource: NoteSource;
   roots: Roots;
   rows: readonly GuideHighlight[];
   status: Status;
@@ -454,6 +460,20 @@ function GuideSelectionMenu({
   const supported = selection ? highlightsSupported() : false;
   const key = selection?.key ?? "";
   const panelKey = carry && carry.to === key ? carry.from : key;
+  const addToNote = useAddToNote(
+    key,
+    () => {
+      if (!selection) return "";
+      // Linked to the block the selection starts in (an id in the guide's HTML), else to the lesson.
+      const block = selection.described.ok ? selection.described.anchor.startBlock : "";
+      const lesson = noteSource.href.split("#")[0];
+      return quotedExcerpt(selection.text, {
+        label: `${noteSource.label} · ${selection.reference}`,
+        href: block ? `${lesson}#${block}` : lesson,
+      });
+    },
+    clear
+  );
 
   async function mark(patch: GuideAnnotationPatch) {
     if (!selection || !described) return;
@@ -550,7 +570,7 @@ function GuideSelectionMenu({
             }}
           />
         }
-        showInsightAction={false}
+        {...addToNote}
         onClear={clear}
         onAnnotation={() => {
           if (!selection || !described || !ready || pending > 0) return;
@@ -563,7 +583,8 @@ function GuideSelectionMenu({
 
 /**
  * The viewer's private annotations in a guide's prose (`guide` is the guide's week start): highlights,
- * underlines, and notes on spans of its text. `reader` lists the elements the reader part is rendered in, in
+ * underlines, and notes on spans of its text, and Add to note for its selections (`noteSource`, the lesson,
+ * is what their excerpts link to). `reader` lists the elements the reader part is rendered in, in
  * reading order; `layoutKey` changes whenever any of them may be rendered anew elsewhere (the closing sections
  * move between layouts). Returns the layer to render once on the page: the selection menu, or the annotation
  * editor.
@@ -572,7 +593,8 @@ export function useGuideHighlights(
   guide: string,
   introduction: RefObject<HTMLElement | null>,
   reader: ReadonlyArray<RefObject<HTMLElement | null>>,
-  layoutKey: string
+  layoutKey: string,
+  noteSource: NoteSource
 ) {
   const { user } = useAuth();
   const device = useDeviceStudy();
@@ -669,7 +691,7 @@ export function useGuideHighlights(
 
   let layer: ReactNode;
   if (!editing) {
-    layer = <GuideSelectionMenu guide={guide} roots={roots} rows={rows} status={status} painted={painted} onEdit={setEditing} />;
+    layer = <GuideSelectionMenu guide={guide} noteSource={noteSource} roots={roots} rows={rows} status={status} painted={painted} onEdit={setEditing} />;
   } else {
     const { part, described, rowId } = editing;
     const anchor = { guide, part, ...described.anchor };

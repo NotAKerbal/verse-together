@@ -75,11 +75,13 @@ export function restartEntryDraft(draft: EntryDraft, defaults: EntryDefaults): E
 /**
  * An untouched draft follows the page in view (navigating with the panel open), keeping a reading choice the page
  * made; one with content, or a reading the person chose, stays put. The same page with another query or hash is
- * not a move.
+ * not a move. A draft linked to the page at `pathname` itself also stays: a note started from a Come, Follow Me
+ * lesson keeps the lesson rather than following the chapter being read on it.
  */
-export function followEntrySource(draft: EntryDraft, source: NoteSource | null): EntryDraft {
+export function followEntrySource(draft: EntryDraft, source: NoteSource | null, pathname?: string): EntryDraft {
   if (!isPristineEntry(draft) || !source) return draft;
   if (draft.source && sourcePage(draft.source) === sourcePage(source)) return draft;
+  if (draft.source && pathname !== undefined && draft.source.href.split(/[?#]/)[0] === pathname) return draft;
   return { ...draft, source };
 }
 

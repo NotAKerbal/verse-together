@@ -2,6 +2,7 @@
 // guide list is passed in so tests can supply their own (see lessonIndex.ts for the published one).
 
 import { COME_FOLLOW_ME_WEEKS, type ChapterRange, type ComeFollowMeWeek } from "../../lib/comeFollowMe.ts";
+import type { NoteSource } from "../notes/journal.ts";
 import { getLessonCover, type LessonCover } from "./lessonCovers.ts";
 
 /** The published guide metadata a lesson card needs (a subset of content/cfm/guides.json entries). */
@@ -58,6 +59,14 @@ export function formatLessonDates(start: string, end: string): string {
 
 export function lessonHref(weekStart: string): string {
   return `/come-follow-me/${weekStart}`;
+}
+
+/**
+ * What a note or reading logged from a lesson page is linked to: the lesson's own page, whether or not the week has
+ * a study guide yet. `label` names it in the journal: the guide's scripture and title, else the scheduled block.
+ */
+export function lessonNoteSource(weekStart: string, label: string): NoteSource & { kind: "guide" } {
+  return { kind: "guide", label, href: lessonHref(weekStart) };
 }
 
 /** The week's assigned chapters, or the special week's suggested reading. */

@@ -333,6 +333,50 @@
   text-wrap: pretty;
 }
 
+/* The lesson's own actions, under its title: Add note (LessonNoteButton). */
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.noteAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 1px solid var(--cfm-rule-strong);
+  border-radius: 999px;
+  background: var(--cfm-panel);
+  font: 600 0.75rem/1 var(--cfm-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cfm-ink);
+  cursor: pointer;
+}
+
+.noteAction:hover {
+  border-color: var(--cfm-rubric-line);
+  color: var(--cfm-rubric);
+}
+
+.noteAction:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 2px;
+}
+
+.noteAction:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.noteActionIcon {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--cfm-rubric);
+}
+
 .attribution {
   color: var(--cfm-ink-2);
 }

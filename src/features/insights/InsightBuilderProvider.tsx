@@ -16,7 +16,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "@/lib/auth";
 import type { InsightDraft, InsightDraftSummary, InsightVisibility } from "@/lib/appData";
-import { isSafeSourceHref, localDateKey, type JournalNoteDocument, type NoteSource } from "@/features/notes/journal";
+import { isSafeSourceHref, localDateKey, newRequestId, type JournalNoteDocument, type NoteSource } from "@/features/notes/journal";
 import { JournalOutbox, RevisionConflictError, type OutboxEntry } from "@/features/notes/journalOutbox";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
 import type { ReadingLogOption } from "@/features/notes/ReadingChip";
@@ -30,6 +30,7 @@ import {
 import { deviceStudy } from "@/features/notes/deviceStudy";
 import { useDeviceStudy } from "@/features/notes/useDeviceStudy";
 import { useEntryDraftStore, type CreateJournalEntry } from "@/features/notes/useEntryDraftStore";
+import { queueExcerpt } from "@/features/notes/noteExcerpts";
 
 /**
  * What the page being read says about itself. `href` defaults to the live URL (path, query and hash) at the
@@ -142,6 +143,14 @@ type InsightBuilderContextValue = {
   ) => Promise<void>;
   addDictionaryBlock: (payload: DictionaryPayload) => Promise<void>;
   appendScriptureBlock: (payload: ScripturePayload) => Promise<void>;
+  /**
+   * A selection's Add to note: puts `markdown` (an excerpt, see noteExcerpts) at the end of the active note, or with
+   * none active saves it as a new note linked to the page in view and makes that note active (a retry with the same
+   * `requestId` is the same note). Text typed in the active note and not yet saved stays, with the excerpt after it.
+   * Rejects with a message to show, having added nothing, when the note has a save conflict to settle or the write
+   * fails; the unsaved Log entry is never touched.
+   */
+  addExcerptToNote: (markdown: string, requestId: string) => Promise<void>;
   updateBlock: (
     blockId: string,
     patch: {
@@ -669,6 +678,46 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     [user, appendLocalText, appendScriptureBlockMutation, ensureActiveDraftId, openBuilder, tracked]
   );
 
+  const addExcerptToNote = useCallback(
+    async (markdown: string, requestId: string) => {
+      const excerpt = markdown.trim();
+      if (!excerpt) throw new Error("Select some text to add.");
+      const noteId = activeDraftId;
+      if (!noteId) {
+        const input = { journalDate: localDateKey(), source: captureCurrentSource() ?? undefined, markdownBody: excerpt, logReading: false };
+        let created: { id: string | null };
+        try {
+          created = await createEntry({ ...input, requestId });
+          // The note an earlier try of this request made has since been deleted: this one is a new note.
+          if (!created.id) created = await createEntry({ ...input, requestId: newRequestId() });
+        } catch {
+          throw new Error("Couldn't start a note with that. Try again.");
+        }
+        if (!created.id) throw new Error("Couldn't start a note with that. Try again.");
+        activateEntry(created.id);
+        openBuilder();
+        return;
+      }
+      let stored: { body: string; revision: number } | null = null;
+      if (!user) {
+        const note = deviceStudy.getSnapshot().notes.find((row) => row.id === noteId && row.owner === null);
+        if (!note) throw new Error("That note isn't on this device any more.");
+        stored = { body: note.markdown_body ?? "", revision: note.markdown_revision ?? 0 };
+      }
+      // The outbox saves it (with any text typed and not yet saved), showing that save's progress in the note;
+      // otherwise it is appended on the server, after whatever the note holds there, in one write.
+      if (!queueExcerpt(journalOutbox, noteId, excerpt, stored)) {
+        try {
+          await tracked(addBlockMutation({ draftId: noteId as DraftId, type: "text", text: excerpt }));
+        } catch {
+          throw new Error("Couldn't add that to your note. Try again.");
+        }
+      }
+      openBuilder();
+    },
+    [user, activeDraftId, captureCurrentSource, createEntry, activateEntry, openBuilder, journalOutbox, addBlockMutation, tracked]
+  );
+
   const addDictionaryBlock = useCallback(
     async (payload: DictionaryPayload) => {
       if (!user) return appendLocalText(`### ${payload.word}\n\n${payload.entryText}`);
@@ -809,6 +858,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       addQuoteBlock,
       addDictionaryBlock,
       appendScriptureBlock,
+      addExcerptToNote,
       updateBlock,
       removeBlock,
       reorderBlocks,
@@ -866,6 +916,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       addQuoteBlock,
       addDictionaryBlock,
       appendScriptureBlock,
+      addExcerptToNote,
       updateBlock,
       removeBlock,
       reorderBlocks,

@@ -263,12 +263,13 @@ function escapeLinkLabel(label: string): string {
 }
 
 /** A Markdown link, or the bare URL as text when it can't be a link destination. */
-function markdownLink(label: string, url: string): string {
+export function markdownLink(label: string, url: string): string {
   if (/[\s<>]/.test(url)) return `${label}: ${url}`;
   return `[${escapeLinkLabel(label)}](<${url}>)`;
 }
 
-function quoteLines(text: string): string {
+/** Text as a Markdown block quote, line by line. */
+export function quoteLines(text: string): string {
   return text
     .split("\n")
     .map((line) => (line ? `> ${line}` : ">"))

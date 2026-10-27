@@ -10,6 +10,7 @@ import { deviceChapterAnnotations } from "../annotations/useChapterAnnotations";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";
 import VerseMarkedText from "@/features/annotations/VerseMarkedText";
 import { useVerseQuickMarks } from "@/features/annotations/useVerseQuickMarks";
+import { scriptureExcerpt } from "@/features/notes/noteExcerpts";
 import {
   annotationChapter,
   highlightOf,
@@ -27,6 +28,7 @@ import {
   type VerseKey,
 } from "./scriptureAnnotations";
 import styles from "./studyCompanion.module.css";
+import { useAddToNote } from "./useAddToNote";
 import { useHeldSelection } from "./useHeldSelection";
 
 type Book = { label: string; slug: string; volume: string };
@@ -62,9 +64,10 @@ function sameSelection(a: ScriptureSelection, b: ScriptureSelection) {
 
 /**
  * The selection menu (the standard reader's VerseActionBar) beside a text selection in the scripture pane: the
- * reader's quick marks for every selected verse, across a chapter break too, the Annotate panel (any style
- * and color, and the full note editor on the first selected verse), and Copy. Insights and Resources are the
- * standard reader's and aren't offered here. Its own component, so following a selection re-renders only the menu.
+ * reader's quick marks for every selected verse, across a chapter break too, Add to note (the selected words,
+ * each chapter's linked to its verses), the Annotate panel (any style and color, and the full note editor on the
+ * first selected verse), and Copy. Resources is the standard reader's and isn't offered here. Its own component,
+ * so following a selection re-renders only the menu.
  */
 function ScriptureSelectionMenu({
   doc,
@@ -105,8 +108,9 @@ function ScriptureSelectionMenu({
     ranges: selection?.ranges.filter(range => range.chapter === write.target.chapter)
       .map(range => ({ verse: range.verse, start: range.start, end: range.end, text: range.text })),
   }));
+  const selectionKey = selection?.ranges.map(range => `${range.chapter}:${range.verse}:${range.start}:${range.end}`).join(",") ?? "";
   const { quickMarks, pending } = useVerseQuickMarks({
-    selectionKey: selection?.ranges.map(range => `${range.chapter}:${range.verse}:${range.start}:${range.end}`).join(",") ?? "",
+    selectionKey,
     marks,
     writes,
     loaded: verses.length > 0 && verses.every((verse) => loaded.has(verse.chapter)),
@@ -114,6 +118,13 @@ function ScriptureSelectionMenu({
     beforeSave: () => { restoreRef.current = selection?.ranges ?? null; },
     onSaveError: () => { restoreRef.current = null; },
   });
+  const addToNote = useAddToNote(
+    selectionKey,
+    () => selection
+      ? scriptureExcerpt(book, selection.ranges.map(range => ({ chapter: range.chapter!, verse: range.verse, text: range.text.slice(range.start, range.end) })))
+      : "",
+    clear
+  );
 
   const noteVerse = verses[0] ?? null;
   const noteLabel =
@@ -138,7 +149,7 @@ function ScriptureSelectionMenu({
         noteDescription={pending ? "Saving marks…" : "Note and marks together"}
         // The optimistic row may not have a server id yet: the full editor waits for the save.
         annotationDisabled={pending}
-        showInsightAction={false}
+        {...addToNote}
         onClear={clear}
         onAnnotation={() => {
           if (noteVerse && !pending) onNote(noteVerse);

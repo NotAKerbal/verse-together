@@ -14,10 +14,13 @@ export default function NotebookPanel() {
     canUseInsights, isMobileOpen, dismissMobile,
     isPanelOpen, togglePanel, closeBuilder, activeDraftId, activeNote, drafts, isLoading, switchDraft,
     panelView, setPanelView, isSheetOpen, setSheetOpen, readerChapter, startEntry,
-    captureCurrentSource,
+    captureCurrentSource, currentSource,
   } = useInsightBuilder();
   const belowLg = useBelowLg();
   const onNotesPage = pathname === "/notes" || pathname.startsWith("/notes/");
+  // The phone Log sheet belongs to a chapter page, or a page that names itself as a note's source (a Come, Follow
+  // Me lesson, with or without a guide).
+  const sheetPage = readerChapter !== null || currentSource !== null;
 
   // Reader actions ask for the notebook with isMobileOpen (the provider already made the note active). Below lg, a
   // chapter page opens its Log sheet on that note; elsewhere the note opens full-screen on /notes. Only the phone
@@ -30,10 +33,10 @@ export default function NotebookPanel() {
     else router.push("/notes");
   }, [isMobileOpen, belowLg, canUseInsights, onNotesPage, readerChapter, dismissMobile, setSheetOpen, router]);
 
-  // The phone Log sheet belongs to a chapter page; leaving it, or widening past lg, closes it.
+  // Leaving the sheet's page, or widening past lg, closes it.
   useEffect(() => {
-    if (isSheetOpen && (!readerChapter || belowLg === false)) setSheetOpen(false);
-  }, [isSheetOpen, readerChapter, belowLg, setSheetOpen]);
+    if (isSheetOpen && (!sheetPage || belowLg === false)) setSheetOpen(false);
+  }, [isSheetOpen, sheetPage, belowLg, setSheetOpen]);
 
   if (!canUseInsights || onNotesPage || belowLg === null) return null;
 
@@ -56,7 +59,7 @@ export default function NotebookPanel() {
   );
 
   if (belowLg) {
-    return readerChapter && isSheetOpen ? (
+    return sheetPage && isSheetOpen ? (
       <NotesSheet onClose={() => setSheetOpen(false)}>{(frame) => content(frame, false)}</NotesSheet>
     ) : null;
   }

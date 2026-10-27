@@ -65,11 +65,14 @@ export default function JournalEntryComposer({
   const notice = problem ?? saveNotice(entrySave);
   const detached = entrySave.status === "conflict" || entrySave.status === "kept" || entrySave.status === "deleted";
 
-  // An untouched draft follows the page: navigating with the desktop panel open logs the chapter now shown.
+  // An untouched draft follows the page: navigating with the desktop panel open logs the chapter now shown. One
+  // linked to the page itself (a lesson's Add note) stays with it.
   const pageSource = followPage ? (options[0]?.source ?? null) : null;
   useEffect(() => {
     if (!pageSource) return;
-    updateEntryDraft((current) => followEntrySource(current, withLiveHref(pageSource, window.location)));
+    updateEntryDraft((current) =>
+      followEntrySource(current, withLiveHref(pageSource, window.location), window.location.pathname)
+    );
   }, [pageSource, updateEntryDraft]);
 
   const reading = draft.logReading && draft.source ? { source: draft.source, journalDate: draft.journalDate } : null;
