@@ -900,6 +900,7 @@ export default function ChapterReader({
   const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting && !isCustomTouchSelecting;
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
+  const wordStudyContext = useMemo(() => ({ volume, book, chapter }), [volume, book, chapter]);
   const showInsightAction = hasSelection && !canExploreWord;
   const hasSidebarPanelOpen = openResources || (openExplorer && canExploreWord);
   const selectedBounds = selectionState?.selectedBounds ?? null;
@@ -1540,6 +1541,7 @@ export default function ChapterReader({
             <WordStudyPanel
               word={singleSelectedWord}
               panelId="word-study-panel-desktop"
+              context={wordStudyContext}
               title="Explore Word"
               onClose={() => setOpenExplorer(false)}
             />
@@ -1912,6 +1914,7 @@ export default function ChapterReader({
               <WordStudyPanel
                 word={singleSelectedWord}
                 panelId="word-study-panel-mobile"
+                context={wordStudyContext}
                 title="Explore Word"
                 onClose={() => setOpenExplorer(false)}
               />
