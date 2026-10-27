@@ -1487,11 +1487,14 @@ export default function ChapterReader({
     (target: PassageTarget) => textReady && target.volume === canonicalVolume && target.book === book && target.chapter === chapter,
     [textReady, canonicalVolume, book, chapter]
   );
-  const goToVerse = useCallback((target: PassageTarget) => {
-    const verse = target.first ?? 1;
+  const uncoverPassage = useCallback(() => {
     // The mobile resources dialog covers the text, which stays inert until it has closed; the desktop sidebar
     // sits beside the text and stays.
     if (!window.matchMedia(RESOURCES_SIDEBAR_QUERY).matches) flushSync(() => setOpenResources(false));
+  }, []);
+  const goToVerse = useCallback((target: PassageTarget) => {
+    const verse = target.first ?? 1;
+    uncoverPassage();
     const element = verseListRef.current?.querySelector<HTMLElement>(`[id="v-${verse}"]`);
     if (!element) return;
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#v-${verse}`);
@@ -1499,7 +1502,7 @@ export default function ChapterReader({
     window.dispatchEvent(new CustomEvent("quick-nav-jump", { detail: { verse } }));
     element.tabIndex = -1;
     element.focus({ preventScroll: true });
-  }, []);
+  }, [uncoverPassage]);
   const restoreScroll = useCallback((top: number) => window.scrollTo({ top, behavior: "instant" }), []);
   const passagePreview = usePassagePreview({
     local: previewLocal,
@@ -1507,6 +1510,7 @@ export default function ChapterReader({
     showBesideGuide: goToVerse,
     restoreScroll,
     showBesideLabel: "Go to this passage",
+    beforeChapterNavigation: uncoverPassage,
   });
 
   return (
