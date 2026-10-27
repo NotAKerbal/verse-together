@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Fragment } from "react";
 import ShareChrome from "@/components/ShareChrome";
+import SharePassageButton from "@/components/SharePassageButton";
 import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
 import { getLocalLdsChapter } from "@/lib/ldsLocalData.server";
-import { formatPassageReference, groupVerseRuns, parseVerseSpec } from "@/lib/passageShare";
+import { buildShareUrl, formatPassageReference, groupVerseRuns, parseVerseSpec } from "@/lib/passageShare";
 import { getScriptureVolumeLabel, normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 
 type Params = {
@@ -52,6 +53,7 @@ async function loadPassage(raw: { volume: string; book: string; chapter: string;
     bookLabel,
     volumeLabel: getScriptureVolumeLabel(volume),
     chapterHref: `${getChapterHref({ volume, book, chapter })}#v-${verses[0].verse}`,
+    shareHref: buildShareUrl({ volume, book, chapter, verses: verses.map((verse) => verse.verse) }),
   };
 }
 
@@ -119,10 +121,13 @@ export default async function SharePassagePage({ params }: Params) {
         </article>
 
         <footer className="share-footer">
-          <Link href={passage.chapterHref} aria-label={`Read all of ${passage.bookLabel} ${passage.chapter}`}>
-            Read the whole chapter
-            <span aria-hidden="true">{"→"}</span>
-          </Link>
+          <div className="share-footer-actions">
+            <SharePassageButton href={passage.shareHref} reference={passage.reference} />
+            <Link href={passage.chapterHref} aria-label={`Read all of ${passage.bookLabel} ${passage.chapter}`}>
+              Read the whole chapter
+              <span aria-hidden="true">{"→"}</span>
+            </Link>
+          </div>
           <Link href="/" className="brand-wordmark" aria-label="Verse Together home">
             Verse<span>Together</span>
           </Link>

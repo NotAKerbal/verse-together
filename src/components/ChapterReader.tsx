@@ -40,7 +40,8 @@ import {
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/plans/useReadingProgress";
-import { chapterReadPassages, hasReaderNote, sourceMatchesChapter } from "@/features/notes/chapterReadStatus";
+import { scriptureLinksForChapter } from "../../convex/noteScriptureLinks";
+import { chapterReadPassages, hasReaderNote } from "@/features/notes/chapterReadStatus";
 import { useJournalEntryActions } from "@/features/notes/useJournalEntryActions";
 import type { JournalEntry, ReadingLogRow } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
@@ -649,12 +650,12 @@ export default function ChapterReader({
       const reflections = new Map(journalEntries?.flatMap(entry => entry.kind === "note" ? [[entry.id, entry.has_reflection] as const] : []) ?? []);
       const notes = new Map(drafts.filter(draft => hasReaderNote({ ...draft, has_reflection: reflections.get(draft.id) })).map(draft => [draft.id, draft]));
       const refs = (myInsightRefs ?? []).filter(ref => notes.has(ref.draftId));
-      // Device notes have no server scripture refs; their explicit verse source supplies the marker.
+      // Device notes use the same current backlinks as account notes.
       if (!user) for (const draft of notes.values()) {
-        const source = draft.source;
-        if (draft.status === "archived" || !sourceMatchesChapter(source, { volume, book, chapter }) || source?.verseStart === undefined) continue;
-        refs.push({ draftId: draft.id, draftTitle: draft.title, verseStart: source.verseStart,
-          verseEnd: source.verseEnd ?? source.verseStart, status: draft.status });
+        if (draft.status === "archived") continue;
+        for (const ref of scriptureLinksForChapter(draft.markdown_body ?? "", draft.source, { volume, book, chapter })) {
+          refs.push({ draftId: draft.id, draftTitle: draft.title, ...ref, status: draft.status });
+        }
       }
       return groupVerseInsightRefsByVerse(refs);
     },
@@ -959,8 +960,8 @@ export default function ChapterReader({
   const hasCompareSelections = compareByTranslation.size > 0;
   const selectionReferenceLabel = useMemo(() => {
     if (!selectedBounds) return null;
-    return `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
-  }, [book, chapter, selectedBounds]);
+    return `${reference}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `–${selectedBounds.end}` : ""}`;
+  }, [reference, selectedBounds]);
   const shareHref = selectedVerses.length > 0
     ? buildShareUrl({ volume, book, chapter, verses: selectedVerses.map((verse) => verse.verse) })
     : null;
@@ -1455,7 +1456,7 @@ export default function ChapterReader({
       chapter,
       verseStart: selectedBounds.start,
       verseEnd: selectedBounds.end,
-      reference,
+      reference: selectionReferenceLabel,
       text: selectedText || null,
     });
     openBuilder();
