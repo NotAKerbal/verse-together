@@ -574,6 +574,12 @@ export default function ChapterReader({
   // appendix compares the JST with the KJV, so it is read in place of the KJV text and nothing else.
   const jst = useJstExcerpts(volume, book, chapter, jstEnabled && textReady && primaryTranslation === "lds");
   const jstReading = useMemo(() => readJstChapter(jst.status === "ready" ? jst.excerpts : [], verses), [jst, verses]);
+  const jstOmitsWording = useMemo(
+    () => Array.from(jstReading.rows.values()).some((row) => row.pieces.some((piece) => piece.kind === "omitted")),
+    [jstReading]
+  );
+  // KJV wording the JST leaves out is hidden by default so the passage reads cleanly; the reader can show it.
+  const [showJstOmitted, setShowJstOmitted] = useState(false);
   const { user, getToken } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
@@ -1705,18 +1711,30 @@ export default function ChapterReader({
               The JST appendix has no excerpts for this chapter.
             </div>
           ) : jst.status === "ready" ? (
-            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
-              {jstReading.integrated.length > 0 ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55">
+              <span role="status" aria-live="polite">
+                {jstReading.integrated.length > 0 ? (
+                  <>
+                    {jstReading.integrated.length === 1 ? "1 JST passage" : `${jstReading.integrated.length} JST passages`} read
+                    in place of the KJV; <ins className="jst-added">JST wording</ins> is underlined. Turn off the JST to
+                    highlight or note those verses.
+                  </>
+                ) : (
+                  "The JST appendix has a note for this chapter."
+                )}
+              </span>
+              {jstOmitsWording ? (
                 <>
-                  {jstReading.integrated.length === 1
-                    ? "1 JST passage, read in place of the KJV verses it revises"
-                    : `${jstReading.integrated.length} JST passages, read in place of the KJV verses they revise`}
-                  ; <ins className="jst-added">JST wording</ins> is marked.
-                  Highlights and notes stay with the KJV text: turn the JST off to mark those verses.
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowJstOmitted((shown) => !shown)}
+                    className="underline underline-offset-2"
+                  >
+                    {showJstOmitted ? "Hide omitted KJV words" : "Show omitted KJV words"}
+                  </button>
                 </>
-              ) : (
-                "The JST appendix has a note for this chapter."
-              )}
+              ) : null}
             </div>
           ) : jst.status === "failed" ? (
             <div className="reader-header-notice flex flex-wrap items-center gap-x-2 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200" role="alert">
@@ -1812,7 +1830,7 @@ export default function ChapterReader({
                               {jstRow ? (
                                 <div className="min-w-0 flex-1 text-left" data-verse={v.verse}>
                                   <span className="verse-badge">{v.verse}</span>
-                                  <JstVerseText row={jstRow} />
+                                  <JstVerseText row={jstRow} showOmitted={showJstOmitted} />
                                   {/* Translation overlays compare with the KJV; the KJV isn't repeated beside them here. */}
                                   {verseComparisons.map((comparison) => (
                                     <span key={`${v.verse}-${comparison.key}`} className="mt-1 block text-sm leading-6" data-verse-ignore>

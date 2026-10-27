@@ -1383,81 +1383,49 @@ a.reader-toolbar-crumb:hover {
 }
 
 /*
-  Joseph Smith Translation passages read in place of the KJV verses they revise. The JST's own wording is violet
-  on a faint violet wash with a dotted underline, so it doesn't rest on color alone; shared wording reads normally.
+  Joseph Smith Translation passages read in place of the KJV verses they revise, in the verse's own color. The JST's
+  own wording has only a dotted underline (an <ins>), so the passage reads as one text; shared wording is unmarked.
 */
-:root {
-  --jst-ink: #6d28d9;
-  --jst-wash: rgb(124 58 237 / 0.09);
-  --jst-rule: rgb(124 58 237 / 0.45);
-}
-
-[data-theme="dark"] {
-  --jst-ink: #c4b5fd;
-  --jst-wash: rgb(167 139 250 / 0.14);
-  --jst-rule: rgb(167 139 250 / 0.5);
-}
-
-.reader-verse[data-jst="true"] {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  box-shadow: inset 2px 0 0 var(--jst-rule);
-}
-
 .jst-added {
-  color: var(--jst-ink);
-  background: var(--jst-wash);
-  border-radius: 0.2em;
-  padding: 0 0.1em;
+  color: inherit;
   text-decoration: underline dotted;
-  text-decoration-color: var(--jst-rule);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
+  text-decoration-color: color-mix(in oklab, currentColor 55%, transparent);
+  text-decoration-thickness: 0.09em;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.24em;
 }
 
 .jst-passage-label {
-  display: inline-block;
   margin-right: 0.4rem;
-  padding: 0.05rem 0.35rem;
-  border: 1px solid var(--jst-rule);
-  border-radius: 999px;
-  color: var(--jst-ink);
+  color: var(--foreground-muted);
   font-family: var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 0.66rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.3;
-  vertical-align: 0.2em;
+  letter-spacing: 0.03em;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  vertical-align: 0.35em;
   white-space: nowrap;
   user-select: none;
 }
 
 .jst-verse-number {
   margin: 0 0.15rem 0 0.1rem;
-  color: var(--jst-ink);
+  color: var(--foreground-muted);
   font-family: var(--font-dm-sans), system-ui, sans-serif;
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: lining-nums tabular-nums;
   vertical-align: 0.45em;
   line-height: 1;
   user-select: none;
 }
 
-.jst-verse-number > [aria-hidden="true"] {
-  font-weight: 500;
-  opacity: 0.75;
-}
-
+/* KJV wording the JST leaves out, shown only when the reader asks for it. */
 .jst-omitted {
-  margin: 0 0.05rem;
-  color: var(--jst-ink);
-  font-family: var(--font-dm-sans), system-ui, sans-serif;
-  font-size: 0.8em;
-  font-weight: 700;
-  cursor: help;
+  color: var(--foreground-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, currentColor 70%, transparent);
   user-select: none;
 }
 

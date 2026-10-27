@@ -117,7 +117,7 @@ export default function BibleTranslationToolbar({ volume, book, chapter, compare
           </div>
           <div id="jst-toggle-description" className="mt-1 text-[11px] leading-relaxed text-[color:var(--foreground-muted)]">
             Read the JST passages from the Bible appendix in place of the KJV verses they revise, with the JST&apos;s
-            own wording marked in violet. These are selected passages, not the full JST, so most chapters have none.{" "}
+            own wording underlined. These are selected passages, not the full JST, so most chapters have none.{" "}
             <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2">
               Source
             </a>
