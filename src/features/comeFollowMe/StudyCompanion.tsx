@@ -107,7 +107,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
   // saved text anchors. Keep chapter headings and context fragments in the original source order.
   const guideRoots = useMemo(() => new Map(readerSections.flatMap((section) => [section.id, ...section.blocks.flatMap((block) => block.previewEnd ? [block.id, `${block.id}-more`] : [block.id])]).map((id) => [id, createRef<HTMLDivElement>()])), [readerSections]);
   const highlightReader = useMemo(() => [...guideRoots.values(), fallbackRef, closingRef], [guideRoots]);
-  const guideHighlights = useGuideHighlights(weekStart, introRef, highlightReader, "scripture-first");
+  const guideHighlights = useGuideHighlights(weekStart, introRef, highlightReader, "scripture-first", guideSource);
   const annotations = useScriptureAnnotations(book, chapterNumbers, mixed ? firstBookRef : scriptureDocRef);
   const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
 

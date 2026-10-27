@@ -159,6 +159,40 @@ describe("the selection menu without insights or resources", () => {
     expect(html).not.toContain("Explore");
     expect(html).not.toContain("Focus scripture");
   });
+
+  test("a lesson's Add to note: New note with no note active, one add at a time, and a failure to retry", () => {
+    const render = (props: { hasActiveInsight: boolean; insightPending?: boolean; insightError?: string | null }) =>
+      renderToStaticMarkup(
+        createElement(VerseActionBar, {
+          visible: true,
+          anchorRect: { top: 10, left: 10, right: 20, bottom: 20, width: 10, height: 10 },
+          hasSelection: true,
+          selectionReference: "Study guide · A new covenant",
+          selectedText: "I have loved thee",
+          quickMarks: { ...quickMarks, scope: "text" },
+          showInsightAction: true,
+          onInsight: () => {},
+          onNewInsight: () => {},
+          onClear: () => {},
+          onAnnotation: () => {},
+          ...props,
+        })
+      );
+    const fresh = render({ hasActiveInsight: false });
+    expect(fresh).toContain("New Note");
+    expect(fresh).not.toContain('role="alert"');
+    expect(fresh).not.toMatch(/<button[^>]*disabled=""[^>]*aria-busy/);
+    expect(render({ hasActiveInsight: true })).toContain("Add to Note");
+
+    const adding = render({ hasActiveInsight: true, insightPending: true });
+    expect(adding).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"/);
+    expect(adding).toContain("Adding…");
+
+    const failed = render({ hasActiveInsight: true, insightError: "Couldn't add that to your note. Try again." });
+    expect(failed).toContain('role="alert">Couldn&#x27;t add that to your note. Try again.</p>');
+    expect(failed).toContain("Add to Note");
+    expect(failed).not.toMatch(/<button[^>]*disabled=""[^>]*aria-busy/);
+  });
 });
 
 test("each chapter's exact text ranges reach guest and account storage through the shared hook", async () => {

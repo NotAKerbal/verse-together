@@ -26,7 +26,7 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
     <article className="rounded-md border border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] p-3 space-y-3">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-[1_1_9rem] space-y-1">
-          <h5 className="break-words font-serif text-xl leading-tight">{item.word}</h5>
+          <h6 className="break-words font-serif text-xl leading-tight">{item.word}</h6>
           <span className="inline-flex rounded-full border border-[color:var(--surface-border)] px-2 py-0.5 text-[11px] text-foreground/70">
             {item.source}
           </span>

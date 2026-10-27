@@ -9,6 +9,9 @@ import {
   withLiveHref,
 } from "../src/features/notes/entryDraft";
 import type { NoteSource } from "../src/features/notes/journal";
+import { lessonNoteSource } from "../src/features/comeFollowMe/lessons";
+import { COME_FOLLOW_ME_WEEKS } from "../src/lib/comeFollowMe";
+import { noteSourceProblem } from "../convex/noteJournal";
 
 const chapter2: NoteSource = { kind: "scripture", label: "1 Nephi 2", href: "/browse/bookofmormon/1nephi/2", volume: "bookofmormon", book: "1nephi", chapter: 2 };
 const chapter3: NoteSource = { ...chapter2, label: "1 Nephi 3", href: "/browse/bookofmormon/1nephi/3", chapter: 3 };
@@ -73,5 +76,46 @@ describe("the unsaved journal entry", () => {
       "/browse/bookofmormon/1nephi/2?compare=kjv"
     );
     expect(withLiveHref(chapter2, { pathname: "/come-follow-me/2026-10-19", search: "" })).toBe(chapter2);
+  });
+});
+
+describe("a Come, Follow Me lesson's Add note", () => {
+  const lessonPath = "/come-follow-me/2026-10-26";
+  const lesson = lessonNoteSource("2026-10-26", "Jeremiah 31–33; 36–39; Lamentations 1; 3");
+  const jeremiah31: NoteSource = { kind: "scripture", label: "Jeremiah 31", href: "/browse/oldtestament/jeremiah/31", volume: "oldtestament", book: "jeremiah", chapter: 31 };
+  const jeremiah32: NoteSource = { ...jeremiah31, label: "Jeremiah 32", href: "/browse/oldtestament/jeremiah/32", chapter: 32 };
+
+  test("every scheduled week, with or without a study guide, links its notes to a storable lesson source", () => {
+    for (const week of COME_FOLLOW_ME_WEEKS) {
+      const source = lessonNoteSource(week.start, week.block);
+      expect(source).toEqual({ kind: "guide", label: week.block, href: `/come-follow-me/${week.start}` });
+      expect(noteSourceProblem(source), week.start).toBeNull();
+    }
+  });
+
+  test("replaces an untouched Log with a note-only entry for the lesson, and never replaces one in progress", () => {
+    const log = freshEntryDraft({ source: jeremiah31, logReading: true });
+    const note = restartEntryDraft(log, { source: lesson, logReading: false });
+    expect(note).toMatchObject({ source: lesson, logReading: false, text: "", requestId: log.requestId });
+    expect(entryDraftProblem(note)).toBe("Write a note or log your reading first.");
+    expect(entryDraftInput({ ...note, text: "Hope" })).toMatchObject({ source: lesson, logReading: false });
+
+    const typed = { ...log, text: "Already writing" };
+    expect(restartEntryDraft(typed, { source: lesson, logReading: false })).toBe(typed);
+    const chosenReading = { ...freshEntryDraft({ source: null }), edited: true };
+    expect(restartEntryDraft(chosenReading, { source: lesson, logReading: false })).toBe(chosenReading);
+  });
+
+  test("stays with the lesson as its chapters scroll by, while Log still follows the chapter being read", () => {
+    const note = freshEntryDraft({ source: lesson });
+    expect(followEntrySource(note, jeremiah32, lessonPath)).toBe(note);
+    // A live query or hash on the lesson is still the lesson.
+    const live = { ...note, source: { ...lesson, href: `${lessonPath}?x=1#ch-31` } };
+    expect(followEntrySource(live, jeremiah32, lessonPath)).toBe(live);
+
+    const log = freshEntryDraft({ source: jeremiah31, logReading: true });
+    expect(followEntrySource(log, jeremiah32, lessonPath)).toMatchObject({ source: jeremiah32, logReading: true });
+    // Leaving the lesson with the panel open, an untouched note follows the new page as before.
+    expect(followEntrySource(note, jeremiah32, jeremiah32.href)).toMatchObject({ source: jeremiah32 });
   });
 });

@@ -37,7 +37,7 @@ export default function DictionaryEntryCard({
     <article className="rounded-md border border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] p-3 space-y-3">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-[1_1_9rem]">
-          <h5 className="break-words font-serif text-xl leading-tight">{entry.word}</h5>
+          <h6 className="break-words font-serif text-xl leading-tight">{entry.word}</h6>
           {entry.pronounce ? <div className="text-xs text-foreground/60">{entry.pronounce}</div> : null}
         </div>
         <button

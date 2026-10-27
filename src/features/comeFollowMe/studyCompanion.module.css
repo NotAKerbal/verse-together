@@ -7,7 +7,9 @@
   styles follow the scripture-first styles below.
 */
 
-.page {
+/* The theme. The scripture preview carries it too, as it also opens outside a lesson (the reader's Resources). */
+.page,
+.passageDialog {
   --cfm-serif: var(--font-serif-text);
   --cfm-sans: var(--font-dm-sans), system-ui, sans-serif;
   --cfm-ink: var(--foreground);
@@ -18,6 +20,9 @@
   --cfm-rubric: var(--accent-rubric);
   --cfm-rubric-line: var(--accent-rubric-line);
   --cfm-panel: var(--surface-card);
+}
+
+.page {
   --cfm-measure: 40rem;
   --cfm-reading-width: 46rem;
   --cfm-columns-gap: clamp(2rem, 4vw, 4rem);
@@ -331,6 +336,50 @@
   line-height: 1.6;
   color: var(--cfm-ink-2);
   text-wrap: pretty;
+}
+
+/* The lesson's own actions, under its title: Add note (LessonNoteButton). */
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.noteAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 1px solid var(--cfm-rule-strong);
+  border-radius: 999px;
+  background: var(--cfm-panel);
+  font: 600 0.75rem/1 var(--cfm-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cfm-ink);
+  cursor: pointer;
+}
+
+.noteAction:hover {
+  border-color: var(--cfm-rubric-line);
+  color: var(--cfm-rubric);
+}
+
+.noteAction:focus-visible {
+  outline: 2px solid var(--cfm-rubric);
+  outline-offset: 2px;
+}
+
+.noteAction:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.noteActionIcon {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--cfm-rubric);
 }
 
 .attribution {

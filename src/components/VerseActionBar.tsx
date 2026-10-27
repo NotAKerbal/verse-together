@@ -72,6 +72,10 @@ type Props = {
   /** The insight action shows only with both handlers (and showInsightAction): a reader without insights leaves them out. */
   onInsight?: () => void;
   onNewInsight?: () => void;
+  /** The insight action is adding the selection (it can't be pressed again meanwhile). */
+  insightPending?: boolean;
+  /** Why the insight action's last try failed, shown until the next one. */
+  insightError?: string | null;
   onAnnotation: () => void;
   /** Without it there is no Resources action (a reader with no resources panel). */
   onResources?: () => void;
@@ -389,8 +393,8 @@ function SelectionCardBody({
   selectionKey, quickMarks, annotateExtra, annotationTitle = "Annotate", annotationDescription = "Mark what matters",
   annotationDisabled = false, noteLabel = "Write a note", noteDescription = "Note and marks together",
   hasActiveInsight, selectedWord, showInsightAction = true, showExplore = false, showTranslations = false,
-  actionsEnabled = true, onClear, onInsight, onNewInsight, onAnnotation, onResources, onExplore, onTranslations,
-  shareHref, targetLabel = "Note",
+  actionsEnabled = true, onClear, onInsight, onNewInsight, insightPending = false, insightError = null, onAnnotation,
+  onResources, onExplore, onTranslations, shareHref, targetLabel = "Note",
 }: CardBodyProps) {
   // The selection the Annotate panel is open on, or null: a new selection reopens on the actions.
   const [annotating, setAnnotating] = useState<string | null>(null);
@@ -440,6 +444,7 @@ function SelectionCardBody({
     <>
       <QuickMarkBar quickMarks={quickMarks} onClear={onClear} />
       {quickMarks?.error ? <p className="selection-quick-error" role="alert">{quickMarks.error}</p> : null}
+      {insightError ? <p className="selection-quick-error" role="alert">{insightError}</p> : null}
 
       <div className="selection-actions">
         {showExplore && onExplore ? (
@@ -448,8 +453,19 @@ function SelectionCardBody({
           </button>
         ) : null}
         {showInsightAction && onInsight && onNewInsight ? (
-          <button type="button" className="selection-action" onMouseDown={preserveSelection} onClick={hasActiveInsight ? onInsight : onNewInsight} disabled={!actionsEnabled}>
-            <ActionLabel icon="add" title={hasActiveInsight ? `Add to ${targetLabel}` : `New ${targetLabel}`} description={actionsEnabled ? "Keep your thoughts" : "Sign in to save"} />
+          <button
+            type="button"
+            className="selection-action"
+            onMouseDown={preserveSelection}
+            onClick={hasActiveInsight ? onInsight : onNewInsight}
+            disabled={!actionsEnabled || insightPending}
+            aria-busy={insightPending || undefined}
+          >
+            <ActionLabel
+              icon="add"
+              title={hasActiveInsight ? `Add to ${targetLabel}` : `New ${targetLabel}`}
+              description={!actionsEnabled ? "Sign in to save" : insightPending ? "Adding…" : "Keep your thoughts"}
+            />
           </button>
         ) : null}
         <button

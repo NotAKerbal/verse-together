@@ -79,3 +79,36 @@ export function formatPassageReference(bookLabel: string, chapter: number, verse
   const spec = runs.map((run) => (run.start === run.end ? String(run.start) : `${run.start}–${run.end}`)).join(", ");
   return `${bookLabel} ${chapter}:${spec}`;
 }
+
+export type PassageShareData = { title: string; text: string; url: string };
+
+/** What a Share press came to: the share sheet took it, the link was copied, the reader backed out, or neither worked. */
+export type PassageShareOutcome = "shared" | "copied" | "cancelled" | "failed";
+
+type ShareNavigator = {
+  share?: (data: PassageShareData) => Promise<void>;
+  canShare?: (data: PassageShareData) => boolean;
+  clipboard?: { writeText: (text: string) => Promise<void> };
+};
+
+/**
+ * Shares a passage link through the system share sheet where there is one, and otherwise copies the link.
+ * Closing the sheet is a cancel, not an error; a sheet that refuses the link falls back to copying it.
+ */
+export async function sharePassageLink(data: PassageShareData, nav: ShareNavigator | undefined): Promise<PassageShareOutcome> {
+  if (nav?.share && (!nav.canShare || nav.canShare(data))) {
+    try {
+      await nav.share(data);
+      return "shared";
+    } catch (error) {
+      if ((error as { name?: unknown } | null)?.name === "AbortError") return "cancelled";
+    }
+  }
+  if (!nav?.clipboard) return "failed";
+  try {
+    await nav.clipboard.writeText(data.url);
+    return "copied";
+  } catch {
+    return "failed";
+  }
+}

@@ -2,11 +2,12 @@
 
 import { faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import VerseResourcesPanel from "./VerseResourcesPanel";
+import VerseResourcesPanel, { DESKTOP_QUERY as RESOURCES_SIDEBAR_QUERY } from "./VerseResourcesPanel";
 import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import {
@@ -26,6 +27,11 @@ import { scheduleIdleTask } from "@/lib/idle";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import { useComparisonChapters } from "./useComparisonChapters";
+import { useJstExcerpts } from "./useJstExcerpts";
+import JstExcerptCard from "./JstExcerptCard";
+import JstVerseText from "./JstVerseText";
+import { readJstChapter } from "@/lib/jst";
+import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
@@ -39,12 +45,15 @@ import {
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/plans/useReadingProgress";
-import { chapterReadPassages, hasReaderNote, sourceMatchesChapter } from "@/features/notes/chapterReadStatus";
+import { scriptureLinksForChapter } from "../../convex/noteScriptureLinks";
+import { chapterReadPassages, hasReaderNote } from "@/features/notes/chapterReadStatus";
 import { useJournalEntryActions } from "@/features/notes/useJournalEntryActions";
 import type { JournalEntry, ReadingLogRow } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import type { ReadingLogOption } from "@/features/notes/ReadingChip";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import { usePassagePreview } from "@/features/comeFollowMe/PassagePreview";
+import type { PassageTarget } from "@/features/comeFollowMe/passagePreview";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import type { ChapterChrome } from "@/lib/browseRoutes";
@@ -65,9 +74,10 @@ import {
   annotationHighlightClass,
   highlightOf,
   selectionMarks,
+  verseMarkAttributes,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
-import { selectedVerseRanges, restoreVerseRange } from "@/lib/verseSelection";
+import { selectedVerseRanges, selectedVersePassages, restoreVerseRange } from "@/lib/verseSelection";
 import type { VerseTextRange } from "../../convex/annotationRules";
 import { api } from "../../convex/_generated/api";
 
@@ -559,6 +569,11 @@ export default function ChapterReader({
     textReady ? overlayTranslations : NO_OVERLAYS
   );
   const overlayList = overlayTranslations.join(",");
+  const [jstEnabled] = useJstPreference();
+  // Bible chapters only (the hook checks), and like comparisons, only once the primary text is on screen. The
+  // appendix compares the JST with the KJV, so it is read in place of the KJV text and nothing else.
+  const jst = useJstExcerpts(volume, book, chapter, jstEnabled && textReady && primaryTranslation === "lds");
+  const jstReading = useMemo(() => readJstChapter(jst.status === "ready" ? jst.excerpts : [], verses), [jst, verses]);
   const { user, getToken } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
@@ -646,12 +661,12 @@ export default function ChapterReader({
       const reflections = new Map(journalEntries?.flatMap(entry => entry.kind === "note" ? [[entry.id, entry.has_reflection] as const] : []) ?? []);
       const notes = new Map(drafts.filter(draft => hasReaderNote({ ...draft, has_reflection: reflections.get(draft.id) })).map(draft => [draft.id, draft]));
       const refs = (myInsightRefs ?? []).filter(ref => notes.has(ref.draftId));
-      // Device notes have no server scripture refs; their explicit verse source supplies the marker.
+      // Device notes use the same current backlinks as account notes.
       if (!user) for (const draft of notes.values()) {
-        const source = draft.source;
-        if (draft.status === "archived" || !sourceMatchesChapter(source, { volume, book, chapter }) || source?.verseStart === undefined) continue;
-        refs.push({ draftId: draft.id, draftTitle: draft.title, verseStart: source.verseStart,
-          verseEnd: source.verseEnd ?? source.verseStart, status: draft.status });
+        if (draft.status === "archived") continue;
+        for (const ref of scriptureLinksForChapter(draft.markdown_body ?? "", draft.source, { volume, book, chapter })) {
+          refs.push({ draftId: draft.id, draftTitle: draft.title, ...ref, status: draft.status });
+        }
       }
       return groupVerseInsightRefsByVerse(refs);
     },
@@ -900,6 +915,7 @@ export default function ChapterReader({
   const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting && !isCustomTouchSelecting;
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
+  const wordStudyContext = useMemo(() => ({ volume, book, chapter }), [volume, book, chapter]);
   const showInsightAction = hasSelection && !canExploreWord;
   const hasSidebarPanelOpen = openResources || (openExplorer && canExploreWord);
   const selectedBounds = selectionState?.selectedBounds ?? null;
@@ -930,7 +946,7 @@ export default function ChapterReader({
   const compareColorClasses = [
     "text-sky-700 dark:text-sky-300",
     "text-emerald-700 dark:text-emerald-300",
-    "text-violet-700 dark:text-violet-300",
+    "text-lime-700 dark:text-lime-300",
     "text-rose-700 dark:text-rose-300",
     "text-cyan-700 dark:text-cyan-300",
     "text-fuchsia-700 dark:text-fuchsia-300",
@@ -954,10 +970,6 @@ export default function ChapterReader({
     [compareByTranslation, translationNameById]
   );
   const hasCompareSelections = compareByTranslation.size > 0;
-  const selectionReferenceLabel = useMemo(() => {
-    if (!selectedBounds) return null;
-    return `${book} ${chapter}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `-${selectedBounds.end}` : ""}`;
-  }, [book, chapter, selectedBounds]);
   const shareHref = selectedVerses.length > 0
     ? buildShareUrl({ volume, book, chapter, verses: selectedVerses.map((verse) => verse.verse) })
     : null;
@@ -1445,16 +1457,23 @@ export default function ChapterReader({
 
 
   async function onAddToNote() {
-    if (!selectedBounds || !selectionReferenceLabel) return;
-    await appendScriptureBlock({
-      volume,
-      book,
-      chapter,
-      verseStart: selectedBounds.start,
-      verseEnd: selectedBounds.end,
-      reference,
-      text: selectedText || null,
-    });
+    const passages = selectedVersePassages(selectionState?.ranges ?? []);
+    if (passages.length === 0) return;
+    for (const passage of passages) {
+      await appendScriptureBlock({
+        volume,
+        book,
+        chapter,
+        verseStart: passage.verseStart,
+        verseEnd: passage.verseEnd,
+        reference: formatPassageReference(
+          getBookLabel(volume, book),
+          chapter,
+          Array.from({ length: passage.verseEnd - passage.verseStart + 1 }, (_, index) => passage.verseStart + index)
+        ),
+        text: passage.text,
+      });
+    }
     openBuilder();
     clearSelection();
   }
@@ -1472,7 +1491,47 @@ export default function ChapterReader({
     setOpenExplorer(true);
   }
 
+  // Scripture named in a lesson resource opens in the same preview the lesson uses. This chapter's verses are
+  // already here (the reader's primary text is the Church's); any other chapter comes from the scripture library.
+  const canonicalVolume = normalizeScriptureVolume(volume);
+  const previewLocal = useMemo(
+    () => textReady ? [{ volume: canonicalVolume, book, chapter, verses }] : [],
+    [canonicalVolume, book, chapter, textReady, verses]
+  );
+  const inThisChapter = useCallback(
+    (target: PassageTarget) => textReady && target.volume === canonicalVolume && target.book === book && target.chapter === chapter,
+    [textReady, canonicalVolume, book, chapter]
+  );
+  const uncoverPassage = useCallback(() => {
+    // The mobile resources dialog covers the text, which stays inert until it has closed; the desktop sidebar
+    // sits beside the text and stays.
+    if (!window.matchMedia(RESOURCES_SIDEBAR_QUERY).matches) flushSync(() => setOpenResources(false));
+  }, []);
+  const goToVerse = useCallback((target: PassageTarget) => {
+    const verse = target.first ?? 1;
+    uncoverPassage();
+    const element = verseListRef.current?.querySelector<HTMLElement>(`[id="v-${verse}"]`);
+    if (!element) return;
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#v-${verse}`);
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.dispatchEvent(new CustomEvent("quick-nav-jump", { detail: { verse } }));
+    element.tabIndex = -1;
+    element.focus({ preventScroll: true });
+  }, [uncoverPassage]);
+  const restoreScroll = useCallback((top: number) => window.scrollTo({ top, behavior: "instant" }), []);
+  const passagePreview = usePassagePreview({
+    local: previewLocal,
+    besideGuide: inThisChapter,
+    showBesideGuide: goToVerse,
+    restoreScroll,
+    showBesideLabel: "Go to this passage",
+    beforeChapterNavigation: uncoverPassage,
+  });
+
   return (
+    <>
+    {/* Outside the section, so touches in the preview never reach the reader's swipe navigation. */}
+    {passagePreview.layer}
     <section
       className="space-y-4 pb-20"
       onTouchStart={onTouchStart}
@@ -1533,6 +1592,7 @@ export default function ChapterReader({
               chapter={chapter}
               verseSpec={selectedVerses.map((verse) => verse.verse).join(",")}
               reference={formatPassageReference(getBookLabel(volume, book), chapter, selectedVerses.map((verse) => verse.verse))}
+              onPreviewPassage={passagePreview.open}
               onClose={() => setOpenResources(false)}
             />
           ) : null}
@@ -1540,6 +1600,7 @@ export default function ChapterReader({
             <WordStudyPanel
               word={singleSelectedWord}
               panelId="word-study-panel-desktop"
+              context={wordStudyContext}
               title="Explore Word"
               onClose={() => setOpenExplorer(false)}
             />
@@ -1635,6 +1696,36 @@ export default function ChapterReader({
           </ChapterHeader>
 
           <h1 className="simple-only reader-simple-title">{reference}</h1>
+          {jst.status === "loading" ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+              Loading Joseph Smith Translation excerpts…
+            </div>
+          ) : jst.status === "empty" ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+              The JST appendix has no excerpts for this chapter.
+            </div>
+          ) : jst.status === "ready" ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+              {jstReading.integrated.length > 0 ? (
+                <>
+                  {jstReading.integrated.length === 1
+                    ? "1 JST passage, read in place of the KJV verses it revises"
+                    : `${jstReading.integrated.length} JST passages, read in place of the KJV verses they revise`}
+                  ; <ins className="jst-added">JST wording</ins> is marked.
+                  Highlights and notes stay with the KJV text: turn the JST off to mark those verses.
+                </>
+              ) : (
+                "The JST appendix has a note for this chapter."
+              )}
+            </div>
+          ) : jst.status === "failed" ? (
+            <div className="reader-header-notice flex flex-wrap items-center gap-x-2 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200" role="alert">
+              <span>Couldn&apos;t load Joseph Smith Translation excerpts. {jst.message}</span>
+              <button type="button" onClick={jst.retry} className="underline underline-offset-2">
+                Retry
+              </button>
+            </div>
+          ) : null}
           {readingOpenError ? <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">{readingOpenError}</p> : null}
 
           <ChapterTextBoundary resetKey={contentPromise} reference={reference}>
@@ -1642,6 +1733,9 @@ export default function ChapterReader({
               <ChapterText key={`${volume}/${book}/${chapter}`} content={contentPromise} onReady={setContent}>
                 {(chapterVerses) => (
                   <>
+                    {jstReading.leading.map((excerpt) => (
+                      <JstExcerptCard key={excerpt.id} excerpt={excerpt} />
+                    ))}
                     <ol
                       ref={verseListRef}
                       onContextMenu={(event) => {
@@ -1660,6 +1754,8 @@ export default function ChapterReader({
                     >
                       {chapterVerses.map((v) => {
                         const isJumpHighlighted = jumpHighlightVerse === v.verse;
+                        // Read with the JST, this verse shows the JST's wording, which isn't the KJV text marks are saved on.
+                        const jstRow = jstReading.rows.get(v.verse);
                         const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
                         const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
                         const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
@@ -1690,6 +1786,7 @@ export default function ChapterReader({
                             data-read={readPassage ? "true" : undefined}
                             data-read-start={readPassage?.start === v.verse ? "true" : undefined}
                             data-read-end={readPassage?.end === v.verse ? "true" : undefined}
+                            data-jst={jstRow ? "true" : undefined}
                             className={`reader-verse leading-7 rounded-md px-3 py-2 -mx-2 ${
                               isJumpHighlighted
                                 ? "bg-[color:var(--accent-sky-soft)] ring-2 ring-[color:var(--surface-border)] transition-colors duration-300"
@@ -1712,6 +1809,26 @@ export default function ChapterReader({
                               />
                             ) : null}
                             <div className="flex items-start gap-2">
+                              {jstRow ? (
+                                <div className="min-w-0 flex-1 text-left" data-verse={v.verse}>
+                                  <span className="verse-badge">{v.verse}</span>
+                                  <JstVerseText row={jstRow} />
+                                  {/* Translation overlays compare with the KJV; the KJV isn't repeated beside them here. */}
+                                  {verseComparisons.map((comparison) => (
+                                    <span key={`${v.verse}-${comparison.key}`} className="mt-1 block text-sm leading-6" data-verse-ignore>
+                                      <span className={`mr-1.5 text-[10px] uppercase tracking-wide ${comparison.compareColorClass}`}>
+                                        {comparison.label}
+                                      </span>
+                                      {comparison.compareText}
+                                    </span>
+                                  ))}
+                                  {myVerseAnnotation && (verseMarkAttributes(myVerseAnnotation) || myVerseAnnotation.text_marks?.length) ? (
+                                    <span className="jst-hidden-marks" data-verse-ignore>
+                                      Your marks on this verse are on its KJV wording. Turn off the JST to see them.
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : (
                               <div
                                 className={`min-w-0 flex-1 text-left ${
                                   customMobileSelectionEnabled
@@ -1778,6 +1895,7 @@ export default function ChapterReader({
                                   </span>
                                 )}
                               </div>
+                              )}
                               {verseStudyPaths.length > 0 ? (
                                 <VerseStudyPathMarker
                                   verse={v.verse}
@@ -1912,6 +2030,7 @@ export default function ChapterReader({
               <WordStudyPanel
                 word={singleSelectedWord}
                 panelId="word-study-panel-mobile"
+                context={wordStudyContext}
                 title="Explore Word"
                 onClose={() => setOpenExplorer(false)}
               />
@@ -1997,5 +2116,6 @@ export default function ChapterReader({
       />
       )}
     </section>
+    </>
   );
 }

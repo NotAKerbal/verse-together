@@ -18,9 +18,9 @@ const DRAG_CLOSE_DISTANCE = 90;
 const KEYBOARD_MIN_HEIGHT = 80;
 
 /**
- * Below lg, a chapter page's Log: a modal bottom sheet opened by the reader's Log button (or a reader note action),
- * as tall as the screen allows and above an open keyboard. It holds the same panel as the desktop sidebar
- * (`children`, given the sheet's title id and close button for the panel's one header row).
+ * Below lg, a chapter or lesson page's Log: a modal bottom sheet opened by the reader's Log button, a lesson's Add
+ * note, or a reader note action, as tall as the screen allows and above an open keyboard. It holds the same panel
+ * as the desktop sidebar (`children`, given the sheet's title id and close button for the panel's one header row).
  */
 export default function NotesSheet({
   onClose,

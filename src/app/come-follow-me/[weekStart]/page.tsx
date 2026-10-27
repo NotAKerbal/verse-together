@@ -3,7 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import LessonCoverImage, { CoverCredit } from "@/features/comeFollowMe/LessonCoverImage";
 import { getLessonCover, type LessonCover } from "@/features/comeFollowMe/lessonCovers";
+import LessonNoteButton from "@/features/comeFollowMe/LessonNoteButton";
+import { lessonNoteSource } from "@/features/comeFollowMe/lessons";
 import StudyCompanion, { type CompanionChapter } from "@/features/comeFollowMe/StudyCompanion";
+import type { NoteSource } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import styles from "@/features/comeFollowMe/studyCompanion.module.css";
 import { getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
@@ -80,13 +83,15 @@ type HeroProps = {
   meta: string[];
   title: string;
   summary?: string;
+  /** What Add note links to: this lesson. */
+  noteSource: NoteSource;
 };
 
 /**
  * The page head: a full-width cover fading into the week's text. The cover's credit (or a
  * generated illustration's provenance) is in the footer, not here; see CoverLine.
  */
-function LessonHero({ cover, meta, title, summary }: HeroProps) {
+function LessonHero({ cover, meta, title, summary, noteSource }: HeroProps) {
   return (
     <header className={styles.header}>
       <div className={styles.heroArt}>
@@ -101,6 +106,9 @@ function LessonHero({ cover, meta, title, summary }: HeroProps) {
         </p>
         <h1 className={styles.title}>{title}</h1>
         {summary ? <p className={styles.summary}>{summary}</p> : null}
+        <div className={`simple-hide ${styles.heroActions}`}>
+          <LessonNoteButton source={noteSource} />
+        </div>
       </div>
     </header>
   );
@@ -118,9 +126,16 @@ function CoverLine({ cover }: { cover: LessonCover }) {
 function NoGuide({ week }: { week: ComeFollowMeWeek }) {
   const ranges = week.refs.length > 0 ? week.refs : week.suggestion ? [week.suggestion.ref] : [];
   const cover = getLessonCover(week.start);
+  const noteSource = lessonNoteSource(week.start, week.block);
   return (
     <section className={`page-shell ${styles.page}`} data-lesson-page>
-      <LessonHero cover={cover} meta={["Come, Follow Me", formatWeekRange(week)]} title={week.block} />
+      <LessonHero
+        cover={cover}
+        meta={["Come, Follow Me", formatWeekRange(week)]}
+        title={week.block}
+        noteSource={noteSource}
+      />
+      <NoteSourceRegistrar kind={noteSource.kind} label={noteSource.label} href={noteSource.href} />
       <div className={styles.noGuide}>
         <p>There is no study guide for this week yet. You can still read the assigned scripture.</p>
         <ul>
@@ -162,11 +177,7 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
   }
 
   const cover = getLessonCover(week.start);
-  const guideSource = {
-    kind: "guide" as const,
-    label: `${guide.scripture}: ${parsed.title}`,
-    href: `/come-follow-me/${week.start}`,
-  };
+  const guideSource = lessonNoteSource(week.start, `${guide.scripture}: ${parsed.title}`);
 
   return (
     <section className={`page-shell-wide ${styles.page}`} data-lesson-page>
@@ -175,6 +186,7 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         meta={[guide.scripture, guide.dateLabel]}
         title={parsed.title}
         summary={guide.summary}
+        noteSource={guideSource}
       />
 
       <NoteSourceRegistrar kind={guideSource.kind} label={guideSource.label} href={guideSource.href} />
