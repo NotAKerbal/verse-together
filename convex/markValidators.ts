@@ -1,17 +1,11 @@
-import { v } from "convex/values";
+import { v, type VString } from "convex/values";
+import type { MarkColor } from "./annotationRules";
 
 // Validators for verse marks and mark presets, shared by the schema and the functions that take them
 // (the rules themselves: convex/annotationRules.ts).
 
-/** MARK_COLORS: the colors a verse can be highlighted or underlined in. */
-export const markColorValidator = v.union(
-  v.literal("red"),
-  v.literal("yellow"),
-  v.literal("blue"),
-  v.literal("green"),
-  v.literal("pink"),
-  v.literal("purple")
-);
+/** Convex has no regex validator; mutation rules check palette names or lowercase six-digit hex. */
+export const markColorValidator = v.string() as VString<MarkColor>;
 
 /**
  * One quick button in the selection menu: a highlight or an underline, in one color, optionally named (up to

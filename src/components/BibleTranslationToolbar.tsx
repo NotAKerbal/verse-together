@@ -197,7 +197,7 @@ export default function BibleTranslationToolbar({ volume, book, chapter, compare
     <details className="text-xs">
       <summary className="cursor-pointer py-2 text-foreground/70">Joseph Smith Translation</summary>
       <div className="mt-1 flex items-start justify-between gap-3">
-        <p id="jst-toggle-description" className="text-[11px] leading-relaxed text-foreground/60">Show selected JST passages in place of the KJV verses they revise. <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline">Source</a></p>
+        <p id="jst-toggle-description" className="text-[11px] leading-relaxed text-foreground/60">Show selected JST passages in place of the KJV verses they revise, with the JST&apos;s own wording underlined. <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline">Source</a></p>
         <button type="button" role="switch" aria-checked={jstEnabled} aria-label="Joseph Smith Translation (JST)" aria-describedby="jst-toggle-description"
           className="marker-switch mt-0.5 shrink-0" onClick={() => setJstEnabled(!jstEnabled)}><span className="marker-switch-knob" aria-hidden="true" /></button>
       </div>

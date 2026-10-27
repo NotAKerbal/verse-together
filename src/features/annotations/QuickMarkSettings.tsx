@@ -25,6 +25,8 @@ import {
 } from "../../../convex/annotationRules";
 import MarkSample from "./MarkSample";
 import MarkStylePicker, { type MarkStyle } from "./MarkStylePicker";
+import { customMarkColors } from "./markColors";
+import { useDeviceMarkPresets } from "./useDeviceMarkPresets";
 import { markPresetFullLabel, markPresetLabel, markPresetPhrase } from "./verseAnnotations";
 import styles from "@/app/account/page.module.css";
 
@@ -155,21 +157,8 @@ export default function QuickMarkSettings() {
 
 function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAccount: boolean; sessionLoading: boolean }) {
   const saved = useQuery(api.preferences.getReaderPreferences, syncToAccount ? {} : "skip");
-  const [localPresets, setLocalPresets] = useState<MarkPreset[] | null>(null);
-
-  useEffect(() => {
-    if (syncToAccount) return;
-    function readDevicePresets() {
-      setLocalPresets(readLocalPreferences()?.markPresets ?? DEFAULT_MARK_PRESETS.map((preset) => ({ ...preset })));
-    }
-    // Read browser storage after hydration, then follow changes from other tabs.
-    readDevicePresets();
-    function onStorage(event: StorageEvent) {
-      if (event.key === "reader_prefs_v1" || event.key === null) readDevicePresets();
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [syncToAccount]);
+  // This device's presets (read after hydration), following changes from this tab's other settings and other tabs.
+  const localPresets = useDeviceMarkPresets();
   const save = useMutation(api.preferences.saveMarkPresets).withOptimisticUpdate((store, args) => {
     const current = store.getQuery(api.preferences.getReaderPreferences, {});
     if (current) store.setQuery(api.preferences.getReaderPreferences, {}, { ...current, markPresets: normalizeMarkPresets(args.presets) ?? [] });
@@ -217,7 +206,6 @@ function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAcco
         setError("Couldn't save your quick marks on this device. Allow browser storage and try again.");
         return;
       }
-      setLocalPresets(next);
       setError(null);
       return;
     }
@@ -310,6 +298,8 @@ function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAcco
   }
 
   const isDefault = samePresets(presets, DEFAULT_MARK_PRESETS);
+  // Custom colors already in the list, offered to every picker so one color can mark both ways.
+  const customColors = customMarkColors(presets.map((preset) => preset.color));
   const summary = loading
     ? "Loading…"
     : presets.length === 0
@@ -403,6 +393,7 @@ function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAcco
                     label={position}
                     disabled={loading}
                     unavailable={takenBy(presets, index)}
+                    customColors={customColors}
                     onChange={(style) => edit(index, style)}
                   />
                 </span>
@@ -450,6 +441,7 @@ function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAcco
               label="New quick mark"
               disabled={loading}
               unavailable={takenBy(presets, null)}
+              customColors={customColors}
               onChange={(style) => setAdding({ ...addCandidate, ...style })}
             />
           </span>

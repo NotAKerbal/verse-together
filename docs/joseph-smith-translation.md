@@ -18,11 +18,13 @@ Each passage is **read in place** of the KJV verses it compares to, as one conti
   verse by verse, since JST numbering often differs), and its words are spread over those KJV verses' rows. Every
   JST word appears exactly once, in order: "JST, Mark 9:40–48" (nine JST verses) reads across KJV Mark 9:43–48 (six).
 - Wording the JST shares with the KJV reads normally (in the JST's spelling and punctuation). Wording the JST adds
-  or substitutes is violet on a faint violet wash with a dotted underline (an `<ins>`), so color is not the only
-  cue. KJV wording the JST leaves out isn't shown; a small ‸ marks the spot, with the KJV words in its tooltip and
-  accessible label. A KJV verse with no JST wording at all says so.
-- The KJV verse numbers stay. Each passage starts with a "JST 9:40–48" label (the source label and compare
-  reference in its tooltip), and JST verse numbers that differ from the KJV's show inline as small "JST 41" markers.
+  or substitutes keeps the verse's own text color and has only a subtle dotted underline (an `<ins>`), so the
+  passage reads as one text. KJV wording the JST leaves out is hidden by default; "Show omitted KJV words" in the
+  JST notice above the chapter shows it in place, muted and struck through (a `<del>`, with "KJV wording not in the
+  JST" for screen readers). A KJV verse with no JST wording at all says so.
+- The KJV verse numbers stay. Each passage starts with a small, muted "JST 9:40–48" reference (the source label and
+  compare reference in its tooltip and screen-reader text), and JST verse numbers that differ from the KJV's show
+  inline as small muted numerals (announced as "JST verse 41").
 - KJV verses outside a passage are untouched, including the gap in a discontinuous one (Exodus 34:1–2, 14 leaves
   3–13 alone). Where the JST verses are numbered like the KJV's and skip some ("1 Corinthians 7:1–2, 5, 26, 29–33,
   38" compared with "29–38"), each numbered run is aligned on its own and the verses between runs (34–37), which the

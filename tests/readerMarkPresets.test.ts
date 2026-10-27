@@ -10,8 +10,10 @@ import {
   getDefaultPreferences,
   loadPreferences,
   normalizePreferences,
+  readLocalMarkPresetsSnapshot,
   readLocalPreferences,
   savePreferences,
+  subscribeLocalPreferences,
   writeLocalMarkPresets,
 } from "../src/lib/preferences";
 
@@ -133,5 +135,39 @@ describe("reader preferences on this device", () => {
     });
     expect((await loadPreferences("user", "token")).markPresets).toEqual([{ ...redUnderline, name: "Commandments" }]);
     expect(readLocalPreferences()?.markPresets).toEqual([{ ...redUnderline, name: "Commandments" }]);
+  });
+  test("this device's presets are followed live: a write in this tab notifies, and an unchanged copy reads as the same list", () => {
+    const events = new EventTarget();
+    vi.stubGlobal("window", {
+      localStorage: storage,
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+      dispatchEvent: events.dispatchEvent.bind(events),
+    });
+    const custom = { kind: "highlight" as const, color: "#12ab89" as const, name: "Promises" };
+    const first = readLocalMarkPresetsSnapshot();
+    expect(first).toEqual(getDefaultPreferences().markPresets);
+    expect(readLocalMarkPresetsSnapshot()).toBe(first);
+
+    const onChange = vi.fn();
+    const unsubscribe = subscribeLocalPreferences(onChange);
+    writeLocalMarkPresets([custom, redUnderline]);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = readLocalMarkPresetsSnapshot();
+    expect(next).toEqual([custom, redUnderline]);
+    expect(readLocalMarkPresetsSnapshot()).toBe(next);
+
+    // A reader-settings save keeps the presets (and so the same list), and still tells this tab.
+    void savePreferences(null, { ...getDefaultPreferences(), fontScale: 1.2, markPresets: [] });
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(readLocalMarkPresetsSnapshot()).toEqual([custom, redUnderline]);
+
+    // Another tab's write arrives as a storage event for this key.
+    events.dispatchEvent(Object.assign(new Event("storage"), { key: "reader_prefs_v1" }));
+    events.dispatchEvent(Object.assign(new Event("storage"), { key: "something_else" }));
+    expect(onChange).toHaveBeenCalledTimes(3);
+    unsubscribe();
+    writeLocalMarkPresets([]);
+    expect(onChange).toHaveBeenCalledTimes(3);
   });
 });
