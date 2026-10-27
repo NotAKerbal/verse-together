@@ -1,5 +1,6 @@
 "use client";
 
+import { exploreAction } from "@/components/WordStudyLinks";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 type EtymologyItem = {
@@ -9,7 +10,11 @@ type EtymologyItem = {
   text: string;
 };
 
-export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
+export default function EtymologyEntryCard({ item, variant = "card" }: {
+  item: EtymologyItem;
+  /** "plain" sits inside an Explore result row, which already shows the word and source: no box or header. */
+  variant?: "card" | "plain";
+}) {
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
 
   async function onAddCardToInsight() {
@@ -20,6 +25,24 @@ export default function EtymologyEntryCard({ item }: { item: EtymologyItem }) {
       entryText: item.text?.trim() || "",
     });
     openBuilder();
+  }
+
+  if (variant === "plain") {
+    return (
+      <article className="space-y-2">
+        <p className="whitespace-pre-line break-words">{item.text}</p>
+        <button
+          type="button"
+          onClick={() => {
+            void onAddCardToInsight();
+          }}
+          className={exploreAction}
+          title="Add this etymology card to a note"
+        >
+          Add to note
+        </button>
+      </article>
+    );
   }
 
   return (

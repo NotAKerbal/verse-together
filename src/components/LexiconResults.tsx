@@ -1,8 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
-import { STRONGS_LANG, scriptRuns, type StrongsLanguage, type StrongsLookup, type StrongsMatch } from "@/lib/strongsLexicon";
-import { ExternalIcon, ExternalLink, quietButton, secondaryLink } from "@/components/WordStudyLinks";
+import { STRONGS_LANG, scriptRuns, type StrongsLookup, type StrongsMatch } from "@/lib/strongsLexicon";
+import { ExploreRow, ExploreRows } from "@/components/ExploreSection";
+import { ExternalIcon, ExternalLink, eyebrow, quietButton, secondaryLink } from "@/components/WordStudyLinks";
 
 const SHOWN_FIRST = 3;
 
@@ -21,23 +22,16 @@ function bibleHubEntryUrl(id: string): string {
   return `https://biblehub.com/${id.startsWith("H") ? "hebrew" : "greek"}/${id.slice(1)}.htm`;
 }
 
-function LexiconEntry({ match, language, term }: { match: StrongsMatch; language: StrongsLanguage; term: string }) {
-  const script = STRONGS_LANG[language];
+/** A Strong's entry in full, under its title row: how it is said, what it means, and how the KJV renders it. */
+function LexiconEntry({ match }: { match: StrongsMatch }) {
   return (
-    <li className="space-y-1.5 rounded-md border border-[color:var(--surface-border)] bg-[color:var(--surface-card)] p-3">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <bdi lang={script.lang} dir={script.dir} className="font-serif text-2xl leading-tight">{match.lemma}</bdi>
-        <span className="text-sm italic">{match.transliteration}</span>
-        {match.pronunciation ? (
-          <span className="text-xs text-[color:var(--foreground-muted)]">
-            <span className="sr-only">pronounced </span>{match.pronunciation}
-          </span>
-        ) : null}
-        <span className="ml-auto rounded-full border border-[color:var(--surface-border)] px-2 text-xs tabular-nums text-[color:var(--foreground-muted)]">
-          <span className="sr-only">Strong’s number </span>{match.id}
-        </span>
-      </div>
-      <p className="text-sm leading-6"><MixedScript text={match.definition} /></p>
+    <div className="space-y-1.5">
+      {match.pronunciation ? (
+        <p className="text-xs text-[color:var(--foreground-muted)]">
+          <span className="sr-only">pronounced </span>{match.pronunciation}
+        </p>
+      ) : null}
+      <p><MixedScript text={match.definition} /></p>
       {match.derivation ? (
         <p className="text-xs leading-5 text-[color:var(--foreground-muted)]"><MixedScript text={match.derivation} /></p>
       ) : null}
@@ -45,50 +39,71 @@ function LexiconEntry({ match, language, term }: { match: StrongsMatch; language
         <span className="font-medium">KJV renders it: </span>
         <MixedScript text={match.kjv} />
       </p>
-      <div className="flex flex-wrap items-center justify-between gap-x-3">
-        {match.matchedIn === "definition" ? (
-          <p className="text-xs text-[color:var(--foreground-muted)]">Found in the definition, not the KJV renderings of “{term}”.</p>
-        ) : <span />}
-        <ExternalLink href={bibleHubEntryUrl(match.id)} className={secondaryLink}>
-          {match.id} on Bible Hub
-          <ExternalIcon />
-        </ExternalLink>
-      </div>
-    </li>
+      <ExternalLink href={bibleHubEntryUrl(match.id)} className={secondaryLink}>
+        {match.id} on Bible Hub
+        <ExternalIcon />
+      </ExternalLink>
+    </div>
   );
 }
 
-/** A language's Strong's entries for the word: the best few, the rest on request, and the source. */
+/** A language's Strong's entries for the word as title rows: the best few, the rest on request, and the source. */
 export function LexiconResults({ lookup }: { lookup: StrongsLookup }) {
   const [showAll, setShowAll] = useState(false);
   const listId = useId();
   const { matches, term, language } = lookup;
   const label = language === "hebrew" ? "Hebrew" : "Greek";
+  const script = STRONGS_LANG[language];
   const shown = showAll ? matches : matches.slice(0, SHOWN_FIRST);
+  // Words the KJV translates as the term come first; words whose definitions only mention it follow, apart.
+  const groups = [
+    { id: "kjv", heading: `translated “${term}” in the KJV`, rows: shown.filter((match) => match.matchedIn === "kjv") },
+    { id: "definition", heading: `definitions that mention “${term}”`, rows: shown.filter((match) => match.matchedIn === "definition") },
+  ].filter((group) => group.rows.length > 0);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {matches.length > 0 ? (
         <>
-          <p className="text-xs leading-5 text-[color:var(--foreground-muted)]">
-            {label} words the King James Version translates as “{term}” (or whose definitions use it). They are
-            possibilities to explore, not the word in this verse.
-          </p>
-          <ul id={listId} className="space-y-2">
-            {shown.map((match) => <LexiconEntry key={match.id} match={match} language={language} term={term} />)}
-          </ul>
+          <div id={listId} className="space-y-2">
+            {groups.map((group) => (
+              <section key={group.id} aria-labelledby={`${listId}-${group.id}`}>
+                <h6 id={`${listId}-${group.id}`} className={`px-2.5 pt-1 ${eyebrow}`}>{label} · {group.heading}</h6>
+                <ExploreRows>
+                  {group.rows.map((match) => (
+                    <ExploreRow
+                      key={match.id}
+                      id={`${language}:${match.id}`}
+                      label={<>{label} · <span className="sr-only">Strong’s number </span>{match.id}</>}
+                      title={
+                        <>
+                          <bdi lang={script.lang} dir={script.dir} className="text-lg">{match.lemma}</bdi>
+                          <span className="ml-1.5 text-[0.9375rem] italic text-[color:var(--foreground-muted)]">{match.transliteration}</span>
+                        </>
+                      }
+                    >
+                      <LexiconEntry match={match} />
+                    </ExploreRow>
+                  ))}
+                </ExploreRows>
+              </section>
+            ))}
+          </div>
           {matches.length > SHOWN_FIRST ? (
-            <button type="button" aria-expanded={showAll} aria-controls={listId} onClick={() => setShowAll((value) => !value)} className={quietButton}>
-              {showAll ? "Show fewer" : `Show ${matches.length - SHOWN_FIRST} more`}
-            </button>
+            <div className="px-2.5">
+              <button type="button" aria-expanded={showAll} aria-controls={listId} onClick={() => setShowAll((value) => !value)} className={quietButton}>
+                {showAll ? "Show fewer" : `Show ${matches.length - SHOWN_FIRST} more`}
+                <span className="sr-only"> {label} entries</span>
+              </button>
+            </div>
           ) : null}
         </>
       ) : (
-        <p role="status" className="text-sm leading-6 text-[color:var(--foreground-muted)]">
+        <p role="status" className="px-2.5 text-sm leading-6 text-[color:var(--foreground-muted)]">
           No {label} entry in Strong’s dictionary uses “{term}” in its King James renderings or definition.
         </p>
       )}
-      <p className="text-xs text-[color:var(--foreground-muted)]">
+      <p className="px-2.5 text-xs leading-5 text-[color:var(--foreground-muted)]">
         {lookup.attribution.title}, from{" "}
         <ExternalLink href={lookup.attribution.sourceUrl} className="underline underline-offset-2">OpenScriptures</ExternalLink>
         {" "}({lookup.attribution.license.replace(/\s*\(.*\)$/, "")})
