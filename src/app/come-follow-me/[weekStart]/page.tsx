@@ -83,17 +83,16 @@ type HeroProps = {
 };
 
 /**
- * The page head: the week's text beside its cover, which fades into the page. The cover's credit (or a
+ * The page head: a full-width cover fading into the week's text. The cover's credit (or a
  * generated illustration's provenance) is in the footer, not here; see CoverLine.
  */
 function LessonHero({ cover, meta, title, summary }: HeroProps) {
   return (
     <header className={styles.header}>
-      <BackLink />
-      {/* Never wider than the source, so small paintings are not upscaled. */}
-      <div className={styles.heroArt} style={{ maxWidth: cover.width }}>
+      <div className={styles.heroArt}>
         <LessonCoverImage cover={cover} className={styles.heroImage} priority />
       </div>
+      <BackLink />
       <div className={styles.heroText}>
         <p className={styles.eyebrow}>
           {meta.map((item) => (
@@ -120,7 +119,7 @@ function NoGuide({ week }: { week: ComeFollowMeWeek }) {
   const ranges = week.refs.length > 0 ? week.refs : week.suggestion ? [week.suggestion.ref] : [];
   const cover = getLessonCover(week.start);
   return (
-    <section className={`page-shell ${styles.page}`}>
+    <section className={`page-shell ${styles.page}`} data-lesson-page>
       <LessonHero cover={cover} meta={["Come, Follow Me", formatWeekRange(week)]} title={week.block} />
       <div className={styles.noGuide}>
         <p>There is no study guide for this week yet. You can still read the assigned scripture.</p>
@@ -169,7 +168,7 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
   };
 
   return (
-    <section className={`page-shell-wide ${styles.page}`}>
+    <section className={`page-shell-wide ${styles.page}`} data-lesson-page>
       <LessonHero
         cover={cover}
         meta={[guide.scripture, guide.dateLabel]}
