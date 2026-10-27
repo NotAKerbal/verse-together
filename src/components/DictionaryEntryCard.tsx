@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import DictionaryEntryBody from "@/components/DictionaryEntryBody";
+import { exploreAction } from "@/components/WordStudyLinks";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 type DictionaryEntry = {
@@ -15,9 +16,12 @@ type DictionaryEntry = {
 export default function DictionaryEntryCard({
   entry,
   edition,
+  variant = "card",
 }: {
   entry: DictionaryEntry;
   edition: "1828" | "1844" | "1913";
+  /** "plain" sits inside an Explore result row, which already shows the word: no box or title of its own. */
+  variant?: "card" | "plain";
 }) {
   const { addDictionaryBlock, openBuilder } = useInsightBuilder();
   const dictionaryWord = useMemo(() => entry.word?.trim() || "Dictionary entry", [entry.word]);
@@ -31,6 +35,29 @@ export default function DictionaryEntryCard({
       entryText: entry.entryText,
     });
     openBuilder();
+  }
+
+  if (variant === "plain") {
+    return (
+      <article className="space-y-2">
+        {entry.pronounce || entry.heading ? (
+          <p className="text-xs text-[color:var(--foreground-muted)]">
+            {[entry.pronounce, entry.heading].filter(Boolean).join(" · ")}
+          </p>
+        ) : null}
+        <DictionaryEntryBody entryText={entry.entryText} />
+        <button
+          type="button"
+          onClick={() => {
+            void onAddCardToInsight();
+          }}
+          className={exploreAction}
+          title="Add this dictionary card to a note"
+        >
+          Add to note
+        </button>
+      </article>
+    );
   }
 
   return (

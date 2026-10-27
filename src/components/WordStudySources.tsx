@@ -18,12 +18,15 @@ import { createSharedRequests, fetchOkJson } from "@/lib/sharedRequests";
 import {
   bibleHubLexiconSearchUrl,
   getBibleInterlinearLink,
+  type BibleInterlinearLink,
   type BiblicalLanguage,
   type WordStudyContext,
 } from "@/lib/wordStudySources";
+import { lookupStatus, sectionStatus, visibleSources, type SourceStatus } from "@/lib/exploreSources";
 import { StudyHelpArticle } from "@/components/StudyHelpArticle";
 import { LexiconResults } from "@/components/LexiconResults";
-import { useSharedResource } from "@/components/useSharedResource";
+import { ExploreNotice, ExploreRow, ExploreRows, ExploreSection, GlyphText, plural, type ExploreDisclosure } from "@/components/ExploreSection";
+import { useSharedResource, type ResourceState } from "@/components/useSharedResource";
 import {
   ExternalIcon,
   ExternalLink,
@@ -51,10 +54,11 @@ export function loadStudyHelpsIndex(): Promise<StudyHelpsIndex> {
 
 type IndexState = { status: "loading" } | { status: "ready"; index: StudyHelpsIndex } | { status: "unavailable" };
 
-function useStudyHelpsIndex(): IndexState {
+function useStudyHelpsIndex(): [IndexState, () => void] {
   const [state, setState] = useState<IndexState>(() =>
     studyHelpsIndex ? { status: "ready", index: studyHelpsIndex } : { status: "loading" }
   );
+  const [attempt, setAttempt] = useState(0);
   const loaded = state.status === "ready";
 
   useEffect(() => {
@@ -71,9 +75,14 @@ function useStudyHelpsIndex(): IndexState {
     return () => {
       active = false;
     };
-  }, [loaded]);
+  }, [loaded, attempt]);
 
-  return state;
+  const retry = useCallback(() => {
+    setState({ status: "loading" });
+    setAttempt((value) => value + 1);
+  }, []);
+
+  return [state, retry];
 }
 
 // Entry text and lexicon results, shared by the reader's desktop and mobile panels and kept for the session.
@@ -90,14 +99,6 @@ export const lexiconLookups = createSharedRequests<StrongsLookup>(async (key, si
   const params = new URLSearchParams({ language, term });
   return (await fetchOkJson<{ lookup: StrongsLookup }>(`/api/tools/lexicon?${params}`, signal)).lookup;
 });
-
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`}>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
 
 function StudyHelpEntryPanel({ guide, slug, title, onSelectTopic }: {
   guide: StudyHelpGuide;
@@ -122,19 +123,17 @@ function StudyHelpEntryPanel({ guide, slug, title, onSelectTopic }: {
   return <LoadingLines label={`Loading ${title ?? "entry"}…`} />;
 }
 
-function StudyHelpGuideCard({ guide, word, indexStatus, matches }: {
-  guide: StudyHelpGuide;
-  word: string;
-  indexStatus: IndexState["status"];
-  matches: StudyHelpMatches | null;
-}) {
-  const [open, setOpen] = useState(true);
+/** A guide's row, titled with the topic it shows; open, it offers the guide's other matching topics in place. */
+function StudyHelpGuideRow({ guide, matches }: { guide: StudyHelpGuide; matches: StudyHelpMatches }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const entryRef = useRef<HTMLDivElement>(null);
-  const bodyId = useId();
-  const topics = useMemo(() => (matches ? [...matches.entries, ...matches.related] : []), [matches]);
+  const topicsId = useId();
+  const topics = useMemo(() => [...matches.entries, ...matches.related], [matches]);
   const slug = chosen ?? topics[0]?.slug ?? null;
-  const title = topics.find((topic) => topic.slug === slug)?.title ?? null;
+  const listed = topics.find((topic) => topic.slug === slug)?.title ?? null;
+  // A topic opened from an entry's text may not be among the matches; its title then comes with its entry.
+  const [unlisted] = useSharedResource(studyHelpEntries, slug != null && listed == null ? studyHelpKey(guide.id, slug) : null);
+  const title = listed ?? (unlisted.status === "ready" ? unlisted.data.title : null);
 
   // A topic named in the entry's text replaces the entry; focus moves to the new entry, not back to the top.
   const openTopicFromText = useCallback((next: string) => {
@@ -142,108 +141,142 @@ function StudyHelpGuideCard({ guide, word, indexStatus, matches }: {
     entryRef.current?.focus();
   }, []);
 
+  if (slug == null) return null;
+
   return (
-    <article aria-label={guide.label} className="rounded-md border border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)]">
-      <header className="flex items-start gap-2 p-3 pb-2">
-        <div className="min-w-0 flex-1">
-          <h5 className="text-sm font-semibold">
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-controls={bodyId}
-              onClick={() => setOpen((value) => !value)}
-              className={`flex min-h-8 w-full items-center justify-between gap-2 rounded text-left ${linkFocus}`}
-            >
-              {guide.label}
-              <Chevron open={open} />
-            </button>
-          </h5>
-          <p className="text-xs text-[color:var(--foreground-muted)]">{guide.description}</p>
+    <ExploreRow id={guide.id} label={guide.label} title={title ?? "Related topic"}>
+      <div className="space-y-3">
+        {topics.length > 1 ? (
+          <div className="space-y-1.5">
+            <p className={eyebrow} id={topicsId}>
+              {matches.entries.length ? "Matching and related topics" : "Related topics"}
+            </p>
+            <ul aria-labelledby={topicsId} className="flex flex-wrap gap-1.5">
+              {topics.map((topic) => (
+                <li key={topic.slug} className="min-w-0">
+                  <button
+                    type="button"
+                    aria-pressed={topic.slug === slug}
+                    onClick={() => setChosen(topic.slug)}
+                    className={`inline-flex min-h-10 max-w-full items-center rounded-full border px-3 text-left text-xs transition-colors motion-reduce:transition-none ${linkFocus} ${
+                      topic.slug === slug
+                        ? "border-[color:var(--explore-accent)] bg-[color:var(--explore-accent)] text-[color:var(--explore-on-accent)]"
+                        : "border-[color:var(--explore-edge)] hover:bg-[color:var(--explore-row-hover)]"
+                    }`}
+                  >
+                    <span className="break-words">{topic.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div ref={entryRef} tabIndex={-1} className={`rounded ${linkFocus}`}>
+          <StudyHelpEntryPanel guide={guide} slug={slug} title={title} onSelectTopic={openTopicFromText} />
         </div>
-        <ExternalLink
-          href={studyHelpBrowseUrl(guide.id)}
-          className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-2 text-xs text-[color:var(--foreground-muted)] transition-colors hover:bg-[color:var(--surface-button-hover)]"
-        >
-          Browse<span className="sr-only"> the {guide.label}</span>
+        <ExternalLink href={studyHelpBrowseUrl(guide.id)} className={secondaryLink}>
+          Browse the {guide.label}
           <ExternalIcon />
         </ExternalLink>
-      </header>
-      <div id={bodyId} hidden={!open} className="space-y-3 px-3 pb-3">
-        {indexStatus === "loading" ? (
-          <p role="status" className="text-xs text-[color:var(--foreground-muted)]">Finding topics for “{word}”…</p>
-        ) : indexStatus === "unavailable" ? (
-          <p className="text-xs leading-5 text-[color:var(--foreground-muted)]">Topic matches didn’t load. Browse the {guide.label} instead.</p>
-        ) : slug == null ? (
-          <p className="text-xs leading-5 text-[color:var(--foreground-muted)]">No “{word}” topic. Browse the {guide.label} for a related word.</p>
-        ) : (
-          <>
-            {topics.length > 1 ? (
-              <div className="space-y-1.5">
-                <p className={eyebrow} id={`${bodyId}-topics`}>
-                  {matches?.entries.length ? "Matching and related topics" : "Related topics"}
-                </p>
-                <ul aria-labelledby={`${bodyId}-topics`} className="flex flex-wrap gap-1.5">
-                  {topics.map((topic) => (
-                    <li key={topic.slug} className="min-w-0">
-                      <button
-                        type="button"
-                        aria-pressed={topic.slug === slug}
-                        onClick={() => setChosen(topic.slug)}
-                        className={`inline-flex min-h-8 max-w-full items-center rounded-full border px-2.5 text-left text-xs transition-colors ${linkFocus} ${
-                          topic.slug === slug
-                            ? "border-[color:var(--surface-button-active)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
-                            : "border-[color:var(--surface-border)] hover:bg-[color:var(--surface-button-hover)]"
-                        }`}
-                      >
-                        <span className="break-words">{topic.title}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {open ? (
-              <div ref={entryRef} tabIndex={-1} className={`rounded ${linkFocus}`}>
-                <StudyHelpEntryPanel guide={guide} slug={slug} title={title} onSelectTopic={openTopicFromText} />
-              </div>
-            ) : null}
-          </>
-        )}
       </div>
-    </article>
+    </ExploreRow>
   );
 }
 
-export function ScriptureHelpsSection({ word }: { word: string }) {
-  const indexState = useStudyHelpsIndex();
-  const index = indexState.status === "ready" ? indexState.index : null;
-  const matchesByGuide = useMemo(
-    () => (index ? STUDY_HELP_GUIDES.map((guide) => findStudyHelpMatches(index.guides[guide.id].entries, word)) : null),
-    [index, word]
-  );
-
+function BookIcon() {
   return (
-    <section aria-label="Scripture study helps" className="space-y-3">
-      <h4 className="font-serif text-xl">Scripture study helps</h4>
-      <div className="space-y-2">
-        {STUDY_HELP_GUIDES.map((guide, guideIndex) => (
-          <StudyHelpGuideCard
-            key={guide.id}
-            guide={guide}
-            word={word}
-            indexStatus={indexState.status}
-            matches={matchesByGuide?.[guideIndex] ?? null}
-          />
-        ))}
-      </div>
-    </section>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+      <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
+    </svg>
   );
 }
 
-const LANGUAGE_LABELS: Record<BiblicalLanguage, string> = { hebrew: "Hebrew", greek: "Greek" };
+export type StudyHelpGuideResult = { guide: StudyHelpGuide; status: SourceStatus; matches: StudyHelpMatches | null };
+export type ScriptureHelps = { guides: StudyHelpGuideResult[]; status: SourceStatus; retry: () => void };
 
-function LexiconPanel({ language, term }: { language: StrongsLanguage; term: string }) {
-  const [state, retry] = useSharedResource(lexiconLookups, lexiconKey(language, term));
+/** Which study-help guides have topics for the word, once the topic list has loaded. */
+export function useScriptureHelps(word: string): ScriptureHelps {
+  const [indexState, retry] = useStudyHelpsIndex();
+  const guides = useMemo(() => STUDY_HELP_GUIDES.map((guide): StudyHelpGuideResult => {
+    if (indexState.status !== "ready") {
+      return { guide, status: indexState.status === "loading" ? "loading" : "error", matches: null };
+    }
+    const matches = findStudyHelpMatches(indexState.index.guides[guide.id].entries, word);
+    return { guide, status: matches.entries.length || matches.related.length ? "found" : "empty", matches };
+  }), [indexState, word]);
+  return { guides, status: sectionStatus(guides.map((result) => result.status)), retry };
+}
+
+export function ScriptureHelpsSection({ word, helps, disclosure }: { word: string; helps: ScriptureHelps; disclosure: ExploreDisclosure }) {
+  if (helps.status === "empty") return null;
+  const found = helps.guides.filter((result) => result.status === "found" && result.matches);
+  return (
+    <ExploreSection
+      tone="sage"
+      icon={<BookIcon />}
+      title="Study helps"
+      summary={(found.length ? found : helps.guides).map(({ guide }) => guide.label).join(" · ")}
+      status={helps.status}
+      count={found.length ? plural(found.length, "source", "sources") : null}
+      disclosure={disclosure}
+    >
+      {helps.status === "loading" ? (
+        <ExploreNotice><LoadingLines label={`Finding study-help topics for “${word}”…`} /></ExploreNotice>
+      ) : helps.status === "error" ? (
+        <ExploreNotice>
+          <LoadError message="Study-help topics didn’t load." onRetry={helps.retry}>
+            {helps.guides.map(({ guide }) => (
+              <ExternalLink key={guide.id} href={studyHelpBrowseUrl(guide.id)} className={secondaryLink}>
+                Browse the {guide.label}
+                <ExternalIcon />
+              </ExternalLink>
+            ))}
+          </LoadError>
+        </ExploreNotice>
+      ) : (
+        <ExploreRows>
+          {found.map(({ guide, matches }) => (matches ? <StudyHelpGuideRow key={guide.id} guide={guide} matches={matches} /> : null))}
+        </ExploreRows>
+      )}
+    </ExploreSection>
+  );
+}
+
+export const LANGUAGE_LABELS: Record<BiblicalLanguage, string> = { hebrew: "Hebrew", greek: "Greek" };
+
+export type LexiconResult = {
+  key: BiblicalLanguage;
+  status: SourceStatus;
+  state: ResourceState<StrongsLookup>;
+  retry: () => void;
+};
+export type BiblicalLanguages = {
+  term: string;
+  interlinear: BibleInterlinearLink | null;
+  /** Both languages, the one of the testament being read first. */
+  languages: LexiconResult[];
+  status: SourceStatus;
+};
+
+const hasLexiconMatches = (lookup: StrongsLookup) => lookup.matches.length > 0;
+
+/** Strong's entries for the word in both languages, looked up together so an empty language can be left out. */
+export function useBiblicalLanguages(word: string, context?: WordStudyContext | null): BiblicalLanguages {
+  const interlinear = getBibleInterlinearLink(context);
+  const term = normalizeStudyTerm(word) || word;
+  const [hebrew, retryHebrew] = useSharedResource(lexiconLookups, lexiconKey("hebrew", term));
+  const [greek, retryGreek] = useSharedResource(lexiconLookups, lexiconKey("greek", term));
+  const results: Record<BiblicalLanguage, LexiconResult> = {
+    hebrew: { key: "hebrew", status: lookupStatus(hebrew, hasLexiconMatches), state: hebrew, retry: retryHebrew },
+    greek: { key: "greek", status: lookupStatus(greek, hasLexiconMatches), state: greek, retry: retryGreek },
+  };
+  const languages = interlinear?.testament === "new" ? [results.greek, results.hebrew] : [results.hebrew, results.greek];
+  const lexiconStatus = sectionStatus(languages.map((result) => result.status));
+  return { term, interlinear, languages, status: interlinear && lexiconStatus === "empty" ? "found" : lexiconStatus };
+}
+
+function LexiconPanel({ language, term, state, retry }: { language: BiblicalLanguage; term: string; state: ResourceState<StrongsLookup>; retry: () => void }) {
   const search = (
     <ExternalLink href={bibleHubLexiconSearchUrl(language, term)} className={secondaryLink}>
       Search Bible Hub’s {LANGUAGE_LABELS[language]} lexicon<span className="sr-only"> for “{term}”</span>
@@ -252,68 +285,75 @@ function LexiconPanel({ language, term }: { language: StrongsLanguage; term: str
   );
   if (state.status === "ready") {
     return (
-      <div className="space-y-1">
+      <div>
         <LexiconResults lookup={state.data} />
-        {search}
+        <div className="px-2.5">{search}</div>
       </div>
     );
   }
-  if (state.status === "error") {
-    return <LoadError message={`${LANGUAGE_LABELS[language]} lexicon entries didn’t load.`} onRetry={retry}>{search}</LoadError>;
-  }
-  return <LoadingLines label={`Looking up “${term}” in Strong’s ${LANGUAGE_LABELS[language]} dictionary…`} />;
+  return (
+    <ExploreNotice>
+      {state.status === "error" ? (
+        <LoadError message={`${LANGUAGE_LABELS[language]} lexicon entries didn’t load.`} onRetry={retry}>{search}</LoadError>
+      ) : (
+        <LoadingLines label={`Looking up “${term}” in Strong’s ${LANGUAGE_LABELS[language]} dictionary…`} />
+      )}
+    </ExploreNotice>
+  );
 }
 
-export function BiblicalLanguagesSection({ word, context }: { word: string; context?: WordStudyContext | null }) {
-  const interlinear = getBibleInterlinearLink(context);
-  const searchTerm = normalizeStudyTerm(word) || word;
-  // Lead with, and first load, the language of the testament being read.
-  const preferred: BiblicalLanguage = interlinear?.testament === "new" ? "greek" : "hebrew";
-  const languages: BiblicalLanguage[] = preferred === "greek" ? ["greek", "hebrew"] : ["hebrew", "greek"];
-  const [chosen, setChosen] = useState<BiblicalLanguage | null>(null);
-  const language = chosen ?? preferred;
-  const panelId = useId();
+/** Strong's entries in both languages, the testament's first, and the chapter's interlinear when there is one. */
+export function BiblicalLanguagesSection({ lexicons, disclosure }: { lexicons: BiblicalLanguages; disclosure: ExploreDisclosure }) {
+  const { term, interlinear } = lexicons;
+  if (lexicons.status === "empty") return null;
+  const offered = visibleSources(lexicons.languages);
+  const matchCount = offered.reduce((total, { state }) => total + (state.status === "ready" ? state.data.matches.length : 0), 0);
+  const summary = [
+    ...offered.map(({ key }) => LANGUAGE_LABELS[key]),
+    ...(interlinear ? [`${interlinear.passage} interlinear`] : []),
+  ].join(" · ");
 
   return (
-    <section aria-label="Biblical languages" className="space-y-3">
-      <h4 className="font-serif text-xl">Biblical languages</h4>
-      <div className="space-y-3 rounded-md border border-[color:var(--surface-border)] bg-[color:var(--surface-card-strong)] p-3">
-        <div role="group" aria-label="Lexicon language" className="flex gap-1.5">
-          {languages.map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={option === language}
-              aria-controls={panelId}
-              onClick={() => setChosen(option)}
-              className={`inline-flex min-h-10 items-center rounded-full border px-3 text-sm transition-colors ${linkFocus} ${
-                option === language
-                  ? "border-[color:var(--surface-button-active)] bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)]"
-                  : "border-[color:var(--surface-border)] hover:bg-[color:var(--surface-button-hover)]"
-              }`}
-            >
-              {LANGUAGE_LABELS[option]}
-            </button>
-          ))}
-        </div>
-        <div id={panelId}>
-          <LexiconPanel key={language} language={language} term={searchTerm} />
-        </div>
+    <ExploreSection
+      tone="blue"
+      icon={<GlyphText>αא</GlyphText>}
+      title="Biblical languages"
+      summary={summary}
+      status={lexicons.status}
+      count={matchCount ? plural(matchCount, "match", "matches") : null}
+      disclosure={disclosure}
+    >
+      {offered.length ? (
+        <p className="flex items-start gap-2 px-2.5 pb-1 text-xs leading-5 text-[color:var(--explore-accent)]">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 shrink-0">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5M12 8h.01" />
+          </svg>
+          <span>
+            <span className="font-semibold">Possibilities to explore, not the word in this verse.</span> Strong’s entries whose
+            King James renderings or definitions use “{term}”.
+          </span>
+        </p>
+      ) : null}
+      <div className="space-y-2">
+        {offered.map((option) => (
+          <LexiconPanel key={option.key} language={option.key} term={term} state={option.state} retry={option.retry} />
+        ))}
       </div>
       {interlinear ? (
         <ExternalLink
           href={interlinear.url}
-          className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--surface-border)] p-3 transition-colors hover:bg-[color:var(--surface-button-hover)]"
+          className="mt-1 grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-[10px] px-2.5 py-2 transition-colors hover:bg-[color:var(--explore-row-hover)] motion-reduce:transition-none"
         >
-          <span className="min-w-0 space-y-0.5">
-            <span className="block text-sm font-semibold">{interlinear.passage} interlinear</span>
-            <span className="block text-xs leading-5 text-[color:var(--foreground-muted)]">
-              {interlinear.testament === "old" ? "Hebrew (and Aramaic)" : "Greek"} text of this chapter, word by word with English · Bible Hub
+          <span className="min-w-0">
+            <span className="block text-xs leading-snug text-[color:var(--foreground-muted)]">
+              {interlinear.testament === "old" ? "Hebrew (and Aramaic)" : "Greek"} text, word by word with English · Bible Hub
             </span>
+            <span className="mt-px block font-serif text-base leading-snug">{interlinear.passage} interlinear</span>
           </span>
           <ExternalIcon />
         </ExternalLink>
       ) : null}
-    </section>
+    </ExploreSection>
   );
 }

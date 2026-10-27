@@ -1071,7 +1071,7 @@ export default function ChapterReader({
       if (customMobileSelectionEnabled || customSelectionActiveRef.current || selectionRestoreRef.current) return;
       const nextSelectionState = getChapterSelectionState(window.getSelection?.() ?? null, verseListRef.current, verses);
       // Keep the resource context while interacting with its contents; selecting another passage still updates it.
-      if (openResources && !nextSelectionState) return;
+      if ((openResources || openExplorer) && !nextSelectionState) return;
       setSelectionState((prev) => {
         if (
           prev?.selectedText === nextSelectionState?.selectedText &&
@@ -1109,7 +1109,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [openResources, customMobileSelectionEnabled, showTapHint, verses]);
+  }, [openResources, openExplorer, customMobileSelectionEnabled, showTapHint, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
