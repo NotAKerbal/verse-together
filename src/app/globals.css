@@ -2388,7 +2388,8 @@ a.reader-toolbar-crumb:hover {
 /* Selection tools stay close to the passage, with the same paper and rubric as the reader. */
 .selection-popover {
   position: fixed;
-  z-index: 40;
+  /* Above the nonmodal Log/sidebar panels (40), below modal backdrops (50). */
+  z-index: 45;
   width: min(calc(100vw - 1.5rem), 27.5rem);
   max-height: calc(100dvh - 100px);
   visibility: hidden;
