@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getVerseLessonResources, parseResourceSelection } from "./verseResources.ts";
 import { parseGuide, readGuide, readGuides } from "./cfmGuide.ts";
+import { resourcePassageFromLink } from "../../features/comeFollowMe/passagePreview.ts";
 
 const selection = (overrides = {}) => ({ volume: "oldtestament", book: "jeremiah", chapter: 1, verses: [5], ...overrides });
 
@@ -99,4 +100,38 @@ This belongs only to verse six.
   assert.ok(html.length > 1000);
   assert.ok(!html.includes("This belongs only to verse six"));
   assert.ok(!html.includes("The next insight"));
+});
+
+test("scripture in a resource's insight and citations opens as a preview in the reader; other citations stay external", () => {
+  const links = (resource) => Array.from(resource.bodyHtml.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g), ([, attributes, text]) => ({
+    href: /\bhref="([^"]*)"/.exec(attributes)?.[1] ?? null,
+    last: /\bdata-last="([^"]*)"/.exec(attributes)?.[1] ?? null,
+    scripture: /\bdata-cfm-(?:scripture|local)\b/.test(attributes),
+    text: text.replace(/<[^>]+>/g, ""),
+  }));
+  const preview = (resource, link) => resourcePassageFromLink(link.href, link.last, { slug: "isaiah", volume: "oldtestament" }, link.text);
+
+  const [jeremiah] = getVerseLessonResources(selection());
+  const jeremiahLinks = links(jeremiah);
+  assert.ok(jeremiahLinks.filter((link) => link.scripture).length >= 5);
+  for (const link of jeremiahLinks.filter((link) => link.scripture)) assert.ok(preview(jeremiah, link), link.href);
+  assert.deepEqual(preview(jeremiah, jeremiahLinks.find((link) => link.text === "Doctrine and Covenants 138:53–56")), {
+    volume: "doctrineandcovenants", book: "doctrineandcovenants", label: "Doctrine and Covenants", chapter: 138, first: 53, last: 56,
+  });
+  // Scripture Helps is a manual, not scripture: it still opens on the Church's site.
+  const helps = jeremiahLinks.find((link) => link.text === "Scripture Helps");
+  assert.equal(preview(jeremiah, helps), null);
+  assert.equal(resourcePassageFromLink(jeremiah.sources[0].url, null, { slug: "jeremiah", volume: "oldtestament" }, jeremiah.sources[0].title), null);
+
+  const [comfort] = getVerseLessonResources(selection({ book: "isaiah", chapter: 40, verses: [1] }));
+  const comfortLinks = links(comfort);
+  // The lesson's own anchor for these verses, and a Gospel Library citation the insight names by reference.
+  const local = comfortLinks.find((link) => link.href === "/come-follow-me/2026-09-28#scripture-isaiah-40-v1-2");
+  assert.deepEqual(preview(comfort, local), { volume: "oldtestament", book: "isaiah", label: "Isaiah", chapter: 40, first: 1, last: 2 });
+  const cited = comfort.sources.find((source) => source.title === "Isaiah 61:7");
+  assert.ok(cited);
+  assert.deepEqual(resourcePassageFromLink(cited.url, null, { slug: "isaiah", volume: "oldtestament" }, cited.title), {
+    volume: "oldtestament", book: "isaiah", label: "Isaiah", chapter: 61, first: 7, last: 7,
+  });
+  for (const link of comfortLinks.filter((link) => link.scripture)) assert.ok(preview(comfort, link), link.href);
 });

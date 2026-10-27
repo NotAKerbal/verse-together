@@ -183,6 +183,26 @@ export function passageFromLink(
   return null;
 }
 
+const LESSON_ANCHOR = /^\/come-follow-me\/\d{4}-\d{2}-\d{2}(#.+)$/;
+
+/**
+ * The passage a link in a lesson resource points to, read away from its lesson (the reader's Resources panel).
+ * The resource carries the lesson's in-page scripture anchors as links into the lesson
+ * (`/come-follow-me/<week>#scripture-isaiah-40-v1-2`, see verseResources.ts); those name passages of the
+ * lesson's own book, `lessonBook`, and their `data-last` repeats the anchor's range. Every other link reads as
+ * in the lesson itself (passageFromLink); a lesson link to anything but its scripture is not a passage.
+ */
+export function resourcePassageFromLink(
+  href: string | null,
+  rangeEnd: string | null,
+  lessonBook: { slug: string; volume: string },
+  label: string | null = null
+): PassageTarget | null {
+  const lesson = href ? LESSON_ANCHOR.exec(href) : null;
+  if (lesson) return passageFromLink(lesson[1], null, lessonBook);
+  return passageFromLink(href, rangeEnd, undefined, label);
+}
+
 /** "Isaiah 58", "Luke 4:16–21", "Isaiah 66:24". */
 export function passageTitle(target: PassageTarget): string {
   const chapter = `${target.label} ${target.chapter}`;

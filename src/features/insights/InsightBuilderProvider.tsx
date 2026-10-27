@@ -30,6 +30,7 @@ import {
 import { deviceStudy } from "@/features/notes/deviceStudy";
 import { useDeviceStudy } from "@/features/notes/useDeviceStudy";
 import { useEntryDraftStore, type CreateJournalEntry } from "@/features/notes/useEntryDraftStore";
+import { blockToMarkdown } from "../../../convex/noteJournal";
 import { queueExcerpt } from "@/features/notes/noteExcerpts";
 
 /**
@@ -658,7 +659,11 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const appendScriptureBlock = useCallback(
     async (payload: ScripturePayload) => {
-      if (!user) return appendLocalText(`> ${(payload.text ?? "").replace(/\n/g, "\n> ")}\n\n${payload.reference}`);
+      if (!user) return appendLocalText(blockToMarkdown({
+        type: "scripture",
+        text: payload.text ?? undefined,
+        scriptureRef: payload,
+      }));
       const draftId = await ensureActiveDraftId();
       if (!draftId) return;
       await tracked(

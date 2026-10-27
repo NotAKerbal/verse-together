@@ -7,7 +7,9 @@
   styles follow the scripture-first styles below.
 */
 
-.page {
+/* The theme. The scripture preview carries it too, as it also opens outside a lesson (the reader's Resources). */
+.page,
+.passageDialog {
   --cfm-serif: var(--font-serif-text);
   --cfm-sans: var(--font-dm-sans), system-ui, sans-serif;
   --cfm-ink: var(--foreground);
@@ -18,6 +20,9 @@
   --cfm-rubric: var(--accent-rubric);
   --cfm-rubric-line: var(--accent-rubric-line);
   --cfm-panel: var(--surface-card);
+}
+
+.page {
   --cfm-measure: 40rem;
   --cfm-reading-width: 46rem;
   --cfm-columns-gap: clamp(2rem, 4vw, 4rem);

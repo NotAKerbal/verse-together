@@ -2411,11 +2411,73 @@ a.reader-toolbar-crumb:hover {
   color: var(--foreground);
 }
 
+.share-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 1.5rem;
+}
+
+.share-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.6rem;
+}
+
+.share-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.4rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.share-button svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+}
+
+.share-button:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.share-button[aria-busy="true"] {
+  cursor: progress;
+}
+
+.share-notice {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--foreground-soft);
+}
+
+.share-notice:empty {
+  display: none;
+}
+
+.share-notice[data-outcome="failed"] {
+  color: var(--accent-rubric);
+}
+
 @media (max-width: 480px) {
-  .share-footer {
+  .share-footer,
+  .share-footer-actions {
     flex-direction: column;
     align-items: center;
     text-align: center;
+  }
+
+  .share-action {
+    justify-content: center;
   }
 }
 

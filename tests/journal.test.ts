@@ -45,6 +45,44 @@ describe("journal persistence and authorization", () => {
     expect(markers).toEqual([expect.objectContaining({draftId:id,verseStart:3,verseEnd:5})]);
     expect((await alice.query(api.insights.listMyDrafts,{}))[0]).not.toHaveProperty("markdown_body");
   });
+  test("verse markers follow saved backlinks rather than retained scripture blocks", async () => {
+    const { alice, bob } = await setup();
+    const chapter = { volume: "oldtestament", book: "jeremiah", chapter: 31 };
+    const { id } = await alice.mutation(api.insights.createJournalNote, {
+      journalDate: "2026-10-21",
+      source: { kind: "scripture", label: "Jeremiah 31", href: "/browse/oldtestament/jeremiah/31", ...chapter },
+    });
+    await alice.mutation(api.insights.appendScriptureBlock, {
+      draftId: id, ...chapter, verseStart: 5, verseEnd: 7,
+      reference: "Jeremiah 31:5–7", text: "Selected words",
+    });
+    const before = (await alice.query(api.insights.getDraft, { draftId: id }))!;
+    expect(before.markdown_body).toContain("[Jeremiah 31:5–7](</browse/oldtestament/jeremiah/31#v-5>)");
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([
+      expect.objectContaining({ draftId: id, verseStart: 5, verseEnd: 7 }),
+    ]);
+    await alice.mutation(api.insights.saveJournalNote, {
+      draftId: id, markdownBody: "The quote was removed. Only my thoughts remain.", expectedRevision: before.markdown_revision,
+    });
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([]);
+    const saved = (await alice.query(api.insights.getDraft, { draftId: id }))!;
+    await alice.mutation(api.insights.saveJournalNote, {
+      draftId: id, markdownBody: "[Jeremiah 31:9](</browse/oldtestament/jeremiah/31#v-9>)", expectedRevision: saved.markdown_revision,
+    });
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([
+      expect.objectContaining({ draftId: id, verseStart: 9, verseEnd: 9 }),
+    ]);
+    expect(await bob.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([]);
+  });
+  test("verse coordinates alone do not supply a note marker without a verse backlink", async () => {
+    const { alice } = await setup();
+    await alice.mutation(api.insights.createJournalNote, {
+      journalDate: "2026-10-21", source: { ...source, verseStart: 3, verseEnd: 5, href: "/browse/bookofmormon/1-nephi/2" },
+    });
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, {
+      volume: "bookofmormon", book: "1-nephi", chapter: 2,
+    })).toEqual([]);
+  });
   test("projects legacy blocks and preserves them as recovery data after editing",async()=>{
     const {alice,t}=await setup();
     const {id}=await alice.mutation(api.insights.createDraft,{title:"Old note"});
