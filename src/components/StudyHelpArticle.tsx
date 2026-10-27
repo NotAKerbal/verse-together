@@ -69,7 +69,7 @@ function Blocks({ blocks, context }: { blocks: StudyHelpBlock[]; context: Inline
   });
 }
 
-/** An entry's text: a short preview, then all of it on "Read more". Links to the official page for the rest. */
+/** An entry's text, under the row that names it: a short preview, then all of it on "Read more". Links to the official page for the rest. */
 export function StudyHelpArticle({ entry, guideLabel, onSelectTopic }: {
   entry: StudyHelpEntry;
   guideLabel: string;
@@ -82,7 +82,6 @@ export function StudyHelpArticle({ entry, guideLabel, onSelectTopic }: {
 
   return (
     <div className="space-y-2">
-      <h6 className="font-serif text-lg leading-snug">{entry.title}</h6>
       <div id={bodyId} className="space-y-2 text-sm leading-6">
         <Blocks blocks={expanded ? entry.blocks : preview.blocks} context={context} />
         {expanded && entry.truncated ? (

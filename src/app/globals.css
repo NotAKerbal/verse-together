@@ -2783,3 +2783,106 @@ a.reader-toolbar-crumb:hover {
   .selection-card { animation: none; }
   .selection-action:hover:not(:disabled) .selection-action-icon { transform: none; }
 }
+
+/*
+  Explore word: three softly tinted section cards, the only container layer.
+  Results inside are plain rows; their colors come from the card's tone.
+*/
+.explore-card {
+  --explore-tint: #e7ecdf;
+  --explore-tint-hover: #dee6d3;
+  --explore-edge: #cbd6be;
+  --explore-accent: #435e3a;
+  --explore-accent-soft: #d2dec6;
+  --explore-on-accent: #ffffff;
+  --explore-pill: rgba(255, 255, 255, 0.6);
+  --explore-row-hover: rgba(255, 255, 255, 0.5);
+  --explore-shadow: rgba(31, 29, 26, 0.08);
+  background: var(--explore-tint);
+  border: 1px solid var(--explore-edge);
+  border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(31, 29, 26, 0.04);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.explore-card[data-tone="blue"] {
+  --explore-tint: #e3e9f0;
+  --explore-tint-hover: #d8e0ea;
+  --explore-edge: #c5d1de;
+  --explore-accent: #33547a;
+  --explore-accent-soft: #cad7e5;
+}
+
+.explore-card[data-tone="clay"] {
+  --explore-tint: #f3e5d7;
+  --explore-tint-hover: #ecdac9;
+  --explore-edge: #e0c6ad;
+  --explore-accent: #8a4a1e;
+  --explore-accent-soft: #e9cfb7;
+}
+
+[data-theme="dark"] .explore-card {
+  --explore-tint: #20261e;
+  --explore-tint-hover: #273024;
+  --explore-edge: #354131;
+  --explore-accent: #a9c59b;
+  --explore-accent-soft: #2e3a2a;
+  --explore-on-accent: #181715;
+  --explore-pill: rgba(0, 0, 0, 0.22);
+  --explore-row-hover: rgba(255, 255, 255, 0.05);
+  --explore-shadow: rgba(0, 0, 0, 0.35);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .explore-card[data-tone="blue"] {
+  --explore-tint: #1d232b;
+  --explore-tint-hover: #242c36;
+  --explore-edge: #333e4c;
+  --explore-accent: #a3bede;
+  --explore-accent-soft: #2a3542;
+}
+
+[data-theme="dark"] .explore-card[data-tone="clay"] {
+  --explore-tint: #2a211a;
+  --explore-tint-hover: #33281f;
+  --explore-edge: #4a392b;
+  --explore-accent: #e5ae80;
+  --explore-accent-soft: #3d2e22;
+}
+
+.explore-card:hover {
+  box-shadow: 0 2px 8px var(--explore-shadow);
+}
+
+.explore-card[data-open] {
+  border-color: color-mix(in srgb, var(--explore-edge) 70%, var(--explore-accent));
+  box-shadow: 0 4px 16px var(--explore-shadow);
+}
+
+.explore-card[data-open] > h4 > button {
+  border-radius: 13px 13px 8px 8px;
+}
+
+.explore-reveal:not([hidden]) {
+  animation: explore-reveal 0.18s ease-out;
+}
+
+@keyframes explore-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore-card {
+    transition: none;
+  }
+  .explore-reveal:not([hidden]) {
+    animation: none;
+  }
+}

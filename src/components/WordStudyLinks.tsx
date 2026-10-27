@@ -5,9 +5,11 @@ import type { ReactNode } from "react";
 export const linkFocus =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent-rubric)]";
 export const eyebrow = "text-[0.7rem] font-medium uppercase tracking-wide text-[color:var(--foreground-muted)]";
-export const secondaryLink = `inline-flex min-h-8 items-center gap-1 rounded text-xs text-[color:var(--foreground-muted)] underline-offset-2 hover:underline ${linkFocus}`;
+export const secondaryLink = `inline-flex min-h-10 items-center gap-1 rounded text-xs text-[color:var(--foreground-muted)] underline-offset-2 hover:underline ${linkFocus}`;
 export const textLink = `rounded text-[color:var(--accent-rubric)] underline decoration-[color:var(--surface-border)] underline-offset-2 hover:decoration-current ${linkFocus}`;
-export const quietButton = `surface-button inline-flex min-h-9 items-center rounded-full border px-3 text-xs ${linkFocus}`;
+export const quietButton = `surface-button inline-flex min-h-10 items-center rounded-full border px-3 text-xs ${linkFocus}`;
+/** A result's main action inside an Explore section, in the section's accent. */
+export const exploreAction = `inline-flex min-h-10 items-center gap-1.5 rounded-full border border-[color:var(--explore-accent)] bg-[color:var(--explore-accent)] px-3.5 text-[0.8125rem] font-semibold text-[color:var(--explore-on-accent)] transition-[filter] hover:brightness-110 motion-reduce:transition-none ${linkFocus}`;
 
 export function ExternalIcon() {
   return (
