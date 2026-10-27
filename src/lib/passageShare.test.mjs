@@ -6,6 +6,7 @@ import {
   groupVerseRuns,
   parseVerseSpec,
   serializeVerseSpec,
+  sharePassageLink,
 } from "./passageShare.ts";
 
 test("parses a single verse, a range, a list and a mix", () => {
@@ -83,4 +84,73 @@ test("formats human references with en dashes", () => {
   assert.equal(formatPassageReference("Alma", 32, [3, 21, 22, 23, 24, 25, 26, 27, 28]), "Alma 32:3, 21–28");
   assert.equal(formatPassageReference("Alma", 32, [27]), "Alma 32:27");
   assert.equal(formatPassageReference("Alma", 32, []), "Alma 32");
+});
+
+const shareData = {
+  title: "Alma 32:3, 21–28 · Verse Together",
+  text: "Alma 32:3, 21–28",
+  url: "https://example.test/share/bookofmormon/alma/32/3,21-28",
+};
+
+function fakeNavigator({ share, canShare, writeText } = {}) {
+  const calls = { shared: [], copied: [] };
+  const nav = {};
+  if (share) {
+    nav.share = async (data) => {
+      calls.shared.push(data);
+      return share(data);
+    };
+  }
+  if (canShare) nav.canShare = canShare;
+  if (writeText) {
+    nav.clipboard = {
+      writeText: async (text) => {
+        calls.copied.push(text);
+        return writeText(text);
+      },
+    };
+  }
+  return { nav, calls };
+}
+
+test("shares the passage link through the share sheet when there is one", async () => {
+  const { nav, calls } = fakeNavigator({ share: () => undefined, writeText: () => undefined });
+  assert.equal(await sharePassageLink(shareData, nav), "shared");
+  assert.deepEqual(calls.shared, [shareData]);
+  assert.deepEqual(calls.copied, []);
+});
+
+test("closing the share sheet is a cancel, with nothing copied", async () => {
+  const abort = Object.assign(new Error("Share canceled"), { name: "AbortError" });
+  const { nav, calls } = fakeNavigator({ share: () => Promise.reject(abort), writeText: () => undefined });
+  assert.equal(await sharePassageLink(shareData, nav), "cancelled");
+  assert.deepEqual(calls.copied, []);
+  // A DOMException abort (what browsers throw) reads the same.
+  const domAbort = new DOMException("Share canceled", "AbortError");
+  const dom = fakeNavigator({ share: () => Promise.reject(domAbort), writeText: () => undefined });
+  assert.equal(await sharePassageLink(shareData, dom.nav), "cancelled");
+});
+
+test("copies the exact passage link without a share sheet", async () => {
+  const { nav, calls } = fakeNavigator({ writeText: () => undefined });
+  assert.equal(await sharePassageLink(shareData, nav), "copied");
+  assert.deepEqual(calls.copied, [shareData.url]);
+});
+
+test("copies the link when the share sheet refuses it or can't take it", async () => {
+  const refused = new DOMException("Not allowed", "NotAllowedError");
+  const failing = fakeNavigator({ share: () => Promise.reject(refused), writeText: () => undefined });
+  assert.equal(await sharePassageLink(shareData, failing.nav), "copied");
+  assert.deepEqual(failing.calls.copied, [shareData.url]);
+
+  const unsupported = fakeNavigator({ share: () => undefined, canShare: () => false, writeText: () => undefined });
+  assert.equal(await sharePassageLink(shareData, unsupported.nav), "copied");
+  assert.deepEqual(unsupported.calls.shared, []);
+});
+
+test("reports a failure when neither sharing nor copying works", async () => {
+  assert.equal(await sharePassageLink(shareData, undefined), "failed");
+  assert.equal(await sharePassageLink(shareData, {}), "failed");
+  const { nav } = fakeNavigator({ writeText: () => Promise.reject(new Error("denied")) });
+  assert.equal(await sharePassageLink(shareData, nav), "failed");
 });
