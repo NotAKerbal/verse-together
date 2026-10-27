@@ -77,7 +77,7 @@ import {
   verseMarkAttributes,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
-import { selectedVerseRanges, restoreVerseRange } from "@/lib/verseSelection";
+import { selectedVerseRanges, selectedVersePassages, restoreVerseRange } from "@/lib/verseSelection";
 import type { VerseTextRange } from "../../convex/annotationRules";
 import { api } from "../../convex/_generated/api";
 
@@ -969,10 +969,6 @@ export default function ChapterReader({
     [compareByTranslation, translationNameById]
   );
   const hasCompareSelections = compareByTranslation.size > 0;
-  const selectionReferenceLabel = useMemo(() => {
-    if (!selectedBounds) return null;
-    return `${reference}:${selectedBounds.start}${selectedBounds.end !== selectedBounds.start ? `–${selectedBounds.end}` : ""}`;
-  }, [reference, selectedBounds]);
   const shareHref = selectedVerses.length > 0
     ? buildShareUrl({ volume, book, chapter, verses: selectedVerses.map((verse) => verse.verse) })
     : null;
@@ -1460,16 +1456,23 @@ export default function ChapterReader({
 
 
   async function onAddToNote() {
-    if (!selectedBounds || !selectionReferenceLabel) return;
-    await appendScriptureBlock({
-      volume,
-      book,
-      chapter,
-      verseStart: selectedBounds.start,
-      verseEnd: selectedBounds.end,
-      reference: selectionReferenceLabel,
-      text: selectedText || null,
-    });
+    const passages = selectedVersePassages(selectionState?.ranges ?? []);
+    if (passages.length === 0) return;
+    for (const passage of passages) {
+      await appendScriptureBlock({
+        volume,
+        book,
+        chapter,
+        verseStart: passage.verseStart,
+        verseEnd: passage.verseEnd,
+        reference: formatPassageReference(
+          getBookLabel(volume, book),
+          chapter,
+          Array.from({ length: passage.verseEnd - passage.verseStart + 1 }, (_, index) => passage.verseStart + index)
+        ),
+        text: passage.text,
+      });
+    }
     openBuilder();
     clearSelection();
   }

@@ -2,6 +2,25 @@ import type { VerseTextRange } from "../../convex/annotationRules";
 
 export type SelectedVerseTextRange = VerseTextRange & { chapter?: number };
 
+/** Note blocks have contiguous bounds, so a selection across excluded verses needs one block per run. */
+export function selectedVersePassages(ranges: readonly SelectedVerseTextRange[]): Array<{ verseStart: number; verseEnd: number; text: string }> {
+  const passages: Array<{ verseStart: number; verseEnd: number; text: string }> = [];
+  let previousChapter: number | undefined;
+  for (const range of ranges) {
+    const text = range.text.slice(range.start, range.end).trim();
+    if (!text) continue;
+    const last = passages[passages.length - 1];
+    if (last && range.chapter === previousChapter && range.verse === last.verseEnd + 1) {
+      last.verseEnd = range.verse;
+      last.text += ` ${text}`;
+    } else {
+      passages.push({ verseStart: range.verse, verseEnd: range.verse, text });
+    }
+    previousChapter = range.chapter;
+  }
+  return passages;
+}
+
 /** Scripture text nodes only: verse badges, comparison text, and controls never count. */
 export function scriptureTextNodes(element: HTMLElement): Text[] {
   const walker = element.ownerDocument.createTreeWalker(element, 4);

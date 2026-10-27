@@ -41,7 +41,7 @@ place this way; the full-corpus audit in the tests checks it.
 Saved highlights, underlines, and notes point at offsets in the KJV text, so a verse showing the JST's wording is
 not part of the selectable scripture text (it has no `data-verse-text`, and `selectedVerseRanges` skips it). Its
 words can't be highlighted, quoted, shared, or added to an insight as KJV, and a selection running into it only
-acts on the KJV verses it covers. A JST verse with a saved highlight or underline says the mark is on the KJV wording
+acts on the KJV verses it covers. When added to a note, selections spanning a revised verse are saved as separate contiguous passage blocks, each with its own exact quotation and reference. A JST verse with a saved highlight or underline says the mark is on the KJV wording
 and to turn off the JST to see it; a note still shows under the verse. Every other verse works as usual. Turning
 the JST off restores the KJV text with its marks exactly.
 
