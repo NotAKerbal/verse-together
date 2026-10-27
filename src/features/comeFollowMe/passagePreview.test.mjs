@@ -13,6 +13,7 @@ import {
   PREVIEW_STATE_KEY,
   previewFromState,
   previewState,
+  resourcePassageFromLink,
   selectPassage,
 } from "./passagePreview.ts";
 
@@ -490,4 +491,34 @@ test("a scripture-shaped label never makes a non-scripture destination a passage
   assert.equal(passageFromLink(church("bd/isaiah?lang=eng"), null, isaiah, "Isaiah 1:1"), null);
   // The same label on the chapter's own Gospel Library URL is still a passage.
   assert.deepEqual(passageFromLink(church("ot/isa/58?lang=eng"), null, isaiah, "Isaiah 58"), passageTarget("oldtestament", "isaiah", 58));
+});
+
+test("a lesson resource's links name the same passages away from the lesson (the reader's Resources)", () => {
+  // The lesson's in-page scripture anchors arrive as links into the lesson, with the anchor's range repeated.
+  assert.deepEqual(
+    resourcePassageFromLink("/come-follow-me/2026-09-28#scripture-isaiah-40-v1-2", "2", isaiah, "40:1–2"),
+    passageTarget("oldtestament", "isaiah", 40, 1, 2)
+  );
+  assert.deepEqual(resourcePassageFromLink("/come-follow-me/2026-09-28#scripture-isaiah-40", null, isaiah), passageTarget("oldtestament", "isaiah", 40));
+  // Only the lesson's own book, and only its scripture: other lesson anchors still go to the lesson.
+  for (const href of [
+    "/come-follow-me/2026-09-28#scripture-jeremiah-1-v5",
+    "/come-follow-me/2026-09-28#cfm-v-40-1-2",
+    "/come-follow-me/2026-09-28",
+    "/come-follow-me/2026-09-28#",
+    "/come-follow-me/latest#scripture-isaiah-40-v1-2",
+    "/elsewhere/2026-09-28#scripture-isaiah-40-v1-2",
+    "#scripture-isaiah-40-v1-2",
+  ]) assert.equal(resourcePassageFromLink(href, null, isaiah), null, href);
+  // Every other link reads exactly as in the lesson: our scripture links, and Gospel Library scripture by its text.
+  assert.deepEqual(resourcePassageFromLink("/browse/pearl/abraham/3#v-22", "23", isaiah, "Abraham 3:22–23"), passageTarget("pearl", "abraham", 3, 22, 23));
+  assert.deepEqual(
+    resourcePassageFromLink(church("ot/isa/61?lang=eng"), null, isaiah, "Isaiah 61:7"),
+    passageTarget("oldtestament", "isaiah", 61, 7, 7)
+  );
+  for (const href of [
+    church("manual/scripture-helps-old-testament/41-jeremiah-1-3-7-16-18-20?lang=eng"),
+    "https://www.google.com/search?q=Come+Follow+Me+Isaiah+40%3A1",
+    null,
+  ]) assert.equal(resourcePassageFromLink(href, null, isaiah, "Isaiah 40:1"), null, String(href));
 });
