@@ -65,6 +65,8 @@
 .sources h3 { margin: 0 0 8px; color: var(--foreground-soft); font-size: 11px; font-weight: 600; }
 .sources ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; }
 .sources a { color: var(--foreground); font-size: 12px; text-underline-offset: 3px; overflow-wrap: anywhere; }
+/* A cited scripture opens in the preview, like the scripture links in the insight. */
+.sources a.passageSource { color: var(--accent-rubric); text-decoration: underline; }
 .webSearch { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-border); }
 .webSearch p { margin: 0 0 10px; font-size: 12px; color: var(--foreground-soft); }
 .searchButton { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; border: 1px solid var(--surface-border); border-radius: 8px; background: var(--surface-card); padding: 9px 12px; color: var(--foreground); text-decoration: none; font-size: 13px; font-weight: 600; }
