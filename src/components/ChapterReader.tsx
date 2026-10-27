@@ -56,6 +56,7 @@ import { usePassagePreview } from "@/features/comeFollowMe/PassagePreview";
 import type { PassageTarget } from "@/features/comeFollowMe/passagePreview";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
+import { FEATURED_BIBLES } from "@/lib/translationCatalog";
 import type { ChapterChrome } from "@/lib/browseRoutes";
 import {
   groupChapterStudyPathsByVerse,
@@ -340,7 +341,7 @@ function normalizeCompareText(value: string): string {
 function formatTranslationShortLabel(translationId: string | undefined): string {
   if (!translationId) return "UNKNOWN";
   if (translationId.toLowerCase() === "lds") return "LDS";
-  return translationId.toUpperCase();
+  return FEATURED_BIBLES.find((item) => item.id.toLowerCase() === translationId.toLowerCase())?.shortLabel ?? translationId.toUpperCase();
 }
 
 function tokenizeWords(value: string): string[] {
@@ -953,7 +954,8 @@ export default function ChapterReader({
   ];
   const translationNameById = useMemo(() => {
     const next = new Map<string, string>();
-    next.set("lds", "LDS Standard Works");
+    next.set("lds", "King James Bible (LDS edition)");
+    FEATURED_BIBLES.forEach((option) => next.set(option.id, option.label));
     BIBLE_TRANSLATION_OPTIONS.forEach((option) => {
       next.set(option.id, option.label);
     });
