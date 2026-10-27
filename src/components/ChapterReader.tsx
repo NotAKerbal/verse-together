@@ -2,11 +2,12 @@
 
 import { faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Suspense, use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import VerseResourcesPanel from "./VerseResourcesPanel";
+import VerseResourcesPanel, { DESKTOP_QUERY as RESOURCES_SIDEBAR_QUERY } from "./VerseResourcesPanel";
 import VerseActionBar, { type VerseActionAnchorRect } from "./VerseActionBar";
 import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./ChapterNavigation";
 import {
@@ -46,6 +47,8 @@ import type { JournalEntry, ReadingLogRow } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import type { ReadingLogOption } from "@/features/notes/ReadingChip";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
+import { usePassagePreview } from "@/features/comeFollowMe/PassagePreview";
+import type { PassageTarget } from "@/features/comeFollowMe/passagePreview";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import type { ChapterChrome } from "@/lib/browseRoutes";
@@ -1473,7 +1476,47 @@ export default function ChapterReader({
     setOpenExplorer(true);
   }
 
+  // Scripture named in a lesson resource opens in the same preview the lesson uses. This chapter's verses are
+  // already here (the reader's primary text is the Church's); any other chapter comes from the scripture library.
+  const canonicalVolume = normalizeScriptureVolume(volume);
+  const previewLocal = useMemo(
+    () => ({ volume: canonicalVolume, book, chapters: textReady ? [{ chapter, verses }] : [] }),
+    [canonicalVolume, book, chapter, textReady, verses]
+  );
+  const inThisChapter = useCallback(
+    (target: PassageTarget) => textReady && target.volume === canonicalVolume && target.book === book && target.chapter === chapter,
+    [textReady, canonicalVolume, book, chapter]
+  );
+  const uncoverPassage = useCallback(() => {
+    // The mobile resources dialog covers the text, which stays inert until it has closed; the desktop sidebar
+    // sits beside the text and stays.
+    if (!window.matchMedia(RESOURCES_SIDEBAR_QUERY).matches) flushSync(() => setOpenResources(false));
+  }, []);
+  const goToVerse = useCallback((target: PassageTarget) => {
+    const verse = target.first ?? 1;
+    uncoverPassage();
+    const element = verseListRef.current?.querySelector<HTMLElement>(`[id="v-${verse}"]`);
+    if (!element) return;
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#v-${verse}`);
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.dispatchEvent(new CustomEvent("quick-nav-jump", { detail: { verse } }));
+    element.tabIndex = -1;
+    element.focus({ preventScroll: true });
+  }, [uncoverPassage]);
+  const restoreScroll = useCallback((top: number) => window.scrollTo({ top, behavior: "instant" }), []);
+  const passagePreview = usePassagePreview({
+    local: previewLocal,
+    besideGuide: inThisChapter,
+    showBesideGuide: goToVerse,
+    restoreScroll,
+    showBesideLabel: "Go to this passage",
+    beforeChapterNavigation: uncoverPassage,
+  });
+
   return (
+    <>
+    {/* Outside the section, so touches in the preview never reach the reader's swipe navigation. */}
+    {passagePreview.layer}
     <section
       className="space-y-4 pb-20"
       onTouchStart={onTouchStart}
@@ -1534,6 +1577,7 @@ export default function ChapterReader({
               chapter={chapter}
               verseSpec={selectedVerses.map((verse) => verse.verse).join(",")}
               reference={formatPassageReference(getBookLabel(volume, book), chapter, selectedVerses.map((verse) => verse.verse))}
+              onPreviewPassage={passagePreview.open}
               onClose={() => setOpenResources(false)}
             />
           ) : null}
@@ -1998,5 +2042,6 @@ export default function ChapterReader({
       />
       )}
     </section>
+    </>
   );
 }

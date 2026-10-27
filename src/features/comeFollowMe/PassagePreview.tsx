@@ -56,6 +56,8 @@ type Options = {
   restoreScroll: (top: number) => void;
   /** The scripture-first reader opens the passage in the page instead of beside the guide. */
   showBesideLabel?: string;
+  /** Clear any covering reader UI before navigating, including a jump within the current chapter. */
+  beforeChapterNavigation?: () => void;
 };
 
 /** What opened the preview: focus returns there, and the page to where it was then (its window.scrollY). */
@@ -92,7 +94,7 @@ function noModifiers(event: MouseEvent) {
 }
 
 /** The scripture preview. Returns `open` for the guide's links, and the dialog to render once on the page. */
-export function usePassagePreview({ local, besideGuide, showBesideGuide, restoreScroll, showBesideLabel = "Show beside the guide" }: Options) {
+export function usePassagePreview({ local, besideGuide, showBesideGuide, restoreScroll, showBesideLabel = "Show beside the guide", beforeChapterNavigation }: Options) {
   const router = useRouter();
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -281,7 +283,10 @@ export function usePassagePreview({ local, besideGuide, showBesideGuide, restore
     // the preview's entry (giving the guide's entry its own scroll restoration back) and go from there.
     leavingRef.current = true;
     hide();
-    stepBack(() => router.push(href));
+    stepBack(() => {
+      beforeChapterNavigation?.();
+      router.push(href);
+    });
   };
 
   const target = shown?.target ?? null;
