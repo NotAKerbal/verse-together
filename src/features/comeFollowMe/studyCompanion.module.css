@@ -1,6 +1,6 @@
 /*
   Come, Follow Me uses the existing cream-paper, warm-ink, rubric-red theme and book-like serif.
-  The hero, introduction, scripture, and closing sections share one consistent reading width.
+  The artwork spans the page; the text shares one consistent reading width.
   The introduction and closing sections are ordinary page content; passage context uses native disclosures.
   Original guide HTML and anchors are kept;
   Contents and Log remain in the app header. Shared guide prose, annotation, contents, and scripture-preview
@@ -26,6 +26,10 @@
   /* The contents rail's width (see .contentsRail); the page also uses it to center beside the rail. */
   --cfm-rail-width: var(--cfm-rail-w, clamp(12rem, calc(50vw - var(--cfm-pair) / 2 - 3rem), 17rem));
   gap: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.page[data-lesson-page] {
+  width: min(calc(100% - 2 * var(--shell-gutter)), var(--shell-max-width-wide));
 }
 
 /* Scripture-first reader: the same calm reading measure and page scroll on every device. */
@@ -239,22 +243,18 @@
 }
 
 /*
-  Page head: a calm editorial hero. The back link; the week's reading and dates as one quiet line; the title
-  in a normal-weight serif; the serif lede; then the week's cover, frameless, its bottom edge fading into the
-  page background (a mask, so it meets the page in either theme). The cover's credit, or a generated
-  illustration's provenance, is in the footer. The cover keeps the 3:2 frame its focus point was chosen for.
-  The cover sits above the text at every width, sharing the reading column's outer edges.
+  The cover reaches the page edges behind the floating navigation, fading into either theme.
+  The back link and lesson text stay in the reading column. Cover credits remain in the footer.
 */
 
 .header {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "back"
     "art"
+    "back"
     "text";
   gap: 0.75rem;
-  padding-top: clamp(0.5rem, 3vw, 2rem);
 }
 
 .backLink {
@@ -280,15 +280,14 @@
 .heroArt {
   grid-area: art;
   justify-self: center;
-  width: 100%;
+  width: 100cqw;
   min-width: 0;
 }
 
 .heroImage {
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 3 / 2;
+  height: clamp(18rem, 45vw, 38rem);
   object-fit: cover;
   -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
   mask-image: linear-gradient(to bottom, #000 55%, transparent);

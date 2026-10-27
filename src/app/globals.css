@@ -1795,7 +1795,7 @@ a.reader-toolbar-crumb:hover {
   padding-bottom: 0;
 }
 
-:root[data-simple="true"] .app-main:not([data-fixed="true"]) {
+:root[data-simple="true"] .app-main:not([data-fixed="true"], :has([data-lesson-page])) {
   padding-top: 2.5rem;
   padding-bottom: 5.5rem;
 }
@@ -2015,8 +2015,15 @@ a.reader-toolbar-crumb:hover {
 }
 
 /* The page clears the fixed header at every width. */
-:root:has(.app-header .guide-header-actions) .app-main:not([data-fixed="true"]) {
+:root:has(.app-header .guide-header-actions) .app-main:not([data-fixed="true"], :has([data-lesson-page])) {
   padding-top: calc(var(--header-height) + 1rem);
+}
+
+/* Lesson artwork starts behind the floating header; cqw excludes the page scrollbar. */
+:root .app-main:has([data-lesson-page]) {
+  container-type: inline-size;
+  padding-top: 0;
+  padding-inline: 0;
 }
 
 /* Contents: a labelled control like Log. */
@@ -2068,7 +2075,7 @@ a.reader-toolbar-crumb:hover {
     min-width: 0;
   }
 
-  :root:has(.app-header .guide-header-pager) .app-main:not([data-fixed="true"]) {
+  :root:has(.app-header .guide-header-pager) .app-main:not([data-fixed="true"], :has([data-lesson-page])) {
     padding-top: calc(var(--guide-header-clear, var(--header-height)) + 1rem);
   }
 }
