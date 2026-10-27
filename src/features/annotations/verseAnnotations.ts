@@ -2,6 +2,8 @@
 // that shows them.
 
 import { toScriptureVolumeUrlSlug } from "../../lib/scriptureVolumes.ts";
+import { customVerseStyle } from "./markColors.ts";
+import type { CSSProperties } from "react";
 import {
   applyVerseMarks,
   DEFAULT_UNDERLINE_COLOR,
@@ -105,6 +107,7 @@ export function underlineColorOf(annotation: VerseAnnotation | null | undefined)
 }
 
 export type VerseMarkAttributes = {
+  style?: CSSProperties;
   "data-verse-highlight"?: MarkColor;
   "data-verse-underline"?: MarkColor;
 };
@@ -120,12 +123,14 @@ export function verseMarkAttributes(annotation: VerseAnnotation | null | undefin
   const out: VerseMarkAttributes = {};
   if (color !== "none") out["data-verse-highlight"] = color;
   if (underline !== "none") out["data-verse-underline"] = underline;
+  const style = customVerseStyle(color === "none" ? undefined : color, underline === "none" ? undefined : underline);
+  if (style) out.style = style;
   return out;
 }
 
 /** A mark's style for labels: "Yellow highlight", "Red underline" (whatever the preset is named). */
 export function markPresetLabel(preset: Pick<MarkPreset, "kind" | "color">): string {
-  return `${MARK_COLOR_LABELS[preset.color]} ${preset.kind}`;
+  return `${markColorLabel(preset.color)} ${preset.kind}`;
 }
 
 /**
@@ -177,7 +182,7 @@ function sharedColor(colors: readonly AnnotationMarkColor[]): AnnotationMarkColo
 }
 
 function presentColors(colors: readonly AnnotationMarkColor[]): MarkColor[] {
-  return MARK_COLORS.filter((color) => colors.includes(color));
+  return [...MARK_COLORS.filter((color) => colors.includes(color)), ...new Set(colors.filter((color): color is MarkColor => color.startsWith("#")))];
 }
 
 export function selectionMarks(annotations: ReadonlyArray<VerseAnnotation | null | undefined>, ranges?: readonly VerseTextRange[]): SelectionMarks {
@@ -303,7 +308,7 @@ export const ANNOTATION_HIGHLIGHT_OPTIONS: Array<{
   { value: "purple", label: "Purple", swatchClass: "bg-violet-400/80 border border-violet-500/80" },
 ];
 
-export const MARK_COLOR_LABELS: Record<MarkColor, string> = {
+export const MARK_COLOR_LABELS = {
   red: "Red",
   yellow: "Yellow",
   blue: "Blue",
@@ -311,6 +316,10 @@ export const MARK_COLOR_LABELS: Record<MarkColor, string> = {
   pink: "Pink",
   purple: "Purple",
 };
+
+export function markColorLabel(color: MarkColor): string {
+  return color.startsWith("#") ? color.toUpperCase() : MARK_COLOR_LABELS[color as keyof typeof MARK_COLOR_LABELS];
+}
 
 /** The verse mark palette, for highlights and underlines alike (each color's swatch: --verse-swatch-*). */
 export const MARK_COLOR_OPTIONS: ReadonlyArray<{ value: MarkColor; label: string }> = MARK_COLORS.map((value) => ({

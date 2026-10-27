@@ -19,10 +19,13 @@ vi.mock("@/features/annotations/MarkStylePicker", () => import("../src/features/
 vi.mock("@/features/annotations/verseAnnotations", () => import("../src/features/annotations/verseAnnotations"));
 vi.mock("@/app/account/page.module.css", () => import("../src/app/account/page.module.css"));
 vi.mock("@/features/notes/useConvexSignedIn", () => ({ useConvexSignedIn: () => ({ user: { id: "u" }, ready: true, loading: false }) }));
+vi.mock("@/lib/auth", () => ({ useAuth: () => ({ user: { id: "u" }, promptSignIn: vi.fn() }) }));
 
 import VerseActionBar, { AnnotatePanel, markAction, type VerseQuickMarks } from "../src/components/VerseActionBar";
 import MarkStylePicker from "../src/features/annotations/MarkStylePicker";
 import QuickMarkSettings from "../src/features/annotations/QuickMarkSettings";
+import ReaderSettings from "../src/components/ReaderSettings";
+import { getDefaultPreferences } from "../src/lib/preferences";
 import { selectionMarks, type MarkPreset, type VerseAnnotation } from "../src/features/annotations/verseAnnotations";
 
 const row = (verse: number, extra: Partial<VerseAnnotation> = {}): VerseAnnotation => ({
@@ -58,6 +61,31 @@ function tags(html: string, pattern: RegExp) {
 }
 
 describe("MarkStylePicker", () => {
+  test("a saved custom color is selected, previewed, and editable", () => {
+    const html = renderToStaticMarkup(createElement(MarkStylePicker, {
+      value: { kind: "underline", color: "#12ab89" }, onChange: () => {}, label: "Mark",
+    }));
+    const checked = tags(html, /aria-checked="true"/);
+    expect(checked[1]).toContain('aria-label="#12AB89"');
+    expect(checked[1]).toContain('--mark-picker-swatch:#12ab89');
+    expect(html).toContain('type="color"');
+    expect(html).toContain('aria-label="Mark custom color"');
+    expect(html).toContain('value="#12ab89"');
+    expect(html).toContain('class="mark-custom-swatch" style="background-color:#12ab89" aria-hidden="true"');
+    expect(html).not.toContain("undefined underline");
+  });
+  test("the reader's custom colors are offered after the palette, once each, and a palette color opens the custom picker on its swatch", () => {
+    const html = renderToStaticMarkup(createElement(MarkStylePicker, {
+      value: { kind: "highlight", color: "blue" }, onChange: () => {}, label: "Mark",
+      customColors: ["#12ab89", "#8040e0", "#12ab89", "yellow"],
+    }));
+    const colors = tags(html, /class="mark-picker-color"/).map((tag) => tag.match(/data-color="([^"]+)"/)?.[1]);
+    expect(colors).toEqual(["red", "yellow", "blue", "green", "pink", "purple", "#12ab89", "#8040e0"]);
+    expect(tags(html, /data-color="#8040e0"/)[0]).toContain("--mark-picker-swatch:#8040e0");
+    // Not chosen: the custom picker opens on the blue swatch, not a fixed color.
+    expect(tags(html, /type="color"/)[0]).toContain('value="#6ea5e6"');
+  });
+
   test("two radio groups, the chosen style and color checked and the only stops for Tab", () => {
     const html = renderToStaticMarkup(
       createElement(MarkStylePicker, { value: { kind: "underline", color: "blue" }, onChange: () => {}, label: "Quick mark 2" })
@@ -167,6 +195,28 @@ describe("Annotate panel", () => {
     expect(tags(html, /selection-annotate-note/)[0]).not.toContain("aria-disabled");
   });
 
+  test("custom-colored quick marks preview in their color, and the panel offers the reader's custom colors again", () => {
+    const promises: MarkPreset = { kind: "highlight", color: "#12ab89", name: "Promises" };
+    const onSelection = row(1, { underline: true, underline_color: "#8040e0" });
+    const marks = quickMarks({ presets: [promises, redUnderline], marks: selectionMarks([onSelection, row(2)]) });
+    const bar = renderToStaticMarkup(createElement(VerseActionBar, {
+      visible: true, anchorRect: { top: 10, left: 10, right: 20, bottom: 20, width: 10, height: 10 }, hasSelection: true,
+      selectionReference: "Ruth 1:16", selectedText: "Whither thou goest", onClear: () => {}, onAnnotation: () => {}, quickMarks: marks,
+    }));
+    const header = tags(bar, /class="selection-preset"/)[0];
+    expect(header).toContain('aria-label="Promises (#12ab89 highlight)"');
+    expect(tags(bar, /class="mark-sample"/)[0]).toContain("--mark-highlight:#12ab8955");
+
+    const html = panel(marks);
+    // The listed preset and the Apply preview (starting from the first preset) both draw the custom color.
+    expect(tags(html, /class="mark-sample"[^>]*data-color="#12ab89"/).length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain("<span>Apply #12ab89 highlight</span>");
+    const colors = tags(html, /class="mark-picker-color"/).map((tag) => tag.match(/data-color="([^"]+)"/)?.[1]);
+    // The preset's color, and the underline color already on the selection.
+    expect(colors.slice(6)).toEqual(["#12ab89", "#8040e0"]);
+    expect(html).toContain('aria-label="Mark custom color"');
+  });
+
   test("Apply removes a mark every selected verse has; the note waits while marks save", () => {
     const html = panel(quickMarks({ marks: selectionMarks([row(1, { highlight_color: "yellow" })]) }), { noteDisabled: true, noteDescription: "Saving marks…" });
     expect(html).toContain("<span>Remove yellow highlight</span>");
@@ -207,7 +257,7 @@ describe("account quick-mark settings", () => {
     convex.saved = { showFootnotes: true, fontScale: 1, fontFamily: "serif", comparisonView: "inline", markPresets: [blessings, redUnderline] };
     const html = renderToStaticMarkup(createElement(QuickMarkSettings));
     expect(html).not.toContain("<select");
-    const names = tags(html, /<input/);
+    const names = tags(html, /<input[^>]*type="text"/);
     expect(names).toHaveLength(3); // two presets and the add row
     expect(names[0]).toContain('aria-label="Quick mark 1 name"');
     expect(names[0]).toContain('value="Blessings"');
@@ -245,5 +295,29 @@ describe("account quick-mark settings", () => {
     };
     const named = renderToStaticMarkup(createElement(QuickMarkSettings));
     expect(named).not.toMatch(/aria-disabled="true"[^>]*>Restore defaults/);
+  });
+  test("a custom-colored quick mark is listed in its color and offered to every picker, the add row's too", () => {
+    convex.saved = {
+      showFootnotes: true, fontScale: 1, fontFamily: "serif", comparisonView: "inline",
+      markPresets: [{ kind: "underline", color: "#12ab89", name: "Promises" }, blessings],
+    };
+    const html = renderToStaticMarkup(createElement(QuickMarkSettings));
+    expect(tags(html, /class="mark-sample"[^>]*data-color="#12ab89"/)[0]).toContain("--mark-underline:#12ab89");
+    // Two presets' pickers and the add row's each offer it.
+    expect(tags(html, /class="mark-picker-color"[^>]*data-color="#12ab89"/)).toHaveLength(3);
+    expect(tags(html, /type="color"/)).toHaveLength(3);
+  });
+});
+
+describe("reader settings", () => {
+  test("keeps quick-mark customization on the Settings page, outside the compact reader menu", () => {
+    const html = renderToStaticMarkup(createElement(ReaderSettings, {
+      open: true, onClose: () => {}, prefs: getDefaultPreferences(), onChange: () => {},
+    }));
+    expect(html).toContain("Typeface");
+    expect(html).toContain("Text width");
+    expect(html).not.toContain("Quick marks");
+    expect(html).not.toContain("Customize");
+    expect(html).not.toContain('type="color"');
   });
 });

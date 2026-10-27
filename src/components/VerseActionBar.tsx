@@ -5,6 +5,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { positionSelectionPopover } from "@/lib/selectionPopover";
 import MarkSample from "@/features/annotations/MarkSample";
 import MarkStylePicker, { type MarkStyle } from "@/features/annotations/MarkStylePicker";
+import { customMarkColors } from "@/features/annotations/markColors";
 import {
   markPresetFullLabel,
   markPresetKey,
@@ -265,6 +266,12 @@ export function AnnotatePanel({
   const customState = presetState(custom, quickMarks.marks);
   const customPhrase = markPresetPhrase(custom);
   const customAction = customState === true ? `Remove ${customPhrase}` : `Apply ${customPhrase}`;
+  // The reader's own colors, offered again: their quick marks' and the ones already on the selection.
+  const customColors = customMarkColors([
+    ...quickMarks.presets.map((preset) => preset.color),
+    ...quickMarks.marks.highlights,
+    ...quickMarks.marks.underlines,
+  ]);
 
   // Opening the panel moves focus into it (its Back button), so a keyboard reader lands on the new choices.
   useEffect(() => {
@@ -323,13 +330,21 @@ export function AnnotatePanel({
               })}
             </div>
           ) : (
-            <p className="selection-annotate-empty">No quick marks saved. Choose them in account settings.</p>
+            <p className="selection-annotate-empty">No quick marks saved. Choose them in Settings.</p>
           )}
         </section>
 
         <section className="selection-annotate-section" aria-labelledby={customId}>
           <h4 id={customId} className="selection-annotate-label">Any style and color</h4>
-          <MarkStylePicker value={custom} onChange={setCustom} label="Mark" keepSelection disabled={loading} className="selection-annotate-picker" />
+          <MarkStylePicker
+            value={custom}
+            onChange={setCustom}
+            label="Mark"
+            keepSelection
+            disabled={loading}
+            customColors={customColors}
+            className="selection-annotate-picker"
+          />
           <div className="selection-annotate-apply-row">
             <button
               type="button"

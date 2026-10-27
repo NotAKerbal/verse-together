@@ -1,6 +1,7 @@
 import { Children, cloneElement, isValidElement, type ReactNode } from "react";
 import { matchingTextMarks } from "../../../convex/annotationRules";
 import { verseMarkAttributes, type VerseAnnotation } from "./verseAnnotations";
+import { customVerseStyle } from "./markColors";
 
 type InlineProps = { children?: ReactNode; "data-verse-ignore"?: boolean; "aria-hidden"?: boolean | "true" | "false" };
 function ignored(child: { type: unknown; props: InlineProps }): boolean {
@@ -20,7 +21,7 @@ function textOf(children: ReactNode): string {
 /** Draw saved ranges on their exact words, keeping legacy whole-verse styles as the base. */
 export default function VerseMarkedText({ annotation, children, formatText }: {
   annotation: VerseAnnotation | null | undefined;
-  children: ReactNode;
+  children?: ReactNode;
   formatText?: (text: string) => string;
 }) {
   const text = textOf(children);
@@ -44,7 +45,7 @@ export default function VerseMarkedText({ annotation, children, formatText }: {
           const raw = value.slice(from - start, to - start);
           const part = formatText ? formatText(raw) : raw;
           return highlight || underline
-            ? <span key={from} className="verse-mark" data-verse-highlight={highlight} data-verse-underline={underline}>{part}</span>
+            ? <span key={from} className="verse-mark" data-verse-highlight={highlight} data-verse-underline={underline} style={customVerseStyle(highlight, underline)}>{part}</span>
             : part;
         });
       }

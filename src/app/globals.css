@@ -1529,6 +1529,7 @@ a.reader-toolbar-crumb:hover {
 }
 
 .verse-mark {
+  background-color: var(--verse-custom-highlight);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
   border-radius: 0.15em;
@@ -1694,6 +1695,46 @@ a.reader-toolbar-crumb:hover {
 .mark-picker [role="radio"][aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
 .mark-picker[aria-disabled="true"] [role="radio"] { cursor: progress; }
 .mark-picker [role="radio"]:focus-visible { outline: 2px solid var(--accent-rubric); outline-offset: 1px; }
+
+.mark-custom { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mark-custom-control {
+  position: relative;
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--foreground-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+/* Keep native color-picker activation and keyboard support, with the same visual language as the palette. */
+.mark-custom-control input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.mark-custom-swatch {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.mark-picker[data-kind="underline"] .mark-custom-swatch { width: 22px; height: 5px; border-radius: 3px; box-shadow: none; }
+.mark-custom-control:hover:not(:has(input:disabled)) { background: var(--surface-card-soft); color: var(--foreground); }
+.mark-custom-control:has(input:disabled) { opacity: 0.35; cursor: not-allowed; }
+.mark-custom-control input:disabled { cursor: not-allowed; }
+.mark-custom-control:has(input:focus-visible) { outline: 2px solid var(--accent-rubric); outline-offset: 1px; }
+
+.mark-custom-error { color: var(--foreground-soft); font-size: 11px; line-height: 1.35; }
 
 @media (forced-colors: active) {
   .mark-picker-swatch { forced-color-adjust: none; }

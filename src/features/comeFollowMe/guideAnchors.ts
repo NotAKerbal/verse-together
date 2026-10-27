@@ -277,7 +277,8 @@ export function guideSelectionMarks(
 ): SelectionMarks {
   const rows = exact ? [exact, ...overlapping] : overlapping;
   const present = (pick: (row: GuideHighlight) => MarkColor | null) =>
-    MARK_COLORS.filter((color) => rows.some((row) => pick(row) === color));
+    [...MARK_COLORS.filter((color) => rows.some((row) => pick(row) === color)),
+      ...new Set(rows.map(pick).filter((color): color is MarkColor => !!color?.startsWith("#")))];
   return {
     highlight: exact?.highlightColor ?? "none",
     underline: exact?.underlineColor ?? "none",
