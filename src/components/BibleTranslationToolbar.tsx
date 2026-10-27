@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import TranslationCatalogPicker from "@/components/TranslationCatalogPicker";
 import { BIBLE_TRANSLATION_OPTIONS, type BibleTranslationId } from "@/lib/bibleCanon";
+import { JST_SOURCE_DOCS_URL } from "@/lib/jst";
+import { useJstPreference } from "@/lib/jstPreference";
 import {
   readFavoriteTranslations,
   writeFavoriteTranslations,
@@ -63,6 +65,7 @@ function buildToggleQuery(
 
 export default function BibleTranslationToolbar({ volume, book, chapter, compare }: Props) {
   const [favorites, setFavorites] = useState<FavoriteTranslation[]>([]);
+  const [jstEnabled, setJstEnabled] = useJstPreference();
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -107,6 +110,31 @@ export default function BibleTranslationToolbar({ volume, book, chapter, compare
 
   return (
     <div className="space-y-3">
+      <div className="panel-card-soft flex items-start justify-between gap-3 rounded-[1.1rem] p-3">
+        <div className="min-w-0">
+          <div id="jst-toggle-label" className="text-xs font-medium tracking-wide text-foreground/80">
+            Joseph Smith Translation (JST)
+          </div>
+          <div id="jst-toggle-description" className="mt-1 text-[11px] leading-relaxed text-[color:var(--foreground-muted)]">
+            Read the JST passages from the Bible appendix in place of the KJV verses they revise, with the JST&apos;s
+            own wording marked in violet. These are selected passages, not the full JST, so most chapters have none.{" "}
+            <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+              Source
+            </a>
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={jstEnabled}
+          aria-labelledby="jst-toggle-label"
+          aria-describedby="jst-toggle-description"
+          className="marker-switch mt-0.5 shrink-0"
+          onClick={() => setJstEnabled(!jstEnabled)}
+        >
+          <span className="marker-switch-knob" aria-hidden="true" />
+        </button>
+      </div>
       <div className="panel-card-soft rounded-[1.1rem] p-3">
         <div className="text-xs text-[color:var(--foreground-muted)]">Default Bible text comes from the local LDS standard works dataset.</div>
         <div className="mt-1 text-xs text-[color:var(--foreground-muted)]">Select optional translation overlays to compare wording differences.</div>

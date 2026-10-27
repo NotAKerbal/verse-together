@@ -26,6 +26,11 @@ import { scheduleIdleTask } from "@/lib/idle";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import { useComparisonChapters } from "./useComparisonChapters";
+import { useJstExcerpts } from "./useJstExcerpts";
+import JstExcerptCard from "./JstExcerptCard";
+import JstVerseText from "./JstVerseText";
+import { readJstChapter } from "@/lib/jst";
+import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
 import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
@@ -65,6 +70,7 @@ import {
   annotationHighlightClass,
   highlightOf,
   selectionMarks,
+  verseMarkAttributes,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
 import { selectedVerseRanges, restoreVerseRange } from "@/lib/verseSelection";
@@ -559,6 +565,11 @@ export default function ChapterReader({
     textReady ? overlayTranslations : NO_OVERLAYS
   );
   const overlayList = overlayTranslations.join(",");
+  const [jstEnabled] = useJstPreference();
+  // Bible chapters only (the hook checks), and like comparisons, only once the primary text is on screen. The
+  // appendix compares the JST with the KJV, so it is read in place of the KJV text and nothing else.
+  const jst = useJstExcerpts(volume, book, chapter, jstEnabled && textReady && primaryTranslation === "lds");
+  const jstReading = useMemo(() => readJstChapter(jst.status === "ready" ? jst.excerpts : [], verses), [jst, verses]);
   const { user, getToken } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
@@ -930,7 +941,7 @@ export default function ChapterReader({
   const compareColorClasses = [
     "text-sky-700 dark:text-sky-300",
     "text-emerald-700 dark:text-emerald-300",
-    "text-violet-700 dark:text-violet-300",
+    "text-lime-700 dark:text-lime-300",
     "text-rose-700 dark:text-rose-300",
     "text-cyan-700 dark:text-cyan-300",
     "text-fuchsia-700 dark:text-fuchsia-300",
@@ -1635,6 +1646,36 @@ export default function ChapterReader({
           </ChapterHeader>
 
           <h1 className="simple-only reader-simple-title">{reference}</h1>
+          {jst.status === "loading" ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+              Loading Joseph Smith Translation excerpts…
+            </div>
+          ) : jst.status === "empty" ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+              The JST appendix has no excerpts for this chapter.
+            </div>
+          ) : jst.status === "ready" ? (
+            <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
+              {jstReading.integrated.length > 0 ? (
+                <>
+                  {jstReading.integrated.length === 1
+                    ? "1 JST passage, read in place of the KJV verses it revises"
+                    : `${jstReading.integrated.length} JST passages, read in place of the KJV verses they revise`}
+                  ; <ins className="jst-added">JST wording</ins> is marked.
+                  Highlights and notes stay with the KJV text: turn the JST off to mark those verses.
+                </>
+              ) : (
+                "The JST appendix has a note for this chapter."
+              )}
+            </div>
+          ) : jst.status === "failed" ? (
+            <div className="reader-header-notice flex flex-wrap items-center gap-x-2 text-[11px] sm:text-xs text-amber-900 dark:text-amber-200" role="alert">
+              <span>Couldn&apos;t load Joseph Smith Translation excerpts. {jst.message}</span>
+              <button type="button" onClick={jst.retry} className="underline underline-offset-2">
+                Retry
+              </button>
+            </div>
+          ) : null}
           {readingOpenError ? <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">{readingOpenError}</p> : null}
 
           <ChapterTextBoundary resetKey={contentPromise} reference={reference}>
@@ -1642,6 +1683,9 @@ export default function ChapterReader({
               <ChapterText key={`${volume}/${book}/${chapter}`} content={contentPromise} onReady={setContent}>
                 {(chapterVerses) => (
                   <>
+                    {jstReading.leading.map((excerpt) => (
+                      <JstExcerptCard key={excerpt.id} excerpt={excerpt} />
+                    ))}
                     <ol
                       ref={verseListRef}
                       onContextMenu={(event) => {
@@ -1660,6 +1704,8 @@ export default function ChapterReader({
                     >
                       {chapterVerses.map((v) => {
                         const isJumpHighlighted = jumpHighlightVerse === v.verse;
+                        // Read with the JST, this verse shows the JST's wording, which isn't the KJV text marks are saved on.
+                        const jstRow = jstReading.rows.get(v.verse);
                         const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
                         const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
                         const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
@@ -1690,6 +1736,7 @@ export default function ChapterReader({
                             data-read={readPassage ? "true" : undefined}
                             data-read-start={readPassage?.start === v.verse ? "true" : undefined}
                             data-read-end={readPassage?.end === v.verse ? "true" : undefined}
+                            data-jst={jstRow ? "true" : undefined}
                             className={`reader-verse leading-7 rounded-md px-3 py-2 -mx-2 ${
                               isJumpHighlighted
                                 ? "bg-[color:var(--accent-sky-soft)] ring-2 ring-[color:var(--surface-border)] transition-colors duration-300"
@@ -1712,6 +1759,26 @@ export default function ChapterReader({
                               />
                             ) : null}
                             <div className="flex items-start gap-2">
+                              {jstRow ? (
+                                <div className="min-w-0 flex-1 text-left" data-verse={v.verse}>
+                                  <span className="verse-badge">{v.verse}</span>
+                                  <JstVerseText row={jstRow} />
+                                  {/* Translation overlays compare with the KJV; the KJV isn't repeated beside them here. */}
+                                  {verseComparisons.map((comparison) => (
+                                    <span key={`${v.verse}-${comparison.key}`} className="mt-1 block text-sm leading-6" data-verse-ignore>
+                                      <span className={`mr-1.5 text-[10px] uppercase tracking-wide ${comparison.compareColorClass}`}>
+                                        {comparison.label}
+                                      </span>
+                                      {comparison.compareText}
+                                    </span>
+                                  ))}
+                                  {myVerseAnnotation && (verseMarkAttributes(myVerseAnnotation) || myVerseAnnotation.text_marks?.length) ? (
+                                    <span className="jst-hidden-marks" data-verse-ignore>
+                                      Your marks on this verse are on its KJV wording. Turn off the JST to see them.
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : (
                               <div
                                 className={`min-w-0 flex-1 text-left ${
                                   customMobileSelectionEnabled
@@ -1778,6 +1845,7 @@ export default function ChapterReader({
                                   </span>
                                 )}
                               </div>
+                              )}
                               {verseStudyPaths.length > 0 ? (
                                 <VerseStudyPathMarker
                                   verse={v.verse}

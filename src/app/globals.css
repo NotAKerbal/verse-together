@@ -1382,6 +1382,102 @@ a.reader-toolbar-crumb:hover {
   bottom: 0.5rem;
 }
 
+/*
+  Joseph Smith Translation passages read in place of the KJV verses they revise. The JST's own wording is violet
+  on a faint violet wash with a dotted underline, so it doesn't rest on color alone; shared wording reads normally.
+*/
+:root {
+  --jst-ink: #6d28d9;
+  --jst-wash: rgb(124 58 237 / 0.09);
+  --jst-rule: rgb(124 58 237 / 0.45);
+}
+
+[data-theme="dark"] {
+  --jst-ink: #c4b5fd;
+  --jst-wash: rgb(167 139 250 / 0.14);
+  --jst-rule: rgb(167 139 250 / 0.5);
+}
+
+.reader-verse[data-jst="true"] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  box-shadow: inset 2px 0 0 var(--jst-rule);
+}
+
+.jst-added {
+  color: var(--jst-ink);
+  background: var(--jst-wash);
+  border-radius: 0.2em;
+  padding: 0 0.1em;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--jst-rule);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.jst-passage-label {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--jst-rule);
+  border-radius: 999px;
+  color: var(--jst-ink);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  vertical-align: 0.2em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.jst-verse-number {
+  margin: 0 0.15rem 0 0.1rem;
+  color: var(--jst-ink);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  vertical-align: 0.45em;
+  line-height: 1;
+  user-select: none;
+}
+
+.jst-verse-number > [aria-hidden="true"] {
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.jst-omitted {
+  margin: 0 0.05rem;
+  color: var(--jst-ink);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.8em;
+  font-weight: 700;
+  cursor: help;
+  user-select: none;
+}
+
+.jst-no-wording,
+.jst-hidden-marks {
+  color: var(--foreground-muted);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.jst-no-wording {
+  margin-left: 0.25rem;
+}
+
+.jst-hidden-marks {
+  display: block;
+  margin-top: 0.25rem;
+}
+
 .verse-read-marker {
   position: absolute;
   left: -0.75rem;
