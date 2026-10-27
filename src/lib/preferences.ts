@@ -53,10 +53,58 @@ export function writeLocalPreferences(prefs: ReaderPreferences): boolean {
   try {
     if (typeof window === "undefined") return false;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-    return true;
   } catch {
     return false;
   }
+  // The storage event reaches only other tabs: tell this one's readers (the selection menu, settings).
+  try {
+    window.dispatchEvent?.(new Event(LOCAL_CHANGE_EVENT));
+  } catch {
+    // Saved all the same; a reader in this tab catches up when it next reads.
+  }
+  return true;
+}
+
+const LOCAL_CHANGE_EVENT = "reader-prefs-change";
+
+/** Follow this device's reader preferences: a write in this tab, or in another. Returns the unsubscribe. */
+export function subscribeLocalPreferences(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  function onStorage(event: StorageEvent) {
+    if (event.key === STORAGE_KEY || event.key === null) onChange();
+  }
+  window.addEventListener(LOCAL_CHANGE_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(LOCAL_CHANGE_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+let presetsSnapshot: { raw: string | null; presets: MarkPreset[] } | null = null;
+
+/**
+ * This device's mark presets (the defaults when nothing is saved), the same array until the stored value
+ * changes, as useSyncExternalStore needs. Null without browser storage (on the server).
+ */
+export function readLocalMarkPresetsSnapshot(): MarkPreset[] | null {
+  if (typeof window === "undefined") return null;
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    raw = null;
+  }
+  if (presetsSnapshot?.raw !== raw) {
+    let parsed: unknown = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
+    presetsSnapshot = { raw, presets: normalizePreferences(parsed as Partial<ReaderPreferences> | null).markPresets };
+  }
+  return presetsSnapshot.presets;
 }
 
 export function normalizePreferences(

@@ -7,6 +7,10 @@ export type HelloaoTranslation = {
   shortName?: string;
   language?: string;
   languageEnglishName?: string;
+  languageName?: string;
+  numberOfBooks?: number;
+  totalNumberOfChapters?: number;
+  textDirection?: "ltr" | "rtl";
 };
 
 export type HelloaoChapterResponse = {
@@ -96,6 +100,10 @@ export async function fetchAvailableHelloaoTranslations(): Promise<HelloaoTransl
         englishName: getString(item, "englishName")?.trim() || undefined,
         shortName: getString(item, "shortName")?.trim() || undefined,
         language: getString(item, "language")?.trim() || undefined,
+        languageName: getString(item, "languageName")?.trim() || undefined,
+        numberOfBooks: getNumber(item, "numberOfBooks"),
+        totalNumberOfChapters: getNumber(item, "totalNumberOfChapters"),
+        textDirection: getString(item, "textDirection") === "rtl" ? "rtl" : undefined,
         languageEnglishName: getString(item, "languageEnglishName")?.trim() || undefined,
       };
     })

@@ -13,13 +13,14 @@ import {
 import { useMutation, useQueries } from "convex/react";
 import VerseActionBar, { type VerseActionAnchorRect, type VerseQuickMarks } from "@/components/VerseActionBar";
 import MarkSample from "@/features/annotations/MarkSample";
+import { markHighlightColor, markUnderlineColor } from "@/features/annotations/markColors";
 import { useMarkPresets } from "@/features/annotations/useVerseQuickMarks";
 import { markPresetLabel, quickMarkPatch, type MarkColor } from "@/features/annotations/verseAnnotations";
 import type { NoteSource } from "@/features/notes/journal";
 import { quotedExcerpt } from "@/features/notes/noteExcerpts";
 import { useAuth } from "@/lib/auth";
 import { getDefaultPreferences, readLocalPreferences } from "@/lib/preferences";
-import { MARK_COLORS, type GuideAnnotationPatch } from "../../../convex/annotationRules";
+import { MARK_COLORS, isMarkColor, type GuideAnnotationPatch } from "../../../convex/annotationRules";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { deviceStudy } from "../notes/deviceStudy";
@@ -63,26 +64,28 @@ type Roots = Record<GuidePart, ReadonlyArray<RefObject<HTMLElement | null>>>;
 type Status = "loading" | "ready" | "unavailable";
 
 const PARTS: readonly GuidePart[] = ["introduction", "reader"];
-const highlightName = (color: MarkColor) => `cfm-guide-${color}`;
-const underlineName = (color: MarkColor) => `cfm-guide-underline-${color}`;
+const highlightName = (color: MarkColor) => `cfm-guide-${color.replace("#", "hex-")}`;
+const underlineName = (color: MarkColor) => `cfm-guide-underline-${color.replace("#", "hex-")}`;
 /** A note on a span with no underline of its own: a dotted underline, so the note can be found again. */
 const NOTE_NAME = "cfm-guide-note";
 
 // The verse marks' colors (globals.css), so a guide's marks and a verse's look alike on both themes. An
 // underline is a text decoration: it paints under the words on every line the span runs across, and never
 // moves them.
-const HIGHLIGHT_CSS = `
-${MARK_COLORS.map((color) => `::highlight(${highlightName(color)}) { background-color: var(--verse-mark-${color}); }`).join("\n")}
-${MARK_COLORS.map(
+function highlightCss(colors: readonly MarkColor[]) {
+  return `
+${colors.map((color) => `::highlight(${highlightName(color)}) { background-color: ${markHighlightColor(color)}; }`).join("\n")}
+${colors.map(
   (color) =>
-    `::highlight(${underlineName(color)}) { text-decoration-line: underline; text-decoration-color: var(--verse-underline-${color}); text-decoration-thickness: max(1.5px, 0.08em); text-underline-offset: 0.22em; }`
+    `::highlight(${underlineName(color)}) { text-decoration-line: underline; text-decoration-color: ${markUnderlineColor(color)}; text-decoration-thickness: max(1.5px, 0.08em); text-underline-offset: 0.22em; }`
 ).join("\n")}
 ::highlight(${NOTE_NAME}) { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--cfm-muted, currentColor); text-decoration-thickness: max(1.5px, 0.08em); text-underline-offset: 0.22em; }
 @media (forced-colors: active) {
-${MARK_COLORS.map((color) => `  ::highlight(${highlightName(color)}) { background-color: Mark; color: MarkText; }`).join("\n")}
-${MARK_COLORS.map((color) => `  ::highlight(${underlineName(color)}) { text-decoration-color: CanvasText; }`).join("\n")}
+${colors.map((color) => `  ::highlight(${highlightName(color)}) { background-color: Mark; color: MarkText; }`).join("\n")}
+${colors.map((color) => `  ::highlight(${underlineName(color)}) { text-decoration-color: CanvasText; }`).join("\n")}
 }
 `;
+}
 
 function highlightsSupported() {
   return (
@@ -93,20 +96,6 @@ function highlightsSupported() {
     "adoptedStyleSheets" in document
   );
 }
-
-let stylesInstalled = false;
-
-/** The mark styles, as a constructed style sheet: no build step has to understand ::highlight(). */
-function installHighlightStyles() {
-  if (stylesInstalled) return;
-  stylesInstalled = true;
-  const sheet = new CSSStyleSheet();
-  sheet.replaceSync(HIGHLIGHT_CSS);
-  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
-}
-
-/** Every highlight name this hook paints (and so may remove). */
-const NAMES = [...MARK_COLORS.map(highlightName), ...MARK_COLORS.map(underlineName), NOTE_NAME];
 
 type DomIndex = TextIndex & {
   nodes: Text[];
@@ -633,11 +622,15 @@ export function useGuideHighlights(
   // guide, a re-render that sets new HTML). Only this hook's own highlight names are touched.
   useEffect(() => {
     if (!highlightsSupported()) return;
-    installHighlightStyles();
+    const colors = [...new Set<MarkColor>([...MARK_COLORS, ...rows.flatMap(row => [row.highlightColor, row.underlineColor]).filter(isMarkColor)])];
+    const names = [...colors.map(highlightName), ...colors.map(underlineName), NOTE_NAME];
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(highlightCss(colors));
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
     let frame = 0;
     const paint = () => {
       frame = 0;
-      const ranges = new Map<string, Range[]>(NAMES.map((name) => [name, []]));
+      const ranges = new Map<string, Range[]>(names.map((name) => [name, []]));
       const next: Painted[] = [];
       for (const part of PARTS) {
         const elements = partRoots(roots, part);
@@ -654,7 +647,7 @@ export function useGuideHighlights(
           next.push({ row, start: at.start, end: at.end, ranges: areas });
         }
       }
-      for (const name of NAMES) {
+      for (const name of names) {
         const list = ranges.get(name) ?? [];
         if (!list.length) {
           CSS.highlights.delete(name);
@@ -678,7 +671,8 @@ export function useGuideHighlights(
     return () => {
       observer.disconnect();
       if (frame) window.cancelAnimationFrame(frame);
-      for (const name of NAMES) CSS.highlights.delete(name);
+      for (const name of names) CSS.highlights.delete(name);
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(existing => existing !== sheet);
       painted.set(NOTHING_PAINTED);
     };
   }, [rows, roots, layoutKey, painted]);

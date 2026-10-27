@@ -8,45 +8,44 @@ function shortLabel(label: string): string {
 
 /**
  * The Joseph Smith Translation's reading of one KJV verse, in the reader's own type: wording it shares with the
- * KJV reads normally, its own wording is marked, and KJV wording it leaves out is only pointed out, so the
- * passage reads as one text. JST verse numbers that differ from the KJV's are kept as small markers.
+ * KJV reads normally and its own wording is quietly underlined, so the passage reads as one text. KJV wording it
+ * leaves out is shown, struck through, only when `showOmitted` is on. JST verse numbers that differ from the KJV's
+ * are kept as small numerals.
  *
  * None of this is KJV text, so it is outside the selection's scripture text (no `data-verse-text`): a highlight,
  * note, or quote can't be saved against the KJV's offsets from it.
  */
-export default function JstVerseText({ row }: { row: JstRow }) {
+export default function JstVerseText({ row, showOmitted = false }: { row: JstRow; showOmitted?: boolean }) {
   const parts: ReactNode[] = [];
   let wrote = false;
+  let spaced = false;
   row.pieces.forEach((piece, index) => {
     if (piece.kind === "verse") {
       // Before any wording, the passage label (first row) or the KJV numeral (same number) already says it.
       if (!wrote && (row.first || piece.number === String(row.verse))) return;
       parts.push(
-        <span key={index} className="jst-verse-number" data-verse-ignore>
+        <span key={index} className="jst-verse-number" data-verse-ignore title={`JST verse ${piece.number}`}>
           <span className="sr-only">JST verse </span>
-          <span aria-hidden="true">JST&nbsp;</span>
           {piece.number}
         </span>
       );
       return;
     }
     if (piece.kind === "omitted") {
+      if (!showOmitted) return;
+      if (spaced) parts.push(" ");
+      spaced = true;
       parts.push(
-        <span
-          key={index}
-          role="img"
-          className="jst-omitted"
-          data-verse-ignore
-          aria-label={`KJV wording not in the JST: ${piece.text}`}
-          title={`KJV wording not in the JST: “${piece.text}”`}
-        >
-          ‸
-        </span>
+        <del key={index} className="jst-omitted" data-verse-ignore>
+          <span className="sr-only">KJV wording not in the JST: </span>
+          {piece.text}
+        </del>
       );
       return;
     }
-    if (wrote) parts.push(" ");
+    if (spaced) parts.push(" ");
     wrote = true;
+    spaced = true;
     parts.push(
       piece.kind === "added" ? (
         <ins key={index} className="jst-added">

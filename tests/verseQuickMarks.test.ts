@@ -86,8 +86,8 @@ describe("quick marks across a chapter break", () => {
   test("a guest's mark saves on this device, every chapter with the same patch", () => {
     const { quickMarks } = quickMarksFor();
     expect(quickMarks.status).toBe("ready");
-    // Guests get the default presets, never another account's.
-    expect(quickMarks.presets).not.toEqual(fallbackPresets);
+    // A guest's presets are this device's, as chosen in settings (the copy passed in until storage is read).
+    expect(quickMarks.presets).toEqual(fallbackPresets);
     quickMarks.onMark(yellow);
     expect(state.save).not.toHaveBeenCalled();
     // Yellow is on 52:15 only ("mixed"), so it goes on every selected verse, in both chapters.

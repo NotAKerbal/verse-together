@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { writeLocalMarkPresets } from "@/lib/preferences";
 import type { VerseQuickMarks } from "@/components/VerseActionBar";
 import { deviceStudy } from "../notes/deviceStudy";
+import { useDeviceMarkPresets } from "./useDeviceMarkPresets";
 import { useConvexSignedIn } from "../notes/useConvexSignedIn";
 import {
   quickMarkPatch,
@@ -21,10 +22,11 @@ import {
 } from "./verseAnnotations";
 
 /**
- * The reader's mark presets for a selection menu, live: the account's (a change in account settings shows at
- * once, and is kept as this device's copy), `fallbackPresets` (this device's copy) until they load, and the
- * defaults for guests and an account with nothing saved yet. `ready` is false while a signed-in reader's
- * session is still connecting (nothing can be saved to the account yet).
+ * The reader's mark presets for a selection menu, live: the account's (a change in settings shows at once,
+ * and is kept as this device's copy), `fallbackPresets` (this device's copy) until they load, and the
+ * defaults for an account with nothing saved yet. A guest's are this device's, as chosen in settings.
+ * `ready` is false while a signed-in reader's session is still connecting (nothing can be saved to the
+ * account yet).
  */
 export function useMarkPresets(fallbackPresets: readonly MarkPreset[]): {
   presets: readonly MarkPreset[];
@@ -35,12 +37,13 @@ export function useMarkPresets(fallbackPresets: readonly MarkPreset[]): {
   const { ready: convexReady } = useConvexSignedIn();
   const accountPreferences = useQuery(api.preferences.getReaderPreferences, convexReady ? {} : "skip");
   const accountMarkPresets = accountPreferences?.markPresets;
+  const devicePresets = useDeviceMarkPresets();
   useEffect(() => {
     if (accountMarkPresets) writeLocalMarkPresets(accountMarkPresets);
   }, [accountMarkPresets]);
   return {
-    // Presets are an account setting: guests (and an account with nothing saved yet) get the defaults.
-    presets: !user || accountPreferences === null ? readMarkPresets(null) : accountMarkPresets ?? fallbackPresets,
+    // A guest's presets are this device's (settings saves them there); an account with nothing saved yet has the defaults.
+    presets: !user ? devicePresets ?? fallbackPresets : accountPreferences === null ? readMarkPresets(null) : accountMarkPresets ?? fallbackPresets,
     ready: !user || convexReady,
     convexReady,
   };
