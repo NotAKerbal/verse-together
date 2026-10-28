@@ -25,6 +25,15 @@ function post(t: T, path: string, body: unknown, headers: Record<string, string>
   });
 }
 
+/** A request as the desktop app sends it (native/src/cloud.rs): JSON, no Origin and no cookie. */
+function appPost(t: T, path: string, body: unknown, headers: Record<string, string> = {}) {
+  return t.fetch(`/api/auth${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
 /** A signed-in website session (email sign-up stands in for Google in the test deployment). */
 async function websiteCookie(t: T): Promise<string> {
   const response = await post(t, "/sign-up/email", {
@@ -33,6 +42,8 @@ async function websiteCookie(t: T): Promise<string> {
     name: "Reader",
   });
   expect(response.status).toBe(200);
+  // A website sign-in never hands its session token to page scripts (the cookie stays HttpOnly-only).
+  expect(response.headers.get("set-auth-token")).toBeNull();
   const cookie = response.headers.get("set-cookie") ?? "";
   const session = cookie.split(/,(?=\s*[\w.-]+=)/).map(c => c.split(";")[0].trim()).find(c => c.includes("session_token="));
   expect(session).toBeTruthy();
@@ -59,7 +70,7 @@ describe("desktop sign-in", () => {
     const cookie = await websiteCookie(t);
     const code = await grant(t, cookie);
 
-    const exchanged = await post(t, "/native/token", { code, verifier: VERIFIER });
+    const exchanged = await appPost(t, "/native/token", { code, verifier: VERIFIER });
     expect(exchanged.status).toBe(200);
     const body = (await exchanged.json()) as { token: string; user: { email: string } };
     expect(body.user.email).toBe("reader@example.com");
@@ -73,10 +84,10 @@ describe("desktop sign-in", () => {
     expect(((await jwt.json()) as { token: string }).token.split(".")).toHaveLength(3);
 
     // A code is single use.
-    expect((await post(t, "/native/token", { code, verifier: VERIFIER })).status).toBe(401);
+    expect((await appPost(t, "/native/token", { code, verifier: VERIFIER })).status).toBe(401);
 
     // Signing the app out ends only the app's session.
-    const out = await post(t, "/sign-out", {}, { authorization: `Bearer ${body.token}` });
+    const out = await appPost(t, "/sign-out", {}, { authorization: `Bearer ${body.token}` });
     expect(out.status).toBe(200);
     const after = await t.fetch("/api/auth/get-session", { headers: { authorization: `Bearer ${body.token}` } });
     expect(await after.json()).toBeNull();

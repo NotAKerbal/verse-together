@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsVolume } from "@/lib/faithTradition";
+
 import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -40,6 +43,7 @@ export default function ScriptureQuickNav({
   panelClassName = "",
   align = "left",
 }: Props) {
+  const { showLdsContent } = useFaithTradition();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -58,15 +62,16 @@ export default function ScriptureQuickNav({
 
   const quickSuggestions = useMemo(() => getQuickNavSuggestions(query, 14), [query]);
   const filteredSuggestions = useMemo(() => {
-    if (!chapterVerseCounts || !activeVolume || !activeBook) return quickSuggestions;
+    if (!chapterVerseCounts || !activeVolume || !activeBook) return quickSuggestions.filter((item) => showLdsContent || !isLdsVolume(item.volume));
     return quickSuggestions.filter((item) => {
+      if (!showLdsContent && isLdsVolume(item.volume)) return false;
       if (!item.verse) return true;
       if (item.volume !== activeVolume || item.book !== activeBook) return true;
       const maxVerse = chapterVerseCounts[item.chapter - 1] ?? 0;
       if (maxVerse <= 0) return true;
       return item.verse <= maxVerse;
     });
-  }, [quickSuggestions, chapterVerseCounts, activeVolume, activeBook]);
+  }, [quickSuggestions, chapterVerseCounts, activeVolume, activeBook, showLdsContent]);
 
   const chapterMatches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -151,7 +156,7 @@ export default function ScriptureQuickNav({
               ref={inputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search chapter or jump (ex: j151, 1 ne 3:7)"
+              placeholder={showLdsContent ? "Search chapter or jump (ex: j151, 1 ne 3:7)" : "Search chapter or jump (ex: John 3:16)"}
               className="w-full rounded-md border border-[color:var(--surface-border)] bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/30"
             />
             {query.trim() ? (

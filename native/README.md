@@ -66,7 +66,7 @@ under your user data directory, needs no sudo, and creates no services or autost
   each lesson's page read scripture-first as on the website (every chapter of the week in full, the guide's
   commentary in "Context for verses …" disclosures), with contents and log. The week's verses select, mark and
   take notes there as in the reader; scripture links outside the week open in a side panel.
-  The guides are those published in the repository, plus the October 26 guide published upstream on `master`.
+  The guides are those published in the repository's catalog (`content/cfm/guides.json`).
 - **Reader study tools**, from the website's own public endpoints (network needed; the scripture itself stays
   embedded): study-path markers beside verses (AI chapter insights, cached on the website), **Explore** a selected
   word (Bible Dictionary/Guide/Topical Guide topics matched on this computer and read from the website, Strong's

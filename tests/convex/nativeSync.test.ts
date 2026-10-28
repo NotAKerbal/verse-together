@@ -131,6 +131,31 @@ describe("desktop journal sync", () => {
     expect((await alice.query(api.insights.getDraft, { draftId }))!.reading_at).toBeNull();
   });
 
+  test("a passage the app adds to a note marks its verses on the website; the reading source alone does not", async () => {
+    const { alice } = await setup();
+    // The app's reading source (native/src/store.rs NoteSource::scripture), as create_args serializes it.
+    const source = { kind: "scripture" as const, label: "Alma 32:21-24", href: "/browse/bookofmormon/alma/32#v-21", ...chapter, verseStart: 21, verseEnd: 24 };
+    const sourceOnly = await alice.mutation(api.insights.createJournalEntry, {
+      ...create, requestId: "b1b2c3d4e5f60718293a4b5c6d7e8f90", markdownBody: "A thought about faith", source, logReading: true,
+    });
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([]);
+    // The reader's Add to note body exactly as the app writes it (native/src/journal.rs scripture_block).
+    const markdownBody =
+      "**[Alma 32:21–22](</browse/bookofmormon/alma/32#v-21>)**\n> faith\n>\n> And\n\n" +
+      "**[Alma 32:24](</browse/bookofmormon/alma/32#v-24>)**\n> Now";
+    const quoted = await alice.mutation(api.insights.createJournalEntry, { ...create, markdownBody, source });
+    const refs = await alice.query(api.insights.listMyScriptureRefsForChapter, chapter);
+    expect(refs.map((ref: { draftId: string; verseStart: number; verseEnd: number }) => [ref.draftId, ref.verseStart, ref.verseEnd])).toEqual([
+      [quoted.id, 21, 22],
+      [quoted.id, 24, 24],
+    ]);
+    // Adding the passage to the first note later, through the app's revision-checked save, marks it too.
+    await alice.mutation(api.nativeSync.saveJournalNote, {
+      draftId: sourceOnly.id as Id<"insightDrafts">, markdownBody: `A thought about faith\n\n${markdownBody}`, expectedRevision: 0,
+    });
+    expect((await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).filter((ref: { draftId: string }) => ref.draftId === sourceOnly.id)).toHaveLength(2);
+  });
+
   test("deleting is idempotent, and a deleted entry's late create stays deleted", async () => {
     const { alice, bob } = await setup();
     const { id } = await alice.mutation(api.insights.createJournalEntry, create);

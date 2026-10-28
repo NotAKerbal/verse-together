@@ -319,16 +319,23 @@ impl App {
                 Some(selection)
             };
     }
-    /// The words selected in the reader, verse by verse (joined with spaces, as the website's selected text is).
-    pub(crate) fn reader_selected_text(&self) -> String {
+    /// The words selected in the reader, verse by verse, with each verse's number.
+    pub(crate) fn reader_selected_pieces(&self) -> Vec<(u32, String)> {
         self.word_selection
             .iter()
             .filter_map(|(index, range)| {
-                let text = &self.verses.get(*index)?.text;
-                let a = marks::utf16_to_byte(text, range.start)?;
-                let b = marks::utf16_to_byte(text, range.end)?;
-                Some(text[a..b].to_string())
+                let verse = self.verses.get(*index)?;
+                let a = marks::utf16_to_byte(&verse.text, range.start)?;
+                let b = marks::utf16_to_byte(&verse.text, range.end)?;
+                Some((verse.number, verse.text[a..b].to_string()))
             })
+            .collect()
+    }
+    /// The words selected in the reader, verse by verse (joined with spaces, as the website's selected text is).
+    pub(crate) fn reader_selected_text(&self) -> String {
+        self.reader_selected_pieces()
+            .into_iter()
+            .map(|(_, text)| text)
             .collect::<Vec<_>>()
             .join(" ")
     }

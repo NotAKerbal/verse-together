@@ -1,25 +1,211 @@
 .shell {
-  width: min(100%, 60rem);
+  width: min(100%, 64rem);
   margin-inline: auto;
-  padding-block: 1rem;
+  padding-block: 1rem 3rem;
 }
 
-.manager {
-  display: grid;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-.profileColumn,
-.settingsColumn,
-.accountSettings {
+/*
+  The sections: a pill like the app's navigation, the open section dark with its name and the others as icons. On
+  phones, tablets and in simple mode it sits at the top of the page; from 900px (SETTINGS_HEADER_QUERY in
+  settingsTabs.ts) at the right of the app header, beside the navigation, with the open section full width below.
+*/
+.panels {
   min-width: 0;
 }
 
-.accountSettings,
+.tabList {
+  display: flex;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: -2px;
+}
+
+.tabIcon {
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.tabLabel {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
+}
+
+.tab[aria-selected="true"] .tabLabel {
+  max-width: 10rem;
+  margin-left: .375rem;
+  opacity: 1;
+}
+
+/* In the page: the chrome of the header and the phone navigation (.desktop-nav-bar, .mobile-nav-control). */
+.tabList[data-placement="page"] {
+  gap: .25rem;
+  width: min(100%, 30rem);
+  margin: 0 0 1.25rem;
+  padding: .3125rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.tabList[data-placement="page"] .tab {
+  flex: 1 1 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding-inline: .6rem;
+  border-radius: 999px;
+  font-size: .8rem;
+  transition: flex-grow 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+}
+
+/* Never narrower than its name: the clipped label would otherwise let it shrink ("Release not"). */
+.tabList[data-placement="page"] .tab[aria-selected="true"] {
+  flex-grow: 3;
+  min-width: max-content;
+}
+
+/* The narrowest phones (320px): all five tabs fit when they sit closer and the open one shows only its name. */
+@media (max-width: 359px) {
+  .tabList[data-placement="page"] {
+    gap: .125rem;
+  }
+
+  .tabList[data-placement="page"] .tab {
+    min-width: 2.5rem;
+    padding-inline: .5rem;
+  }
+
+  .tabList[data-placement="page"] .tab[aria-selected="true"] .tabIcon {
+    display: none;
+  }
+
+  .tabList[data-placement="page"] .tab[aria-selected="true"] .tabLabel {
+    margin-left: 0;
+  }
+}
+
+/*
+  The server-rendered page has only this copy; until the header's takes over (on wide screens outside simple mode)
+  it stays hidden, so the tabs never flash in the page and then jump.
+*/
+@media (min-width: 900px) {
+  :global(:root:not([data-simple="true"])) .tabList[data-placement="page"] {
+    display: none;
+  }
+}
+
+/* In the header (AppHeaderPortal): the navigation pill's chrome and controls, the open tab like its open link. */
+.tabList[data-placement="header"] {
+  flex-shrink: 0;
+  align-items: center;
+  gap: .375rem;
+  width: max-content;
+  min-height: 3rem;
+  padding: .3125rem .375rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.tabList[data-placement="header"] .tab {
+  min-width: var(--desktop-nav-control-size);
+  height: var(--desktop-nav-control-size);
+  padding-inline: .6rem;
+  border-radius: .7rem;
+  font-size: .8125rem;
+  transition: padding 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+}
+
+.tabList[data-placement="header"] .tab[aria-selected="true"] {
+  padding-inline: .75rem;
+}
+
+.tabList[data-placement="header"] .tab:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Only where there is a pointer that hovers: on touch screens a tapped tab would keep the hover look. */
+@media (hover: hover) {
+  .tab:not([aria-selected="true"]):hover {
+    background: var(--surface-button-hover);
+  }
+}
+
+/* The open section spans the header beneath both pills. */
+@media (min-width: 900px) {
+  .shell {
+    width: min(100%, var(--shell-max-width));
+  }
+
+  .panelHeader {
+    padding-bottom: .9rem;
+    border-bottom: 1px solid var(--rule);
+  }
+}
+
+/* One panel at a time; the others stay mounted but hidden. */
+.panel {
+  display: grid;
+  gap: .9rem;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panelHeader {
+  display: grid;
+  gap: .2rem;
+}
+
+.panelTitle {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.panelLead {
+  font-size: .8rem;
+  color: var(--foreground-muted);
+}
+
+.profileColumn,
+.settingsColumn {
+  min-width: 0;
+}
+
 .accountManager {
   display: grid;
   gap: .75rem;
+  align-items: start;
+}
+
+@container (min-width: 42rem) {
+  .accountManager {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .profileColumn {
@@ -61,7 +247,7 @@
   min-width: 0;
 }
 
-.identity h2 {
+.identity h3 {
   font-family: inherit;
   font-size: .95rem;
   font-weight: 600;
@@ -135,7 +321,7 @@
   list-style: none;
 }
 
-.sectionSummary h2 {
+.sectionSummary h3 {
   font-family: inherit;
   font-size: .82rem;
   font-weight: 500;
@@ -181,6 +367,286 @@
 
 .preferences {
   padding: .5rem .75rem;
+}
+
+/* A card's title, its status line and an action on the right. */
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  padding-block: .5rem 1rem;
+}
+
+.cardHeader p {
+  font-size: .7rem;
+  color: var(--foreground-muted);
+  margin-top: .15rem;
+}
+
+/* Reading: sample and faith tradition on the left, appearance and simple mode on the right. */
+.readingGrid {
+  display: grid;
+  gap: .75rem;
+  align-items: start;
+}
+
+@container (min-width: 42rem) {
+  .readingGrid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+
+  .readingPreviewColumn {
+    position: sticky;
+    top: calc(var(--header-height) + 1rem);
+  }
+}
+
+.readingPreviewColumn {
+  display: grid;
+  gap: .75rem;
+  min-width: 0;
+}
+
+.sample {
+  margin: 0;
+  padding: .75rem 1rem 1rem;
+}
+
+.sampleCaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .25rem .75rem;
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: .7rem;
+  color: var(--foreground-muted);
+}
+
+.sampleText {
+  padding-top: .5rem;
+  overflow-wrap: break-word;
+}
+
+/* Release notes: the current version, what's coming, then one entry per release, newest first. */
+.releaseNotes {
+  display: grid;
+  gap: .75rem;
+}
+
+.releaseCurrent {
+  font-size: .82rem;
+  color: var(--foreground-muted);
+}
+
+.releaseCurrent strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.releaseList {
+  display: grid;
+  gap: .75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.releaseEntry {
+  border-radius: .9rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+.releaseUpcoming {
+  border: 1px dashed var(--accent-rubric-line);
+  box-shadow: none;
+}
+
+.releaseHeader {
+  display: grid;
+  gap: .15rem;
+  margin-bottom: .65rem;
+}
+
+.releaseMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .1rem .4rem;
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--foreground-muted);
+  font-variant-numeric: lining-nums;
+}
+
+.releaseVersion {
+  color: var(--accent-rubric);
+  font-weight: 600;
+}
+
+.releaseHeader h3 {
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.releaseItems {
+  display: grid;
+  gap: .55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+
+.releaseItems > li {
+  display: grid;
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+  gap: .5rem;
+  align-items: baseline;
+}
+
+.releaseItemBody {
+  display: grid;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.releaseKind {
+  justify-self: start;
+  padding: .05rem .45rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  font-size: .64rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--foreground-muted);
+}
+
+.releaseKind[data-kind="new"] {
+  border-color: var(--accent-rubric-line);
+  color: var(--accent-rubric);
+}
+
+/* A feature's screenshot under its note: a capped thumbnail that opens full size. */
+.releaseFigure {
+  display: grid;
+  gap: .3rem;
+  margin: 0 0 .35rem;
+  max-width: 34rem;
+}
+
+.releaseShot {
+  display: block;
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: .6rem;
+  background: var(--surface-card-soft);
+  cursor: zoom-in;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.releaseShot:hover {
+  border-color: var(--accent-rubric-line);
+  box-shadow: var(--surface-shadow-soft);
+}
+
+.releaseShot:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 2px;
+}
+
+/* The whole screenshot, scaled down to fit: wide ones by the column, tall ones by the height cap. */
+.releaseShot img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 20rem;
+}
+
+.releaseFigure figcaption {
+  font-size: .72rem;
+  color: var(--foreground-muted);
+}
+
+.releaseShotNote {
+  font-style: italic;
+}
+
+.releaseViewer {
+  width: min(96vw, 80rem);
+  max-width: none;
+  max-height: 94vh;
+  margin: auto;
+  padding: .75rem;
+  border: 0;
+  border-radius: .9rem;
+  background: var(--surface-card-strong);
+  color: var(--foreground);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / .35);
+}
+
+.releaseViewer::backdrop {
+  background: rgb(0 0 0 / .6);
+}
+
+.releaseViewer figure {
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+}
+
+.releaseViewer img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(94vh - 4.5rem);
+  object-fit: contain;
+  border-radius: .5rem;
+}
+
+.releaseViewer figcaption {
+  padding-right: 3rem;
+  font-size: .8rem;
+  color: var(--foreground-muted);
+}
+
+.releaseViewerClose {
+  position: absolute;
+  right: .75rem;
+  bottom: .5rem;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: var(--foreground-muted);
+}
+
+.releaseViewerClose:hover {
+  background: var(--surface-button-hover);
+  color: var(--foreground);
+}
+
+.releaseEarlier {
+  border-radius: .9rem;
+  background: var(--surface-card-soft);
+  padding: .25rem;
+}
+
+.releaseEarlier > summary {
+  font-size: .82rem;
+  font-weight: 500;
+}
+
+.releaseEarlier[open] > .releaseList {
+  padding: .5rem .25rem .25rem;
 }
 
 .setting {
@@ -437,6 +903,58 @@
   padding: 1rem;
 }
 
+/* Feedback: one readable column, its button at the start like the profile form's. */
+.feedbackCard {
+  width: min(100%, 42rem);
+}
+
+.feedbackForm {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: .5rem;
+}
+
+.feedbackForm > button {
+  justify-self: start;
+}
+
+.feedbackMessage {
+  min-height: 9rem;
+  resize: vertical;
+}
+
+.feedbackForm :is(textarea, input):read-only {
+  opacity: .7;
+}
+
+.fieldMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: .3rem;
+  font-size: .72rem;
+  color: var(--foreground-muted);
+}
+
+.fieldMeta > span {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fieldError {
+  margin-top: .3rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--accent-secondary);
+}
+
+.feedbackSent {
+  padding: .5rem .75rem;
+  border: 2px solid var(--surface-border);
+  border-radius: .75rem;
+  font-size: .875rem;
+}
+
 .shell :is(a, button):focus-visible {
   outline: 2px solid var(--accent-rubric);
   outline-offset: 3px;
@@ -447,15 +965,10 @@
   outline-offset: -3px;
 }
 
-@media (min-width: 768px) {
-  .manager {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 @media (max-width: 540px) {
-  .manager {
-    gap: 1rem;
+  .releaseItems > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .2rem;
   }
 
   .profile {
@@ -480,7 +993,76 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell *, .shell *::before {
+  .shell *, .shell *::before, .tabList * {
     transition: none;
+  }
+}
+
+/* Tradition names can be long; wrap within the settings column on small screens. */
+.faithCard {
+  min-width: 0;
+}
+
+.faithFieldset {
+  min-width: 0;
+  margin-top: 1rem;
+}
+
+.faithChoices {
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.faithChoice {
+  display: flex;
+  align-items: center;
+  min-height: 3.25rem;
+  min-width: 0;
+  gap: .75rem;
+  padding: .875rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: .625rem;
+  background: var(--surface-card);
+  font-size: .875rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.faithChoice:hover {
+  background: var(--surface-button-hover);
+}
+
+.faithChoice[data-active="true"] {
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
+  border-color: currentColor;
+}
+
+.faithChoice:focus-within {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.faithChoice input {
+  flex-shrink: 0;
+}
+
+.translationsCard {
+  width: min(100%, 40rem);
+}
+
+/* Keep all six sections within a narrow phone's settings pill. */
+@media (max-width: 400px) {
+  .tabList[data-placement="page"] {
+    gap: .125rem;
+  }
+
+  .tabList[data-placement="page"] .tab {
+    min-width: 2rem;
+    padding-inline: .25rem;
+    font-size: .75rem;
   }
 }

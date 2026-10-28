@@ -49,6 +49,23 @@ export const FALLBACK_COVER: GeneratedCover = {
 };
 
 const LESSON_COVERS: Readonly<Record<string, LessonCover>> = {
+  "2026-10-26": {
+    kind: "painting",
+    src: "/cfm/covers/rembrandt-jeremiah.webp",
+    width: 1180,
+    height: 1500,
+    focus: "50% 38%",
+    alt: "Jeremiah rests his head on his hand as Jerusalem burns in the distance, in Rembrandt’s painting.",
+    credit: {
+      title: "Jeremiah Lamenting the Destruction of Jerusalem",
+      artist: "Rembrandt van Rijn",
+      date: "1630",
+      collection: "Rijksmuseum",
+      license: "Public domain",
+      sourceLabel: "Wikimedia Commons",
+      sourceUrl: "https://commons.wikimedia.org/wiki/File:Rembrandt_-_Jeremiah_lamenting.jpg",
+    },
+  },
   "2026-10-19": {
     kind: "generated",
     src: "/cfm/covers/jeremiah-potter.webp",

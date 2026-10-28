@@ -745,24 +745,11 @@ impl App {
             .into_iter()
             .filter_map(|(c, verses, texts)| {
                 let (label, location) = self.lesson_book_label(c)?;
-                let (first, last) = (*verses.iter().min()?, *verses.iter().max()?);
-                let source =
-                    crate::store::NoteSource::scripture(&label, &location, Some((first, last)));
-                let quote = texts
-                    .join("\n\n")
-                    .split('\n')
-                    .map(|line| {
-                        if line.is_empty() {
-                            ">".to_string()
-                        } else {
-                            format!("> {line}")
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                Some(format!(
-                    "**{}**\n{quote}",
-                    crate::journal::markdown_link(&source.label, &source.href)
+                Some(crate::journal::scripture_block(
+                    &label,
+                    &location,
+                    &verses,
+                    &texts.join("\n\n"),
                 ))
             })
             .collect::<Vec<_>>()

@@ -75,32 +75,30 @@ fn main() {
     write_guides(&root);
 }
 
-/// Embeds every published Come, Follow Me guide: the repository's catalog, plus guides published upstream that
-/// this branch's catalog does not list yet (native/upstream-guides.json).
+/// Embeds every published Come, Follow Me guide in the repository's catalog (`content/cfm/guides.json`).
 fn write_guides(root: &std::path::Path) {
-    let mut out = String::from("pub const GUIDE_CATALOGS: &[&str] = &[\n");
+    let catalog = root.join("content/cfm/guides.json");
+    println!("cargo:rerun-if-changed={}", catalog.display());
+    let out = format!(
+        "pub const GUIDE_CATALOG: &str = include_str!({:?});\n",
+        catalog.display().to_string()
+    );
     let mut files = String::from("pub const GUIDE_FILES: &[(&str, &str)] = &[\n");
-    for catalog in [
-        root.join("content/cfm/guides.json"),
-        root.join("native/upstream-guides.json"),
-    ] {
-        println!("cargo:rerun-if-changed={}", catalog.display());
-        out.push_str(&format!(
-            "    include_str!({:?}),\n",
-            catalog.display().to_string()
+    let entries: Value = serde_json::from_slice(&fs::read(&catalog).unwrap()).unwrap();
+    let mut seen = std::collections::HashSet::new();
+    for entry in entries.as_array().unwrap() {
+        let slug = entry["slug"].as_str().unwrap();
+        assert!(
+            seen.insert(slug.to_string()),
+            "guide {slug} is listed twice"
+        );
+        let path = root.join(format!("content/cfm/{slug}.md"));
+        println!("cargo:rerun-if-changed={}", path.display());
+        files.push_str(&format!(
+            "    ({slug:?}, include_str!({:?})),\n",
+            path.display().to_string()
         ));
-        let entries: Value = serde_json::from_slice(&fs::read(&catalog).unwrap()).unwrap();
-        for entry in entries.as_array().unwrap() {
-            let slug = entry["slug"].as_str().unwrap();
-            let path = root.join(format!("content/cfm/{slug}.md"));
-            println!("cargo:rerun-if-changed={}", path.display());
-            files.push_str(&format!(
-                "    ({slug:?}, include_str!({:?})),\n",
-                path.display().to_string()
-            ));
-        }
     }
-    out.push_str("];\n");
     files.push_str("];\n");
     fs::write(
         PathBuf::from(env::var("OUT_DIR").unwrap()).join("guides.rs"),

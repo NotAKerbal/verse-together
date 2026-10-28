@@ -1,0 +1,59 @@
+import { describe, expect, test } from "vitest";
+import {
+  DEFAULT_SETTINGS_TAB,
+  SETTINGS_TABS,
+  settingsPanelId,
+  settingsTabId,
+  tabForKey,
+  tabFromHash,
+} from "../src/features/settings/settingsTabs";
+
+describe("settings tabs", () => {
+  test("the hash opens its tab, and anything else opens Account", () => {
+    expect(tabFromHash("#reading")).toBe("reading");
+    expect(tabFromHash("#bible-translations")).toBe("bible-translations");
+    expect(tabFromHash("#release-notes")).toBe("release-notes");
+    expect(tabFromHash("#feedback")).toBe("feedback");
+    expect(tabFromHash("study-tools")).toBe("study-tools");
+    expect(tabFromHash("")).toBe(DEFAULT_SETTINGS_TAB);
+    expect(tabFromHash("#")).toBe("account");
+    expect(tabFromHash("#profile")).toBe("account");
+    expect(tabFromHash("#%E0%A4%A")).toBe("account");
+  });
+
+  test("Left and Right step along the row and wrap; Up and Down do nothing", () => {
+    expect(tabForKey("ArrowRight", "account")).toBe("reading");
+    expect(tabForKey("ArrowRight", "reading")).toBe("bible-translations");
+    expect(tabForKey("ArrowLeft", "study-tools")).toBe("bible-translations");
+    expect(tabForKey("ArrowRight", "study-tools")).toBe("release-notes");
+    expect(tabForKey("ArrowRight", "release-notes")).toBe("feedback");
+    expect(tabForKey("ArrowRight", "feedback")).toBe("account");
+    expect(tabForKey("ArrowLeft", "reading")).toBe("account");
+    expect(tabForKey("ArrowLeft", "account")).toBe("feedback");
+    expect(tabForKey("ArrowLeft", "feedback")).toBe("release-notes");
+    expect(tabForKey("ArrowDown", "reading")).toBeNull();
+    expect(tabForKey("ArrowUp", "reading")).toBeNull();
+  });
+
+  test("Home and End go to the ends, other keys do nothing", () => {
+    expect(tabForKey("Home", "study-tools")).toBe("account");
+    expect(tabForKey("End", "account")).toBe("feedback");
+    expect(tabForKey("Enter", "account")).toBeNull();
+    expect(tabForKey("Tab", "reading")).toBeNull();
+  });
+
+  test("Feedback is the last tab, after Release notes", () => {
+    expect(SETTINGS_TABS.at(-1)).toBe("feedback");
+    expect(SETTINGS_TABS.indexOf("feedback")).toBe(SETTINGS_TABS.indexOf("release-notes") + 1);
+    expect(settingsTabId("feedback")).toBe("settings-tab-feedback");
+    expect(settingsPanelId("feedback")).toBe("settings-panel-feedback");
+  });
+
+  test("tab and panel ids never equal a hash, so the browser has nothing to jump to", () => {
+    for (const tab of SETTINGS_TABS) {
+      expect(settingsTabId(tab)).not.toBe(tab);
+      expect(settingsPanelId(tab)).not.toBe(tab);
+    }
+    expect(settingsPanelId("reading")).toBe("settings-panel-reading");
+  });
+});

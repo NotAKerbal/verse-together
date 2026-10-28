@@ -18,6 +18,25 @@ async function setup() {
 }
 
 describe("unified journal entries", () => {
+  test("a reading reflection does not attach the note to the whole reading range", async () => {
+    const { alice } = await setup();
+    const id = created(await alice.mutation(api.insights.createJournalEntry, {
+      ...input, markdownBody: "A general thought from today's reading",
+    }));
+    const chapter = { volume: source.volume, book: source.book, chapter: source.chapter };
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([]);
+    expect(await alice.query(api.readingProgress.listMyReadingLog, {})).toEqual([
+      expect.objectContaining({ note_id: id, source }),
+    ]);
+    await alice.mutation(api.insights.saveJournalNote, {
+      draftId: id, expectedRevision: 0,
+      markdownBody: "A specific thought about [1 Nephi 2:4](/browse/bookofmormon/1-nephi/2#v-4)",
+    });
+    expect(await alice.query(api.insights.listMyScriptureRefsForChapter, chapter)).toEqual([
+      expect.objectContaining({ draftId: id, verseStart: 4, verseEnd: 4 }),
+    ]);
+  });
+
   test.each([
     { markdownBody: "# A note\n\nWithout reading", logReading: false },
     { markdownBody: "", logReading: true },

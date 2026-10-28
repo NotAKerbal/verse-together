@@ -168,11 +168,12 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
   const { range } = parsed;
 
   const chapters: CompanionChapter[] = [];
-  // Only the week's own chapters ("Jeremiah 1–3; 7; …" skips 4–6); other chapters stay preview links.
-  for (const chapter of range.chapters) {
-    const data = await getLocalLdsChapter(range.volume, range.slug, chapter);
-    if (!data) throw new Error(`Come, Follow Me: missing ${range.book} ${chapter}`);
-    chapters.push({ chapter, verses: data.verses });
+  // Only the week's own chapters, each from its own book ("Jeremiah 31–33; 36–39; Lamentations 1; 3" skips
+  // Jeremiah 34–35 and Lamentations 2); other chapters stay preview links.
+  for (const entry of range.entries) {
+    const data = await getLocalLdsChapter(entry.volume, entry.slug, entry.chapter);
+    if (!data) throw new Error(`Come, Follow Me: missing ${entry.book} ${entry.chapter}`);
+    chapters.push({ ...entry, verses: data.verses });
   }
 
   const cover = getLessonCover(week.start);
@@ -195,7 +196,6 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         readerSections={parsed.readerSections}
         closingHtml={parsed.closingHtml}
         toc={parsed.toc}
-        book={{ label: range.book, slug: range.slug, volume: range.volume }}
         chapters={chapters}
         weekStart={week.start}
         guideSource={guideSource}

@@ -828,6 +828,22 @@ impl App {
         self.start_note(&today, Some(source), &quote, None);
         presented(iced::widget::operation::focus("journal-title"))
     }
+    /// The reader's Add to note (`onAddToNote`): each run of consecutive selected verses quoted under its own
+    /// reference and verse link, its verses as separate paragraphs.
+    fn reader_excerpt(&self, pieces: Vec<(u32, String)>) -> String {
+        let label = self
+            .book()
+            .map(|b| b.label.clone())
+            .unwrap_or_else(|| self.preferences.last.book.clone());
+        journal::verse_passages(pieces)
+            .into_iter()
+            .map(|(a, b, text)| {
+                let verses: Vec<u32> = (a..=b).collect();
+                journal::scripture_block(&label, &self.preferences.last, &verses, &text)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
     fn chapter_source(&self, verses: Option<(u32, u32)>) -> NoteSource {
         let label = self
             .book()
@@ -1013,15 +1029,14 @@ impl App {
                     .iter()
                     .filter_map(|(i, _)| Some(self.verses.get(*i)?.number))
                     .collect();
-                let words = self.reader_selected_text();
+                let excerpt = self.reader_excerpt(self.reader_selected_pieces());
                 if let (Some(first), Some(last)) = (verses.first(), verses.last())
-                    && !words.trim().is_empty()
+                    && !excerpt.is_empty()
                     && self.save_note()
                 {
                     let source = self.chapter_source(Some((*first, *last)));
-                    let quote = format!("> {}\n>\n> — {}\n\n", words.trim(), source.label);
                     self.clear_words();
-                    return self.write_in_journal(source, quote);
+                    return self.write_in_journal(source, format!("{excerpt}\n\n"));
                 }
             }
             Message::VersesInJournal => {
@@ -1031,15 +1046,14 @@ impl App {
                 ) && self.save_note()
                 {
                     let source = self.chapter_source(Some((first, last)));
-                    let verses = self
+                    let pieces = self
                         .verses
                         .iter()
                         .filter(|v| self.selected.contains(&v.number))
-                        .map(|v| format!("> **{}** {}", v.number, v.text))
-                        .collect::<Vec<_>>()
-                        .join("\n>\n");
-                    let quote = format!("{verses}\n>\n> — {}\n\n", source.label);
-                    return self.write_in_journal(source, quote);
+                        .map(|v| (v.number, v.text.clone()))
+                        .collect::<Vec<_>>();
+                    let excerpt = self.reader_excerpt(pieces);
+                    return self.write_in_journal(source, format!("{excerpt}\n\n"));
                 }
             }
             Message::Journal(message) => return self.update_journal(message),
@@ -1478,6 +1492,40 @@ mod interaction_tests {
             book: "alma".into(),
             chapter: 32,
         }
+    }
+    #[test]
+    fn the_readers_add_to_note_quotes_each_run_under_its_verse_link_like_the_website() {
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        let text = |n: u32| {
+            app.verses
+                .iter()
+                .find(|v| v.number == n)
+                .unwrap()
+                .text
+                .clone()
+        };
+        let (v21, v22, v24) = (text(21), text(22), text(24));
+        app.selected = BTreeSet::from([21, 22, 24]);
+        let _ = app.update(Message::VersesInJournal);
+        let open = app
+            .journal
+            .open
+            .as_ref()
+            .expect("a note opens with the passage");
+        // The reading source stays context; the verse links in the body are what mark the verses on the website.
+        assert_eq!(
+            open.note.source.as_ref().unwrap().href,
+            "/browse/bookofmormon/alma/32#v-21"
+        );
+        assert_eq!(
+            open.body.text(),
+            format!(
+                "**[Alma 32:21–22](</browse/bookofmormon/alma/32#v-21>)**\n> {v21}\n>\n> {v22}\n\n**[Alma 32:24](</browse/bookofmormon/alma/32#v-24>)**\n> {v24}\n\n"
+            )
+        );
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn selecting_range_marks_every_verse_and_never_edits_scripture() {

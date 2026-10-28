@@ -11,6 +11,7 @@ import {
   pkceMatches,
   sha256Base64Url,
 } from "../convex/nativeAuthRules";
+import { chooseSignInRoute, signInReturnPath } from "../src/lib/signInFlow";
 
 describe("desktop sign-in rules", () => {
   // RFC 7636 appendix B.
@@ -44,6 +45,21 @@ describe("desktop sign-in rules", () => {
     ]) {
       expect(parseNativeAuthorizeRequest(new URLSearchParams(bad))).toBeNull();
     }
+  });
+
+  it("brings the reader back to the same approval request after signing in", () => {
+    // The approval page's own URL as the app opens it (native/src/cloud.rs), through the website's sign-in flow.
+    const page = `/native/authorize?challenge=${challenge}&state=abcdefghijklmnopQRSTUV&port=49152`;
+    expect(signInReturnPath(page)).toBe(page);
+    const google = chooseSignInRoute({ google: true, emailPassword: false }, signInReturnPath(page), "https://www.versetogether.org");
+    expect(google).toMatchObject({ kind: "google", callbackURL: `https://www.versetogether.org${page}` });
+    const back = new URL((google as { callbackURL: string }).callbackURL);
+    expect(parseNativeAuthorizeRequest(back.searchParams)).toEqual({ challenge, state: "abcdefghijklmnopQRSTUV", port: 49152 });
+    // With a choice of methods the sign-in page is used, and it returns to the same request.
+    const choice = chooseSignInRoute({ google: true, emailPassword: true }, page, "https://www.versetogether.org");
+    expect(choice.kind).toBe("page");
+    const redirect = new URL((choice as { href: string }).href, "https://www.versetogether.org").searchParams.get("redirect");
+    expect(redirect).toBe(page);
   });
 
   it("stores codes only as hashes and reads grants defensively", async () => {

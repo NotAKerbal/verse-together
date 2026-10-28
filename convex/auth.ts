@@ -1,6 +1,5 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { bearer } from "better-auth/plugins";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { components } from "./_generated/api";
@@ -139,11 +138,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       },
     },
     plugins: [
-      // The Convex plugin issues the RS256 JWTs Convex verifies (15 minute lifetime by default).
+      // The Convex plugin issues the RS256 JWTs Convex verifies (15 minute lifetime by default). It also runs the
+      // bearer plugin's request hook, which reads `Authorization: Bearer <session token>` as the session: the desktop
+      // app (no cookie jar) authenticates that way. The full bearer() plugin is deliberately not added: its response
+      // hook would copy every website session token into a script-readable `set-auth-token` header.
       convex({ authConfig }),
-      // The desktop app holds its own session token and sends it as `Authorization: Bearer` (it has no cookie
-      // jar). Browsers never send this header on their own, so cookie-based CSRF protections are unaffected.
-      bearer(),
       // Browser-approved, PKCE-bound desktop sign-in (convex/nativeAuth.ts).
       nativeAppAuth(),
     ],

@@ -240,6 +240,61 @@ pub fn markdown_link(label: &str, url: &str) -> String {
 pub fn plural(count: usize, one: &str, many: &str) -> String {
     format!("{count} {}", if count == 1 { one } else { many })
 }
+/// `quoteLines`: text as a Markdown block quote, line by line (a blank line stays a bare ">").
+pub fn quote_lines(text: &str) -> String {
+    text.split('\n')
+        .map(|line| {
+            if line.is_empty() {
+                ">".to_string()
+            } else {
+                format!("> {line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+/// `selectedVersePassages`: selected pieces in verse order, each run of consecutive verses one passage whose
+/// verses are separate paragraphs. Pieces with nothing but whitespace are skipped.
+pub fn verse_passages(pieces: impl IntoIterator<Item = (u32, String)>) -> Vec<(u32, u32, String)> {
+    let mut passages: Vec<(u32, u32, String)> = vec![];
+    for (verse, text) in pieces {
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        match passages.last_mut() {
+            Some((_, end, body)) if verse == *end + 1 => {
+                *end = verse;
+                body.push_str("\n\n");
+                body.push_str(text);
+            }
+            _ => passages.push((verse, verse, text.to_string())),
+        }
+    }
+    passages
+}
+/// `blockToMarkdown` for a scripture block (`scriptureExcerpt`, the reader's Add to note): the passage's bold
+/// reference ("Jeremiah 31:3–4, 6", `formatPassageReference`) linked to its first verse, over its quoted text.
+/// The verse link is what makes the note a note on these verses (`scriptureLinksForChapter`).
+pub fn scripture_block(
+    book_label: &str,
+    l: &crate::store::Location,
+    verses: &[u32],
+    text: &str,
+) -> String {
+    let first = verses.iter().min().copied();
+    let source = crate::store::NoteSource::scripture(book_label, l, first.map(|v| (v, v)));
+    let reference = if verses.is_empty() {
+        format!("{book_label} {}", l.chapter)
+    } else {
+        format!("{book_label} {}:{}", l.chapter, verse_spec(verses))
+    };
+    format!(
+        "**{}**\n{}",
+        markdown_link(&reference, &source.href),
+        quote_lines(text)
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -310,5 +365,60 @@ mod tests {
         assert_eq!(revisit(&notes, "2026-10-27").unwrap().body, "Last week");
         assert!(revisit(&notes, "2026-10-25").is_none());
         assert_eq!(plural(1, "entry", "entries"), "1 entry");
+    }
+    #[test]
+    fn scripture_blocks_are_written_like_the_websites_excerpts() {
+        // Expected strings are the website's own `scriptureExcerpt` and reader Add to note output (2.13.0).
+        let jeremiah = |chapter| Location {
+            volume: "oldtestament".into(),
+            book: "jeremiah".into(),
+            chapter,
+        };
+        let pieces = [
+            (3, "I have loved thee".to_string()),
+            (4, " Again I will build".to_string()),
+            (6, "For there shall be".to_string()),
+        ];
+        let verses: Vec<u32> = pieces.iter().map(|p| p.0).collect();
+        let text = pieces
+            .iter()
+            .map(|p| p.1.trim())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        assert_eq!(
+            format!(
+                "{}\n\n{}",
+                scripture_block("Jeremiah", &jeremiah(31), &verses, &text),
+                scripture_block("Jeremiah", &jeremiah(32), &[1], "The word")
+            ),
+            "**[Jeremiah 31:3–4, 6](</browse/oldtestament/jeremiah/31#v-3>)**\n> I have loved thee\n>\n> Again I will build\n>\n> For there shall be\n\n**[Jeremiah 32:1](</browse/oldtestament/jeremiah/32#v-1>)**\n> The word"
+        );
+        // The reader quotes each run of consecutive verses as its own block.
+        let passages = verse_passages([
+            (21, "faith".to_string()),
+            (22, "And".to_string()),
+            (23, "  ".to_string()),
+            (24, "Now".to_string()),
+        ]);
+        assert_eq!(
+            passages,
+            [
+                (21, 22, "faith\n\nAnd".to_string()),
+                (24, 24, "Now".to_string())
+            ]
+        );
+        let alma = Location {
+            volume: "bookofmormon".into(),
+            book: "alma".into(),
+            chapter: 32,
+        };
+        let blocks: Vec<String> = passages
+            .iter()
+            .map(|(a, b, t)| scripture_block("Alma", &alma, &(*a..=*b).collect::<Vec<_>>(), t))
+            .collect();
+        assert_eq!(
+            blocks.join("\n\n"),
+            "**[Alma 32:21–22](</browse/bookofmormon/alma/32#v-21>)**\n> faith\n>\n> And\n\n**[Alma 32:24](</browse/bookofmormon/alma/32#v-24>)**\n> Now"
+        );
     }
 }

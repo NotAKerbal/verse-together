@@ -3,7 +3,7 @@
 import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Link from "next/link";
-import { createRef, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
+import { createRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { chapterLogOptions, READER_HEADER_BUTTON_CLASS } from "@/components/ChapterReaderChrome";
 import { useReaderHeaderDock } from "@/components/ReaderHeaderSlot";
@@ -11,7 +11,7 @@ import { useInsightBuilder, type ReaderChapter, type ReaderChapterRegistration }
 import type { NoteSource } from "@/features/notes/journal";
 import JournalLogButton from "@/features/notes/JournalLogButton";
 import { getChapterHref } from "@/features/plans/scriptureCatalog";
-import { decodeFragment, localScriptureTarget, normalizeTarget, parseScriptureAnchor, scriptureAnchor, scriptureVerseId } from "@/lib/cfm/cfmAnchors";
+import { decodeFragment, normalizeTarget, parseRangeAnchor, rangeAnchor, rangeBooks, rangeEntry, rangeScriptureTarget, scriptureAnchor, scriptureVerseId, type RangeChapter } from "@/lib/cfm/cfmAnchors";
 import type { GuideContextBlock, GuideReaderSection, TocItem } from "@/lib/cfm/cfmGuide";
 import ContentsNav, { ContentsOpener, type ContentsHandle } from "./ContentsNav";
 import { usePassagePreview } from "./PassagePreview.tsx";
@@ -21,7 +21,7 @@ import { useGuideHighlights } from "./useGuideHighlights";
 import { useScriptureAnnotations } from "./useScriptureAnnotations";
 import styles from "./studyCompanion.module.css";
 
-export type CompanionChapter = { chapter: number; verses: Array<{ verse: number; text: string }> };
+export type CompanionChapter = RangeChapter & { verses: Array<{ verse: number; text: string }> };
 
 type Props = {
   introductionHtml: string;
@@ -29,7 +29,6 @@ type Props = {
   readerSections: GuideReaderSection[];
   closingHtml: string;
   toc: TocItem[];
-  book: { label: string; slug: string; volume: string };
   chapters: CompanionChapter[];
   weekStart: string;
   guideSource: NoteSource & { kind: "guide" };
@@ -72,24 +71,44 @@ function contextLabel(block: GuideContextBlock) {
   return `Context for ${passage.first === passage.last && !/[–-]/.test(verses) ? "verse" : "verses"} ${verses}`;
 }
 
-export default function StudyCompanion({ introductionHtml, readerHtml, readerSections, closingHtml, toc, book, chapters, weekStart, guideSource, footer }: Props) {
+type ScriptureAnnotations = ReturnType<typeof useScriptureAnnotations>;
+
+/** Each book keeps its annotations scoped to its own scripture identity and document. */
+function LaterBookScripture({ chapters, layerHost, render }: {
+  chapters: CompanionChapter[];
+  layerHost: HTMLElement | null;
+  render: (chapters: CompanionChapter[], annotations: ScriptureAnnotations) => ReactNode;
+}) {
+  const docRef = useRef<HTMLDivElement>(null);
+  const book = useMemo(() => ({ label: chapters[0].book, slug: chapters[0].slug, volume: chapters[0].volume }), [chapters]);
+  const numbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
+  const annotations = useScriptureAnnotations(book, numbers, docRef);
+  return <><div ref={docRef}>{render(chapters, annotations)}</div>{layerHost ? createPortal(annotations.layer, layerHost) : null}</>;
+}
+
+export default function StudyCompanion({ introductionHtml, readerHtml, readerSections, closingHtml, toc, chapters, weekStart, guideSource, footer }: Props) {
   const introRef = useRef<HTMLDivElement>(null);
   const closingRef = useRef<HTMLDivElement>(null);
   const fallbackRef = useRef<HTMLDivElement>(null);
   const scriptureDocRef = useRef<HTMLDivElement>(null);
+  const firstBookRef = useRef<HTMLDivElement>(null);
+  const [layerHost, setLayerHost] = useState<HTMLDivElement | null>(null);
   const contentsRef = useRef<ContentsHandle>(null);
   const dock = useReaderHeaderDock(true, true);
   const { registerReaderChapter } = useInsightBuilder();
-  const chapterNumbers = useMemo(() => chapters.map((entry) => entry.chapter), [chapters]);
+  const scriptureBooks = useMemo(() => rangeBooks(chapters), [chapters]);
+  const book = useMemo(() => ({ label: chapters[0].book, slug: chapters[0].slug, volume: chapters[0].volume }), [chapters]);
+  const chapterNumbers = useMemo(() => scriptureBooks[0].map((entry) => entry.chapter), [scriptureBooks]);
+  const mixed = scriptureBooks.length > 1;
   const sectionByChapter = useMemo(() => new Map(readerSections.filter((section) => section.chapter != null).map((section) => [section.chapter!, section])), [readerSections]);
-  const groupsByChapter = useMemo(() => new Map(chapters.map((chapter) => [chapter.chapter, readingGroups(chapter.verses, sectionByChapter.get(chapter.chapter)?.blocks ?? [])])), [chapters, sectionByChapter]);
+  const groupsByChapter = useMemo(() => new Map(chapters.map((chapter) => [chapter.key, readingGroups(chapter.verses, sectionByChapter.get(chapter.key)?.blocks ?? [])])), [chapters, sectionByChapter]);
 
   // Only original guide HTML enters the highlight index. Scripture and disclosure labels must not shift
   // saved text anchors. Keep chapter headings and context fragments in the original source order.
   const guideRoots = useMemo(() => new Map(readerSections.flatMap((section) => [section.id, ...section.blocks.flatMap((block) => block.previewEnd ? [block.id, `${block.id}-more`] : [block.id])]).map((id) => [id, createRef<HTMLDivElement>()])), [readerSections]);
   const highlightReader = useMemo(() => [...guideRoots.values(), fallbackRef, closingRef], [guideRoots]);
   const guideHighlights = useGuideHighlights(weekStart, introRef, highlightReader, "scripture-first", guideSource);
-  const annotations = useScriptureAnnotations(book, chapterNumbers, scriptureDocRef);
+  const annotations = useScriptureAnnotations(book, chapterNumbers, mixed ? firstBookRef : scriptureDocRef);
   const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
 
   const getActive = useCallback(() => {
@@ -106,25 +125,25 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
   const activeId = useSyncExternalStore(subscribePage, getActive, () => null);
   const activeIndex = toc.findIndex((item) => item.id === activeId || item.verses.some((verse) => verse.id === activeId));
   const activeChapter = toc.slice(0, activeIndex + 1).findLast((item) => item.number != null);
-  const logChapter = activeChapter?.number ? Number(activeChapter.number) : chapters[0].chapter;
-  const logReference = `${book.label} ${logChapter}`;
+  const logEntry = chapters.find((entry) => entry.chapter === Number(activeChapter?.number) && entry.book === activeChapter?.book) ?? chapters[0];
+  const logReference = `${logEntry.book} ${logEntry.chapter}`;
   const readerChapter = useMemo<ReaderChapter>(() => {
     const chapterOptions = (chapter: CompanionChapter) => chapterLogOptions(
-      { volumeSlug: book.volume, book: book.slug, chapter: chapter.chapter },
-      `${book.label} ${chapter.chapter}`,
-      getChapterHref({ volume: book.volume, book: book.slug, chapter: chapter.chapter }),
+      { volumeSlug: chapter.volume, book: chapter.slug, chapter: chapter.chapter },
+      `${chapter.book} ${chapter.chapter}`,
+      getChapterHref({ volume: chapter.volume, book: chapter.slug, chapter: chapter.chapter }),
       chapter.verses.length,
     );
     return {
-      volume: book.volume, book: book.slug, chapter: logChapter, reference: logReference,
+      volume: logEntry.volume, book: logEntry.slug, chapter: logEntry.chapter, reference: logReference,
       logOptions: [
-        ...chapterOptions(chapters.find((entry) => entry.chapter === logChapter) ?? chapters[0]),
+        ...chapterOptions(logEntry),
         { source: guideSource },
-        ...chapters.filter((entry) => entry.chapter !== logChapter).flatMap(chapterOptions),
+        ...chapters.filter((entry) => entry.key !== logEntry.key).flatMap(chapterOptions),
       ],
       logReady: true,
     };
-  }, [book.volume, book.slug, book.label, chapters, guideSource, logChapter, logReference]);
+  }, [chapters, guideSource, logEntry, logReference]);
   const registrationRef = useRef<ReaderChapterRegistration | null>(null);
   useEffect(() => {
     const registration = registerReaderChapter();
@@ -134,10 +153,10 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
   useEffect(() => { registrationRef.current?.update(readerChapter); }, [readerChapter, registerReaderChapter]);
 
   const navigate = useCallback((id: string, updateHash = true, focus = true) => {
-    const parsed = parseScriptureAnchor(id, book.slug);
-    const target = parsed ? normalizeTarget(parsed, (chapter) => chapters.find((entry) => entry.chapter === chapter)?.verses.length) : null;
+    const parsed = parseRangeAnchor(id, chapters);
+    const target = parsed ? normalizeTarget(parsed, (chapter) => rangeEntry(chapters, chapter)?.verses.length) : null;
     if (parsed && !target) return;
-    const element = document.getElementById(target ? scriptureAnchor(book.slug, target.chapter, target.first) : id);
+    const element = document.getElementById(target ? rangeAnchor(chapters, { ...target, last: undefined })! : id);
     if (!element) return;
     let parent = element.parentElement;
     while (parent) {
@@ -150,7 +169,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
       if (!element.matches("a[href], button, summary, [tabindex]")) element.tabIndex = -1;
       element.focus({ preventScroll: true });
     }
-  }, [book.slug, chapters]);
+  }, [chapters]);
   useEffect(() => {
     const apply = () => {
       const id = decodeFragment(window.location.hash);
@@ -161,9 +180,9 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
     return () => window.removeEventListener("hashchange", apply);
   }, [navigate]);
 
-  const previewLocal = useMemo(() => ({ volume: book.volume, book: book.slug, chapters }), [book.volume, book.slug, chapters]);
-  const besideGuide = useCallback((target: PassageTarget) => target.volume === book.volume && target.book === book.slug && chapterNumbers.includes(target.chapter), [book.volume, book.slug, chapterNumbers]);
-  const showBesideGuide = useCallback((target: PassageTarget) => navigate(scriptureAnchor(book.slug, target.chapter, target.first, target.last)), [book.slug, navigate]);
+  const previewLocal = useMemo(() => chapters.map((entry) => ({ volume: entry.volume, book: entry.slug, chapter: entry.chapter, verses: entry.verses })), [chapters]);
+  const besideGuide = useCallback((target: PassageTarget) => chapters.some((entry) => entry.volume === target.volume && entry.slug === target.book && entry.chapter === target.chapter), [chapters]);
+  const showBesideGuide = useCallback((target: PassageTarget) => navigate(scriptureAnchor(target.book, target.chapter, target.first, target.last)), [navigate]);
   const restoreScroll = useCallback((top: number) => window.scrollTo({ top, behavior: "instant" }), []);
   const preview = usePassagePreview({ local: previewLocal, besideGuide, showBesideGuide, restoreScroll, showBesideLabel: "Go to this passage" });
   const onGuideClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -171,10 +190,10 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
     const link = event.target instanceof Element ? event.target.closest("a") : null;
     if (!link || !event.currentTarget.contains(link)) return;
     const href = link.getAttribute("href");
-    const local = localScriptureTarget(href, book, chapterNumbers);
+    const local = rangeScriptureTarget(href, chapters);
     if (local) {
       event.preventDefault();
-      navigate(scriptureAnchor(book.slug, local.chapter, local.first, local.last));
+      navigate(rangeAnchor(chapters, local)!);
       return;
     }
     const passage = passageFromLink(href, link.getAttribute("data-last"), book, link.textContent);
@@ -201,6 +220,42 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
       </div>
     </details>
   );
+  const renderChapters = (entries: CompanionChapter[], annotations: ScriptureAnnotations) => entries.map((chapter) => {
+    const section = sectionByChapter.get(chapter.key);
+    const groups = groupsByChapter.get(chapter.key) ?? [];
+    const sectionIndex = section ? readerSections.indexOf(section) : -1;
+    const following: GuideReaderSection[] = [];
+    for (let index = sectionIndex + 1; sectionIndex >= 0 && index < readerSections.length; index++) {
+      if (readerSections[index].chapter != null) break;
+      following.push(readerSections[index]);
+    }
+    return (
+      <section key={chapter.key} id={scriptureAnchor(chapter.slug, chapter.chapter)} data-chapter={chapter.key} className={styles.readingChapter} aria-label={`${chapter.book} ${chapter.chapter}`}>
+        {section ? <div ref={guideRoots.get(section.id)} className={`${styles.guide} ${styles.readingChapterHead}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: section.headingHtml }} /> : <h2 className={styles.plainChapterTitle}>{chapter.book} {chapter.chapter}</h2>}
+        {groups.map((group) => (
+          <div key={group.id} className={group.verses.length ? styles.readingPassage : styles.contextOnly}>
+            {group.verses.length ? (
+              <>
+                <p className={styles.passageEyebrow}>{verseRangeLabel(group.verses[0].verse, group.verses[group.verses.length - 1].verse)}</p>
+                <ol className={`${styles.verses} ${styles.readingVerses}`} start={group.verses[0].verse}>
+                  {group.verses.map((verse) => (
+                    <li key={verse.verse} id={scriptureVerseId(chapter.slug, chapter.chapter, verse.verse)} value={verse.verse} {...annotations.verseAttributes(chapter.chapter, verse.verse)}>
+                      <span className={styles.verseNumber} {...annotations.verseNumberProps(chapter.chapter, verse.verse, verse.verse === chapter.verses[0].verse)}>{verse.verse}</span>
+                      <span className={styles.srOnly}>Verse {verse.verse}: </span>
+                      {annotations.verseText(chapter.chapter, verse.verse, verse.text, typesetDashes)}
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : null}
+            {group.context ? context(group.context) : null}
+          </div>
+        ))}
+        <p className={styles.fullChapterLink}><Link href={getChapterHref({ volume: chapter.volume, book: chapter.slug, chapter: chapter.chapter })}>Open {chapter.book} {chapter.chapter} in the reader</Link></p>
+        {following.map((extra) => <div key={extra.id} className={styles.interChapter}><div ref={guideRoots.get(extra.id)} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: extra.headingHtml }} />{extra.blocks.map(context)}</div>)}
+      </section>
+    );
+  });
   const actions = (
     <div role="group" aria-label="Study guide controls" className="reader-toolbar guide-header-actions">
       <ContentsOpener onOpen={openContents} />
@@ -212,6 +267,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
     <>
       <ContentsNav toc={toc} handle={contentsRef} subscribe={subscribePage} getActive={getActive} contentLeft={contentLeft} layoutKey="scripture-first" onNavigate={navigateToSection} />
       {annotations.layer}
+      {mixed ? <div ref={setLayerHost} style={{ display: "contents" }} /> : null}
       {guideHighlights.layer}
       {preview.layer}
       {/* The introduction and closing sections remain visible and share the scripture's reading width. */}
@@ -223,42 +279,8 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
       <div ref={scriptureDocRef} className={styles.scriptureFirst} aria-label="Scripture with expandable context">
         <p className={styles.readerInvitation}>Read the scriptures. Open the context as you go.</p>
         {readerSections.length === 0 ? <div ref={fallbackRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: readerHtml }} /> : null}
-        {chapters.map((chapter) => {
-          const section = sectionByChapter.get(chapter.chapter);
-          const groups = groupsByChapter.get(chapter.chapter) ?? [];
-          const sectionIndex = section ? readerSections.indexOf(section) : -1;
-          const following: GuideReaderSection[] = [];
-          for (let index = sectionIndex + 1; sectionIndex >= 0 && index < readerSections.length; index++) {
-            if (readerSections[index].chapter != null) break;
-            following.push(readerSections[index]);
-          }
-          return (
-            <section key={chapter.chapter} id={scriptureAnchor(book.slug, chapter.chapter)} data-chapter={chapter.chapter} className={styles.readingChapter} aria-label={`${book.label} ${chapter.chapter}`}>
-              {section ? <div ref={guideRoots.get(section.id)} className={`${styles.guide} ${styles.readingChapterHead}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: section.headingHtml }} /> : <h2 className={styles.plainChapterTitle}>{book.label} {chapter.chapter}</h2>}
-              {groups.map((group) => (
-                <div key={group.id} className={group.verses.length ? styles.readingPassage : styles.contextOnly}>
-                  {group.verses.length ? (
-                    <>
-                      <p className={styles.passageEyebrow}>{verseRangeLabel(group.verses[0].verse, group.verses[group.verses.length - 1].verse)}</p>
-                      <ol className={`${styles.verses} ${styles.readingVerses}`} start={group.verses[0].verse}>
-                        {group.verses.map((verse) => (
-                          <li key={verse.verse} id={scriptureVerseId(book.slug, chapter.chapter, verse.verse)} value={verse.verse} {...annotations.verseAttributes(chapter.chapter, verse.verse)}>
-                            <span className={styles.verseNumber} {...annotations.verseNumberProps(chapter.chapter, verse.verse, verse.verse === chapter.verses[0].verse)}>{verse.verse}</span>
-                            <span className={styles.srOnly}>Verse {verse.verse}: </span>
-                            {annotations.verseText(chapter.chapter, verse.verse, verse.text, typesetDashes)}
-                          </li>
-                        ))}
-                      </ol>
-                    </>
-                  ) : null}
-                  {group.context ? context(group.context) : null}
-                </div>
-              ))}
-              <p className={styles.fullChapterLink}><Link href={getChapterHref({ volume: book.volume, book: book.slug, chapter: chapter.chapter })}>Open {book.label} {chapter.chapter} in the reader</Link></p>
-              {following.map((extra) => <div key={extra.id} className={styles.interChapter}><div ref={guideRoots.get(extra.id)} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: extra.headingHtml }} />{extra.blocks.map(context)}</div>)}
-            </section>
-          );
-        })}
+        {mixed ? <div ref={firstBookRef}>{renderChapters(scriptureBooks[0], annotations)}</div> : renderChapters(scriptureBooks[0], annotations)}
+        {scriptureBooks.slice(1).map((group) => <LaterBookScripture key={group[0].slug} chapters={group} layerHost={layerHost} render={renderChapters} />)}
       </div>
       <div className={styles.afterReader}>
         {closingHtml ? (

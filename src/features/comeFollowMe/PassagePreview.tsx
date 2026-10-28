@@ -47,8 +47,8 @@ import styles from "./studyCompanion.module.css";
 type Loaded = { status: "ready"; verses: PassageVerse[] } | { status: "missing" } | { status: "failed" };
 
 type Options = {
-  /** The guide's own chapters, already on the page: previews of them need no request. */
-  local: { volume: string; book: string; chapters: ReadonlyArray<{ chapter: number; verses: PassageVerse[] }> };
+  /** The guide's own chapters, each in its own book, already on the page: previews of them need no request. */
+  local: ReadonlyArray<{ volume: string; book: string; chapter: number; verses: PassageVerse[] }>;
   /** Whether a passage can also be shown in the paired scripture beside the guide (this week's chapters). */
   besideGuide: (target: PassageTarget) => boolean;
   showBesideGuide: (target: PassageTarget, opener: HTMLElement | null) => void;
@@ -291,8 +291,8 @@ export function usePassagePreview({ local, besideGuide, showBesideGuide, restore
 
   const target = shown?.target ?? null;
   const localVerses = useMemo(() => {
-    if (!target || target.volume !== local.volume || target.book !== local.book) return null;
-    const entry = local.chapters.find((item) => item.chapter === target.chapter);
+    if (!target) return null;
+    const entry = local.find((item) => item.volume === target.volume && item.book === target.book && item.chapter === target.chapter);
     return entry ? chapterVerses({ verses: entry.verses }, target.chapter) : null;
   }, [target, local]);
   const key = target ? chapterKey(target) : null;

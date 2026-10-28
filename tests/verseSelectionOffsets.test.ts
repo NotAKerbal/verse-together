@@ -25,13 +25,13 @@ test("note quotations split around excluded JST verses and retain partial select
   ]);
 });
 
-test("contiguous note quotations remain one passage, without crossing chapters", () => {
+test("contiguous note quotations separate verses with a blank line, without crossing chapters", () => {
   expect(selectedVersePassages([
     { verse: 3, text: "Start selected", start: 6, end: 14, chapter: 9 },
     { verse: 4, text: "next words", start: 0, end: 4, chapter: 9 },
     { verse: 5, text: "new chapter", start: 0, end: 3, chapter: 10 },
   ])).toEqual([
-    { verseStart: 3, verseEnd: 4, text: "selected next" },
+    { verseStart: 3, verseEnd: 4, text: "selected\n\nnext" },
     { verseStart: 5, verseEnd: 5, text: "new" },
   ]);
   expect(selectedVersePassages([])).toEqual([]);

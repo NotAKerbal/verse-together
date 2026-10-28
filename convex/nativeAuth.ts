@@ -18,8 +18,8 @@ import {
  *    to the app's PKCE challenge in Better Auth's own verification table, for two minutes.
  *  - POST /native/token: the app exchanges the code with its verifier; the code is consumed atomically, and the
  *    app receives a new session of its own (revocable on its own; the website session is untouched).
- * The app then authenticates with that session token as a bearer token (Better Auth's bearer plugin), to read
- * its session, fetch Convex JWTs from /convex/token, and sign out.
+ * The app then authenticates with that session token as a bearer token (the bearer request hook the Convex plugin
+ * runs; see convex/auth.ts), to read its session, fetch Convex JWTs from /convex/token, and sign out.
  */
 export const nativeAppAuth = () =>
   ({

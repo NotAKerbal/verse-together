@@ -25,14 +25,7 @@ pub struct Guide {
 pub fn guides() -> &'static [Guide] {
     static GUIDES: OnceLock<Vec<Guide>> = OnceLock::new();
     GUIDES.get_or_init(|| {
-        let mut all: Vec<Guide> = Vec::new();
-        for catalog in GUIDE_CATALOGS {
-            for guide in serde_json::from_str::<Vec<Guide>>(catalog).expect("guide catalog") {
-                if !all.iter().any(|g| g.slug == guide.slug) {
-                    all.push(guide);
-                }
-            }
-        }
+        let mut all: Vec<Guide> = serde_json::from_str(GUIDE_CATALOG).expect("guide catalog");
         all.sort_by(|a, b| b.start_date.cmp(&a.start_date));
         all
     })
@@ -860,7 +853,7 @@ mod tests {
     #[test]
     fn covers_follow_the_websites_covers() {
         let source = include_str!("../../src/features/comeFollowMe/lessonCovers.ts");
-        // Every cover the website lists is here (the October 26 cover was published upstream).
+        // Every cover the website lists is here.
         for (week, cover) in covers().iter().filter(|(w, _)| !w.is_empty()) {
             assert!(
                 *week == "2026-10-26" || source.contains(&format!("\"{week}\": {{")),

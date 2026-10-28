@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { Marked, type Token, type Tokens } from "marked";
-import { passageHalves, scriptureAnchor, type VerseHalf } from "./cfmAnchors.ts";
+import { passageHalves, rangeKey, scriptureAnchor, type RangeChapter, type VerseHalf } from "./cfmAnchors.ts";
 import {
   escapeHtml,
   findBook,
@@ -64,6 +64,7 @@ export type GuidePassage = {
   id: string;
   /** As printed, e.g. "57:13b–14". */
   label: string;
+  /** Its chapter's key in the guide's range (see RangeChapter): the chapter number, in the guide's first book. */
   chapter: number;
   /** Base verse numbers; "13a" and "13b" both select verse 13. */
   first: number;
@@ -73,8 +74,20 @@ export type GuidePassage = {
   /** "a" when the passage stops halfway through `last` ("11–13a"). */
   lastHalf?: VerseHalf;
 };
-/** The guide's book; `first`/`last` bound its chapters, and `chapters` lists exactly the ones it covers. */
-export type GuideRange = { book: string; slug: string; volume: string; first: number; last: number; chapters: number[] };
+/**
+ * The guide's reading. `entries` lists exactly the chapters it covers, in reading order, each in its own book,
+ * and `chapters` their keys, bounded by `first` and `last`; in a single-book guide the keys are the chapter
+ * numbers themselves. `book`, `slug`, and `volume` name its first book (its only one, in a single-book guide).
+ */
+export type GuideRange = {
+  book: string;
+  slug: string;
+  volume: string;
+  first: number;
+  last: number;
+  chapters: number[];
+  entries: RangeChapter[];
+};
 export type GuidePassageResource = {
   passageId: string;
   bodyHtml: string;
@@ -131,25 +144,43 @@ const SOURCES = /\b(?:sources?|bibliograph\w*|works cited|references)\b/i;
 const VERSE_RANGE = /^(?:(.+) )?(\d{1,3}):(\d{1,3})[ab]?(?:[–-](\d{1,3})[ab]?)?$/;
 
 /**
- * "Isaiah 50–57" or "Jeremiah 1–3; 7; 16–18; 20" → the guide's own book and chapters, when the book is known.
- * Parts after ";" continue the same book, in ascending order within the book's chapters; anything else
- * (another book, a backward or overlapping range, a chapter the book lacks) is null.
+ * "Isaiah 50–57", "Jeremiah 1–3; 7; 16–18; 20", or "Jeremiah 31–33; 36–39; Lamentations 1; 3" → the guide's
+ * own books and chapters, when every book is known. The first part names its book; each later part continues
+ * the book before it, or names the next. Within a book the chapters ascend, and each book is read once, never
+ * returned to. Anything else (an unknown or revisited book, a backward or overlapping range, a chapter the book
+ * lacks, an empty or malformed part) is null.
  */
 export function guideRange(scripture: string): GuideRange | null {
-  const [head, ...rest] = scripture.split(";").map((part) => part.trim());
-  const match = /^(.+?) (\d{1,3}(?:[–-]\d{1,3})?)$/.exec(head);
-  const book = match ? findBook(match[1]) : null;
-  if (!match || !book) return null;
-  const chapters: number[] = [];
-  for (const span of [match[2], ...rest]) {
-    const part = /^(\d{1,3})(?:[–-](\d{1,3}))?$/.exec(span);
-    if (!part) return null;
-    const from = Number(part[1]);
-    const to = Number(part[2] ?? part[1]);
-    if (from < 1 || to < from || to > book.chapters || from <= (chapters[chapters.length - 1] ?? 0)) return null;
-    for (let chapter = from; chapter <= to; chapter += 1) chapters.push(chapter);
+  const entries: RangeChapter[] = [];
+  const read = new Set<string>();
+  let current: { name: string; book: NonNullable<ReturnType<typeof findBook>> } | null = null;
+  let previous = 0;
+  for (const part of scripture.split(";").map((text) => text.trim())) {
+    const match = /^(?:(.+?) )?(\d{1,3})(?:[–-](\d{1,3}))?$/.exec(part);
+    if (!match) return null;
+    if (match[1] != null) {
+      const book = findBook(match[1]);
+      if (!book) return null;
+      if (book.slug !== current?.book.slug) {
+        if (read.has(book.slug)) return null;
+        read.add(book.slug);
+        current = { name: match[1], book };
+        previous = 0;
+      }
+    }
+    if (!current) return null;
+    const from = Number(match[2]);
+    const to = Number(match[3] ?? match[2]);
+    if (from < 1 || to < from || to > current.book.chapters || from <= previous) return null;
+    for (let chapter = from; chapter <= to; chapter += 1) {
+      const { slug, canonicalVolume } = current.book;
+      entries.push({ key: rangeKey(read.size - 1, chapter), book: current.name, slug, volume: canonicalVolume, chapter });
+    }
+    previous = to;
   }
-  return { book: match[1], slug: book.slug, volume: book.canonicalVolume, first: chapters[0], last: chapters[chapters.length - 1], chapters };
+  const chapters = entries.map((entry) => entry.key);
+  const [head] = entries;
+  return { book: head.book, slug: head.slug, volume: head.volume, first: chapters[0], last: chapters[chapters.length - 1], chapters, entries };
 }
 
 /** Only absolute public http(s) URLs, site-relative paths, and in-page anchors. */
@@ -272,19 +303,25 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
   const counts = new Map<string, number>();
   // Book and chapter of the h2 section being rendered, for local close-reading leads like "**40:1–2, …**".
   let context: { book: string; chapter: string } | null = null;
-  const scriptureBook = /^(.+?) \d/.exec(guide.scripture)?.[1];
-  const guideBook = scriptureBook && findBook(scriptureBook) ? scriptureBook : undefined;
   const range = guideRange(guide.scripture);
+  // In a guide that reads more than one book, a bare "3:22" outside its chapter sections has no one book to be in.
+  const mixed = !!range && range.entries.some((entry) => entry.slug !== range.slug);
+  const scriptureBook = /^(.+?) \d/.exec(guide.scripture)?.[1];
+  const guideBook = !mixed && scriptureBook && findBook(scriptureBook) ? scriptureBook : undefined;
   const leadIds = new Set<string>();
   const placedArt = new Set<Art>();
 
-  /** In-page anchor into the scripture pane, when the reference is inside this guide's chapters. */
+  /**
+   * The paired scripture pane's anchor for a reference, in its own book, and its chapter's key in the range,
+   * when the reference is inside this guide's chapters.
+   */
   const localTarget = (book: string, chapter: number, first?: number, last?: number) => {
-    if (!range || book !== range.book || !range.chapters.includes(chapter)) return null;
-    return scriptureAnchor(range.slug, chapter, first, last);
+    const slug = findBook(book)?.slug;
+    const entry = range?.entries.find((item) => item.slug === slug && item.chapter === chapter);
+    return entry ? { anchor: scriptureAnchor(entry.slug, chapter, first, last), key: entry.key } : null;
   };
-  const localLink = (anchor: string, html: string, chapter: number, first?: number, last?: number) =>
-    `<a class="cfm-scripture cfm-local" data-cfm-local href="#${anchor}" data-chapter="${chapter}"` +
+  const localLink = (local: { anchor: string; key: number }, html: string, first?: number, last?: number) =>
+    `<a class="cfm-scripture cfm-local" data-cfm-local href="#${local.anchor}" data-chapter="${local.key}"` +
     (first != null ? ` data-first="${first}" data-last="${last ?? first}"` : "") +
     `>${html}</a>`;
   const passageAttrs = (passage: GuidePassage) =>
@@ -334,9 +371,9 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
             Object.assign(item, { kind: "chapter", book: chapter[1], number: chapter[2], subtitle: chapter[3] });
             className = "cfm-h-chapter";
             const label = `<span class="cfm-ch-book">${shown[1]}</span> <span class="cfm-ch-num">${shown[2]}</span>`;
-            const anchor = localTarget(chapter[1], Number(chapter[2]));
+            const local = localTarget(chapter[1], Number(chapter[2]));
             inner =
-              (anchor ? localLink(anchor, label, Number(chapter[2])) : label) +
+              (local ? localLink(local, label) : label) +
               (shown[3] ? `<span class="cfm-sr">: </span><span class="cfm-ch-title">${shown[3]}</span>` : "");
           } else if (SOURCES.test(plain)) item.kind = "sources";
           toc.push(item);
@@ -349,14 +386,14 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
             const chapter = ref ? Number(ref[2]) : NaN;
             const first = ref ? Number(ref[3]) : NaN;
             const last = ref ? Number(ref[4] ?? ref[3]) : NaN;
-            const anchor = ref && ref[1] ? localTarget(ref[1], chapter, first, last) : null;
+            const local = ref && ref[1] ? localTarget(ref[1], chapter, first, last) : null;
             let refHtml: string;
-            if (anchor) {
+            if (local) {
               const label = verse[1].slice(verse[1].lastIndexOf(" ") + 1);
-              const passage: GuidePassage = { id, label, chapter, first, last, ...passageHalves(label) };
+              const passage: GuidePassage = { id, label, chapter: local.key, first, last, ...passageHalves(label) };
               passages.push(passage);
               attrs = passageAttrs(passage);
-              refHtml = localLink(anchor, shown[1], chapter, first, last);
+              refHtml = localLink(local, shown[1], first, last);
             } else {
               const passage = referencePassage(verse[1]);
               refHtml = passage ? scriptureLink(passage, shown[1]) : shown[1];
@@ -377,28 +414,31 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
         let attrs = "";
         if (local && context) {
           // Close-reading leads get their own anchors (prefixed so they can never collide with heading ids)
-          // and join the chapter > verse contents just like verse headings.
-          const base = `cfm-v-${local.chapter}-${local.first}${local.last ? `-${local.last}` : ""}`;
+          // and join the chapter > verse contents just like verse headings. In a mixed-book guide a later book's
+          // leads name their book too, so Lamentations 1 and Jeremiah 1 never share a lead anchor.
+          const leadSlug = mixed ? findBook(context.book)?.slug : undefined;
+          const leadBook = leadSlug && leadSlug !== range?.slug ? `${leadSlug}-` : "";
+          const base = `cfm-v-${leadBook}${local.chapter}-${local.first}${local.last ? `-${local.last}` : ""}`;
           id = base;
           for (let n = 2; leadIds.has(id); n++) id = `${base}-${n}`;
           leadIds.add(id);
           const chapter = Number(local.chapter);
           const first = Number(local.first);
           const last = Number(local.last ?? local.first);
-          const anchor = localTarget(context.book, chapter, first, last);
-          const linkTo = anchor ? null : scripturePassage(context.book, local.chapter, local.first, local.last);
+          const paired = localTarget(context.book, chapter, first, last);
+          const linkTo = paired ? null : scripturePassage(context.book, local.chapter, local.first, local.last);
           // The text renderer may already have linked the lead ref to its passage; either way the lead's own
           // ref becomes one link, to the local pane when the verses are in this guide's range.
           const linked = new RegExp(
             String.raw`^<strong><a class="cfm-scripture" data-cfm-scripture href="[^"]*"(?: data-last="\d+")?>${local.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</a>`
           ).exec(inner);
           const leadLength = linked ? linked[0].length : inner.startsWith(`<strong>${local.text}`) ? 8 + local.text.length : 0;
-          if ((anchor || linkTo) && leadLength) {
-            const link = anchor ? localLink(anchor, local.text, chapter, first, last) : scriptureLink(linkTo, local.text);
+          if ((paired || linkTo) && leadLength) {
+            const link = paired ? localLink(paired, local.text, first, last) : scriptureLink(linkTo, local.text);
             inner = `<strong>${link}${inner.slice(leadLength)}`;
           }
-          if (anchor) {
-            const passage: GuidePassage = { id, label: local.text, chapter, first, last, ...passageHalves(local.text) };
+          if (paired) {
+            const passage: GuidePassage = { id, label: local.text, chapter: paired.key, first, last, ...passageHalves(local.text) };
             passages.push(passage);
             attrs = passageAttrs(passage);
           }
@@ -575,8 +615,9 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
     const fragments: Array<Omit<GuideContextBlock, "id">> = [];
     const content = render(group, fragments);
     const item = toc[first];
-    const chapterAttr =
-      context && localTarget(context.book, Number(context.chapter)) ? ` data-chapter="${context.chapter}"` : "";
+    // A paired section carries its chapter's key, as its passages do.
+    const paired = context ? localTarget(context.book, Number(context.chapter)) : null;
+    const chapterAttr = paired ? ` data-chapter="${paired.key}"` : "";
     const headingHtml = /^<h2\b[^>]*>[\s\S]*?<\/h2>\n?/.exec(fragments[0]?.html ?? "")?.[0] ?? "";
     const blocks = fragments.flatMap((fragment, index) => {
       const html = index === 0 ? fragment.html.slice(headingHtml.length) : fragment.html;
@@ -586,7 +627,7 @@ export function parseGuide(guide: Guide, markdown: string): ParsedGuide {
       html: `<section class="cfm-section" data-kind="${item.kind}"${chapterAttr} aria-labelledby="${item.id}">\n${content}</section>\n`,
       item,
       paired: chapterAttr !== "",
-      reader: { id: item.id, chapter: chapterAttr ? Number(context?.chapter) : undefined, headingHtml, blocks },
+      reader: { id: item.id, chapter: paired?.key, headingHtml, blocks },
     });
   }
   // The paired reader runs from the first chapter section of the guide's own range (a section the parser has

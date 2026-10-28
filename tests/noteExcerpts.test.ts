@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
+import NoteMarkdown from "../src/features/notes/NoteMarkdown";
 import { JournalOutbox, RevisionConflictError } from "../src/features/notes/journalOutbox";
 import { queueExcerpt, quotedExcerpt, scriptureExcerpt } from "../src/features/notes/noteExcerpts";
 import { blockToMarkdown } from "../convex/noteJournal";
@@ -18,7 +21,7 @@ describe("a lesson selection's excerpt", () => {
     expect(quotedExcerpt(" \n ", { label: "Lesson", href: "/come-follow-me/2026-10-26" })).toBe("");
   });
 
-  test("selected verses read as the scripture reader's Add to note writes them", () => {
+  test("selected verses have separate paragraphs within the scripture quote", () => {
     const markdown = scriptureExcerpt(jeremiah, [
       { chapter: 31, verse: 3, text: "I have loved thee with an everlasting love" },
       { chapter: 31, verse: 4, text: "Again I will build thee " },
@@ -26,13 +29,15 @@ describe("a lesson selection's excerpt", () => {
     expect(markdown).toBe(
       blockToMarkdown({
         type: "scripture",
-        text: "I have loved thee with an everlasting love Again I will build thee",
+        text: "I have loved thee with an everlasting love\n\nAgain I will build thee",
         scriptureRef: { volume: "oldtestament", book: "jeremiah", chapter: 31, verseStart: 3, verseEnd: 4, reference: "Jeremiah 31:3–4" },
       })
     );
     expect(markdown).toBe(
-      "**[Jeremiah 31:3–4](</browse/oldtestament/jeremiah/31#v-3>)**\n> I have loved thee with an everlasting love Again I will build thee"
+      "**[Jeremiah 31:3–4](</browse/oldtestament/jeremiah/31#v-3>)**\n> I have loved thee with an everlasting love\n>\n> Again I will build thee"
     );
+    const html = renderToStaticMarkup(createElement(NoteMarkdown, { markdown }));
+    expect(html).toContain("<blockquote>\n<p>I have loved thee with an everlasting love</p>\n<p>Again I will build thee</p>\n</blockquote>");
   });
 
   test("a selection across a chapter break credits each chapter's words to that chapter", () => {

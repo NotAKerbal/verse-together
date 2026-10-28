@@ -1,6 +1,6 @@
 "use client";
 
-import { faCheck, faNoteSticky, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
@@ -15,19 +15,16 @@ export type VerseInsightRef = {
 };
 
 /**
- * Expand each scripture-block reference across every verse it covers, so a block for
- * verses 21-23 marks 21, 22 and 23. A draft that cites the same verse twice is listed once.
+ * Place one link at the start of each cited passage. A range keeps its full extent
+ * in the picker without repeating the same note beside every verse.
  */
 export function groupVerseInsightRefsByVerse(refs: VerseInsightRef[]): Map<number, VerseInsightRef[]> {
   const grouped = new Map<number, VerseInsightRef[]>();
   for (const ref of refs) {
     const start = Math.min(ref.verseStart, ref.verseEnd);
-    const end = Math.max(ref.verseStart, ref.verseEnd);
-    for (let verse = start; verse <= end; verse += 1) {
-      const existing = grouped.get(verse) ?? [];
-      if (existing.some((item) => item.draftId === ref.draftId)) continue;
-      grouped.set(verse, [...existing, ref]);
-    }
+    const existing = grouped.get(start) ?? [];
+    if (existing.some((item) => item.draftId === ref.draftId)) continue;
+    grouped.set(start, [...existing, ref]);
   }
   return grouped;
 }
@@ -129,8 +126,8 @@ export default function VerseInsightMarker({
   const label = isReading
     ? `Open reading log for ${passageLabel ?? `verse ${verse}`}`
     : count === 1
-      ? `Open your insight "${insights[0].draftTitle}" for verse ${verse}`
-      : `Choose one of ${count} of your insights for verse ${verse}`;
+      ? `Open your note "${insights[0].draftTitle}" for verse ${verse}`
+      : `Choose one of ${count} notes for verse ${verse}`;
 
   return (
     <>
@@ -140,11 +137,11 @@ export default function VerseInsightMarker({
         aria-label={label}
         aria-haspopup={count > 1 ? "dialog" : undefined}
         aria-expanded={count > 1 ? pickerOpen : undefined}
-        title={isReading ? "Logged as read" : count === 1 ? "In one of your insights" : `In ${count} of your insights`}
-        className={isReading ? "verse-read-marker" : `inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
+        title={isReading ? "Logged as read" : count === 1 ? insights[0].draftTitle : `${count} notes`}
+        className={isReading ? "verse-read-marker" : `inline-flex h-7 shrink-0 items-center rounded px-1 font-sans text-[11px] font-medium underline decoration-current/25 underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] ${
           pickerOpen
-            ? "bg-[color:var(--surface-button-active)] text-[color:var(--surface-button-active-text)] shadow-[var(--surface-shadow-soft)]"
-            : "bg-[color:var(--accent-sky-soft)] text-foreground hover:shadow-[var(--surface-shadow-soft)]"
+            ? "text-foreground"
+            : "text-foreground/65"
         }`}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
@@ -156,7 +153,7 @@ export default function VerseInsightMarker({
           setPickerOpen((prev) => !prev);
         }}
       >
-        <FontAwesomeIcon icon={isReading ? faCheck : faNoteSticky} className="h-3.5 w-3.5" />
+        {isReading ? <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" /> : count === 1 ? "Note" : `${count} notes`}
       </button>
       {pickerOpen && typeof document !== "undefined"
         ? createPortal(
@@ -171,12 +168,9 @@ export default function VerseInsightMarker({
             >
               <header className="flex items-center justify-between gap-2 border-b-2 border-[color:var(--surface-border)] bg-[color:var(--accent-sky-soft)] px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-card)] text-foreground">
-                    <FontAwesomeIcon icon={isReading ? faCheck : faNoteSticky} className="h-3 w-3" />
-                  </span>
                   <div className="min-w-0">
                     <div id={titleId} className="truncate font-display text-sm font-extrabold tracking-[-0.02em] text-foreground">
-                      {isReading ? "Reading log" : "Your insights"}
+                      {isReading ? "Reading log" : "Your notes"}
                     </div>
                     <div className="text-[11px] font-semibold text-foreground/65">{passageLabel ?? `Verse ${verse}`}</div>
                   </div>
@@ -201,7 +195,7 @@ export default function VerseInsightMarker({
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-foreground">
-                          {insight.draftTitle.trim() || "Untitled insight"}
+                          {insight.draftTitle.trim() || "Untitled note"}
                         </span>
                         <span className="block text-[11px] text-foreground/60">{formatRange(insight)}</span>
                       </span>
