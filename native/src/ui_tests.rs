@@ -315,7 +315,7 @@ fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     for verse in 1..=3 {
         let _ = app.update(Message::Lesson(LessonMsg::SelectVerse(0, verse)));
     }
-    let _ = app.update(Message::Lesson(LessonMsg::MarkVerses(1)));
+    let _ = app.update(Message::QuickMark(1, false));
     shot(app, "lesson-marks");
     let _ = app.update(Message::TogglePopover(Popover::Contents));
     shot(app, "lesson-contents");
@@ -345,12 +345,12 @@ fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     shot(app, "journal-note");
     for c in "## A mighty change\n\nFaith is **not** a perfect knowledge, but *hope* for things.\n- Read [Alma 32](/browse/bookofmormon/alma/32)\n> Ye must nourish it".chars() {
         let edit = if c == '\n' {
-            iced::widget::text_editor::Edit::Enter
+            crate::md_editor::Edit::Enter
         } else {
-            iced::widget::text_editor::Edit::Insert(c)
+            crate::md_editor::Edit::Insert(c)
         };
         let _ = app.update(Message::Journal(JournalMsg::Body(
-            iced::widget::text_editor::Action::Edit(edit),
+            crate::md_editor::Action::Edit(edit),
         )));
     }
     shot(app, "journal-markdown");
@@ -431,10 +431,48 @@ fn plan_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
         let _ = app.update(Message::Plans(PlansMsg::Builder(m)));
     }
     shot(app, "plans-builder");
+    // The start date's calendar, scrolled into view (the builder can only be reached signed in).
+    let _ = app.update(Message::Plans(PlansMsg::Builder(BuilderMsg::DateText(
+        crate::plans::DateTarget::Start,
+        "11/02/2026".into(),
+    ))));
+    let _ = app.update(Message::Plans(PlansMsg::Builder(BuilderMsg::DateOpen(
+        crate::plans::DateTarget::Start,
+    ))));
+    let _ = app.update(Message::Plans(PlansMsg::Builder(BuilderMsg::DateFocus(3))));
+    {
+        let out =
+            PathBuf::from(std::env::var("VERSE_SNAPSHOTS").expect("VERSE_SNAPSHOTS directory"));
+        let path = out.join("plans-date-picker.png");
+        let _ = std::fs::remove_file(out.join("plans-date-picker-tiny-skia.png"));
+        let mut ui = simulator(app);
+        ui.point_at(iced::Point::new(640.0, 500.0));
+        let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+            delta: iced::mouse::ScrollDelta::Pixels { x: 0.0, y: -700.0 },
+        })]);
+        ui.snapshot(&app.theme())
+            .unwrap()
+            .matches_image(&path)
+            .unwrap();
+    }
+    let _ = app.update(Message::Plans(PlansMsg::Builder(BuilderMsg::DateClose)));
     let _ = app.update(Message::Plans(PlansMsg::Edit("plan-1".into())));
     shot(app, "plans-edit");
     app.account.session = None;
     app.plans = Default::default();
+    use crate::library_ui::{LibraryMsg, LibraryPage};
+    let _ = app.update(Message::Library(LibraryMsg::Nav));
+    let _ = app.update(Message::Library(LibraryMsg::Nav));
+    shot(app, "library");
+    let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Volume(
+        "oldtestament".into(),
+    ))));
+    shot(app, "library-volume");
+    let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Book(
+        "oldtestament".into(),
+        "psalms".into(),
+    ))));
+    shot(app, "library-book");
 }
 
 #[test]
@@ -494,4 +532,64 @@ fn your_bibles_opens_its_catalog_from_reader_settings() {
     );
     assert_eq!(app.popover, Some(Popover::ReaderSettings));
     assert_eq!(app.tools.bibles_view, crate::reader_tools::BiblesView::Add);
+}
+
+#[test]
+fn the_bible_catalog_chooses_languages_like_the_website() {
+    use crate::reader_tools::{Load, ToolsMsg, Translation};
+    let mut f = fixture();
+    let app = &mut f.app;
+    let _ = app.update(Message::Navigate(
+        Location {
+            volume: "newtestament".into(),
+            book: "john".into(),
+            chapter: 3,
+        },
+        None,
+    ));
+    let bible = |id: &str, name: &str, lang: &str, english: &str, native: &str| Translation {
+        id: id.into(),
+        name: name.into(),
+        english_name: None,
+        short_name: Some(id.to_uppercase()),
+        language: Some(lang.into()),
+        language_english_name: Some(english.into()),
+        language_name: Some(native.into()),
+    };
+    let _ = app.update(Message::TogglePopover(Popover::ReaderSettings));
+    let _ = click(app, "+ Add Bible");
+    app.tools.catalog = Some(Load::Ready(vec![
+        bible("BSB", "Berean Standard Bible", "eng", "English", "English"),
+        bible("spa_rvr", "Reina-Valera 1909", "spa", "Spanish", "español"),
+        bible(
+            "spa_pdt",
+            "Palabra de Dios para Todos",
+            "spa",
+            "Spanish",
+            "español",
+        ),
+    ]));
+    // The opening view: the featured English Bibles and the language button.
+    let _ = click(app, "Change ›");
+    assert!(app.tools.choosing_language);
+    // Search the languages by their own name; Enter takes the first.
+    let _ = app.update(Message::Tools(ToolsMsg::LanguageQuery("espanol".into())));
+    let _ = click(app, "Spanish · español");
+    assert_eq!(app.tools.catalog_language, "spa");
+    assert!(!app.tools.choosing_language);
+    // The Spanish Bibles are listed; adding one saves it to Your Bibles.
+    let _ = click(app, "Palabra de Dios para Todos");
+    let messages = click(app, "Add");
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::Tools(ToolsMsg::SaveBible(_)))),
+        "{messages:?}"
+    );
+    assert!(
+        app.preferences
+            .bibles
+            .iter()
+            .any(|b| b.id.starts_with("spa_"))
+    );
 }

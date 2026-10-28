@@ -61,6 +61,26 @@ pub fn sans(weight: font::Weight) -> Font {
 
 /// The width of a single line of text as the renderer will lay it out.
 pub fn measure(content: &str, size: f32, font: Font) -> f32 {
+    // Remembered: views measure the same verse numbers and indents on every redraw.
+    thread_local! {
+        static MEASURED: std::cell::RefCell<std::collections::HashMap<(String, u32, Font), f32>> =
+            Default::default();
+    }
+    let key = (content.to_string(), size.to_bits(), font);
+    if let Some(width) = MEASURED.with(|m| m.borrow().get(&key).copied()) {
+        return width;
+    }
+    let width = measure_uncached(content, size, font);
+    MEASURED.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() > 4096 {
+            m.clear();
+        }
+        m.insert(key, width);
+    });
+    width
+}
+fn measure_uncached(content: &str, size: f32, font: Font) -> f32 {
     let paragraph =
         <iced::Renderer as core_text::Renderer>::Paragraph::with_text(core_text::Text {
             content,
@@ -196,6 +216,14 @@ impl Colors {
     }
 }
 /// `.panel-card`: the journal's and lessons' cards.
+/// `--rule-strong`: a hovered card's border, link underlines.
+pub fn rule_strong(p: Colors) -> Color {
+    if p.paper.r < 0.5 {
+        Color::from_rgb8(0x4a, 0x46, 0x3e)
+    } else {
+        Color::from_rgb8(0xc8, 0xbf, 0xad)
+    }
+}
 pub fn card(p: Colors, radius: f32) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
         background: Some(p.card.into()),

@@ -282,10 +282,14 @@ impl App {
     /// The floating bar shown while words of a verse are selected: mark exactly those words, copy them, or start
     /// a journal note quoting them.
     pub(crate) fn word_bar(&self) -> Option<Element<'_, Message>> {
-        let (index, _) = self.word_selection.as_ref()?;
+        let (first, _) = self.word_selection.first()?;
+        let (last, _) = self.word_selection.last()?;
         let p = self.p();
-        let verse = self.verses.get(*index)?;
-        let words = self.selected_words(*index).unwrap_or_default();
+        let (first, last) = (
+            self.verses.get(*first)?.number,
+            self.verses.get(*last)?.number,
+        );
+        let words = self.reader_selected_text();
         let quote = if words.chars().count() > 48 {
             format!(
                 "“{}…”",
@@ -305,9 +309,13 @@ impl App {
         };
         let head = row![
             column![
-                text(format!("{}:{}", self.reference(), verse.number))
-                    .size(12)
-                    .font(sans(font::Weight::Semibold)),
+                text(if first == last {
+                    format!("{}:{first}", self.reference())
+                } else {
+                    format!("{}:{first}–{last}", self.reference())
+                })
+                .size(12)
+                .font(sans(font::Weight::Semibold)),
                 text(quote).font(serif()).size(13).color(p.muted),
             ]
             .spacing(2)

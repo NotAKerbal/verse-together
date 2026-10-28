@@ -1,3 +1,97 @@
+# Independent acceptance — October 28, 2026 (fourth pass)
+
+Codex independently reviewed the native widget, selection mapping, editor, persistence and navigation changes
+on base `5593e22`. **Passed:** 138 native tests (1 optional exporter ignored), 5 renderer tests, 47 real
+Convex/Better Auth backend contracts, strict clippy, format and whitespace checks. Logs are retained at
+`/tmp/verse-pass4-review-{tests,renderer,backend,clippy}.log` on the review machine.
+
+**Passed, actual release window:** `--no-account --data-dir /tmp/verse-pass4-root-qa`, Ubuntu GNOME Wayland.
+Dragged across 1 Nephi 1:2–3 and applied blue; SQLite confirmed each verse's own selected text and UTF-16
+range. Opened the Library grid and Journal, wrote a heading, emphasis, scripture link and a continued list;
+verified heading size, hidden syntax off the caret line, syntax revealed at Ctrl+Home, undo/redo, and the full
+Markdown persisted by autosave without Save or leaving the editor. The QA profile is separate from personal
+data and the QA window was closed after review. The packaged executable matches the reviewed release hash below.
+
+Account deployment/live Google QA remains **Blocked**; macOS/Windows execution and accessibility/IME validation
+remain **Not run**. This review does not claim those integrations have been exercised.
+
+# Final core-study parity pass — October 28, 2026 (fourth Claude pass)
+
+Base `5593e22` (`t3/rust-desktop-app`), uncommitted working tree in the shared checkout. Rust 1.99.1
+(`/tmp/verse-native-tools/env.sh`), Ubuntu GNOME Wayland 1280×800. Implementation evidence follows; independent
+acceptance is recorded above. Claude made no commit, push, PR, merge or deployment. Release SHA-256 (packaged binary identical):
+`e7ae4eab19b995f8811f5517d0236c7b88c93d1961b12f292ab4d10fcbedca8f`; package
+`verse-together-native-linux-x86_64.tar.gz` SHA-256 in `dist/…tar.gz.sha256`.
+
+## What changed
+
+- **Selection** (`select_text.rs`, `text_selection.rs`): one selectable-text widget for reader verses, comparison
+  verses, lesson verses and guide prose, replacing the per-verse stock text editors and `rich_select.rs`. A drag
+  runs across paragraphs; display offsets map back to each verse's own words (UTF-16 of the KJV text) through a
+  display map that excludes indents and other Bibles' words; guide drags map to part offsets with multi-block
+  anchors. Text is shaped once per change of text or width; selections/marks are painted from the glyph layout.
+  `design::measure` results are now cached (views measured every verse number indent on every redraw).
+- **Lesson page**: word selection across verses and chapter breaks, the selection menu (reference, Copy, Add to
+  note with per-chapter excerpts, verse note on the first verse, quick marks and every style). The reader's mark
+  tools now act on lesson targets across chapters (`MarkTarget`).
+- **Guide prose**: multi-paragraph selections; "Saved passages here"; marks apply to exactly the selected span;
+  Copy and Add to note.
+- **Journal editor** (`md_editor.rs`, `md_live.rs`): a native editor widget with the website's live preview
+  (hidden syntax off the caret line, heading sizes, link underlines, quote rule, code), Ctrl/⌘-click on safe
+  links, list continuation, undo/redo with the caret restored; the Write/Preview switch is removed. Day previews
+  follow `markdownExcerpt`.
+- **Browse** (`library_ui.rs`, generated `book_art.rs`): the `/browse` Library grid with Continue reading, volume
+  book lists with the website's book art and categories, chapter grids, selection controls in the header, and the
+  website's Browse-link return behavior.
+- **Plans**: browser-style date fields with a calendar popup (`popup.rs`) and validation.
+- **Your Bibles**: the website's catalog picker and language chooser (`bible_catalog.rs`).
+
+## Automated checks (final tree)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --manifest-path native/Cargo.toml` | **Passed**: 138, 1 ignored (snapshot exporter). New: cross-verse marking, comparison selection (inline/side by side), lesson cross-chapter marks/excerpt/verse note, multi-paragraph guide anchors, Library navigation and art, Markdown live-preview rules, editor editing/list continuation/undo caret/layout mapping/link hit-testing, plan date typing and calendar keyboard, catalog/language ranking, simulated language-chooser clicks, display-map and glyph-painting unit tests |
+| Renderer tests | `cargo test -p iced_tiny_skia` | **Passed**: 5 |
+| Clippy / format / whitespace | `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check` | **Passed** |
+| Backend contracts (unchanged backend) | `npx vitest run tests/convex/nativeSync.test.ts tests/convex/nativeAuthHttp.test.ts tests/nativeAuth.test.ts tests/journalEntry.test.ts` | **Passed**: 47 |
+| Release build, package | `cargo build --release --locked`, `native/package-linux.sh` | **Passed**; package holds the binary, README/PARITY/VERIFICATION, icon, installer and licenses only (no QA data or credentials) |
+| Headless renders | `VERSE_SNAPSHOTS=… cargo test snapshots -- --ignored` | **Passed**; `/tmp/verse-claude4-evidence/headless/` incl. `plans-date-picker`, `library`, `library-volume`, `library-book` |
+
+## Real desktop checks (release builds, Linux Computer Use, `--no-account --data-dir /tmp/verse-claude4-qa`, session bus disabled)
+
+Screenshots: `/tmp/verse-claude4-evidence/` (numbered).
+
+- **Passed:** 1 Nephi 1: a drag from mid-verse 2 into verse 4 selected across three verses; blue quick mark drawn
+  on exactly those words; SQLite holds three per-verse UTF-16 ranges with the exact text; persisted after restart.
+- **Passed:** Journal: typed a heading, bold, italic, a link, a list (continued on Enter) and a quote; syntax hidden
+  off the caret line, shown on it ("#" revealed on the heading); heading larger. Found and fixed: a heading inside a
+  quote wasn't recognized; empty-note placeholder. Ctrl/⌘-click could not be exercised (the desktop tool can't hold
+  a modifier during a click) — **Not run** live; covered by unit tests.
+- **Passed:** Browse: Library grid with art; Book of Mormon → books with categories; Alma → chapter grid; chapter 32
+  opened in the reader; Browse from the Journal returned to the reader at the same place. Found and fixed: art edge
+  hairline and square corners, header search text alignment, selection controls moved to the header, and the
+  Library landing page being remembered as the return point (the website doesn't).
+- **Passed:** October 26 lesson: a guide selection across four blocks (paragraphs and list items, bold kept) marked
+  green and stored with its multi-block quote; a verse selection from Jeremiah 31:40 into 32:1 ("Jeremiah 31:40;
+  32:1") marked pink in both chapters and a note written on 31:40 from the menu; the note appears in today's Journal.
+- **Passed:** Mark 9 with the live BSB: Add a Bible → Change › → "espanol" → Spanish · español → Spanish Bibles;
+  "BSB" in Spanish → "No Bibles match … in Spanish" → Search all languages → added BSB. Inline comparison: a drag
+  through "/ radiantly" took only "became shining, exceeding white as" (stored exactly); side by side shows the mark
+  on the LDS box, and a drag across 9:3–4 boxes selected both verses.
+- **Not run live:** the plan builder's calendar (the builder needs a signed-in account; verified by tests and a
+  headless render). Found and fixed in the render: the calendar panel stretched to the window width.
+- **Observed, not changed:** one screenshot right after a Library card click still showed the previous active nav
+  label; the next capture showed the correct one (likely capture timing; not reproduced).
+- **Not profiled numerically:** dragging on the lesson page (about 300 selectable verses plus guide blocks) was
+  visually immediate in the release build; text is reshaped only for changed paragraphs and measurement is cached.
+
+## Remaining external blockers
+
+Live account features (sign-in, sync, Settings account sections, Plans signed in) still need `convex/nativeAuth.ts`,
+`convex/nativeSync.ts`, the `createJournalEntry` revision change and `/native/authorize` integrated with current
+production source, deployed, and verified with live Google sign-in. macOS/Windows execution, accessibility and IME
+composition are not verified.
+
 # Independent review and draft autosave — October 28, 2026
 
 Codex reviewed the third Claude pass on top of `98e4df9`. Independent checks: **Passed** 117 native tests

@@ -903,6 +903,14 @@ pub struct ToolsState {
     pub bibles_view: BiblesView,
     pub catalog: Option<Load<Vec<Translation>>>,
     pub catalog_query: String,
+    /// The catalog's language ("eng", a language id, or all), whether all English Bibles are being browsed, and
+    /// how many rows show; the language chooser (open, its search, how many rows show).
+    pub catalog_language: String,
+    pub catalog_browsing: bool,
+    pub catalog_limit: usize,
+    pub choosing_language: bool,
+    pub language_query: String,
+    pub language_limit: usize,
 }
 impl ToolsState {
     pub fn new() -> Self {
@@ -922,6 +930,12 @@ impl ToolsState {
             bibles_view: BiblesView::List,
             catalog: None,
             catalog_query: String::new(),
+            catalog_language: crate::bible_catalog::DEFAULT_LANGUAGE.into(),
+            catalog_browsing: false,
+            catalog_limit: crate::bible_catalog::PAGE_SIZE,
+            choosing_language: false,
+            language_query: String::new(),
+            language_limit: crate::bible_catalog::PAGE_SIZE,
         }
     }
     /// The study paths that tag a verse.
@@ -961,6 +975,15 @@ pub enum ToolsMsg {
     BiblesView(BiblesView),
     Catalog(Result<Vec<Translation>, String>),
     CatalogQuery(String),
+    /// Open or close the language chooser.
+    ChooseLanguage(bool),
+    CatalogLanguage(String),
+    LanguageQuery(String),
+    /// Enter in the language search: the first language.
+    LanguageFirst,
+    BrowseAllEnglish,
+    CatalogMore,
+    LanguagesMore,
     ToggleJst,
     /// "Show omitted KJV words" / "Hide omitted KJV words".
     ToggleJstOmitted,
@@ -1036,8 +1059,7 @@ impl App {
     }
     /// The single word selected in a verse, as the website's Explore offers it (`extractSingleSelectedWord`).
     pub(crate) fn selected_single_word(&self) -> Option<String> {
-        let (index, _) = self.word_selection.as_ref()?;
-        let words = self.selected_words(*index)?;
+        let words = self.reader_selected_text();
         let word: String = words
             .trim()
             .trim_matches(|c: char| !c.is_alphanumeric())
@@ -1279,6 +1301,7 @@ impl App {
             }
             ToolsMsg::BiblesView(view) => {
                 self.tools.bibles_view = view.clone();
+                self.tools.choosing_language = false;
                 if view == BiblesView::Add
                     && !matches!(
                         self.tools.catalog,
@@ -1298,7 +1321,36 @@ impl App {
                     Err(e) => Load::Failed(e),
                 });
             }
-            ToolsMsg::CatalogQuery(q) => self.tools.catalog_query = q,
+            ToolsMsg::CatalogQuery(q) => {
+                self.tools.catalog_query = q;
+                self.tools.catalog_limit = crate::bible_catalog::PAGE_SIZE;
+            }
+            ToolsMsg::ChooseLanguage(open) => {
+                self.tools.choosing_language = open;
+                self.tools.language_query.clear();
+                self.tools.language_limit = crate::bible_catalog::PAGE_SIZE;
+                if open {
+                    return crate::presented(iced::widget::operation::focus("language-search"));
+                }
+            }
+            ToolsMsg::CatalogLanguage(id) => {
+                self.tools.catalog_language = id;
+                self.tools.catalog_limit = crate::bible_catalog::PAGE_SIZE;
+                self.tools.choosing_language = false;
+            }
+            ToolsMsg::LanguageQuery(q) => {
+                self.tools.language_query = q;
+                self.tools.language_limit = crate::bible_catalog::PAGE_SIZE;
+            }
+            ToolsMsg::LanguageFirst => {
+                if let Some(first) = self.language_options().first() {
+                    let id = first.id.clone();
+                    return self.update_tools(ToolsMsg::CatalogLanguage(id));
+                }
+            }
+            ToolsMsg::BrowseAllEnglish => self.tools.catalog_browsing = true,
+            ToolsMsg::CatalogMore => self.tools.catalog_limit += crate::bible_catalog::PAGE_SIZE,
+            ToolsMsg::LanguagesMore => self.tools.language_limit += crate::bible_catalog::PAGE_SIZE,
             ToolsMsg::ToggleJst => {
                 self.preferences.jst = !self.preferences.jst;
                 self.persist();

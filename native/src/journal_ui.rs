@@ -6,11 +6,11 @@ use crate::design::{self, Colors, icon, sans, serif};
 use crate::header::CONTENT_TOP;
 use crate::icons;
 use crate::journal::{self, Entry, REFLECTION_PROMPTS, WEEKDAYS};
+use crate::md_editor;
 use crate::store::{self, JournalGoals, Note, NoteSource};
 use crate::{App, Message};
 use iced::widget::{
-    button, column, container, image, markdown, mouse_area, opaque, pin, row, space, stack, text,
-    text_editor, text_input,
+    button, column, container, image, mouse_area, opaque, pin, row, space, stack, text, text_input,
 };
 use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, Task, font};
 use std::sync::OnceLock;
@@ -33,10 +33,8 @@ fn dawn() -> image::Handle {
 
 pub struct OpenNote {
     pub note: Note,
-    pub body: text_editor::Content,
+    pub body: md_editor::Content,
     pub dirty: bool,
-    pub preview: bool,
-    pub markdown: Vec<markdown::Item>,
     pub confirm_delete: bool,
     /// The reflection prompt the note was started from, shown until something is written.
     pub prompt: Option<String>,
@@ -101,11 +99,10 @@ pub enum JournalMsg {
     Open(String),
     Close,
     Title(String),
-    Body(text_editor::Action),
+    Body(md_editor::Action),
     Undo,
     Redo,
     Save,
-    Preview(bool),
     ToggleReading,
     Delete,
     ConfirmDelete(bool),
@@ -216,16 +213,13 @@ impl App {
             .set(target, self.now, self.motion.animate);
     }
     pub(crate) fn open_note(&mut self, note: Note, prompt: Option<String>) {
-        let body = text_editor::Content::with_text(&note.body);
-        let markdown = markdown::parse(&note.body).collect();
+        let body = md_editor::Content::with_text(&note.body);
         self.journal.month = journal::month_of(&note.journal_date);
         self.journal.day = note.journal_date.clone();
         self.set_note_open(Some(OpenNote {
             note,
             body,
             dirty: false,
-            preview: false,
-            markdown,
             confirm_delete: false,
             prompt,
             undo: vec![],
@@ -305,13 +299,11 @@ impl App {
             }
             JournalMsg::Body(action) => {
                 if let Some(open) = &mut self.journal.open {
-                    if let text_editor::Action::Edit(edit) = &action {
+                    if let md_editor::Action::Edit(edit) = &action {
                         let kind = match edit {
-                            text_editor::Edit::Insert(c) if !c.is_whitespace() => EditKind::Typing,
-                            text_editor::Edit::Insert(_) | text_editor::Edit::Enter => {
-                                EditKind::Break
-                            }
-                            text_editor::Edit::Paste(_) => EditKind::Paste,
+                            md_editor::Edit::Insert(c) if !c.is_whitespace() => EditKind::Typing,
+                            md_editor::Edit::Insert(_) | md_editor::Edit::Enter => EditKind::Break,
+                            md_editor::Edit::Paste(_) => EditKind::Paste,
                             _ => EditKind::Delete,
                         };
                         let now = std::time::Instant::now();
@@ -342,10 +334,11 @@ impl App {
                         (&mut open.redo, &mut open.undo)
                     };
                     if let Some(text) = from.pop() {
-                        to.push(open.body.text());
-                        open.body = text_editor::Content::with_text(&text);
-                        open.body
-                            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                        let current = open.body.text();
+                        open.body = md_editor::Content::with_text(&text);
+                        // The caret goes back to where the text changed, as the website's editor puts it.
+                        open.body.place_after_change(&current);
+                        to.push(current);
                         open.dirty = true;
                         open.last_edit = None;
                     }
@@ -353,14 +346,6 @@ impl App {
             }
             JournalMsg::Save => {
                 self.save_journal_note();
-            }
-            JournalMsg::Preview(preview) => {
-                if let Some(open) = &mut self.journal.open {
-                    open.preview = preview;
-                    if preview {
-                        open.markdown = markdown::parse(&open.body.text()).collect();
-                    }
-                }
             }
             JournalMsg::ToggleReading => {
                 if let Some(open) = &mut self.journal.open
@@ -1283,15 +1268,9 @@ impl App {
                 .align_y(Center),
             )
         };
-        let mode = self.segmented(
-            &[(false, "Write"), (true, "Preview")],
-            open.preview,
-            |preview| Message::Journal(JournalMsg::Preview(preview)),
-        );
         let toolbar = row![
             round(&icons::ARROW_LEFT, msg(JournalMsg::Close)),
             space::horizontal(),
-            container(mode).width(180),
             round(&icons::TRASH, msg(JournalMsg::Delete)),
             status,
         ]
@@ -1353,77 +1332,36 @@ impl App {
                 }),
             );
         }
-        let body: Element<'_, Message> = if open.preview {
-            let mut style = markdown::Style::from(self.theme());
-            style.font = serif();
-            style.link_color = p.accent;
-            let settings = markdown::Settings::with_text_size(16, style);
-            self.scroll(
-                container(
-                    markdown::view(&open.markdown, settings)
-                        .map(|uri| Message::OpenLink(uri.to_string())),
-                )
-                .padding([8, 2]),
-            )
-            .height(Fill)
-            .into()
+        // The website's editor: Markdown styled as it is written, its syntax hidden off the caret's line.
+        let rule_strong = if self.preferences.dark {
+            Color::from_rgb8(0x4a, 0x46, 0x3e)
         } else {
-            text_editor(&open.body)
-                .placeholder(
-                    open.prompt
-                        .as_deref()
-                        .unwrap_or("Write in Markdown: # headings, **bold**, > quotes, - lists"),
-                )
-                .on_action(|a| Message::Journal(JournalMsg::Body(a)))
-                .key_binding(|press| {
-                    use iced::keyboard::Key;
-                    if press.modifiers.command()
-                        && let Key::Character(c) = &press.key
-                    {
-                        match c.as_str() {
-                            "z" if press.modifiers.shift() => {
-                                return Some(text_editor::Binding::Custom(Message::Journal(
-                                    JournalMsg::Redo,
-                                )));
-                            }
-                            "z" => {
-                                return Some(text_editor::Binding::Custom(Message::Journal(
-                                    JournalMsg::Undo,
-                                )));
-                            }
-                            "y" => {
-                                return Some(text_editor::Binding::Custom(Message::Journal(
-                                    JournalMsg::Redo,
-                                )));
-                            }
-                            _ => {}
-                        }
-                    }
-                    text_editor::Binding::from_key_press(press)
-                })
-                .highlight_with::<crate::md_highlight::Markdown>(
-                    crate::md_highlight::Settings {
-                        ink: p.ink,
-                        muted: p.muted,
-                        faint: p.faint,
-                        rubric: p.accent,
-                    },
-                    crate::md_highlight::format,
-                )
-                .font(serif())
-                .size(17)
-                .line_height(iced::widget::text::LineHeight::Relative(1.65))
-                .height(Fill)
-                .padding([12, 2])
-                .style(move |_, _| text_editor::Style {
-                    background: Color::TRANSPARENT.into(),
-                    border: Border::default(),
-                    placeholder: p.faint,
-                    value: p.ink,
-                    selection: p.gold,
-                })
-                .into()
+            Color::from_rgb8(0xc8, 0xbf, 0xad)
         };
+        let mut editor = md_editor::md_editor(
+            &open.body,
+            md_editor::Palette {
+                ink: p.ink,
+                soft: p.faint,
+                rubric: p.accent,
+                quote: p.accent,
+                rule_strong,
+                code: p.hover,
+                selection: p.primary,
+            },
+            |a| Message::Journal(JournalMsg::Body(a)),
+        )
+        .id("journal-body")
+        .on_undo(Message::Journal(JournalMsg::Undo))
+        .on_redo(Message::Journal(JournalMsg::Redo))
+        .on_link(Message::NoteLink);
+        // The reflection prompt it was started from, else the website's "Write a note…".
+        editor = editor.placeholder(match &open.prompt {
+            Some(prompt) => prompt.clone(),
+            None if open.note.reading_at.is_some() => "Add a note (optional)…".to_string(),
+            None => "Write a note…".to_string(),
+        });
+        let body: Element<'_, Message> = container(editor).padding([8, 0]).height(Fill).into();
         let mut content = column![toolbar, title, meta, rule(p), body].spacing(12);
         if open.confirm_delete {
             content = content.push(

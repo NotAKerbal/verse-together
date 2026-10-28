@@ -5,12 +5,14 @@
 use crate::design::{self, icon, sans, serif};
 use crate::lessons::{self, ContextBlock};
 use crate::lessons_ui::{LessonMsg, OpenGuide};
-use crate::mark_layer::{self, Run};
-use crate::marks::{self, MarksPatch};
+use crate::mark_layer;
+use crate::marks;
+use crate::select_text::{Paint, Piece, select_text};
 use crate::store::Annotation;
+use crate::text_selection::{Area, lesson_block};
 use crate::{App, Message};
 use iced::widget::{button, column, container, row, space, stack, svg, text};
-use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, Task, font};
+use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, font};
 
 /// `.page` reading width.
 const ARTICLE: f32 = 736.0;
@@ -31,72 +33,9 @@ fn chevron<'a>(color: Color, open: bool) -> svg::Svg<'a> {
 }
 
 impl App {
-    /// Applies a quick mark to the selected verses, or takes it off when they all have it (as the reader does).
-    pub(crate) fn mark_lesson_verses(&mut self, preset: usize) -> Task<Message> {
-        let Some(preset) = self.preferences.presets().get(preset).cloned() else {
-            return Task::none();
-        };
-        let Some(open) = &self.lessons.open else {
-            return Task::none();
-        };
-        let selected: Vec<(usize, u32)> = self.lessons.selected.iter().copied().collect();
-        let text_of = |c: usize, v: u32| {
-            open.scripture
-                .get(c)
-                .and_then(|s| s.verses.iter().find(|x| x.number == v))
-                .map(|x| x.text.clone())
-                .unwrap_or_default()
-        };
-        let marks_of = |c: usize, v: u32| {
-            open.scripture
-                .get(c)
-                .and_then(|s| s.annotations.iter().find(|a| a.verse == v))
-                .map(|a| a.marks.clone())
-                .unwrap_or_default()
-        };
-        let on = !selected.is_empty()
-            && selected.iter().all(|&(c, v)| {
-                marks::colors_over(&marks_of(c, v), &text_of(c, v), preset.kind, None)
-                    .iter()
-                    .all(|color| color.as_ref() == Some(&preset.color))
-            });
-        let patch = MarksPatch::set(preset.kind, (!on).then_some(preset.color));
-        let mut by_chapter: Vec<(crate::store::Location, Vec<Annotation>)> = vec![];
-        for (c, v) in &selected {
-            let Some(chapter) = open.companion.chapters.get(*c) else {
-                continue;
-            };
-            let text = text_of(*c, *v);
-            let mut a = open
-                .scripture
-                .get(*c)
-                .and_then(|s| s.annotations.iter().find(|a| a.verse == *v))
-                .cloned()
-                .unwrap_or(Annotation {
-                    verse: *v,
-                    ..Default::default()
-                });
-            a.marks = marks::apply(&a.marks, &patch, &text, None);
-            match by_chapter.iter_mut().find(|(l, _)| *l == chapter.location) {
-                Some((_, list)) => list.push(a),
-                None => by_chapter.push((chapter.location.clone(), vec![a])),
-            }
-        }
-        let mut saved = false;
-        for (location, updates) in by_chapter {
-            if let Some(s) = &mut self.store {
-                let r = s.save_annotations(&location, &updates);
-                saved |= self.report(r).is_some();
-                if location == self.preferences.last {
-                    self.load_annotations();
-                }
-            }
-        }
-        if saved {
-            self.reload_lesson_scripture();
-            self.sync_soon();
-        }
-        Task::none()
+    /// The indent the verse number sits in at the start of a lesson verse (`.verseNumber`, then the text).
+    pub(crate) fn lesson_indent(&self, number: u32) -> String {
+        crate::view::verse_indent_for(&number.to_string(), 10.88, serif(), 21.76, 5.6)
     }
 
     pub(crate) fn lesson_page<'a>(&'a self, open: &'a OpenGuide) -> Element<'a, Message> {
@@ -241,9 +180,9 @@ impl App {
         ];
         let guide = self.scroll(body).id("guide").width(Fill).height(Fill);
         let mut page = stack![guide];
-        if !self.lessons.selected.is_empty() {
+        if let Some(bar) = self.lesson_bar() {
             page = page.push(
-                container(self.verse_mark_bar())
+                container(iced::widget::opaque(bar))
                     .align_bottom(Fill)
                     .center_x(Fill)
                     .padding(Padding::ZERO.bottom(24)),
@@ -378,8 +317,13 @@ impl App {
                 ];
                 // `.readingVerses li + li`: about half a line between verses.
                 let mut list = column![].spacing(10.9);
-                for verse in verses {
-                    list = list.push(self.lesson_verse(index, verse, &scripture.annotations));
+                for (offset, verse) in verses.iter().enumerate() {
+                    list = list.push(self.lesson_verse(
+                        index,
+                        group.verses.start + offset,
+                        verse,
+                        &scripture.annotations,
+                    ));
                 }
                 passage = passage.push(list);
                 if let Some(block) = &group.context {
@@ -440,10 +384,12 @@ impl App {
         }
     }
 
-    /// One verse, with the reader's marks drawn on its words; its number selects it.
+    /// One verse, with the reader's marks drawn on its words; its words select (a selection may run on through
+    /// the following verses and chapters, as on the website), and its number selects the verse.
     fn lesson_verse<'a>(
         &'a self,
         chapter: usize,
+        verse_index: usize,
         verse: &'a crate::store::Verse,
         annotations: &'a [Annotation],
     ) -> Element<'a, Message> {
@@ -453,45 +399,46 @@ impl App {
         let size = 21.76;
         let line = 35.9;
         let selected = self.lessons.selected.contains(&(chapter, verse.number));
-        let marks = annotations
-            .iter()
-            .find(|a| a.verse == verse.number)
-            .map(|a| a.marks.clone())
-            .unwrap_or_default();
-        // The number sits in an indent at the start of the first line (`.verseNumber`, then the text).
         let number = verse.number.to_string();
-        let indent = crate::view::verse_indent_for(&number, 10.88, font, size, 5.6);
-        let mut runs: Vec<Run> = vec![];
-        if !marks.is_empty() {
-            runs.push(Run {
-                text: indent.clone(),
-                highlight: None,
-                underline: None,
-            });
-            runs.extend(
-                marks::segments(&marks, &verse.text)
-                    .into_iter()
-                    .map(|s| Run {
-                        text: verse.text[s.start..s.end].to_string(),
-                        highlight: s.highlight.map(|c| c.highlight(dark)),
-                        underline: s.underline.map(|c| c.underline(dark)),
-                    }),
-            );
+        let indent = self.lesson_indent(verse.number);
+        let offset = indent.len();
+        let mut paints = vec![];
+        if let Some(a) = annotations
+            .iter()
+            .find(|a| a.verse == verse.number && a.is_marked())
+        {
+            for s in marks::segments(&a.marks, &verse.text) {
+                if s.highlight.is_some() || s.underline.is_some() {
+                    paints.push(Paint {
+                        range: offset + s.start..offset + s.end,
+                        highlight: s.highlight.as_ref().map(|c| c.highlight(dark)),
+                        underline: s.underline.as_ref().map(|c| c.underline(dark)),
+                    });
+                }
+            }
         }
-        let words = mark_layer::marks(
-            text(format!("{indent}{}", verse.text))
-                .font(font)
-                .size(size)
-                .line_height(iced::widget::text::LineHeight::Absolute(line.into()))
-                .shaping(iced::widget::text::Shaping::Advanced)
-                .wrapping(iced::widget::text::Wrapping::Word)
-                .width(Fill)
-                .into(),
-            runs,
-            font,
+        let block = lesson_block(chapter, verse_index);
+        let shown_len = offset + verse.text.len();
+        let selection = self
+            .drag
+            .as_ref()
+            .and_then(|d| d.in_block(Area::Lesson, block, shown_len));
+        let dragging = self
+            .drag
+            .as_ref()
+            .is_some_and(|d| d.dragging && d.area == Area::Lesson);
+        let words: Element<'a, Message> = select_text(
+            vec![Piece::new(indent), Piece::new(verse.text.as_str())],
             size,
             line,
-        );
+            font,
+            p.ink,
+        )
+        .paints(paints)
+        .selection(selection, Color { a: 0.55, ..p.gold })
+        .dragging(dragging)
+        .on_pick(move |at, phase| Message::Pick(Area::Lesson, block, at, phase))
+        .into();
         let mut badge = column![
             text(number.clone())
                 .size(10.88)
@@ -675,46 +622,311 @@ impl App {
         c.into()
     }
 
-    /// The bar for selected verses: the quick marks, as in the reader's selection menu.
-    fn verse_mark_bar(&self) -> Element<'_, Message> {
-        let p = self.p();
-        let dark = self.preferences.dark;
-        let count = self.lessons.selected.len();
-        let mut quick = row![].spacing(2).align_y(Center);
-        for (i, preset) in self.preferences.presets().iter().enumerate() {
-            quick = quick.push(
-                button(crate::view_marks::sample(
-                    preset.kind,
-                    &preset.color,
-                    dark,
-                    p.ink,
+    /// The verses a lesson selection covers, in reading order: the selected words' verses, else the verses
+    /// selected by number.
+    pub(crate) fn lesson_selected_verses(&self) -> Vec<(usize, u32)> {
+        if self.lessons.words.is_empty() {
+            self.lessons.selected.iter().copied().collect()
+        } else {
+            self.lessons
+                .words
+                .iter()
+                .map(|(c, v, _)| (*c, *v))
+                .collect()
+        }
+    }
+    /// Each selected piece of a verse: (companion chapter, verse, the selected words).
+    fn lesson_pieces(&self) -> Vec<(usize, u32, String)> {
+        let Some(open) = &self.lessons.open else {
+            return vec![];
+        };
+        let verse = |c: usize, v: u32| {
+            open.scripture
+                .get(c)
+                .and_then(|s| s.verses.iter().find(|x| x.number == v))
+        };
+        if self.lessons.words.is_empty() {
+            self.lessons
+                .selected
+                .iter()
+                .filter_map(|(c, v)| Some((*c, *v, verse(*c, *v)?.text.clone())))
+                .collect()
+        } else {
+            self.lessons
+                .words
+                .iter()
+                .filter_map(|(c, v, r)| {
+                    let text = &verse(*c, *v)?.text;
+                    let a = marks::utf16_to_byte(text, r.start)?;
+                    let b = marks::utf16_to_byte(text, r.end)?;
+                    Some((*c, *v, text[a..b].to_string()))
+                })
+                .collect()
+        }
+    }
+    /// The selected words, joined as the website joins a selection's text.
+    pub(crate) fn lesson_selected_text(&self) -> String {
+        self.lesson_pieces()
+            .into_iter()
+            .map(|(.., t)| t)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+    /// Whole selected verses, with their reference, as the reader copies a passage.
+    pub(crate) fn lesson_selected_verses_text(&self) -> String {
+        let verses = self
+            .lesson_pieces()
+            .into_iter()
+            .map(|(_, v, t)| format!("{v} {t}"))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        format!(
+            "{}\n\n{verses}",
+            self.lesson_reference(&self.lesson_selected_verses())
+        )
+    }
+    fn lesson_book_label(&self, chapter: usize) -> Option<(String, crate::store::Location)> {
+        let open = self.lessons.open.as_ref()?;
+        let location = open.companion.chapters.get(chapter)?.location.clone();
+        let label = self
+            .books
+            .iter()
+            .find(|b| b.volume == location.volume && b.id == location.book)
+            .map(|b| b.label.clone())
+            .unwrap_or_else(|| location.book.clone());
+        Some((label, location))
+    }
+    /// `formatScriptureSelection`: "Jeremiah 31:3–4", or across a chapter break "Jeremiah 31:40; 32:1–2".
+    pub(crate) fn lesson_reference(&self, verses: &[(usize, u32)]) -> String {
+        let mut groups: Vec<(usize, Vec<u32>)> = vec![];
+        for (c, v) in verses {
+            match groups.iter_mut().find(|(g, _)| g == c) {
+                Some((_, list)) => {
+                    if !list.contains(v) {
+                        list.push(*v)
+                    }
+                }
+                None => groups.push((*c, vec![*v])),
+            }
+        }
+        let mut out = vec![];
+        for (i, (c, list)) in groups.iter().enumerate() {
+            let Some((label, location)) = self.lesson_book_label(*c) else {
+                continue;
+            };
+            let spec = crate::journal::verse_spec(list);
+            out.push(if i == 0 {
+                format!("{label} {}:{spec}", location.chapter)
+            } else {
+                format!("{}:{spec}", location.chapter)
+            });
+        }
+        out.join("; ")
+    }
+    /// `scriptureExcerpt`: each chapter's selected words quoted under that chapter's reference and link.
+    pub(crate) fn lesson_excerpt(&self) -> String {
+        let mut groups: Vec<(usize, Vec<u32>, Vec<String>)> = vec![];
+        for (c, v, text) in self.lesson_pieces() {
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                continue;
+            }
+            match groups.iter_mut().find(|(g, ..)| *g == c) {
+                Some((_, verses, texts)) => {
+                    if !verses.contains(&v) {
+                        verses.push(v);
+                    }
+                    texts.push(text);
+                }
+                None => groups.push((c, vec![v], vec![text])),
+            }
+        }
+        groups
+            .into_iter()
+            .filter_map(|(c, verses, texts)| {
+                let (label, location) = self.lesson_book_label(c)?;
+                let (first, last) = (*verses.iter().min()?, *verses.iter().max()?);
+                let source =
+                    crate::store::NoteSource::scripture(&label, &location, Some((first, last)));
+                let quote = texts
+                    .join("\n\n")
+                    .split('\n')
+                    .map(|line| {
+                        if line.is_empty() {
+                            ">".to_string()
+                        } else {
+                            format!("> {line}")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                Some(format!(
+                    "**{}**\n{quote}",
+                    crate::journal::markdown_link(&source.label, &source.href)
                 ))
-                .padding(3)
-                .on_press(lesson(LessonMsg::MarkVerses(i)))
-                .style(design::quiet(p)),
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+    /// Saves the open verse note from the lesson. Returns false (keeping it) when saving fails.
+    pub(crate) fn save_lesson_verse_note(&mut self) -> bool {
+        let Some((c, v, content)) = &self.lessons.note else {
+            return true;
+        };
+        let (c, v, body) = (*c, *v, content.text());
+        let Some(open) = &self.lessons.open else {
+            return true;
+        };
+        let Some(location) = open.companion.chapters.get(c).map(|x| x.location.clone()) else {
+            return true;
+        };
+        let mut a = open
+            .scripture
+            .get(c)
+            .and_then(|s| s.annotations.iter().find(|a| a.verse == v))
+            .cloned()
+            .unwrap_or(Annotation {
+                verse: v,
+                ..Default::default()
+            });
+        if a.note.trim() == body.trim() {
+            return true;
+        }
+        a.note = body;
+        if let Some(store) = &mut self.store {
+            let r = store.save_annotation(&location, &a);
+            if self.report(r).is_none() {
+                return false;
+            }
+        }
+        if location == self.preferences.last {
+            self.load_annotations();
+        }
+        self.reload_lesson_scripture();
+        self.sync_soon();
+        true
+    }
+
+    /// The menu beside a selection in the lesson's chapters (the website's `ScriptureSelectionMenu`): the
+    /// selection's reference and words, Copy, Add to note, a note on the first selected verse, Done, then the quick
+    /// marks and every style, for every selected verse (across a chapter break too).
+    fn lesson_bar(&self) -> Option<Element<'_, Message>> {
+        let words = !self.lessons.words.is_empty();
+        let verses = self.lesson_selected_verses();
+        if verses.is_empty() {
+            return None;
+        }
+        let p = self.p();
+        let round = |glyph: &'static crate::icons::Icon, m: Message, label: &str| {
+            self.hint(
+                button(container(icon(glyph, p.ink, 13.)).center_x(32).center_y(32))
+                    .padding(0)
+                    .on_press(m)
+                    .style(design::circle(p)),
+                label.to_string(),
+            )
+        };
+        let mut head = column![
+            text(self.lesson_reference(&verses))
+                .size(12)
+                .font(sans(font::Weight::Semibold))
+        ]
+        .spacing(2)
+        .width(Fill);
+        if words {
+            let selected = self.lesson_selected_text();
+            let quote = if selected.chars().count() > 48 {
+                format!(
+                    "“{}…”",
+                    selected.chars().take(48).collect::<String>().trim_end()
+                )
+            } else {
+                format!("“{selected}”")
+            };
+            head = head.push(text(quote).font(serif()).size(13).color(p.muted));
+        } else {
+            head = head.push(
+                text(crate::journal::plural(
+                    verses.len(),
+                    "verse selected",
+                    "verses selected",
+                ))
+                .size(12.5)
+                .color(p.muted),
             );
         }
-        container(
-            row![
-                text(crate::journal::plural(
-                    count,
-                    "verse selected",
-                    "verses selected"
-                ))
-                .size(13)
-                .color(p.muted),
-                quick,
-                button(text("Clear").size(13).font(sans(font::Weight::Semibold)))
-                    .padding([6, 12])
-                    .on_press(lesson(LessonMsg::ClearVerses))
-                    .style(design::outlined(p, 999.0)),
-            ]
-            .spacing(12)
-            .align_y(Center),
+        let (first_c, first_v) = verses[0];
+        let has_note = self
+            .lessons
+            .open
+            .as_ref()
+            .and_then(|o| o.scripture.get(first_c))
+            .is_some_and(|s| {
+                s.annotations
+                    .iter()
+                    .any(|a| a.verse == first_v && !a.note.trim().is_empty())
+            });
+        let note_label = if verses.len() > 1 {
+            format!("Note on {}", self.lesson_reference(&verses[..1]))
+        } else if has_note {
+            "Edit your note".to_string()
+        } else {
+            "Write a note".to_string()
+        };
+        let top = row![
+            head,
+            round(
+                &crate::icons::COPY,
+                lesson(LessonMsg::CopySelection),
+                "Copy"
+            ),
+            round(
+                &crate::icons::PEN_TO_SQUARE,
+                lesson(LessonMsg::AddToNote),
+                "Add to note"
+            ),
+            round(
+                &crate::icons::NOTE_STICKY,
+                lesson(LessonMsg::VerseNote),
+                &note_label
+            ),
+            round(&crate::icons::XMARK, lesson(LessonMsg::ClearVerses), "Done"),
+        ]
+        .spacing(4)
+        .align_y(Center);
+        let mut card = column![top, self.mark_tools(words)].spacing(10);
+        if let Some((_, _, content)) = &self.lessons.note {
+            card = card.push(text(note_label).size(12).color(p.faint));
+            card = card.push(
+                iced::widget::text_editor(content)
+                    .id("lesson-verse-note")
+                    .placeholder("Your note on this verse")
+                    .on_action(|a| lesson(LessonMsg::EditVerseNote(a)))
+                    .size(14)
+                    .height(96)
+                    .padding(10),
+            );
+            card = card.push(
+                button(
+                    text("Save note")
+                        .size(13)
+                        .font(sans(font::Weight::Semibold))
+                        .center()
+                        .width(Fill),
+                )
+                .padding([8, 12])
+                .width(Fill)
+                .on_press(lesson(LessonMsg::SaveVerseNote))
+                .style(design::active(p)),
+            );
+        }
+        Some(
+            container(card)
+                .padding(Padding::from([12, 14]))
+                .width(440)
+                .style(design::popover(p))
+                .into(),
         )
-        .padding([8, 16])
-        .style(design::pill(p))
-        .into()
     }
 
     /// `.footer`: who wrote the guide, where it was first published, the cover, and the other weeks.

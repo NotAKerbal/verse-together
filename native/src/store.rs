@@ -240,16 +240,24 @@ impl Note {
         !self.body.trim().is_empty()
             || (!self.title.trim().is_empty() && self.title.trim() != DEFAULT_NOTE_TITLE)
     }
-    /// The body as plain text for a one-line preview.
+    /// The body as plain text for a preview (`markdownExcerpt`): after a heading that starts it, each line without
+    /// its Markdown (heading marks, quote markers, list markers, link destinations, emphasis), joined.
     pub fn excerpt(&self, limit: usize) -> String {
-        let plain = self
-            .body
-            .lines()
-            .map(|l| l.trim_start_matches(['#', '>', '-', '*', ' ']).trim())
+        let lines: Vec<&str> = self.body.lines().collect();
+        let title = lines.iter().position(|l| !plain_line(l).is_empty());
+        let skip = match title {
+            Some(i) if heading_line(lines[i]) => i + 1,
+            _ => 0,
+        };
+        let plain = lines[skip.min(lines.len())..]
+            .iter()
+            .map(|l| plain_line(l))
             .filter(|l| !l.is_empty())
             .collect::<Vec<_>>()
             .join(" ")
-            .replace(['*', '_', '`'], "");
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
         if plain.chars().count() > limit {
             format!(
                 "{}…",
@@ -259,6 +267,31 @@ impl Note {
             plain
         }
     }
+}
+fn heading_line(line: &str) -> bool {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| regex::Regex::new(r"^\s*#{1,6}\s").unwrap())
+        .is_match(line)
+}
+/// `plainLine`: one line of Markdown as plain text.
+pub fn plain_line(line: &str) -> String {
+    static RES: std::sync::OnceLock<[(regex::Regex, &'static str); 7]> = std::sync::OnceLock::new();
+    let res = RES.get_or_init(|| {
+        [
+            (regex::Regex::new(r"^#{1,6}\s+").unwrap(), ""),
+            (regex::Regex::new(r"\s+#+\s*$").unwrap(), ""),
+            (regex::Regex::new(r"^(>\s?)+").unwrap(), ""),
+            (regex::Regex::new(r"^([-*+]|\d+[.)])\s+").unwrap(), ""),
+            (regex::Regex::new(r"!?\[([^\]]*)\]\([^)]*\)").unwrap(), "$1"),
+            (regex::Regex::new(r"[*_`~]+").unwrap(), ""),
+            (regex::Regex::new(r"^$").unwrap(), ""),
+        ]
+    });
+    let mut out = line.trim().to_string();
+    for (re, with) in res.iter() {
+        out = re.replace_all(&out, *with).into_owned();
+    }
+    out.trim().to_string()
 }
 /// A logged reading.
 #[derive(Debug, Clone, PartialEq)]
@@ -972,7 +1005,6 @@ impl Store {
             .map_err(error)
     }
     /// The chapters of a book marked read.
-    #[cfg(test)]
     pub fn read_chapters(&self, volume: &str, book: &str) -> Result<Vec<u32>> {
         let mut stmt = self.study.prepare_cached("SELECT chapter FROM reading WHERE owner=?1 AND volume=?2 AND book=?3 AND deleted=0 ORDER BY chapter").map_err(error)?;
         stmt.query_map(params![self.owner, volume, book], |r| r.get(0))
@@ -2084,7 +2116,16 @@ mod tests {
         let notes = store.notes_between("2026-10-27", "2026-10-27").unwrap();
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].source, Some(source.clone()));
-        assert_eq!(notes[0].excerpt(40), "Seeds A particle of faith.");
+        // As the website's `markdownExcerpt`: the heading that starts the note is its title, not its preview.
+        assert_eq!(notes[0].excerpt(40), "A particle of faith.");
+        let mut linked = notes[0].clone();
+        linked.body =
+            "He is **mighty**; read [Alma 32](/browse/bookofmormon/alma/32).\n> - Plant the seed"
+                .into();
+        assert_eq!(
+            linked.excerpt(200),
+            "He is mighty; read Alma 32. Plant the seed"
+        );
         let today = today();
         let logged = store.readings_between(&today, &today).unwrap();
         assert_eq!(logged.len(), 1, "marking read twice logs once");

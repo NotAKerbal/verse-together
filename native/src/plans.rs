@@ -10,6 +10,7 @@ use crate::header::CONTENT_TOP;
 use crate::plan_model::{self as model, Builder, Catalog, Driver, Kind, Selection};
 use crate::store::{Location, NoteSource};
 use crate::{App, Message, Screen};
+use chrono::Datelike as _;
 use iced::widget::{button, column, container, row, scrollable, space, svg, text, text_input};
 use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, Shadow, Task, font};
 use serde::Deserialize;
@@ -80,6 +81,65 @@ pub struct BuilderForm {
     pub server_error: Option<String>,
     /// What's typed into a number field before it is a number (`Stepper`'s draft).
     pub drafts: Vec<(Field, String)>,
+    /// The open date picker, and what's typed into a date field (as the browser's date input shows it).
+    pub date: Option<DatePicker>,
+    pub date_text: Vec<(DateTarget, String)>,
+}
+#[cfg(test)]
+impl BuilderForm {
+    fn clone_dates(&self) -> (String, String) {
+        (self.state.start_date.clone(), self.state.finish_by.clone())
+    }
+}
+/// The builder's two date fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DateTarget {
+    Start,
+    Finish,
+}
+/// The browser date input's calendar: the month shown and the day the keyboard is on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DatePicker {
+    pub target: DateTarget,
+    pub month: chrono::NaiveDate,
+    pub focus: chrono::NaiveDate,
+}
+/// A date as the browser's date input shows it (en-US: "10/28/2026").
+pub fn date_display(key: &str) -> String {
+    chrono::NaiveDate::parse_from_str(key, "%Y-%m-%d")
+        .map(|d| d.format("%m/%d/%Y").to_string())
+        .unwrap_or_default()
+}
+/// A typed date: "10/28/2026", "10/28/26"-free month/day/year with four digits, or the stored "2026-10-28".
+pub fn parse_typed_date(text: &str) -> Option<String> {
+    let t = text.trim();
+    let date = chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d")
+        .ok()
+        .or_else(|| {
+            let parts: Vec<&str> = t.split(['/', '-', '.']).collect();
+            if parts.len() != 3 || parts[2].len() != 4 {
+                return None;
+            }
+            let (m, d, y) = (
+                parts[0].parse().ok()?,
+                parts[1].parse().ok()?,
+                parts[2].parse().ok()?,
+            );
+            chrono::NaiveDate::from_ymd_opt(y, m, d)
+        })?;
+    // The browser date input takes years 1–9999 (four digits shown).
+    (1..=9999)
+        .contains(&chrono::Datelike::year(&date))
+        .then(|| date.format("%Y-%m-%d").to_string())
+}
+fn first_of_month(d: chrono::NaiveDate) -> chrono::NaiveDate {
+    chrono::NaiveDate::from_ymd_opt(chrono::Datelike::year(&d), chrono::Datelike::month(&d), 1)
+        .unwrap_or(d)
+}
+fn shift_months(d: chrono::NaiveDate, by: i32) -> chrono::NaiveDate {
+    let months = chrono::Datelike::year(&d) * 12 + chrono::Datelike::month0(&d) as i32 + by;
+    chrono::NaiveDate::from_ymd_opt(months.div_euclid(12), months.rem_euclid(12) as u32 + 1, 1)
+        .unwrap_or(d)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,8 +175,17 @@ pub enum BuilderMsg {
     RemoveBook,
     DoneNarrowing,
     Driver(Driver),
-    FinishBy(String),
-    StartDate(String),
+    /// Open or close a date field's calendar.
+    DateOpen(DateTarget),
+    DateClose,
+    DateMonth(i32),
+    /// Move the calendar's keyboard day by some days.
+    DateFocus(i64),
+    /// Choose a day (a date key), or clear the field (`None`).
+    DatePick(DateTarget, Option<String>),
+    /// Enter on the calendar: choose the keyboard's day.
+    DateEnter,
+    DateText(DateTarget, String),
     Weekday(usize),
     Title(String),
     RemoveSelection(usize),
@@ -219,6 +288,8 @@ impl App {
             saving: false,
             server_error: None,
             drafts: vec![],
+            date: None,
+            date_text: vec![],
         });
         self.plans.page = Page::Builder(plan.map(|p| p.summary.id.clone()));
     }
@@ -510,8 +581,82 @@ impl App {
             }
             BuilderMsg::DoneNarrowing => form.narrowing = None,
             BuilderMsg::Driver(driver) => state.driver = driver,
-            BuilderMsg::FinishBy(value) => state.finish_by = value,
-            BuilderMsg::StartDate(value) => state.start_date = value,
+            BuilderMsg::DateOpen(target) => {
+                if form.date.as_ref().is_some_and(|d| d.target == target) {
+                    form.date = None;
+                } else {
+                    let key = match target {
+                        DateTarget::Start => &state.start_date,
+                        DateTarget::Finish => &state.finish_by,
+                    };
+                    // An empty field opens on today, or on its minimum when that is later.
+                    let mut today = model::today();
+                    if target == DateTarget::Finish
+                        && let Ok(min) =
+                            chrono::NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d")
+                    {
+                        today = today.max(min);
+                    }
+                    let day = chrono::NaiveDate::parse_from_str(key, "%Y-%m-%d").unwrap_or(today);
+                    form.date = Some(DatePicker {
+                        target,
+                        month: first_of_month(day),
+                        focus: day,
+                    });
+                }
+            }
+            BuilderMsg::DateClose => form.date = None,
+            BuilderMsg::DateMonth(by) => {
+                if let Some(d) = &mut form.date {
+                    d.month = shift_months(d.month, by);
+                    // The keyboard's day moves with the month, kept within it.
+                    let day = chrono::Datelike::day(&d.focus);
+                    let last = (28..=31)
+                        .rev()
+                        .find(|n| d.month.with_day(*n).is_some())
+                        .unwrap_or(28);
+                    d.focus = d.month.with_day(day.min(last)).unwrap_or(d.month);
+                }
+            }
+            BuilderMsg::DateFocus(by) => {
+                if let Some(d) = &mut form.date {
+                    d.focus += chrono::Duration::days(by);
+                    d.month = first_of_month(d.focus);
+                }
+            }
+            BuilderMsg::DateEnter => {
+                if let Some(d) = form.date.clone() {
+                    let min = (d.target == DateTarget::Finish)
+                        .then(|| {
+                            chrono::NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d").ok()
+                        })
+                        .flatten();
+                    if min.is_none_or(|m| d.focus >= m) {
+                        let key = d.focus.format("%Y-%m-%d").to_string();
+                        return self
+                            .update_builder(BuilderMsg::DatePick(d.target, Some(key)), generation);
+                    }
+                }
+            }
+            BuilderMsg::DatePick(target, key) => {
+                let key = key.unwrap_or_default();
+                match target {
+                    DateTarget::Start => state.start_date = key,
+                    DateTarget::Finish => state.finish_by = key,
+                }
+                form.date_text.retain(|(t, _)| *t != target);
+                form.date = None;
+            }
+            BuilderMsg::DateText(target, text) => {
+                // As the browser's date input: a complete, real date is the value; anything else is no date.
+                let key = parse_typed_date(&text).unwrap_or_default();
+                match target {
+                    DateTarget::Start => state.start_date = key,
+                    DateTarget::Finish => state.finish_by = key,
+                }
+                form.date_text.retain(|(t, _)| *t != target);
+                form.date_text.push((target, text));
+            }
             BuilderMsg::Weekday(index) => state.toggle_weekday(index),
             BuilderMsg::Title(value) => state.title_override = Some(value),
             BuilderMsg::RemoveSelection(index) => {
@@ -1991,11 +2136,7 @@ impl App {
             Driver::FinishBy => {
                 driver_input = driver_input
                     .push(sub_label(p, "Finish by"))
-                    .push(self.date_input(
-                        &state.finish_by,
-                        |v| bmsg(BuilderMsg::FinishBy(v)),
-                        224.0,
-                    ));
+                    .push(self.date_field(form, DateTarget::Finish, 224.0));
             }
         }
         if let Some(issue) = pace.2 {
@@ -2042,7 +2183,7 @@ impl App {
         .spacing(8);
         let start_block = column![
             sub_label(p, "Start date"),
-            self.date_input(&state.start_date, |v| bmsg(BuilderMsg::StartDate(v)), 192.0)
+            self.date_field(form, DateTarget::Start, 192.0)
         ]
         .spacing(8);
         container(
@@ -2065,21 +2206,232 @@ impl App {
         .style(panel(p, p.card))
         .into()
     }
-    /// The website's `<input type="date">`, written as the date key it stores (YYYY-MM-DD).
-    fn date_input<'a>(
+    /// The website's `<input type="date">`: the date as the browser shows it ("10/28/2026"), typed or chosen from
+    /// its calendar (the button, or the keyboard: arrows, Page Up/Down for months, Enter, Escape). Days before the
+    /// field's minimum (a finish date before the start) can't be chosen. Stored as the date key (YYYY-MM-DD).
+    fn date_field<'a>(
         &self,
-        value: &str,
-        on: impl Fn(String) -> Message + 'a,
+        form: &'a BuilderForm,
+        target: DateTarget,
         width: f32,
     ) -> Element<'a, Message> {
         let p = self.p();
-        text_input("YYYY-MM-DD", value)
-            .on_input(on)
+        let state = &form.state;
+        let key = match target {
+            DateTarget::Start => &state.start_date,
+            DateTarget::Finish => &state.finish_by,
+        };
+        let typed = form
+            .date_text
+            .iter()
+            .find(|(t, _)| *t == target)
+            .map(|(_, v)| v.clone());
+        let shown = typed.clone().unwrap_or_else(|| date_display(key));
+        let invalid = typed
+            .as_ref()
+            .is_some_and(|t| !t.trim().is_empty() && key.is_empty());
+        let open = form.date.as_ref().filter(|d| d.target == target);
+        let input = text_input("mm/dd/yyyy", &shown)
+            .id(match target {
+                DateTarget::Start => "plan-start-date",
+                DateTarget::Finish => "plan-finish-date",
+            })
+            .on_input(move |v| bmsg(BuilderMsg::DateText(target, v)))
             .size(14)
             .font(sans(font::Weight::Semibold))
-            .padding([8, 12])
+            .padding(Padding {
+                top: 8.0,
+                right: 40.0,
+                bottom: 8.0,
+                left: 12.0,
+            })
             .width(width)
-            .style(soft_input(p))
+            .style(soft_input(p));
+        let toggle = button(
+            container(design::icon(&crate::icons::CALENDAR_DAYS, p.ink, 14.0))
+                .center_x(30)
+                .center_y(30),
+        )
+        .padding(0)
+        .on_press(bmsg(BuilderMsg::DateOpen(target)))
+        .style(move |_, status| button::Style {
+            background: (open.is_some() || matches!(status, button::Status::Hovered))
+                .then(|| p.hover.into()),
+            border: Border {
+                radius: 6.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        let field = iced::widget::stack![
+            input,
+            container(toggle)
+                .width(width)
+                .align_right(width)
+                .padding(Padding::ZERO.right(4))
+                .center_y(Fill),
+        ]
+        .width(width);
+        let min = (target == DateTarget::Finish)
+            .then(|| chrono::NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d").ok())
+            .flatten();
+        let panel = open.map(|d| self.calendar(d, key, min));
+        let picker = crate::popup::popup(field, panel)
+            .on_dismiss(bmsg(BuilderMsg::DateClose))
+            .on_key(|key, _| {
+                use iced::keyboard::{Key, key::Named};
+                match key {
+                    Key::Named(Named::ArrowLeft) => Some(bmsg(BuilderMsg::DateFocus(-1))),
+                    Key::Named(Named::ArrowRight) => Some(bmsg(BuilderMsg::DateFocus(1))),
+                    Key::Named(Named::ArrowUp) => Some(bmsg(BuilderMsg::DateFocus(-7))),
+                    Key::Named(Named::ArrowDown) => Some(bmsg(BuilderMsg::DateFocus(7))),
+                    Key::Named(Named::PageUp) => Some(bmsg(BuilderMsg::DateMonth(-1))),
+                    Key::Named(Named::PageDown) => Some(bmsg(BuilderMsg::DateMonth(1))),
+                    Key::Named(Named::Enter) => Some(bmsg(BuilderMsg::DateEnter)),
+                    _ => None,
+                }
+            });
+        let mut c = column![picker].spacing(4);
+        if invalid {
+            c = c.push(error_text(p, "Enter a whole date, like 10/28/2026."));
+        }
+        c.into()
+    }
+    /// The date input's calendar: the month, Sunday-first weeks (en-US), today ringed, the chosen day filled, the
+    /// keyboard's day outlined; Clear and Today beneath.
+    fn calendar<'a>(
+        &self,
+        d: &DatePicker,
+        key: &str,
+        min: Option<chrono::NaiveDate>,
+    ) -> Element<'a, Message> {
+        use chrono::Datelike;
+        let p = self.p();
+        let target = d.target;
+        let chosen = chrono::NaiveDate::parse_from_str(key, "%Y-%m-%d").ok();
+        let today = Some(model::today());
+        let arrow = |glyph: &'static crate::icons::Icon, by: i32, label: &str| {
+            self.hint(
+                button(
+                    container(design::icon(glyph, p.ink, 12.0))
+                        .center_x(30)
+                        .center_y(30),
+                )
+                .padding(0)
+                .on_press(bmsg(BuilderMsg::DateMonth(by)))
+                .style(design::circle(p)),
+                label.to_string(),
+            )
+        };
+        let head = row![
+            text(d.month.format("%B %Y").to_string())
+                .font(serif())
+                .size(17)
+                .width(Fill),
+            arrow(&crate::icons::CHEVRON_LEFT, -1, "Previous month"),
+            arrow(&crate::icons::CHEVRON_RIGHT, 1, "Next month"),
+        ]
+        .spacing(4)
+        .align_y(Center);
+        let mut weekdays = row![].spacing(2);
+        for w in ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] {
+            weekdays = weekdays.push(
+                text(w)
+                    .size(11)
+                    .font(sans(font::Weight::Semibold))
+                    .color(p.faint)
+                    .center()
+                    .width(36),
+            );
+        }
+        let lead = d.month.weekday().num_days_from_sunday() as i64;
+        let start = d.month - chrono::Duration::days(lead);
+        let mut weeks = column![].spacing(2);
+        for w in 0..6 {
+            let mut line = row![].spacing(2);
+            for i in 0..7 {
+                let day = start + chrono::Duration::days(w * 7 + i);
+                let in_month = day.month() == d.month.month();
+                let disabled = min.is_some_and(|m| day < m);
+                let is_chosen = chosen == Some(day);
+                let is_today = today == Some(day);
+                let is_focus = day == d.focus;
+                let color = if is_chosen {
+                    p.paper
+                } else if disabled {
+                    Color { a: 0.3, ..p.ink }
+                } else if in_month {
+                    p.ink
+                } else {
+                    p.faint
+                };
+                let cell = button(
+                    text(day.day().to_string())
+                        .size(13)
+                        .font(sans(if is_today {
+                            font::Weight::Bold
+                        } else {
+                            font::Weight::Normal
+                        }))
+                        .color(color)
+                        .center()
+                        .width(Fill),
+                )
+                .padding([7, 0])
+                .width(36)
+                .on_press_maybe((!disabled).then(|| {
+                    bmsg(BuilderMsg::DatePick(
+                        target,
+                        Some(day.format("%Y-%m-%d").to_string()),
+                    ))
+                }))
+                .style(move |_, status| button::Style {
+                    background: if is_chosen {
+                        Some(p.accent.into())
+                    } else if matches!(status, button::Status::Hovered) && !disabled {
+                        Some(p.hover.into())
+                    } else {
+                        None
+                    },
+                    text_color: color,
+                    border: Border {
+                        color: if is_focus {
+                            p.ink
+                        } else if is_today {
+                            p.accent
+                        } else {
+                            Color::TRANSPARENT
+                        },
+                        width: if is_focus || is_today { 1.5 } else { 0.0 },
+                        radius: 8.0.into(),
+                    },
+                    ..Default::default()
+                });
+                line = line.push(cell);
+            }
+            weeks = weeks.push(line);
+        }
+        let today_key = model::today().format("%Y-%m-%d").to_string();
+        let foot = row![
+            button(text("Clear").size(12.5).font(sans(font::Weight::Semibold)))
+                .padding([6, 10])
+                .on_press(bmsg(BuilderMsg::DatePick(target, None)))
+                .style(design::quiet(p)),
+            space::horizontal(),
+            button(text("Today").size(12.5).font(sans(font::Weight::Semibold)))
+                .padding([6, 10])
+                .on_press_maybe(
+                    today
+                        .is_some_and(|t| min.is_none_or(|m| t >= m))
+                        .then(|| bmsg(BuilderMsg::DatePick(target, Some(today_key.clone())))),
+                )
+                .style(design::quiet(p)),
+        ]
+        .align_y(Center);
+        // Seven 36px days with 2px between them.
+        container(column![head, weekdays, weeks, foot].spacing(8).width(264))
+            .padding(12)
+            .style(design::popover(p))
             .into()
     }
     /// `SummaryCard`.
@@ -2404,6 +2756,71 @@ mod tests {
         let _ = app.update_plans(PlansMsg::Builder(m));
     }
 
+    #[test]
+    fn plan_dates_are_typed_or_chosen_from_a_calendar_like_the_browsers() {
+        let (mut app, dir) = signed_in();
+        let _ = app.update_plans(PlansMsg::New);
+        let form = |app: &App| app.plans.builder.as_ref().unwrap().clone_dates();
+        // Typing: only a whole, real date is a value (as `<input type="date">`), shown back as typed.
+        send(
+            &mut app,
+            BuilderMsg::DateText(DateTarget::Start, "11/3".into()),
+        );
+        assert_eq!(form(&app).0, "");
+        send(
+            &mut app,
+            BuilderMsg::DateText(DateTarget::Start, "02/30/2027".into()),
+        );
+        assert_eq!(form(&app).0, "", "no February 30th");
+        send(
+            &mut app,
+            BuilderMsg::DateText(DateTarget::Start, "11/03/2026".into()),
+        );
+        assert_eq!(form(&app).0, "2026-11-03");
+        assert_eq!(date_display("2026-11-03"), "11/03/2026");
+        assert_eq!(
+            parse_typed_date("2026-11-03").as_deref(),
+            Some("2026-11-03")
+        );
+        // The calendar opens on the chosen day; arrows move by days and weeks, Page Down by months.
+        send(&mut app, BuilderMsg::DateOpen(DateTarget::Finish));
+        let picker = app.plans.builder.as_ref().unwrap().date.clone().unwrap();
+        assert_eq!(picker.target, DateTarget::Finish);
+        send(&mut app, BuilderMsg::DateClose);
+        send(&mut app, BuilderMsg::DateOpen(DateTarget::Start));
+        let d = |app: &App| app.plans.builder.as_ref().unwrap().date.clone().unwrap();
+        assert_eq!(d(&app).focus.to_string(), "2026-11-03");
+        send(&mut app, BuilderMsg::DateFocus(7));
+        send(&mut app, BuilderMsg::DateFocus(-1));
+        assert_eq!(d(&app).focus.to_string(), "2026-11-09");
+        send(&mut app, BuilderMsg::DateMonth(1));
+        assert_eq!(d(&app).month.to_string(), "2026-12-01");
+        assert_eq!(d(&app).focus.to_string(), "2026-12-09");
+        send(&mut app, BuilderMsg::DateEnter);
+        assert_eq!(form(&app).0, "2026-12-09");
+        assert!(app.plans.builder.as_ref().unwrap().date.is_none());
+        // A finish date before the start can't be chosen from the calendar.
+        send(&mut app, BuilderMsg::Driver(Driver::FinishBy));
+        send(&mut app, BuilderMsg::DateOpen(DateTarget::Finish));
+        assert_eq!(
+            d(&app).focus.to_string(),
+            "2026-12-09",
+            "opens on its minimum"
+        );
+        send(&mut app, BuilderMsg::DateFocus(-3));
+        send(&mut app, BuilderMsg::DateEnter);
+        assert_eq!(form(&app).1, "");
+        send(&mut app, BuilderMsg::DateFocus(10));
+        send(&mut app, BuilderMsg::DateEnter);
+        assert_eq!(form(&app).1, "2026-12-16");
+        // Clear empties the field.
+        send(&mut app, BuilderMsg::DateOpen(DateTarget::Finish));
+        send(&mut app, BuilderMsg::DatePick(DateTarget::Finish, None));
+        assert_eq!(form(&app).1, "");
+        let _ = app.view();
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     /// The builder, driven as a reader would, saves exactly what the website's builder saves.
     #[test]
     fn the_builder_creates_and_edits_plans_like_the_website() {
@@ -2432,7 +2849,11 @@ mod tests {
         // Reading days: weekdays only; finish in 4 reading days from a fixed start.
         send(&mut app, BuilderMsg::Weekday(5));
         send(&mut app, BuilderMsg::Weekday(6));
-        send(&mut app, BuilderMsg::StartDate("2026-11-02".into()));
+        // The start date typed as the browser's date input shows it.
+        send(
+            &mut app,
+            BuilderMsg::DateText(DateTarget::Start, "11/02/2026".into()),
+        );
         send(&mut app, BuilderMsg::Driver(Driver::Days));
         send(&mut app, BuilderMsg::Draft(Field::Days, "4".into()));
         let (name, args) = app.plan_call().unwrap();

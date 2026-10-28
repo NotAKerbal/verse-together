@@ -107,4 +107,27 @@ fn write_guides(root: &std::path::Path) {
         out + &files,
     )
     .unwrap();
+    // The website's book art for the Library's volume pages (`getScriptureBookArt`).
+    let art = root.join("public/art/books");
+    println!("cargo:rerun-if-changed={}", art.display());
+    let mut names: Vec<_> = fs::read_dir(&art)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "webp"))
+        .collect();
+    names.sort();
+    let mut books = String::from("pub static BOOK_ART: &[(&str, &[u8])] = &[\n");
+    for path in names {
+        let stem = path.file_stem().unwrap().to_str().unwrap().to_string();
+        books.push_str(&format!(
+            "    ({stem:?}, include_bytes!({:?})),\n",
+            path.display().to_string()
+        ));
+    }
+    books.push_str("];\n");
+    fs::write(
+        PathBuf::from(env::var("OUT_DIR").unwrap()).join("book_art.rs"),
+        books,
+    )
+    .unwrap();
 }

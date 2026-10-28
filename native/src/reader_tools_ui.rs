@@ -1,10 +1,12 @@
 // The reader tools' views: the side panel (study paths, Explore a word, lesson resources), study path markers,
 // other Bibles under each verse with their changed words, JST passages, and Your Bibles in Reader settings.
+use crate::bible_catalog;
 use crate::design::{self, Colors, icon, sans, serif};
 use crate::icons;
 use crate::reader_tools::{
     self, BiblesView, Diff, Guide, HelpBlock, HelpInline, Load, Panel, StudyPath, ToolsMsg,
 };
+use crate::select_text::{Piece, Shown};
 use crate::{App, Message};
 use iced::widget::{
     button, column, container, markdown, rich_text, row, space, span, stack, text, text_input,
@@ -161,99 +163,88 @@ impl App {
             },
         )
     }
-    /// Spans of `kjv[range]` with the reader's highlights drawn on its words.
-    fn marked_spans<'a>(
-        &self,
-        kjv: &str,
-        range: std::ops::Range<usize>,
-        marks: &[(std::ops::Range<usize>, Option<Color>, Option<Color>)],
-        color: Option<Color>,
-    ) -> Vec<iced::widget::text::Span<'a, ()>> {
-        let mut cuts = vec![range.start, range.end];
-        for (r, ..) in marks {
-            for c in [r.start, r.end] {
-                if c > range.start && c < range.end {
-                    cuts.push(c);
+    /// A verse as the reader displays it, for selecting its words: its indent and text, or, read against other
+    /// Bibles in the inline Comparison view, the KJV with each change shown as "KJV / other" (`renderInlineDiff`),
+    /// where only the KJV's own words map back to the verse; side by side, the KJV box's text. `None` for a verse
+    /// read with the JST (its JST wording isn't the text marks are saved on).
+    pub(crate) fn verse_shown(&self, index: usize) -> Option<Shown<'_>> {
+        let verse = self.verses.get(index)?;
+        if self.jst_row(verse.number).is_some() {
+            return None;
+        }
+        let kjv = verse.text.as_str();
+        let comparisons = self.verse_comparisons(verse.number, kjv);
+        let mut shown = Shown::default();
+        if comparisons.is_empty() {
+            let prefix = self.verse_prefix.get(index).map(String::as_str)?;
+            shown.push(Piece::new(prefix), None);
+            shown.push(Piece::new(kjv), Some(0..kjv.len()));
+            return Some(shown);
+        }
+        if self.preferences.side_by_side {
+            shown.push(Piece::new(kjv), Some(0..kjv.len()));
+            return Some(shown);
+        }
+        let p = self.p();
+        let (_, amber) = self.primary_label();
+        let faint = Color { a: 0.35, ..p.ink };
+        let prefix =
+            crate::view::verse_indent(&verse.number.to_string(), self.reading_font(), 14.0);
+        shown.push(Piece::new(prefix), None);
+        for (i, (_, color, other)) in comparisons.iter().enumerate() {
+            if i > 0 {
+                shown.push(Piece::new("  |  ").color(faint), None);
+                shown.map.next_group();
+            }
+            for piece in reader_tools::diff_words(kjv, other) {
+                match piece {
+                    Diff::Same(r) => shown.push(Piece::new(&kjv[r.clone()]), Some(r)),
+                    Diff::Changed(r, changed) => {
+                        let lead = kjv[r.clone()].len() - kjv[r.clone()].trim_start().len();
+                        let start = r.start + lead;
+                        shown.push(Piece::new(" "), None);
+                        if start < r.end {
+                            shown.push(
+                                Piece::new(&kjv[start..r.end]).color(amber),
+                                Some(start..r.end),
+                            );
+                        } else {
+                            shown.push(Piece::new("-").color(faint), None);
+                        }
+                        shown.push(Piece::new(" / ").color(Color { a: 0.4, ..p.ink }), None);
+                        shown.push(
+                            if changed.is_empty() {
+                                Piece::new("-").color(faint)
+                            } else {
+                                Piece::new(changed).color(*color)
+                            },
+                            None,
+                        );
+                        shown.push(Piece::new(" "), None);
+                    }
                 }
             }
         }
-        cuts.sort_unstable();
-        cuts.dedup();
-        cuts.windows(2)
-            .map(|w| {
-                let mut sp = span(kjv[w[0]..w[1]].to_string());
-                if let Some(c) = color {
-                    sp = sp.color(c);
-                }
-                if let Some((_, highlight, underline)) = marks
-                    .iter()
-                    .find(|(r, ..)| r.start <= w[0] && r.end >= w[1])
-                {
-                    if let Some(h) = highlight {
-                        sp = sp.background(*h);
-                    }
-                    if let Some(u) = underline {
-                        sp = sp.underline(true).color(*u);
-                    }
-                }
-                sp
-            })
-            .collect()
+        Some(shown)
     }
     /// A verse read against other Bibles, in the reader's Comparison view: inline (the KJV with each change shown
-    /// as "KJV / other") or side by side (`ChapterReader`'s comparison rows).
+    /// as "KJV / other") or side by side (`ChapterReader`'s comparison rows). The KJV's words select and mark as in
+    /// a plain verse; the other Bibles' words are never taken.
     pub(crate) fn comparison_text<'a>(
         &'a self,
+        index: usize,
         prefix: &str,
-        kjv: &'a str,
         comparisons: Vec<(String, Color, &'a str)>,
-        marks: Vec<(std::ops::Range<usize>, Option<Color>, Option<Color>)>,
         font: iced::Font,
     ) -> Element<'a, Message> {
         let p = self.p();
         let (primary, amber) = self.primary_label();
-        let faint = Color { a: 0.35, ..p.ink };
-        let line = iced::widget::text::LineHeight::Absolute(24.0.into());
+        let line = 24.0;
+        let Some(shown) = self.verse_shown(index) else {
+            return space().into();
+        };
         if !self.preferences.side_by_side {
-            let mut spans: Vec<iced::widget::text::Span<'_, ()>> = vec![span(prefix.to_string())];
-            for (i, (_, color, other)) in comparisons.iter().enumerate() {
-                if i > 0 {
-                    spans.push(span("  |  ").color(faint));
-                }
-                for piece in reader_tools::diff_words(kjv, other) {
-                    match piece {
-                        Diff::Same(r) => spans.extend(self.marked_spans(kjv, r, &marks, None)),
-                        Diff::Changed(r, changed) => {
-                            let lead = kjv[r.clone()].len() - kjv[r.clone()].trim_start().len();
-                            let start = r.start + lead;
-                            spans.push(span(" "));
-                            if start < r.end {
-                                spans.extend(self.marked_spans(
-                                    kjv,
-                                    start..r.end,
-                                    &marks,
-                                    Some(amber),
-                                ));
-                            } else {
-                                spans.push(span("-").color(faint));
-                            }
-                            spans.push(span(" / ").color(Color { a: 0.4, ..p.ink }));
-                            spans.push(if changed.is_empty() {
-                                span("-").color(faint)
-                            } else {
-                                span(changed).color(*color)
-                            });
-                            spans.push(span(" "));
-                        }
-                    }
-                }
-            }
-            return rich_text(spans)
-                .size(14)
-                .font(font)
-                .line_height(line)
-                .width(Fill)
-                .into();
+            return self.verse_words(index, shown, font, 14.0, line);
         }
         let wide = self.window_width >= 768.0;
         let shade = if self.preferences.dark {
@@ -279,16 +270,16 @@ impl App {
             let base = cell(
                 primary.to_string(),
                 amber,
-                rich_text(self.marked_spans(kjv, 0..kjv.len(), &marks, None))
-                    .size(14)
-                    .font(font)
-                    .line_height(line)
-                    .into(),
+                self.verse_words(index, shown.clone(), font, 14.0, line),
             );
             let them = cell(
                 label,
                 color,
-                text(other).size(14).font(font).line_height(line).into(),
+                text(other)
+                    .size(14)
+                    .font(font)
+                    .line_height(iced::widget::text::LineHeight::Absolute(line.into()))
+                    .into(),
             );
             let pair: Element<'_, Message> = if wide {
                 row![base, them].spacing(8).into()
@@ -306,9 +297,14 @@ impl App {
                 }
             }));
         }
-        column![text(prefix.to_string()).size(14).line_height(line), boxes]
-            .spacing(4)
-            .into()
+        column![
+            text(prefix.to_string())
+                .size(14)
+                .line_height(iced::widget::text::LineHeight::Absolute(line.into())),
+            boxes
+        ]
+        .spacing(4)
+        .into()
     }
     /// The website's `compareColorClasses`, by the Bible's place among those shown.
     pub(crate) fn compare_color(&self, index: usize) -> Color {
@@ -1296,102 +1292,33 @@ impl App {
                 );
             }
             BiblesView::Add => {
+                let choosing = self.tools.choosing_language
+                    && matches!(self.tools.catalog, Some(Load::Ready(_)));
                 c = c.push(
                     row![
-                        link_button(p, "‹ Back", msg(ToolsMsg::BiblesView(BiblesView::List))),
+                        link_button(
+                            p,
+                            "‹ Back",
+                            if choosing {
+                                msg(ToolsMsg::ChooseLanguage(false))
+                            } else {
+                                msg(ToolsMsg::BiblesView(BiblesView::List))
+                            }
+                        ),
                         space::horizontal(),
-                        self.setting_label("Add a Bible"),
+                        self.setting_label(if choosing {
+                            "Choose a language"
+                        } else {
+                            "Add a Bible"
+                        }),
                     ]
                     .align_y(Center),
                 );
-                c = c.push(
-                    text_input("Search Bibles or languages", &self.tools.catalog_query)
-                        .on_input(|q| msg(ToolsMsg::CatalogQuery(q)))
-                        .padding([7, 10])
-                        .size(13),
-                );
-                let saved = |id: &str| {
-                    self.preferences
-                        .bibles
-                        .iter()
-                        .any(|b| b.id.eq_ignore_ascii_case(id))
-                };
-                let query = self.tools.catalog_query.trim().to_lowercase();
-                let mut list = column![].spacing(2);
-                let mut shown = 0;
-                let featured = reader_tools::featured_bibles();
-                let catalog: Vec<reader_tools::FavoriteBible> = match &self.tools.catalog {
-                    Some(Load::Ready(all)) => all.iter().map(|t| t.favorite()).collect(),
-                    _ => vec![],
-                };
-                for bible in featured.iter().chain(
-                    catalog
-                        .iter()
-                        .filter(|b| !featured.iter().any(|f| f.id.eq_ignore_ascii_case(&b.id))),
-                ) {
-                    let haystack = format!(
-                        "{} {} {} {}",
-                        bible.label,
-                        bible.id,
-                        bible.language.clone().unwrap_or_default(),
-                        bible.abbreviation.clone().unwrap_or_default()
-                    )
-                    .to_lowercase();
-                    let english = bible.language.as_deref() == Some("English");
-                    if (query.is_empty() && !english)
-                        || (!query.is_empty() && !haystack.contains(&query))
-                        || saved(&bible.id)
-                    {
-                        continue;
-                    }
-                    shown += 1;
-                    if shown > 60 {
-                        break;
-                    }
-                    list = list.push(
-                        button(
-                            column![
-                                text(bible.label.clone())
-                                    .size(13)
-                                    .font(sans(font::Weight::Medium)),
-                                text(
-                                    [bible.language.clone(), bible.abbreviation.clone()]
-                                        .into_iter()
-                                        .flatten()
-                                        .collect::<Vec<_>>()
-                                        .join(" · ")
-                                )
-                                .size(11)
-                                .color(p.faint),
-                            ]
-                            .spacing(1),
-                        )
-                        .padding([6, 8])
-                        .width(Fill)
-                        .on_press(msg(ToolsMsg::SaveBible(bible.clone())))
-                        .style(design::quiet(p)),
-                    );
-                }
-                c = c.push(self.scroll(list).height(Length::Fixed(220.0)));
-                match &self.tools.catalog {
-                    Some(Load::Loading) => c = c.push(muted(p, "Loading the catalog…")),
-                    Some(Load::Failed(e)) => {
-                        c = c.push(
-                            column![
-                                text(format!("The catalog couldn't be loaded: {e}"))
-                                    .size(12)
-                                    .color(p.accent),
-                                link_button(
-                                    p,
-                                    "Try again",
-                                    msg(ToolsMsg::BiblesView(BiblesView::Add))
-                                ),
-                            ]
-                            .spacing(4),
-                        )
-                    }
-                    _ => {}
-                }
+                c = c.push(if choosing {
+                    self.language_chooser()
+                } else {
+                    self.catalog_picker()
+                });
             }
         }
         c = c.push(
@@ -1419,6 +1346,309 @@ impl App {
             );
         }
         Some(c.into())
+    }
+    /// The language chooser's options: "All languages" (while the search fits it), then the matching languages.
+    pub(crate) fn language_options(&self) -> Vec<bible_catalog::Language> {
+        let Some(Load::Ready(catalog)) = &self.tools.catalog else {
+            return vec![];
+        };
+        let query = self.tools.language_query.trim().to_lowercase();
+        let mut options = vec![];
+        if "all languages".starts_with(&query) {
+            options.push(bible_catalog::Language {
+                id: bible_catalog::ALL_LANGUAGES.into(),
+                label: "All languages".into(),
+                native_name: None,
+                count: catalog.len(),
+            });
+        }
+        options.extend(bible_catalog::search_languages(
+            &bible_catalog::languages(catalog),
+            &self.tools.language_query,
+        ));
+        options
+    }
+    /// `LanguageChooser`: a search, then languages by how many Bibles each has, the current one checked.
+    fn language_chooser(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let options = self.language_options();
+        let mut c = column![
+            text_input(
+                "Search languages, e.g. Spanish or español",
+                &self.tools.language_query
+            )
+            .id("language-search")
+            .on_input(|q| msg(ToolsMsg::LanguageQuery(q)))
+            .on_submit(msg(ToolsMsg::LanguageFirst))
+            .padding([9, 12])
+            .size(13)
+        ]
+        .spacing(10);
+        if options.is_empty() {
+            c = c.push(muted(
+                p,
+                format!(
+                    "No language matches “{}”.",
+                    self.tools.language_query.trim()
+                ),
+            ));
+            return c.into();
+        }
+        let mut list = column![].spacing(0);
+        for (i, l) in options.iter().take(self.tools.language_limit).enumerate() {
+            let current = l.id == self.tools.catalog_language;
+            if i > 0 {
+                list = list.push(divider(p));
+            }
+            list = list.push(
+                button(
+                    row![
+                        text(bible_catalog::language_display(l))
+                            .size(13)
+                            .width(Fill),
+                        text(if current { "✓" } else { "" }).size(13),
+                    ]
+                    .align_y(Center),
+                )
+                .padding([9, 14])
+                .width(Fill)
+                .on_press(msg(ToolsMsg::CatalogLanguage(l.id.clone())))
+                .style(design::quiet(p)),
+            );
+        }
+        let rows = options.len().min(self.tools.language_limit) as f32;
+        c = c.push(
+            self.scroll(boxed(p, list))
+                .height(Length::Fixed((rows * 39.0 + 2.0).min(260.0))),
+        );
+        if options.len() > self.tools.language_limit {
+            c = c.push(more_button(p, msg(ToolsMsg::LanguagesMore)));
+        }
+        c.into()
+    }
+    /// `TranslationCatalogPicker`: a search, the language (with Change ›), the featured English Bibles until a
+    /// search, a language or "Browse all English Bibles" asks for more, then the matching Bibles 40 at a time.
+    fn catalog_picker(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let catalog: &[reader_tools::Translation] = match &self.tools.catalog {
+            Some(Load::Ready(all)) => all,
+            _ => &[],
+        };
+        let ready = matches!(self.tools.catalog, Some(Load::Ready(_)));
+        let language = self.tools.catalog_language.as_str();
+        let query = self.tools.catalog_query.as_str();
+        let language_name = if language == bible_catalog::ALL_LANGUAGES {
+            "All languages".to_string()
+        } else {
+            bible_catalog::languages(catalog)
+                .into_iter()
+                .find(|l| l.id == language)
+                .map(|l| l.label)
+                .unwrap_or_else(|| {
+                    if language == bible_catalog::DEFAULT_LANGUAGE {
+                        "English".into()
+                    } else {
+                        language.into()
+                    }
+                })
+        };
+        let featured_only = language == bible_catalog::DEFAULT_LANGUAGE
+            && query.trim().is_empty()
+            && !self.tools.catalog_browsing;
+        let saved = |id: &str| {
+            self.preferences
+                .bibles
+                .iter()
+                .any(|b| b.id.eq_ignore_ascii_case(id))
+        };
+        // (Bible to save, title, subtitle).
+        let rows: Vec<(reader_tools::FavoriteBible, String, String)> = if featured_only {
+            reader_tools::featured_bibles()
+                .into_iter()
+                .map(|f| {
+                    let title = f.label.clone();
+                    let sub = f.abbreviation.clone().unwrap_or_default();
+                    (f, title, sub)
+                })
+                .collect()
+        } else {
+            bible_catalog::filter(catalog, language, query)
+                .into_iter()
+                .map(|t| {
+                    let featured = reader_tools::featured_bibles()
+                        .into_iter()
+                        .find(|f| f.id == t.id);
+                    let mut bible = t.favorite();
+                    let (title, abbr) = match &featured {
+                        Some(f) => (f.label.clone(), f.abbreviation.clone()),
+                        None => (t.title(), t.short_name.clone()),
+                    };
+                    bible.label = title.clone();
+                    bible.abbreviation = abbr.clone();
+                    let sub = [
+                        abbr,
+                        bible_catalog::native_name(t, &title),
+                        (language == bible_catalog::ALL_LANGUAGES).then(|| t.language_label()),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                    (bible, title, sub)
+                })
+                .collect()
+        };
+        let mut c = column![
+            text_input("Search by name or abbreviation", query)
+                .on_input(|q| msg(ToolsMsg::CatalogQuery(q)))
+                .padding([9, 12])
+                .size(13),
+            button(
+                row![
+                    text("Language: ").size(13).color(p.muted),
+                    text(language_name.clone())
+                        .size(13)
+                        .font(sans(font::Weight::Medium))
+                        .width(Fill),
+                    text("Change ›").size(12).color(p.muted),
+                ]
+                .align_y(Center),
+            )
+            .padding([9, 12])
+            .width(Fill)
+            .on_press_maybe(ready.then(|| msg(ToolsMsg::ChooseLanguage(true))))
+            .style(design::outlined(p, 8.0)),
+        ]
+        .spacing(10);
+        if let Some(Load::Failed(_)) = &self.tools.catalog {
+            c = c.push(boxed(
+                p,
+                row![
+                    text("The full list of Bibles couldn’t load.")
+                        .size(12)
+                        .width(Fill),
+                    button(text("Try again").size(12).font(sans(font::Weight::Medium)))
+                        .padding([6, 12])
+                        .on_press(msg(ToolsMsg::BiblesView(BiblesView::Add)))
+                        .style(design::outlined(p, 8.0)),
+                ]
+                .padding(10)
+                .align_y(Center),
+            ));
+        }
+        let shown = if featured_only {
+            rows.len()
+        } else {
+            rows.len().min(self.tools.catalog_limit)
+        };
+        if !rows.is_empty() {
+            let mut list = column![].spacing(0);
+            for (i, (bible, title, sub)) in rows.iter().take(shown).enumerate() {
+                if i > 0 {
+                    list = list.push(divider(p));
+                }
+                let added = saved(&bible.id);
+                let mut info = column![
+                    text(title.clone())
+                        .size(13)
+                        .font(sans(font::Weight::Medium))
+                ]
+                .spacing(2);
+                if !sub.is_empty() {
+                    info = info.push(text(sub.clone()).size(11.5).color(p.faint));
+                }
+                list = list.push(
+                    row![
+                        info.width(Fill),
+                        if added {
+                            Element::from(text("Added").size(12).color(p.faint))
+                        } else {
+                            button(text("Add").size(12).font(sans(font::Weight::Medium)))
+                                .padding([6, 12])
+                                .on_press(msg(ToolsMsg::SaveBible(bible.clone())))
+                                .style(design::outlined(p, 8.0))
+                                .into()
+                        }
+                    ]
+                    .spacing(12)
+                    .padding([10, 14])
+                    .align_y(Center),
+                );
+            }
+            c = c.push(
+                self.scroll(boxed(p, list))
+                    .height(Length::Fixed((shown as f32 * 56.0 + 2.0).min(280.0))),
+            );
+        }
+        if matches!(self.tools.catalog, Some(Load::Loading)) && !featured_only {
+            c = c.push(muted(p, "Loading the catalog…"));
+        }
+        if featured_only && ready {
+            c = c.push(
+                button(
+                    iced::widget::rich_text::<(), _, _, _>([
+                        span("Browse all English Bibles").underline(true)
+                    ])
+                    .size(12)
+                    .font(sans(font::Weight::Medium)),
+                )
+                .padding([6, 0])
+                .width(Fill)
+                .on_press(msg(ToolsMsg::BrowseAllEnglish))
+                .style(|_, _| button::Style::default()),
+            );
+        }
+        if !featured_only && rows.len() > self.tools.catalog_limit {
+            c = c.push(more_button(p, msg(ToolsMsg::CatalogMore)));
+        }
+        if ready && rows.is_empty() {
+            let mut none = column![
+                text(format!(
+                    "No Bibles match “{}”{}.",
+                    query.trim(),
+                    if language == bible_catalog::ALL_LANGUAGES {
+                        String::new()
+                    } else {
+                        format!(" in {language_name}")
+                    }
+                ))
+                .size(13)
+            ]
+            .spacing(6);
+            if bible_catalog::licensed_only(query) {
+                none = none.push(
+                    text("NRSVue, NIV, NLT, CSB and ESV need a publisher’s license, so they aren’t available here.")
+                        .size(12)
+                        .color(p.muted),
+                );
+            }
+            if language != bible_catalog::ALL_LANGUAGES
+                && !query.trim().is_empty()
+                && !bible_catalog::filter(catalog, bible_catalog::ALL_LANGUAGES, query).is_empty()
+            {
+                none = none.push(link_button(
+                    p,
+                    "Search all languages",
+                    msg(ToolsMsg::CatalogLanguage(
+                        bible_catalog::ALL_LANGUAGES.into(),
+                    )),
+                ));
+            }
+            c = c.push(
+                container(none)
+                    .padding(14)
+                    .width(Fill)
+                    .style(move |_| container::Style {
+                        border: Border {
+                            color: p.rule,
+                            width: 1.0,
+                            radius: 12.0.into(),
+                        },
+                        ..Default::default()
+                    }),
+            );
+        }
+        c.into()
     }
     /// The website's `marker-switch`.
     pub(crate) fn switch<'a>(&self, on: bool, m: Message) -> Element<'a, Message> {
@@ -1499,6 +1729,30 @@ fn inline_spans<'a>(
             }
         }
     }
+}
+fn divider<'a>(p: Colors) -> Element<'a, Message> {
+    container(space())
+        .height(1)
+        .width(Fill)
+        .style(move |_| container::Style {
+            background: Some(p.rule.into()),
+            ..Default::default()
+        })
+        .into()
+}
+fn more_button<'a>(p: Colors, m: Message) -> Element<'a, Message> {
+    button(
+        text("Show more")
+            .size(12)
+            .font(sans(font::Weight::Medium))
+            .center()
+            .width(Fill),
+    )
+    .padding(10)
+    .width(Fill)
+    .on_press(m)
+    .style(design::outlined(p, 8.0))
+    .into()
 }
 fn strip_tags(text: &str) -> String {
     let tag = regex::Regex::new(r"(?s)<[^>]*>").unwrap();

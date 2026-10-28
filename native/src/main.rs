@@ -5,6 +5,7 @@
 mod account;
 mod account_ui;
 mod anim;
+mod bible_catalog;
 mod cloud;
 mod design;
 mod guide_marks;
@@ -20,18 +21,21 @@ mod jump;
 mod lesson_page;
 mod lessons;
 mod lessons_ui;
+mod library_ui;
 mod mark_layer;
 mod marks;
-mod md_highlight;
+mod md_editor;
+mod md_live;
 mod plan_model;
 mod plans;
+mod popup;
 mod reader_tools;
 mod reader_tools_ui;
 mod reveal;
-mod rich_select;
-mod selectable;
+mod select_text;
 mod store;
 mod sync;
+mod text_selection;
 mod ticker;
 #[cfg(test)]
 mod ui_tests;
@@ -112,6 +116,8 @@ fn data_dir() -> PathBuf {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Screen {
     Reader,
+    /// The website's `/browse` Library: its card grid, a volume's books, a book's chapters.
+    Library,
     Journal,
     Guides,
     /// The website's `/account` Settings.
@@ -120,6 +126,22 @@ enum Screen {
     SignIn,
     /// The website's `/plans`.
     Plans,
+}
+/// A verse a mark is put on: where it is, the words (or the whole verse), its text and what it has now.
+pub(crate) struct MarkTarget {
+    pub location: Location,
+    pub verse: u32,
+    pub range: Option<TextRange>,
+    pub text: String,
+    pub annotation: Option<Annotation>,
+}
+impl MarkTarget {
+    fn marks(&self) -> marks::VerseMarks {
+        self.annotation
+            .as_ref()
+            .map(|a| a.marks.clone())
+            .unwrap_or_default()
+    }
 }
 /// Panels opened from the header. Only one is open at a time, as on the website.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -149,8 +171,10 @@ enum Message {
     LibraryVolume(String),
     LibraryBook(Option<String>),
     SelectVerse(u32),
-    SelectText(usize, text_editor::Action),
-    CopyWords(usize),
+    /// A press, drag or release in selectable text: its area, paragraph and byte offset.
+    Pick(text_selection::Area, usize, usize, select_text::Phase),
+    /// The pointer came up anywhere: a drag selection ends.
+    EndDrag,
     ClearSelection,
     ToggleLog,
     Copy,
@@ -191,6 +215,9 @@ enum Message {
     Lesson(lessons_ui::LessonMsg),
     JumpTo(Option<u32>),
     OpenLink(String),
+    /// A link Ctrl- or ⌘-clicked in a journal note (one `safe_note_url` allows): a page of the website, or an
+    /// http(s)/mailto address.
+    NoteLink(String),
     DismissError,
     Retry,
     Journal(journal_ui::JournalMsg),
@@ -198,6 +225,7 @@ enum Message {
     Tools(reader_tools::ToolsMsg),
     Guide(guide_marks::GuideMsg),
     Plans(plans::PlansMsg),
+    Library(library_ui::LibraryMsg),
     /// Start a journal note quoting the selected verses.
     VersesInJournal,
     /// Copy the website's share link for the selected verses (`/share/...`, its "Focus scripture" page).
@@ -216,12 +244,13 @@ struct App {
     preferences: Preferences,
     books: Vec<Book>,
     verses: Vec<Verse>,
-    /// Each verse's words for native selection: an indent the inline verse number sits in, then the verse text.
-    verse_content: Vec<text_editor::Content>,
+    /// Each verse's indent, which the inline verse number sits in, before its text.
     verse_prefix: Vec<String>,
     annotations: Vec<Annotation>,
-    /// Words selected inside one verse: its index and the UTF-16 range of its text.
-    word_selection: Option<(usize, TextRange)>,
+    /// Words selected in the reader, verse by verse: each verse's index and the UTF-16 range of its text.
+    word_selection: Vec<(usize, TextRange)>,
+    /// A text selection being made or made, in the reader, a lesson's chapters or a guide.
+    drag: Option<text_selection::Drag>,
     styles_open: bool,
     style_kind: MarkKind,
     custom_color: String,
@@ -253,6 +282,11 @@ struct App {
     account: account::AccountState,
     tools: reader_tools::ToolsState,
     plans: plans::PlansState,
+    /// The Library page shown, the card under the pointer, and whether browsing was last left in the reader.
+    library: library_ui::LibraryPage,
+    library_hover: Option<String>,
+    library_read: Vec<u32>,
+    browse_in_reader: bool,
     /// The verse a navigation jumped to, and when: extras that load just after (other Bibles, JST) re-anchor it.
     jumped: Option<(u32, Instant)>,
     /// The clock the header's transitions are drawn at; advanced by window frames only while one runs.
@@ -308,10 +342,10 @@ impl App {
             preferences,
             books,
             verses: vec![],
-            verse_content: vec![],
             verse_prefix: vec![],
             annotations: vec![],
-            word_selection: None,
+            word_selection: vec![],
+            drag: None,
             styles_open: false,
             style_kind: MarkKind::Highlight,
             custom_color: String::new(),
@@ -343,6 +377,10 @@ impl App {
             account: account::AccountState::new(directory),
             tools: reader_tools::ToolsState::new(),
             plans: plans::PlansState::default(),
+            library: library_ui::LibraryPage::Home,
+            library_hover: None,
+            library_read: vec![],
+            browse_in_reader: true,
             jumped: None,
             now,
             motion: header::Motion::new(0, label_widths, !anim::reduced_motion(), now),
@@ -417,6 +455,18 @@ impl App {
         } else {
             Subscription::none()
         };
+        // While a selection is dragged, the button coming up anywhere (even outside the text) ends it.
+        let drag = if self.drag.as_ref().is_some_and(|d| d.dragging) {
+            iced::event::listen_with(|event, _, _| match event {
+                Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+                    Some(Message::EndDrag)
+                }
+                _ => None,
+            })
+        } else {
+            Subscription::none()
+        };
+        let events = Subscription::batch([events, drag]);
         if self.motion.is_animating(self.now) || self.journal.motion.is_animating(self.now) {
             Subscription::batch([
                 events,
@@ -470,13 +520,8 @@ impl App {
                     .clone()
             })
             .collect();
-        self.word_selection = None;
-        self.verse_content = self
-            .verses
-            .iter()
-            .zip(&self.verse_prefix)
-            .map(|(v, prefix)| text_editor::Content::with_text(&format!("{prefix}{}", v.text)))
-            .collect();
+        // Displayed offsets follow the indent, so a selection made before doesn't carry over.
+        self.clear_text_selection(text_selection::Area::Reader);
     }
     fn load_chapter(&mut self) {
         if let Some(s) = &self.store {
@@ -583,6 +628,14 @@ impl App {
                 .set_active(header::screen_index(screen), self.label_widths, self.now);
         }
         self.screen = screen;
+        match screen {
+            Screen::Reader => self.browse_in_reader = true,
+            // As the website's `browse:last-location`: the Library's own landing page isn't remembered.
+            Screen::Library if self.library != library_ui::LibraryPage::Home => {
+                self.browse_in_reader = false
+            }
+            _ => {}
+        }
     }
     fn begin_search(&mut self) -> Task<Message> {
         self.search_generation += 1;
@@ -636,47 +689,86 @@ impl App {
             .find(|v| v.number == verse)
             .map(|v| v.text.as_str())
     }
-    /// What a mark applies to: the selected words, or each selected verse whole.
-    fn mark_targets(&self, words: bool) -> Vec<(u32, Option<TextRange>)> {
+    /// What a mark applies to: the selected words, or each selected verse whole; in the reader's chapter, or on a
+    /// lesson page in the week's chapters (a selection there may run across a chapter break).
+    pub(crate) fn mark_targets(&self, words: bool) -> Vec<MarkTarget> {
+        let target =
+            |location: &Location, verse: u32, range, text: &str, list: &[Annotation]| MarkTarget {
+                location: location.clone(),
+                verse,
+                range,
+                text: text.to_string(),
+                annotation: list.iter().find(|a| a.verse == verse).cloned(),
+            };
+        if self.screen == Screen::Guides {
+            let Some(open) = &self.lessons.open else {
+                return vec![];
+            };
+            let lesson = |c: usize, v: u32, range: Option<TextRange>| {
+                let chapter = open.companion.chapters.get(c)?;
+                let scripture = open.scripture.get(c)?;
+                let verse = scripture.verses.iter().find(|x| x.number == v)?;
+                Some(target(
+                    &chapter.location,
+                    v,
+                    range,
+                    &verse.text,
+                    &scripture.annotations,
+                ))
+            };
+            return if words {
+                self.lessons
+                    .words
+                    .iter()
+                    .filter_map(|(c, v, r)| lesson(*c, *v, Some(r.clone())))
+                    .collect()
+            } else {
+                self.lessons
+                    .selected
+                    .iter()
+                    .filter_map(|(c, v)| lesson(*c, *v, None))
+                    .collect()
+            };
+        }
+        let here = &self.preferences.last;
         if words {
             self.word_selection
                 .iter()
                 .filter_map(|(index, range)| {
-                    Some((self.verses.get(*index)?.number, Some(range.clone())))
+                    let v = self.verses.get(*index)?;
+                    Some(target(
+                        here,
+                        v.number,
+                        Some(range.clone()),
+                        &v.text,
+                        &self.annotations,
+                    ))
                 })
                 .collect()
         } else {
-            self.selected.iter().map(|v| (*v, None)).collect()
+            self.selected
+                .iter()
+                .filter_map(|n| {
+                    let text = self.verse_text(*n)?;
+                    Some(target(here, *n, None, text, &self.annotations))
+                })
+                .collect()
         }
     }
     /// Whether every part of the target already has this mark in this color.
     pub(crate) fn mark_applied(&self, kind: MarkKind, color: &MarkColor, words: bool) -> bool {
         let targets = self.mark_targets(words);
         !targets.is_empty()
-            && targets.iter().all(|(verse, range)| {
-                let marks = self
-                    .annotations
-                    .iter()
-                    .find(|a| a.verse == *verse)
-                    .map(|a| a.marks.clone())
-                    .unwrap_or_default();
-                let text = self.verse_text(*verse).unwrap_or("");
-                marks::colors_over(&marks, text, kind, range.as_ref())
+            && targets.iter().all(|t| {
+                marks::colors_over(&t.marks(), &t.text, kind, t.range.as_ref())
                     .iter()
                     .all(|c| c.as_ref() == Some(color))
             })
     }
     /// Whether any part of the target has a mark of this kind.
     pub(crate) fn kind_applied(&self, kind: MarkKind, words: bool) -> bool {
-        self.mark_targets(words).iter().any(|(verse, range)| {
-            let marks = self
-                .annotations
-                .iter()
-                .find(|a| a.verse == *verse)
-                .map(|a| a.marks.clone())
-                .unwrap_or_default();
-            let text = self.verse_text(*verse).unwrap_or("");
-            marks::colors_over(&marks, text, kind, range.as_ref())
+        self.mark_targets(words).iter().any(|t| {
+            marks::colors_over(&t.marks(), &t.text, kind, t.range.as_ref())
                 .iter()
                 .any(Option::is_some)
         })
@@ -685,94 +777,45 @@ impl App {
         if !self.save_note() {
             return;
         }
-        let mut updates = Vec::new();
-        for (verse, range) in self.mark_targets(words) {
-            let Some(text) = self.verse_text(verse) else {
-                continue;
-            };
-            if let Some(range) = &range
-                && let Some(problem) = marks::range_problem(text, range)
+        let mut by_chapter: Vec<(Location, Vec<Annotation>)> = vec![];
+        for t in self.mark_targets(words) {
+            if let Some(range) = &t.range
+                && let Some(problem) = marks::range_problem(&t.text, range)
             {
                 self.error = Some(problem.into());
                 return;
             }
-            let mut a = self
-                .annotations
-                .iter()
-                .find(|a| a.verse == verse)
-                .cloned()
-                .unwrap_or(Annotation {
-                    verse,
-                    ..Default::default()
-                });
-            a.marks = marks::apply(&a.marks, &patch, text, range.as_ref());
-            updates.push(a);
+            let mut a = t.annotation.clone().unwrap_or(Annotation {
+                verse: t.verse,
+                ..Default::default()
+            });
+            a.marks = marks::apply(&a.marks, &patch, &t.text, t.range.as_ref());
+            match by_chapter.iter_mut().find(|(l, _)| *l == t.location) {
+                Some((_, list)) => list.push(a),
+                None => by_chapter.push((t.location.clone(), vec![a])),
+            }
         }
         if let Some(store) = &mut self.store {
-            let result = store.save_annotations(&self.preferences.last, &updates);
-            if self.report(result).is_none() {
-                return;
+            for (location, updates) in &by_chapter {
+                let result = store.save_annotations(location, updates);
+                if let Err(e) = result {
+                    self.error = Some(e);
+                    break;
+                }
             }
         }
         self.load_annotations();
+        if self.screen == Screen::Guides {
+            self.reload_lesson_scripture();
+        }
         self.sync_soon();
     }
     fn set_presets(&mut self, presets: Vec<MarkPreset>) {
         self.preferences.mark_presets = Some(marks::normalize_presets(presets));
         self.persist();
     }
-    /// Reads the selected words of a verse after the reader drags or clicks in it.
-    fn track_word_selection(&mut self, index: usize) {
-        let (Some(content), Some(prefix), Some(verse)) = (
-            self.verse_content.get(index),
-            self.verse_prefix.get(index),
-            self.verses.get(index),
-        ) else {
-            return;
-        };
-        let cursor = content.cursor();
-        let range = cursor.selection.and_then(|other| {
-            let (a, b) = (cursor.position.column, other.column);
-            let (a, b) = (a.min(b), a.max(b));
-            let text = verse.text.as_str();
-            let a = a.saturating_sub(prefix.len()).min(text.len());
-            let b = b.saturating_sub(prefix.len()).min(text.len());
-            (a < b && text.is_char_boundary(a) && text.is_char_boundary(b)).then(|| TextRange {
-                start: marks::byte_to_utf16(text, a),
-                end: marks::byte_to_utf16(text, b),
-            })
-        });
-        let range = range.filter(|r| marks::range_problem(&verse.text, r).is_none());
-        // One verse's words at a time: starting a selection elsewhere clears the earlier one.
-        if let Some((previous, _)) = &self.word_selection
-            && *previous != index
-            && range.is_some()
-        {
-            let previous = *previous;
-            if let (Some(v), Some(p)) = (self.verses.get(previous), self.verse_prefix.get(previous))
-            {
-                self.verse_content[previous] =
-                    text_editor::Content::with_text(&format!("{p}{}", v.text));
-            }
-        }
-        match range {
-            Some(range) => self.word_selection = Some((index, range)),
-            None if self
-                .word_selection
-                .as_ref()
-                .is_some_and(|(i, _)| *i == index) =>
-            {
-                self.word_selection = None
-            }
-            None => {}
-        }
-    }
     fn clear_words(&mut self) {
-        if let Some((index, _)) = self.word_selection.take()
-            && let (Some(v), Some(p)) = (self.verses.get(index), self.verse_prefix.get(index))
-        {
-            self.verse_content[index] = text_editor::Content::with_text(&format!("{p}{}", v.text));
-        }
+        self.clear_text_selection(text_selection::Area::Reader);
     }
     /// Opens the journal on today with a new note quoting scripture, linked to where it came from.
     fn write_in_journal(&mut self, source: NoteSource, quote: String) -> Task<Message> {
@@ -817,13 +860,16 @@ impl App {
             .join("\n\n");
         format!("{}\n\n{}", self.selected_reference(), verses)
     }
-    /// Words selected inside a verse, without the indent that holds the verse number.
-    fn selected_words(&self, index: usize) -> Option<String> {
-        let selection = self.verse_content.get(index)?.selection()?;
-        let words = selection.trim_start_matches(view::INDENT_CHARS);
-        (!words.is_empty()).then(|| words.to_string())
+    /// The selected words wherever they are (reader, lesson or guide), for copying.
+    fn selected_text(&self) -> Option<String> {
+        let area = self.drag.as_ref().map(|d| d.area)?;
+        let text = match area {
+            text_selection::Area::Reader => self.reader_selected_text(),
+            text_selection::Area::Lesson => self.lesson_selected_text(),
+            text_selection::Area::Guide => self.guide_selected_text()?,
+        };
+        (!text.trim().is_empty()).then_some(text)
     }
-
     fn toggle_bookmark(&mut self) {
         if !self.save_note() {
             return;
@@ -871,6 +917,7 @@ impl App {
             Message::Tools(message) => return self.update_tools(message),
             Message::Guide(message) => return self.update_guide(message),
             Message::Plans(message) => return self.update_plans(message),
+            Message::Library(message) => return self.update_library(message),
             Message::DismissError => self.error = None,
             Message::Presented => {}
             Message::Frame(now) => self.now = now,
@@ -957,27 +1004,22 @@ impl App {
                     return presented(jump::to_verse(v));
                 }
             }
-            Message::SelectText(index, action) => {
-                if !action.is_edit()
-                    && let Some(content) = self.verse_content.get_mut(index)
-                {
-                    let scrolls = matches!(action, text_editor::Action::Scroll { .. });
-                    content.perform(action);
-                    if !scrolls {
-                        self.track_word_selection(index);
-                    }
-                }
-            }
+            Message::Pick(area, block, at, phase) => return self.pick(area, block, at, phase),
+            Message::EndDrag => return self.end_drag(),
             Message::ClearWords => self.clear_words(),
             Message::QuoteInJournal => {
-                if let Some((index, range)) = self.word_selection.clone()
-                    && let Some(words) = self.selected_words(index)
+                let verses: Vec<u32> = self
+                    .word_selection
+                    .iter()
+                    .filter_map(|(i, _)| Some(self.verses.get(*i)?.number))
+                    .collect();
+                let words = self.reader_selected_text();
+                if let (Some(first), Some(last)) = (verses.first(), verses.last())
+                    && !words.trim().is_empty()
                     && self.save_note()
                 {
-                    let verse = self.verses[index].number;
-                    let source = self.chapter_source(Some((verse, verse)));
+                    let source = self.chapter_source(Some((*first, *last)));
                     let quote = format!("> {}\n>\n> — {}\n\n", words.trim(), source.label);
-                    let _ = range;
                     self.clear_words();
                     return self.write_in_journal(source, quote);
                 }
@@ -1002,10 +1044,8 @@ impl App {
             }
             Message::Journal(message) => return self.update_journal(message),
             Message::CopySelectedWords => {
-                if let Some((index, _)) = &self.word_selection
-                    && let Some(words) = self.selected_words(*index)
-                {
-                    return iced::clipboard::write(words);
+                if !self.word_selection.is_empty() {
+                    return iced::clipboard::write(self.reader_selected_text());
                 }
             }
             Message::QuickMark(i, words) => {
@@ -1066,11 +1106,6 @@ impl App {
             Message::ResetPresets => {
                 self.preferences.mark_presets = None;
                 self.persist();
-            }
-            Message::CopyWords(index) => {
-                if let Some(words) = self.selected_words(index) {
-                    return iced::clipboard::write(words);
-                }
             }
             Message::ClearSelection => {
                 self.clear_selection();
@@ -1218,6 +1253,22 @@ impl App {
                     scrollable::RelativeOffset::START,
                 ));
             }
+            Message::NoteLink(href) => {
+                let Some(href) = md_live::safe_note_url(&href) else {
+                    return Task::none();
+                };
+                if href.starts_with('/') {
+                    // A page of the website: scripture and shared passages open here, other pages in the browser.
+                    return self.update(Message::OpenLink(format!("{}{href}", self.tools.site)));
+                }
+                if href.to_ascii_lowercase().starts_with("mailto:")
+                    && let Err(e) = webbrowser::open(&href)
+                {
+                    self.error = Some(e.to_string());
+                    return Task::none();
+                }
+                return self.update(Message::OpenLink(href));
+            }
             Message::OpenLink(url) => {
                 if let Some((l, v)) = self.scripture_link(&url) {
                     return self.navigate(l, v);
@@ -1259,10 +1310,14 @@ impl App {
                             }
                             return self.update(Message::SaveNote);
                         }
-                        keyboard::Key::Character("c")
-                            if modifiers.command() && !self.selected.is_empty() =>
-                        {
-                            return self.update(Message::Copy);
+                        keyboard::Key::Character("c") if modifiers.command() => {
+                            // Selected words first (as the website copies a text selection), then whole verses.
+                            if let Some(words) = self.selected_text() {
+                                return iced::clipboard::write(words);
+                            }
+                            if !self.selected.is_empty() {
+                                return self.update(Message::Copy);
+                            }
                         }
                         keyboard::Key::Character("j") if modifiers.command() => {
                             return self.update(Message::SetScreen(Screen::Journal));
@@ -1280,7 +1335,11 @@ impl App {
                                 return self.update_guide(guide_marks::GuideMsg::Dismiss);
                             } else if self.focus {
                                 self.focus = false;
-                            } else if self.word_selection.is_some() {
+                            } else if self.screen == Screen::Guides
+                                && !self.lessons.words.is_empty()
+                            {
+                                self.clear_text_selection(text_selection::Area::Lesson);
+                            } else if !self.word_selection.is_empty() {
                                 self.clear_words();
                             } else if !self.selected.is_empty() {
                                 return self.update(Message::ClearSelection);
@@ -1396,6 +1455,8 @@ fn benchmark() {
 #[cfg(test)]
 mod interaction_tests {
     use super::*;
+    use crate::select_text::Phase;
+    use crate::text_selection::Area;
     use std::time::Duration;
     fn directory() -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -1421,12 +1482,11 @@ mod interaction_tests {
     #[test]
     fn selecting_range_marks_every_verse_and_never_edits_scripture() {
         let (mut app, dir) = app();
-        let original = app.verse_content[0].text();
-        let _ = app.update(Message::SelectText(
-            0,
-            text_editor::Action::Edit(text_editor::Edit::Insert('X')),
-        ));
-        assert_eq!(app.verse_content[0].text(), original);
+        let original = app.verses[0].text.clone();
+        // A drag over the words selects them and changes nothing in the text.
+        drag(&mut app, Area::Reader, (0, 0), (0, 40));
+        assert_eq!(app.verses[0].text, original);
+        let _ = app.update(Message::ClearWords);
         let _ = app.update(Message::SelectVerse(2));
         app.modifiers = keyboard::Modifiers::SHIFT;
         let _ = app.update(Message::SelectVerse(5));
@@ -1470,6 +1530,17 @@ mod interaction_tests {
         drop(app);
         std::fs::remove_dir_all(dir).unwrap();
     }
+    /// Presses at one spot of an area, drags to another and lets go, as the pointer would.
+    fn drag(app: &mut App, area: Area, from: (usize, usize), to: (usize, usize)) {
+        let _ = app.update(Message::Pick(
+            area,
+            from.0,
+            from.1,
+            Phase::Press { clicks: 1 },
+        ));
+        let _ = app.update(Message::Pick(area, to.0, to.1, Phase::Drag));
+        let _ = app.update(Message::Pick(area, to.0, to.1, Phase::Release));
+    }
     #[test]
     fn copied_words_never_include_the_verse_number_indent() {
         let (mut app, dir) = app();
@@ -1477,9 +1548,17 @@ mod interaction_tests {
         for size in [store::MIN_FONT_SIZE, 16.0, store::MAX_FONT_SIZE] {
             let _ = app.update(Message::FontSize(size));
             for index in [0, app.verses.len() - 1] {
-                let _ = app.update(Message::SelectText(index, text_editor::Action::SelectAll));
+                // A triple click takes the whole verse paragraph, indent and all; only the words are selected.
+                let _ = app.update(Message::Pick(
+                    Area::Reader,
+                    index,
+                    2,
+                    Phase::Press { clicks: 3 },
+                ));
+                let _ = app.update(Message::EndDrag);
+                assert_eq!(app.reader_selected_text(), app.verses[index].text);
                 assert_eq!(
-                    app.selected_words(index).as_deref(),
+                    app.selected_text().as_deref(),
                     Some(app.verses[index].text.as_str())
                 );
                 // The indent is real layout space, not part of the scripture.
@@ -1487,7 +1566,7 @@ mod interaction_tests {
                 assert!(
                     app.verse_prefix[index]
                         .chars()
-                        .all(|c| view::INDENT_CHARS.contains(&c))
+                        .all(|c| ['\u{2002}', '\u{2009}', '\u{200A}', ' '].contains(&c))
                 );
             }
         }
@@ -1727,7 +1806,7 @@ mod interaction_tests {
     #[test]
     fn the_journal_editor_undoes_and_redoes_like_the_websites() {
         use journal_ui::JournalMsg;
-        use text_editor::{Action, Edit};
+        use md_editor::{Action, Edit};
         let (mut app, dir) = app();
         let _ = app.update(Message::Journal(JournalMsg::New(None)));
         let typed = |app: &mut App, text: &str| {
@@ -1810,26 +1889,22 @@ mod interaction_tests {
         let text = app.verses[index].text.clone();
         let words = "faith is not to have a perfect knowledge";
         let byte = text.find(words).unwrap();
-        // Select the words as a drag would: click before them, then extend over them.
+        // Drag from the end of the words back to their start (a drag runs either way).
         let prefix = app.verse_prefix[index].len();
-        app.verse_content[index].move_to(text_editor::Cursor {
-            position: text_editor::Position {
-                line: 0,
-                column: prefix + byte + words.len(),
-            },
-            selection: Some(text_editor::Position {
-                line: 0,
-                column: prefix + byte,
-            }),
-        });
-        app.track_word_selection(index);
-        let (_, range) = app.word_selection.clone().unwrap();
+        drag(
+            &mut app,
+            Area::Reader,
+            (index, prefix + byte + words.len()),
+            (index, prefix + byte),
+        );
+        assert_eq!(app.word_selection.len(), 1);
+        let (_, range) = app.word_selection[0].clone();
         assert_eq!(
             range.end - range.start,
             words.encode_utf16().count(),
             "UTF-16 units of the selected words"
         );
-        assert_eq!(app.selected_words(index).as_deref(), Some(words));
+        assert_eq!(app.reader_selected_text(), words);
         let _ = app.update(Message::QuickMark(1, true)); // blue highlight
         let marks = &app.annotations[0].marks;
         assert_eq!(marks.highlight, None, "only the words, not the verse");
@@ -1837,12 +1912,366 @@ mod interaction_tests {
         assert_eq!(marks.text_marks[0].text, words);
         assert!(app.mark_applied(MarkKind::Highlight, &MarkColor::Named("blue"), true));
         let _ = app.update(Message::ClearWords);
-        assert!(app.word_selection.is_none());
+        assert!(app.word_selection.is_empty() && app.drag.is_none());
         drop(app);
         let app = App::from_directory(&dir);
         let saved = app.store.as_ref().unwrap().annotations(&alma_32()).unwrap();
         assert_eq!(saved[0].verse, 21);
         assert_eq!(saved[0].marks.text_marks[0].text, words);
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn a_selection_runs_across_verses_and_marks_each_verses_own_words() {
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        let (a, b) = (20, 22); // verses 21 to 23
+        let start = app.verse_prefix[a].len() + app.verses[a].text.find("faith is").unwrap();
+        let end_words: String = app.verses[b]
+            .text
+            .split(' ')
+            .take(4)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let end_words = end_words.as_str();
+        let end = app.verse_prefix[b].len()
+            + app.verses[b].text.find(end_words).unwrap()
+            + end_words.len();
+        drag(&mut app, Area::Reader, (a, start), (b, end));
+        let verses: Vec<u32> = app
+            .word_selection
+            .iter()
+            .map(|(i, _)| app.verses[*i].number)
+            .collect();
+        assert_eq!(verses, [21, 22, 23]);
+        // The middle verse whole, the ends from and to the drag's ends; never an indent.
+        let text = app.reader_selected_text();
+        assert!(text.starts_with("faith is not"));
+        assert!(text.contains(&app.verses[21].text));
+        assert!(text.ends_with(end_words));
+        let _ = app.update(Message::QuickMark(1, true));
+        let marked: Vec<(u32, String)> = app
+            .annotations
+            .iter()
+            .flat_map(|x| {
+                x.marks
+                    .text_marks
+                    .iter()
+                    .map(move |m| (x.verse, m.text.clone()))
+            })
+            .collect();
+        assert_eq!(marked.len(), 3);
+        assert!(marked[0].1.starts_with("faith is not") && marked[0].0 == 21);
+        assert_eq!(marked[1], (22, app.verses[21].text.clone()));
+        assert!(marked[2].1.ends_with(end_words) && marked[2].0 == 23);
+        // Drawn on exactly those words, and the selection is kept after marking (as the website restores it).
+        assert!(app.mark_applied(MarkKind::Highlight, &MarkColor::Named("blue"), true));
+        // Ctrl+C copies the words.
+        assert_eq!(app.selected_text().as_deref(), Some(text.as_str()));
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn words_selected_in_a_comparison_mark_only_the_kjv_words() {
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        let index = 20;
+        let kjv = app.verses[index].text.clone();
+        // Another Bible whose wording differs in the middle of the verse.
+        let other = kjv.replace("perfect knowledge", "complete understanding");
+        app.tools.compare = vec![(
+            "bsb".into(),
+            crate::reader_tools::Load::Ready(vec![Verse {
+                number: 21,
+                text: other,
+            }]),
+        )];
+        for side_by_side in [false, true] {
+            app.preferences.side_by_side = side_by_side;
+            let shown = app.verse_shown(index).unwrap();
+            let display = shown.text();
+            if !side_by_side {
+                // Inline: "KJV / other" with the other Bible's words in the displayed text.
+                assert!(display.contains("perfect knowledge / complete understanding"));
+            }
+            // From "a perfect" through the other Bible's words to "of things".
+            let from = display.find("a perfect").unwrap();
+            let to = display.find("of things").unwrap() + "of things".len();
+            drag(&mut app, Area::Reader, (index, from), (index, to));
+            assert_eq!(app.word_selection.len(), 1);
+            assert_eq!(app.reader_selected_text(), "a perfect knowledge of things");
+            let (_, range) = app.word_selection[0].clone();
+            let units: Vec<u16> = kjv.encode_utf16().collect();
+            assert_eq!(
+                String::from_utf16(&units[range.start..range.end]).unwrap(),
+                "a perfect knowledge of things"
+            );
+            // Only the other Bible's words selected: nothing to mark.
+            if !side_by_side {
+                let o = display.find("complete").unwrap();
+                drag(&mut app, Area::Reader, (index, o), (index, o + 8));
+                assert!(app.word_selection.is_empty());
+            }
+        }
+        // Marked from a comparison, the words are the KJV's, drawn back on the KJV text.
+        app.preferences.side_by_side = false;
+        let shown = app.verse_shown(index).unwrap();
+        let display = shown.text();
+        let from = display.find("a perfect").unwrap();
+        let to = display.find("of things").unwrap() + "of things".len();
+        drag(&mut app, Area::Reader, (index, from), (index, to));
+        let _ = app.update(Message::QuickMark(0, true));
+        let saved = &app.annotations[0];
+        assert_eq!(
+            saved.marks.text_marks[0].text,
+            "a perfect knowledge of things"
+        );
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn a_lesson_selection_across_a_chapter_break_marks_and_quotes_each_chapter() {
+        use crate::lessons_ui::LessonMsg;
+        let (mut app, dir) = app();
+        let _ = app.update(Message::Lesson(LessonMsg::Open("2026-10-26".into())));
+        let _ = app.update(Message::SetScreen(Screen::Guides));
+        let open = app.lessons.open.as_ref().unwrap();
+        let last = open.scripture[0].verses.len() - 1;
+        let first_label = open.companion.chapters[0].location.clone();
+        let next_label = open.companion.chapters[1].location.clone();
+        let end_text = open.scripture[0].verses[last].text.clone();
+        let next_text = open.scripture[1].verses[0].text.clone();
+        let indent = app
+            .lesson_indent(open.scripture[0].verses[last].number)
+            .len();
+        let next_indent = app.lesson_indent(1).len();
+        // From the last verse's fifth word into the next chapter's first verse.
+        let from = indent + end_text.match_indices(' ').nth(3).unwrap().0 + 1;
+        let to = next_indent + next_text.match_indices(' ').nth(2).unwrap().0;
+        drag(
+            &mut app,
+            Area::Lesson,
+            (text_selection::lesson_block(0, last), from),
+            (text_selection::lesson_block(1, 0), to),
+        );
+        assert_eq!(app.lessons.words.len(), 2);
+        assert_eq!(app.lessons.words[0].0, 0);
+        assert_eq!(app.lessons.words[1], (1, 1, app.lessons.words[1].2.clone()));
+        let reference = app.lesson_reference(&app.lesson_selected_verses());
+        assert_eq!(
+            reference,
+            format!(
+                "Jeremiah {}:{}; {}:1",
+                first_label.chapter,
+                last + 1,
+                next_label.chapter
+            )
+        );
+        let _ = app.update(Message::QuickMark(0, true));
+        let store = app.store.as_ref().unwrap();
+        let a = store.annotations(&first_label).unwrap();
+        let b = store.annotations(&next_label).unwrap();
+        assert!(end_text.ends_with(&a[0].marks.text_marks[0].text));
+        assert!(next_text.starts_with(&b[0].marks.text_marks[0].text));
+        assert_eq!(a[0].marks.highlight, None);
+        // Add to note quotes each chapter's words under its own reference and link.
+        let excerpt = app.lesson_excerpt();
+        assert!(excerpt.starts_with(&format!(
+            "**[Jeremiah {}:{}](</browse/oldtestament/jeremiah/{}#v-{}>)**\n> ",
+            first_label.chapter,
+            last + 1,
+            first_label.chapter,
+            last + 1
+        )));
+        assert!(excerpt.contains(&format!(
+            "\n\n**[Jeremiah {}:1](</browse/oldtestament/jeremiah/{}#v-1>)**\n> ",
+            next_label.chapter, next_label.chapter
+        )));
+        // A note on the first selected verse, from the lesson.
+        let _ = app.update(Message::Lesson(LessonMsg::VerseNote));
+        if let Some((.., content)) = &mut app.lessons.note {
+            content.perform(text_editor::Action::Edit(text_editor::Edit::Paste(
+                std::sync::Arc::new("Hope after lament".into()),
+            )));
+        }
+        let _ = app.update(Message::Lesson(LessonMsg::SaveVerseNote));
+        let a = app
+            .store
+            .as_ref()
+            .unwrap()
+            .annotations(&first_label)
+            .unwrap();
+        assert_eq!(a[0].note, "Hope after lament");
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn guide_selections_run_across_paragraphs_and_are_anchored_like_the_website() {
+        use crate::guide_marks::GuideMsg;
+        use crate::lessons_ui::LessonMsg;
+        let (mut app, dir) = app();
+        let _ = app.update(Message::Lesson(LessonMsg::Open("2026-10-26".into())));
+        let open = app.lessons.open.as_ref().unwrap();
+        // Two paragraphs one after the other in the introduction.
+        let part = &open.prose.parts[0];
+        let i = (0..part.blocks.len() - 1)
+            .find(|&i| {
+                let (s0, b0, _) = part.blocks[i];
+                let (s1, b1, _) = part.blocks[i + 1];
+                matches!(
+                    open.prose.blocks[s0][b0].kind,
+                    crate::guide_text::Kind::Paragraph
+                ) && matches!(
+                    open.prose.blocks[s1][b1].kind,
+                    crate::guide_text::Kind::Paragraph
+                )
+            })
+            .unwrap();
+        let (s0, b0, _) = part.blocks[i];
+        let (s1, b1, _) = part.blocks[i + 1];
+        let first = open.prose.blocks[s0][b0].text();
+        let second = open.prose.blocks[s1][b1].text();
+        let from = first.len() - first.split(' ').next_back().unwrap().len();
+        let to = second.find(' ').unwrap();
+        drag(
+            &mut app,
+            Area::Guide,
+            (text_selection::guide_block(0, i), from),
+            (text_selection::guide_block(0, i + 1), to),
+        );
+        let sel = app.lessons.guide.selection.clone().unwrap();
+        assert!(sel.done);
+        let _ = app.update(Message::Guide(GuideMsg::QuickMark(0)));
+        let marks = app
+            .store
+            .as_ref()
+            .unwrap()
+            .guide_marks("2026-10-26")
+            .unwrap();
+        assert_eq!(marks.len(), 1);
+        let anchor = &marks[0].anchor;
+        // The quote runs from the end of one paragraph into the next, across the break between them.
+        assert_eq!(
+            anchor.exact,
+            format!(
+                "{}\n{}",
+                first.split(' ').next_back().unwrap(),
+                second.split(' ').next().unwrap()
+            )
+        );
+        let open = app.lessons.open.as_ref().unwrap();
+        assert_eq!(
+            open.prose.parts[0].resolve(anchor),
+            Some((sel.start, sel.end))
+        );
+        assert_eq!(app.lessons.guide.placed.len(), 1);
+        // The same selection now is that span: the quick mark takes it off again, and an empty span is removed.
+        let _ = app.update(Message::Guide(GuideMsg::QuickMark(0)));
+        assert!(
+            app.store
+                .as_ref()
+                .unwrap()
+                .guide_marks("2026-10-26")
+                .unwrap()
+                .is_empty()
+        );
+        // A drag into another part stays in the part it started in.
+        let _ = app.update(Message::Pick(
+            Area::Guide,
+            text_selection::guide_block(0, i),
+            from,
+            Phase::Press { clicks: 1 },
+        ));
+        let _ = app.update(Message::Pick(
+            Area::Guide,
+            text_selection::guide_block(1, 0),
+            3,
+            Phase::Drag,
+        ));
+        let _ = app.update(Message::EndDrag);
+        assert_eq!(app.lessons.guide.selection.as_ref().map(|s| s.part), None);
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn browse_opens_the_library_and_returns_where_browsing_was_left() {
+        use library_ui::{LibraryMsg, LibraryPage};
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        // From the reader, Browse opens the Library.
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        assert_eq!(app.screen, Screen::Library);
+        assert_eq!(app.library, LibraryPage::Home);
+        // A volume, then a book; Back returns along the way.
+        let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Volume(
+            "bookofmormon".into(),
+        ))));
+        let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Book(
+            "bookofmormon".into(),
+            "alma".into(),
+        ))));
+        assert_eq!(
+            app.library,
+            LibraryPage::Book("bookofmormon".into(), "alma".into())
+        );
+        let _ = app.update(Message::Library(LibraryMsg::Back));
+        assert_eq!(app.library, LibraryPage::Volume("bookofmormon".into()));
+        // The one-book volume opens its book; a one-chapter book opens its chapter in the reader.
+        let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Volume(
+            "doctrineandcovenants".into(),
+        ))));
+        assert_eq!(
+            app.library,
+            LibraryPage::Book("doctrineandcovenants".into(), "doctrineandcovenants".into())
+        );
+        let _ = app.update(Message::Library(LibraryMsg::Back));
+        assert_eq!(app.library, LibraryPage::Home);
+        let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Book(
+            "bookofmormon".into(),
+            "enos".into(),
+        ))));
+        assert_eq!(app.screen, Screen::Reader);
+        assert_eq!(app.preferences.last.book, "enos");
+        // Continue reading opens the chapter left open; from another screen Browse returns to it.
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        let _ = app.update(Message::Library(LibraryMsg::Continue));
+        assert_eq!(
+            (app.screen, app.preferences.last.chapter),
+            (Screen::Reader, 1)
+        );
+        let _ = app.update(Message::SetScreen(Screen::Journal));
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        assert_eq!(app.screen, Screen::Reader);
+        // Left on the Library's landing page, Browse from elsewhere returns to the chapter instead (the website
+        // doesn't remember `/browse` itself); left on a volume or book page, it comes back to that page.
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        let _ = app.update(Message::SetScreen(Screen::Journal));
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        assert_eq!(app.screen, Screen::Reader);
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Volume(
+            "pearl".into(),
+        ))));
+        let _ = app.update(Message::SetScreen(Screen::Guides));
+        let _ = app.update(Message::Library(LibraryMsg::Nav));
+        assert_eq!(
+            (app.screen, app.library.clone()),
+            (Screen::Library, LibraryPage::Volume("pearl".into()))
+        );
+        // A book's page knows its read chapters.
+        let l = alma_32();
+        let source = NoteSource::scripture("Alma", &l, None);
+        app.store
+            .as_mut()
+            .unwrap()
+            .set_read(&l, &source, true)
+            .unwrap();
+        let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Book(
+            "bookofmormon".into(),
+            "alma".into(),
+        ))));
+        assert_eq!(app.library_read, vec![32]);
+        let _ = app.view();
         drop(app);
         std::fs::remove_dir_all(dir).unwrap();
     }

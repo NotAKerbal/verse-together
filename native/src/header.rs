@@ -32,6 +32,9 @@ pub fn measure_labels() -> [f32; 3] {
 }
 /// The navigation link a screen belongs to; Settings and Sign in have none (the website shows no active label).
 pub fn screen_index(screen: Screen) -> Option<usize> {
+    if screen == Screen::Library {
+        return Some(0);
+    }
     NAV_ITEMS.iter().position(|(_, _, s)| *s == screen)
 }
 
@@ -197,6 +200,12 @@ impl App {
             line = line.push(space::horizontal()).push(self.reader_pill());
         } else if self.screen == Screen::Guides && self.lessons.open.is_some() {
             line = line.push(space::horizontal()).push(self.lesson_pill());
+        } else if self.screen == Screen::Library {
+            let right = match self.library_title() {
+                Some(title) => self.selection_header(title),
+                None => self.library_search(),
+            };
+            line = line.push(space::horizontal()).push(right);
         }
         container(line)
             .padding(Padding {
@@ -241,7 +250,11 @@ impl App {
             .padding(0)
             .width(links_widths[i])
             .height(CONTROL)
-            .on_press(Message::SetScreen(*screen))
+            .on_press(if *screen == Screen::Reader {
+                Message::Library(crate::library_ui::LibraryMsg::Nav)
+            } else {
+                Message::SetScreen(*screen)
+            })
             .style(move |_, status| {
                 let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
                 button::Style {
@@ -386,6 +399,49 @@ impl App {
         .height(PILL_HEIGHT)
         .id("nav-pill")
         .style(design::pill(p))
+        .into()
+    }
+
+    /// The Library's search in the header (`LibrarySearch` "header"): opens the search panel.
+    fn library_search(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let open = self.popover == Some(Popover::Search);
+        button(
+            container(
+                row![
+                    icon(&icons::MAGNIFYING_GLASS, p.faint, 14.),
+                    text("Search or jump to 1 Ne 3:7")
+                        .size(14)
+                        .color(p.faint)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                ]
+                .spacing(10)
+                .align_y(Center),
+            )
+            .center_y(Fill),
+        )
+        .padding([0, 18])
+        .width(352)
+        .height(PILL_HEIGHT)
+        .on_press(Message::TogglePopover(Popover::Search))
+        .style(move |_, status| button::Style {
+            background: Some(
+                if open || matches!(status, button::Status::Hovered) {
+                    p.hover
+                } else {
+                    p.card
+                }
+                .into(),
+            ),
+            text_color: p.ink,
+            border: Border {
+                color: p.rule,
+                width: 1.0,
+                radius: 999.0.into(),
+            },
+            shadow: design::soft_shadow(p),
+            ..Default::default()
+        })
         .into()
     }
 

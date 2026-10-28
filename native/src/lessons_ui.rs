@@ -78,6 +78,10 @@ pub struct LessonsState {
     pub full: std::collections::HashSet<usize>,
     /// Selected verses: (companion chapter, verse).
     pub selected: BTreeSet<(usize, u32)>,
+    /// Words selected in the chapters: (companion chapter, verse, UTF-16 range of its text).
+    pub words: Vec<(usize, u32, crate::marks::TextRange)>,
+    /// The verse note being written from the lesson: (companion chapter, verse) and its text.
+    pub note: Option<(usize, u32, iced::widget::text_editor::Content)>,
 }
 
 #[derive(Debug, Clone)]
@@ -98,8 +102,15 @@ pub enum LessonMsg {
     Full(usize),
     SelectVerse(usize, u32),
     Scroll(usize),
-    MarkVerses(usize),
     ClearVerses,
+    /// Copy the selected words (or verses).
+    CopySelection,
+    /// Start a note with the selection quoted under each chapter's reference.
+    AddToNote,
+    /// Open the note editor on the first selected verse.
+    VerseNote,
+    EditVerseNote(iced::widget::text_editor::Action),
+    SaveVerseNote,
     OpenChapter(usize),
     OpenNote(String),
     Credit(String),
@@ -174,7 +185,7 @@ impl App {
             scrollable::RelativeOffset::START,
         ))
     }
-    fn lesson_source(&self) -> Option<NoteSource> {
+    pub(crate) fn lesson_source(&self) -> Option<NoteSource> {
         let open = self.lessons.open.as_ref()?;
         let label = match &open.lesson.guide {
             Some(g) => format!("{}: {}", g.scripture, g.title),
@@ -463,7 +474,59 @@ impl App {
                     self.lessons.selected.insert((chapter, verse));
                 }
             }
-            LessonMsg::ClearVerses => self.lessons.selected.clear(),
+            LessonMsg::ClearVerses => {
+                if !self.save_lesson_verse_note() {
+                    return Task::none();
+                }
+                self.lessons.selected.clear();
+                self.lessons.note = None;
+                self.clear_text_selection(crate::text_selection::Area::Lesson);
+            }
+            LessonMsg::CopySelection => {
+                let text = if self.lessons.words.is_empty() {
+                    self.lesson_selected_verses_text()
+                } else {
+                    self.lesson_selected_text()
+                };
+                if !text.trim().is_empty() {
+                    return iced::clipboard::write(text);
+                }
+            }
+            LessonMsg::AddToNote => {
+                let excerpt = self.lesson_excerpt();
+                if !excerpt.is_empty()
+                    && let Some(source) = self.lesson_source()
+                {
+                    self.lessons.selected.clear();
+                    self.clear_text_selection(crate::text_selection::Area::Lesson);
+                    return self.write_in_journal(source, format!("{excerpt}\n\n"));
+                }
+            }
+            LessonMsg::VerseNote => {
+                if let Some((c, v)) = self.lesson_selected_verses().first().copied() {
+                    let body = self
+                        .lessons
+                        .open
+                        .as_ref()
+                        .and_then(|o| o.scripture.get(c))
+                        .and_then(|s| s.annotations.iter().find(|a| a.verse == v))
+                        .map(|a| a.note.clone())
+                        .unwrap_or_default();
+                    self.lessons.note =
+                        Some((c, v, iced::widget::text_editor::Content::with_text(&body)));
+                    return crate::presented(operation::focus("lesson-verse-note"));
+                }
+            }
+            LessonMsg::EditVerseNote(action) => {
+                if let Some((.., content)) = &mut self.lessons.note {
+                    content.perform(action);
+                }
+            }
+            LessonMsg::SaveVerseNote => {
+                if self.save_lesson_verse_note() {
+                    self.lessons.note = None;
+                }
+            }
             LessonMsg::OpenChapter(index) => {
                 if let Some(chapter) = self
                     .lessons
@@ -475,7 +538,6 @@ impl App {
                     return self.navigate(location, None);
                 }
             }
-            LessonMsg::MarkVerses(preset) => return self.mark_lesson_verses(preset),
         }
         Task::none()
     }

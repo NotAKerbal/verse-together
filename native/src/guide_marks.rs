@@ -5,11 +5,11 @@ use crate::design::{self, icon, sans};
 use crate::guide_text::{self, Block, Kind, PartText};
 use crate::icons;
 use crate::marks::{MarkColor, MarkKind};
-use crate::rich_select;
+use crate::select_text::{Paint, Piece, select_text};
 use crate::store::GuideMark;
+use crate::text_selection::Area;
 use crate::{App, Message};
-use iced::advanced::text::Span;
-use iced::widget::{button, column, container, rich_text, row, span, text, text_editor};
+use iced::widget::{button, column, container, row, text, text_editor};
 use iced::{Alignment::Center, Border, Color, Element, Fill, Font, Padding, font};
 
 pub const PARTS: [&str; 2] = ["introduction", "reader"];
@@ -75,10 +75,13 @@ pub struct GuideMarksState {
 
 #[derive(Debug, Clone)]
 pub enum GuideMsg {
-    Select(usize, usize, usize, usize, bool),
     QuickMark(usize),
     Mark(MarkKind, Option<MarkColor>),
     ClearMarks,
+    /// Select a saved span the selection overlaps (to change it).
+    SelectSpan(usize),
+    Copy,
+    AddToNote,
     OpenNote,
     EditNote(text_editor::Action),
     SaveNote,
@@ -139,6 +142,24 @@ impl App {
             });
         Some((mark, existing))
     }
+    /// Where Add to note links a guide selection: the block it starts in (a heading's id), else the lesson.
+    fn guide_selection_source(&self) -> Option<crate::store::NoteSource> {
+        let mut source = self.lesson_source()?;
+        let open = self.lessons.open.as_ref()?;
+        let sel = self.lessons.guide.selection.as_ref()?;
+        let (anchor, ..) = open.prose.parts[sel.part].describe(sel.start, sel.end)?;
+        if !anchor.start_block.is_empty() {
+            source.href = format!("{}#{}", source.href, anchor.start_block);
+        }
+        Some(source)
+    }
+    /// The selected guide text, for copying.
+    pub(crate) fn guide_selected_text(&self) -> Option<String> {
+        let open = self.lessons.open.as_ref()?;
+        let sel = self.lessons.guide.selection.as_ref()?;
+        let (anchor, ..) = open.prose.parts[sel.part].describe(sel.start, sel.end)?;
+        Some(anchor.exact)
+    }
     fn save_guide_mark(&mut self, m: GuideMark) {
         if let Some(store) = &mut self.store {
             let r = store.save_guide_mark(&m);
@@ -151,41 +172,6 @@ impl App {
     }
     pub(crate) fn update_guide(&mut self, message: GuideMsg) -> iced::Task<Message> {
         match message {
-            GuideMsg::Select(section, block, a, b, done) => {
-                let Some(open) = &self.lessons.open else {
-                    return iced::Task::none();
-                };
-                let part = open.prose.section_part.get(section).copied().unwrap_or(0);
-                let Some(start) = open.prose.parts[part].block_start(section, block) else {
-                    return iced::Task::none();
-                };
-                let text = open.prose.blocks[section][block].text();
-                let units = |byte: usize| {
-                    let byte = byte.min(text.len());
-                    let mut b = byte;
-                    while !text.is_char_boundary(b) {
-                        b -= 1;
-                    }
-                    text[..b].encode_utf16().count()
-                };
-                let (s, e) = (start + units(a), start + units(b));
-                self.lessons.guide.note = None;
-                self.lessons.guide.selection = (s < e || !done).then_some(GuideSelection {
-                    part,
-                    start: s,
-                    end: e,
-                    done,
-                });
-                if done
-                    && self.lessons.guide.selection.as_ref().is_some_and(|sel| {
-                        open.prose.parts[sel.part]
-                            .describe(sel.start, sel.end)
-                            .is_none()
-                    })
-                {
-                    self.lessons.guide.selection = None;
-                }
-            }
             GuideMsg::QuickMark(i) => {
                 if let Some(preset) = self.preferences.presets().get(i).cloned()
                     && let Some((mark, _)) = self.selected_span()
@@ -209,28 +195,61 @@ impl App {
                 }
             }
             GuideMsg::ClearMarks => {
-                // Every span the selection touches loses its marks (a note stays).
-                let Some(sel) = self.lessons.guide.selection.clone() else {
-                    return iced::Task::none();
-                };
-                let touched: Vec<GuideMark> = self
+                // Marks apply to exactly the selected text (as on the website): only the selected span loses them,
+                // and a span left with nothing is removed.
+                if let Some((mut mark, Some(_))) = self.selected_span() {
+                    mark.highlight = None;
+                    mark.underline = None;
+                    self.save_guide_mark(mark);
+                }
+            }
+            GuideMsg::SelectSpan(i) => {
+                if let Some((_, part, s, e)) = self
                     .lessons
                     .guide
                     .placed
                     .iter()
-                    .filter(|(_, part, s, e)| *part == sel.part && *s < sel.end && *e > sel.start)
-                    .map(|(i, ..)| self.lessons.guide.marks[*i].clone())
-                    .collect();
-                for mut m in touched {
-                    m.highlight = None;
-                    m.underline = None;
-                    if let Some(store) = &mut self.store {
-                        let r = store.save_guide_mark(&m);
-                        self.report(r);
-                    }
+                    .find(|(m, ..)| *m == i)
+                    .copied()
+                {
+                    self.drag = None;
+                    self.lessons.guide.note = None;
+                    self.lessons.guide.selection = Some(GuideSelection {
+                        part,
+                        start: s,
+                        end: e,
+                        done: true,
+                    });
                 }
-                self.load_guide_marks();
-                self.sync_soon();
+            }
+            GuideMsg::Copy => {
+                if let Some(text) = self.guide_selected_text() {
+                    return iced::clipboard::write(text);
+                }
+            }
+            GuideMsg::AddToNote => {
+                if let (Some(text), Some(source)) =
+                    (self.guide_selected_text(), self.guide_selection_source())
+                {
+                    let quote = text
+                        .trim()
+                        .split('\n')
+                        .map(|l| {
+                            if l.is_empty() {
+                                ">".to_string()
+                            } else {
+                                format!("> {l}")
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let excerpt = format!(
+                        "**{}**\n{quote}\n\n",
+                        crate::journal::markdown_link(&source.label, &source.href)
+                    );
+                    self.clear_text_selection(Area::Guide);
+                    return self.write_in_journal(source, excerpt);
+                }
             }
             GuideMsg::OpenNote => {
                 let body = self
@@ -255,8 +274,7 @@ impl App {
                 }
             }
             GuideMsg::Dismiss => {
-                self.lessons.guide.selection = None;
-                self.lessons.guide.note = None;
+                self.clear_text_selection(Area::Guide);
             }
         }
         iced::Task::none()
@@ -305,35 +323,24 @@ impl App {
                     (sel.end - start).min(len16),
                 )
             });
-        let mut cuts: Vec<usize> = vec![0, len16];
-        for (s, e, ..) in &ranges {
-            cuts.extend([*s, *e]);
-        }
-        if let Some((s, e)) = selection {
-            cuts.extend([s, e]);
-        }
+        // UTF-16 units of the block's text as byte offsets, for painting.
+        let byte = |u: usize| {
+            crate::marks::utf16_to_byte(&text_all, u.min(len16)).unwrap_or(text_all.len())
+        };
+        let paints: Vec<Paint> = ranges
+            .iter()
+            .filter(|(.., h, u, _)| h.is_some() || u.is_some())
+            .map(|(s, e, h, u, _)| Paint {
+                range: byte(*s)..byte(*e),
+                highlight: *h,
+                underline: *u,
+            })
+            .collect();
         let base_font = design::serif();
-        let mut spans: Vec<Span<'a, String, Font>> = Vec::new();
-        let mut at16 = 0;
-        for run in &block.runs {
-            let run16 = run.text.encode_utf16().count();
-            let mut points: Vec<usize> = cuts
-                .iter()
-                .filter(|c| **c > at16 && **c < at16 + run16)
-                .map(|c| c - at16)
-                .collect();
-            points.push(0);
-            points.push(run16);
-            points.sort_unstable();
-            points.dedup();
-            for w in points.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                let (ba, bb) = (
-                    crate::marks::utf16_to_byte(&run.text, a).unwrap_or(0),
-                    crate::marks::utf16_to_byte(&run.text, b).unwrap_or(run.text.len()),
-                );
-                let piece = run.text[ba..bb].to_string();
-                let (g0, g1) = (at16 + a, at16 + b);
+        let pieces: Vec<Piece<'a>> = block
+            .runs
+            .iter()
+            .map(|run| {
                 let mut font = if run.italic {
                     design::serif_italic()
                 } else {
@@ -345,52 +352,38 @@ impl App {
                         ..font
                     };
                 }
-                let mut sp: Span<'a, String, Font> = span(piece).font(font);
+                let mut piece = Piece::new(run.text.as_str()).font(font);
                 if let Some(link) = &run.link {
-                    sp = sp.color(p.accent).link(link.clone());
+                    piece = piece.color(p.accent).link(link.clone());
                 }
-                let covering = ranges.iter().filter(|(s, e, ..)| *s <= g0 && *e >= g1);
-                let mut background = None;
-                let mut underline = false;
-                for (_, _, h, u, _) in covering {
-                    if h.is_some() {
-                        background = *h;
-                    }
-                    if let Some(u) = u {
-                        underline = true;
-                        sp = sp.color(*u);
-                    }
-                }
-                if let Some((s, e)) = selection
-                    && s <= g0
-                    && e >= g1
-                {
-                    background = Some(Color { a: 0.55, ..p.gold });
-                }
-                if let Some(bg) = background {
-                    sp = sp.background(bg);
-                }
-                if underline {
-                    sp = sp.underline(true);
-                }
-                spans.push(sp);
-            }
-            at16 += run16;
-        }
+                piece
+            })
+            .collect();
         let (size, line) = match block.kind {
             Kind::Heading(2) => (30.0, 38.0),
             Kind::Heading(_) => (22.0, 30.0),
             _ => (size, (size * 1.65).round()),
         };
-        let inner = rich_text(spans.clone())
-            .size(size)
-            .line_height(iced::widget::text::LineHeight::Absolute(line.into()))
-            .font(base_font)
-            .on_link_click(|uri: String| Message::Lesson(crate::lessons_ui::LessonMsg::Link(uri)));
-        let paragraph =
-            rich_select::selectable(inner, spans, size, line, base_font, move |a, b, done| {
-                msg(GuideMsg::Select(section, index, a, b, done))
-            });
+        let key = open.prose.parts[part]
+            .blocks
+            .iter()
+            .position(|(s, b, _)| *s == section && *b == index)
+            .unwrap_or(0);
+        let block_key = crate::text_selection::guide_block(part, key);
+        let dragging = self
+            .drag
+            .as_ref()
+            .is_some_and(|d| d.dragging && d.area == Area::Guide);
+        let paragraph: Element<'a, Message> = select_text(pieces, size, line, base_font, p.ink)
+            .paints(paints)
+            .selection(
+                selection.map(|(s, e)| byte(s)..byte(e)),
+                Color { a: 0.55, ..p.gold },
+            )
+            .dragging(dragging)
+            .on_pick(move |at, phase| Message::Pick(Area::Guide, block_key, at, phase))
+            .on_link(|uri: String| Message::Lesson(crate::lessons_ui::LessonMsg::Link(uri)))
+            .into();
         let has_note = ranges.iter().any(|r| r.4);
         let paragraph: Element<'a, Message> = if has_note {
             row![
@@ -434,7 +427,7 @@ impl App {
         let open = self.lessons.open.as_ref()?;
         let (anchor, ..) = open.prose.parts[sel.part].describe(sel.start, sel.end)?;
         let p = self.p();
-        let (mark, _) = self.selected_span()?;
+        let (mark, existing) = self.selected_span()?;
         let quote = if anchor.exact.chars().count() > 60 {
             format!(
                 "“{}…”",
@@ -493,8 +486,13 @@ impl App {
                 ]
                 .spacing(2)
                 .width(Fill),
+                round(&icons::COPY, msg(GuideMsg::Copy), "Copy"),
+                round(
+                    &icons::PEN_TO_SQUARE,
+                    msg(GuideMsg::AddToNote),
+                    "Add to note"
+                ),
                 round(&icons::NOTE_STICKY, msg(GuideMsg::OpenNote), "Write a note"),
-                round(&icons::TRASH, msg(GuideMsg::ClearMarks), "Remove marks"),
                 round(&icons::XMARK, msg(GuideMsg::Dismiss), "Done"),
             ]
             .spacing(4)
@@ -502,6 +500,87 @@ impl App {
             presets.wrap(),
         ]
         .spacing(10);
+        let exact_marked =
+            existing.is_some() && (mark.highlight.is_some() || mark.underline.is_some());
+        if exact_marked {
+            bar = bar.push(
+                button(text("Remove marks").size(12))
+                    .padding([6, 10])
+                    .on_press(msg(GuideMsg::ClearMarks))
+                    .style(design::quiet(p)),
+            );
+        }
+        // `SavedPassages`: other saved spans sharing the selected text, which a change never reaches on its own.
+        let overlapping: Vec<&(usize, usize, usize, usize)> = self
+            .lessons
+            .guide
+            .placed
+            .iter()
+            .filter(|(i, part, s, e)| {
+                *part == sel.part && *s < sel.end && *e > sel.start && Some(*i) != existing
+            })
+            .collect();
+        if !overlapping.is_empty() {
+            let mut list = column![
+                text("Saved passages here")
+                    .size(12)
+                    .font(sans(font::Weight::Semibold)),
+                text(
+                    "Marks apply to exactly the selected text. Select a saved passage to change it."
+                )
+                .size(12)
+                .color(p.muted),
+            ]
+            .spacing(4);
+            for (i, ..) in overlapping {
+                let m = &self.lessons.guide.marks[*i];
+                let snippet: String = if m.anchor.exact.chars().count() > 50 {
+                    format!(
+                        "“{}…”",
+                        m.anchor
+                            .exact
+                            .chars()
+                            .take(50)
+                            .collect::<String>()
+                            .trim_end()
+                    )
+                } else {
+                    format!("“{}”", m.anchor.exact)
+                };
+                let mut samples = row![].spacing(4);
+                if let Some(c) = &m.highlight {
+                    samples = samples.push(crate::view_marks::sample(
+                        MarkKind::Highlight,
+                        c,
+                        self.preferences.dark,
+                        p.ink,
+                    ));
+                }
+                if let Some(c) = &m.underline {
+                    samples = samples.push(crate::view_marks::sample(
+                        MarkKind::Underline,
+                        c,
+                        self.preferences.dark,
+                        p.ink,
+                    ));
+                }
+                list = list.push(
+                    button(
+                        row![
+                            samples,
+                            text(snippet).font(design::serif()).size(13).width(Fill)
+                        ]
+                        .spacing(8)
+                        .align_y(Center),
+                    )
+                    .padding([6, 8])
+                    .width(Fill)
+                    .on_press(msg(GuideMsg::SelectSpan(*i)))
+                    .style(design::quiet(p)),
+                );
+            }
+            bar = bar.push(list);
+        }
         if let Some(note) = &self.lessons.guide.note {
             bar = bar.push(
                 text_editor(note)

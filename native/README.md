@@ -44,16 +44,28 @@ under your user data directory, needs no sudo, and creates no services or autost
 - **Journal**, as on the website: a month calendar with entry dots, weekly goals (study days and reflections,
   Monday–Sunday, editable), this month's study days, the reflection invitation with its prompts, the selected
   day's entries (Markdown notes, logged readings, and verse notes), and a reflection worth revisiting. Opening a
-  note glides the day's list into the rail. Notes have a title, a Markdown body with preview, an optional source
-  (scripture or lesson) and reading log, and save on leaving, closing or Ctrl+S.
+  note glides the day's list into the rail. Notes have a title, a Markdown body written in the website's live
+  editor (headings at their sizes, bold, italics, links, quotes, lists and code styled in place, syntax hidden
+  off the caret's line, Ctrl/⌘-click to follow a safe link, list continuation on Enter, undo/redo), an optional
+  source (scripture or lesson) and reading log, and save automatically, on leaving, closing or Ctrl+S.
+- **Browse** (the website's `/browse` Library): this week's Come, Follow Me, Continue reading, the Journal and the
+  five volumes as art cards; a volume's books with their art and categories; a book's chapters with read and
+  current chapters marked. The navigation's Browse opens the Library from the reader and otherwise returns to where
+  browsing was left. The art is the website's own generated scenery (see `docs/browse-art-provenance.md` and
+  `docs/scripture-book-art.md`).
+- **Text selection** as in a browser: drag (or double/triple click, Shift-click to extend) across words, on into
+  the following verses, in the reader (plain or read against other Bibles), on a lesson's chapters (across a
+  chapter break) and in guide prose (across paragraphs). Marks, Copy, Add to note and verse notes take exactly the
+  scripture's own words, as UTF-16 ranges of the KJV text; another Bible's words or a verse number never are.
 - Reader settings (gear in the chapter pill): simple mode, the website's 85–130% text-size range in 1% steps, serif/sans, and text width
   (comfortable/wide/full). Appearance (light/dark) is under the navigation's settings gear. Preferences persist;
   profiles from earlier builds keep their notes and move from the old 22px default to the website's 16px.
 - Header animations follow GNOME's "Animations" setting (off = no motion) and only run while a transition is active.
 - **Come, Follow Me**, as on the website: this week's lesson from the real 2026 schedule (read from the website's
   own source), earlier and upcoming published guides with their covers and painting credits, chapter chips, and
-  each lesson's page with its hero, contents, guide text, and log. Verse-by-verse sections and scripture links
-  open the passage in a dock beside the guide, where verses can be marked with the same marks as the reader.
+  each lesson's page read scripture-first as on the website (every chapter of the week in full, the guide's
+  commentary in "Context for verses …" disclosures), with contents and log. The week's verses select, mark and
+  take notes there as in the reader; scripture links outside the week open in a side panel.
   The guides are those published in the repository, plus the October 26 guide published upstream on `master`.
 - **Reader study tools**, from the website's own public endpoints (network needed; the scripture itself stays
   embedded): study-path markers beside verses (AI chapter insights, cached on the website), **Explore** a selected
@@ -62,11 +74,13 @@ under your user data directory, needs no sudo, and creates no services or autost
   the Bible **Your Bibles** in Reader settings (other translations shown verse by verse beside the KJV with their
   changed words colored) and the **Joseph Smith Translation** passages for the chapter. Each shows loading and
   failure states; nothing is invented when a service is unavailable.
-- **Guide prose marks**: drag across words in a Come, Follow Me guide to highlight, underline or note them, with the
-  same quick marks as the reader. Spans are anchored as the website anchors them (block, UTF-16 offsets, quote and
+- **Guide prose marks**: drag across words in a Come, Follow Me guide (across paragraphs too) to highlight,
+  underline or note them, with the same quick marks as the reader, Copy and Add to note; marks apply to exactly the
+  selected text, and saved passages the selection overlaps can be selected to change them. Spans are anchored as the website anchors them (block, UTF-16 offsets, quote and
   context), so they find their words again after edits.
 - **Plans** ("Your study plans" on Come, Follow Me): the account's reading plans with progress, today's chapters,
-  the day-by-day schedule, marking chapters read, deleting a plan, and the website's two quick-start plans.
+  the day-by-day schedule, marking chapters read, deleting a plan, the website's quick-start plans, and the plan
+  builder and editor (dates typed as the browser shows them or chosen from a calendar).
 - **Copy share link** for selected verses: the website's `/share/...` passage link.
 - **Settings and sign-in**, as the website's `/account` and `/sign-in`: the navigation's gear opens Settings
   (account, simple mode, appearance, quick marks); signed in, the avatar opens the account menu. "Continue with
@@ -154,11 +168,10 @@ The earlier Tauri target remains separate under `src-tauri`; it is not used by t
 ## Current scope
 
 See `PARITY.md` for the feature-by-feature inventory, including what is partial or not ported (for example the
-custom plan builder, the social feed, cross-paragraph guide selections, in-place JST reading, and the website's
-rich Markdown editor). Account sign-in and sync are implemented and tested against the real Better Auth and
+social feed and other pages the website no longer links). Account sign-in and sync are implemented and tested against the real Better Auth and
 Convex functions in the repository's test runtime, but need the server change deployed and have not been verified
-against live Google sign-in. Accessibility, IME, long-form editing, cross-verse word dragging, macOS and Windows
-builds need further verification before a broad release. Native rendering follows the same visual language but is
+against live Google sign-in. Accessibility, IME composition, very long notes, macOS and Windows builds need
+further verification before a broad release. Native rendering follows the same visual language but is
 not pixel-identical to browser rendering.
 
 Use `./verse-together --benchmark --data-dir /tmp/verse-benchmark` for local data initialization, repeated chapter

@@ -220,6 +220,23 @@ pub fn verse_spec(verses: &[u32]) -> String {
     }
     parts.join(", ")
 }
+/// `markdownLink`: a Markdown link, or the bare URL as text when it can't be a link destination.
+pub fn markdown_link(label: &str, url: &str) -> String {
+    if url
+        .chars()
+        .any(|c| c.is_whitespace() || c == '<' || c == '>')
+    {
+        return format!("{label}: {url}");
+    }
+    let mut escaped = String::new();
+    for c in label.chars() {
+        if matches!(c, '\\' | '[' | ']') {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    format!("[{escaped}](<{url}>)")
+}
 pub fn plural(count: usize, one: &str, many: &str) -> String {
     format!("{count} {}", if count == 1 { one } else { many })
 }

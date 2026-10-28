@@ -1,14 +1,13 @@
 use crate::design::{self, icon, sans, serif};
 use crate::header::{self, CONTENT_TOP, PILL_HEIGHT, TOP, shell_inset};
 use crate::icons;
-use crate::mark_layer::{self, Run};
 use crate::marks;
-use crate::selectable;
+use crate::select_text::{Paint, Shown, select_text};
 use crate::store::{self, Location, TextWidth};
+use crate::text_selection::Area;
 use crate::{App, Message, Popover, Screen};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::text::{LineHeight, Wrapping};
-use iced::widget::text_editor::Binding;
 use iced::widget::{
     button, column, container, mouse_area, opaque, row, scrollable, slider, space, stack, text,
     text_editor, text_input,
@@ -26,8 +25,6 @@ pub(crate) const BADGE_SIZE: f32 = 11.52;
 const BADGE_SLOT: f32 = 17.6;
 const BADGE_MARGIN: f32 = 6.4;
 const BADGE_RAISE: f32 = 0.35 * BADGE_SIZE;
-/// Characters the verse number indent is made of; they are never copied with the words.
-pub const INDENT_CHARS: &[char] = &['\u{2002}', '\u{2009}', '\u{200A}', ' '];
 /// En, thin and hair spaces, widest first, so the indent comes within a hair of the slot width.
 const INDENT_FILL: &[char] = &['\u{2002}', '\u{2009}', '\u{200A}'];
 
@@ -148,6 +145,7 @@ impl App {
         }
         let content = match self.screen {
             Screen::Reader => self.reader(),
+            Screen::Library => self.library_page_view(),
             Screen::Journal => self.journal_view(),
             Screen::Guides => self.guides_view(),
             Screen::Settings => self.settings_view(),
@@ -429,29 +427,6 @@ impl App {
         }
         let selected = self.selected.contains(&number);
         let annotation = self.annotations.iter().find(|a| a.verse == number);
-        let dark = self.preferences.dark;
-        // Highlights and underlines are painted under the words, on exactly the marked text.
-        let runs: Vec<Run> = match annotation.filter(|a| a.is_marked()) {
-            Some(a) => {
-                let verse_text = &self.verses[index].text;
-                let mut runs = vec![Run {
-                    text: self.verse_prefix[index].clone(),
-                    highlight: None,
-                    underline: None,
-                }];
-                runs.extend(
-                    marks::segments(&a.marks, verse_text)
-                        .into_iter()
-                        .map(|s| Run {
-                            text: verse_text[s.start..s.end].to_string(),
-                            highlight: s.highlight.map(|c| c.highlight(dark)),
-                            underline: s.underline.map(|c| c.underline(dark)),
-                        }),
-                );
-                runs
-            }
-            None => vec![],
-        };
         let bookmarked = annotation.is_some_and(|a| a.bookmarked);
         let has_note = annotation.is_some_and(|a| !a.note.trim().is_empty());
         let verse_text = &self.verses[index].text;
@@ -463,58 +438,13 @@ impl App {
             (14.0, 24.0)
         };
         let words: Element<'_, Message> = if !comparisons.is_empty() {
-            let marks = annotation
-                .filter(|a| a.is_marked())
-                .map(|a| {
-                    marks::segments(&a.marks, verse_text)
-                        .into_iter()
-                        .map(|s| {
-                            (
-                                s.start..s.end,
-                                s.highlight.map(|c| c.highlight(dark)),
-                                s.underline.map(|c| c.underline(dark)),
-                            )
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
             let prefix = verse_indent(&number.to_string(), font, size);
-            self.comparison_text(&prefix, verse_text, comparisons, marks, font)
+            self.comparison_text(index, &prefix, comparisons, font)
         } else {
-            selectable::paragraph(mark_layer::marks(
-                text_editor(&self.verse_content[index])
-                    .font(font)
-                    .size(size)
-                    .line_height(LineHeight::Absolute(line.into()))
-                    .padding(0)
-                    .on_action(move |action| Message::SelectText(index, action))
-                    // Scripture is read-only: copying strips the number indent, and nothing edits the text.
-                    .key_binding(move |press| match Binding::from_key_press(press) {
-                        Some(Binding::Copy | Binding::Cut) => {
-                            Some(Binding::Custom(Message::CopyWords(index)))
-                        }
-                        Some(
-                            Binding::Paste
-                            | Binding::Enter
-                            | Binding::Backspace
-                            | Binding::Delete
-                            | Binding::Insert(_),
-                        ) => None,
-                        other => other,
-                    })
-                    .style(move |_, _| text_editor::Style {
-                        background: Color::TRANSPARENT.into(),
-                        border: Border::default(),
-                        placeholder: p.muted,
-                        value: p.ink,
-                        selection: Color { a: 0.55, ..p.gold },
-                    })
-                    .into(),
-                runs,
-                font,
-                size,
-                line,
-            ))
+            match self.verse_shown(index) {
+                Some(shown) => self.verse_words(index, shown, font, size, line),
+                None => space().into(),
+            }
         };
         let label = number.to_string();
         let digits_width = design::measure(&label, BADGE_SIZE, badge_font());
@@ -582,6 +512,55 @@ impl App {
                 },
                 ..Default::default()
             })
+            .into()
+    }
+
+    /// A verse's words as selectable text, with the reader's highlights and underlines painted on exactly the
+    /// marked words and the selection over them. `shown` maps what is displayed back to the verse's text.
+    pub(crate) fn verse_words<'a>(
+        &'a self,
+        index: usize,
+        shown: Shown<'a>,
+        font: Font,
+        size: f32,
+        line: f32,
+    ) -> Element<'a, Message> {
+        let p = self.p();
+        let dark = self.preferences.dark;
+        let number = self.verses[index].number;
+        let text = self.verses[index].text.as_str();
+        let mut paints = vec![];
+        if let Some(a) = self
+            .annotations
+            .iter()
+            .find(|a| a.verse == number && a.is_marked())
+        {
+            for s in marks::segments(&a.marks, text) {
+                if s.highlight.is_none() && s.underline.is_none() {
+                    continue;
+                }
+                for range in shown.map.displayed(s.start..s.end) {
+                    paints.push(Paint {
+                        range,
+                        highlight: s.highlight.as_ref().map(|c| c.highlight(dark)),
+                        underline: s.underline.as_ref().map(|c| c.underline(dark)),
+                    });
+                }
+            }
+        }
+        let selection = self
+            .drag
+            .as_ref()
+            .and_then(|d| d.in_block(Area::Reader, index, shown.map.len()));
+        let dragging = self
+            .drag
+            .as_ref()
+            .is_some_and(|d| d.dragging && d.area == Area::Reader);
+        select_text(shown.pieces, size, line, font, p.ink)
+            .paints(paints)
+            .selection(selection, Color { a: 0.55, ..p.gold })
+            .dragging(dragging)
+            .on_pick(move |at, phase| Message::Pick(Area::Reader, index, at, phase))
             .into()
     }
 
