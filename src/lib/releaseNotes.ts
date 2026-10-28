@@ -60,12 +60,29 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "In Come, Follow Me lessons, Explore sits beside the scripture instead of at the far edge of the window." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.16.0",
+    date: "2026-10-28",
+    title: "Explore beside the lesson scripture",
+    items: [
+      {
+        kind: "improved",
+        text: "In Come, Follow Me lessons, Explore sits beside the scripture instead of at the far edge of the window.",
+        screenshot: {
+          src: "/release-notes/2.16.0-lesson-explore.webp",
+          width: 1600,
+          height: 1247,
+          alt: "The Come, Follow Me lesson beside an Explore panel for knew, positioned next to the scripture column.",
+          caption: "Explore stays beside the lesson’s scripture column.",
+        },
+      },
+    ],
+    commits: ["a8be363"],
+  },
   {
     version: "2.15.0",
     date: "2026-10-28",
@@ -106,6 +123,7 @@ export const RELEASES: readonly Release[] = [
         },
       },
     ],
+    masterCommit: "17ec108",
     commits: ["daec09e", "f11c790", "ca2d0cd", "7d21571"],
   },
   {
