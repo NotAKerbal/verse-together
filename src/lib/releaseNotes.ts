@@ -63,6 +63,10 @@ export const UNRELEASED: UnreleasedNotes = {
   items: [
     {
       kind: "new",
+      text: "Send suggestions, report problems or request features in Settings → Feedback, with no sign-in required. Leave optional contact details if you would like a reply. If sending fails, your message stays in the form so you can try again.",
+    },
+    {
+      kind: "new",
       text: "Choose your faith tradition in Settings → Reading. Other denominations keeps Bible reading and your journal while hiding Latter-day Saint scriptures, Come Follow Me, Joseph Smith Translation and study resources. Your choice is saved on this device.",
     },
   ],
