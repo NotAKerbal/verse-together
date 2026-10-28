@@ -60,7 +60,12 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    {
+      kind: "new",
+      text: "A privacy policy at versetogether.org/privacy explains what the website and the app keep, what they send to other services, and how to delete your data. It's linked from Settings and the sign-in page.",
+    },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [
