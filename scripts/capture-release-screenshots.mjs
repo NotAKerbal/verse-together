@@ -98,6 +98,44 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.15.0-journal",
+    viewport: { width: 1440, height: 900 },
+    async run(page, viewport) {
+      await open(page, "/browse/bookofmormon/1nephi/1");
+      await page.getByRole("button", { name: "Log 1 Nephi 1", exact: true }).click();
+      await page.getByRole("button", { name: "Add a note", exact: true }).waitFor();
+      const panel = await page.getByRole("complementary", { name: "Journal", exact: true }).boundingBox();
+      const verse = await page.locator(".reader-verse").first().boundingBox();
+      return pad({ ...union(panel, verse), y: 72, height: 650 }, 8, viewport);
+    },
+  },
+  {
+    name: "2.15.0-next-chapter",
+    viewport: { width: 1280, height: 900 },
+    async run(page, viewport) {
+      await open(page, "/browse/bookofmormon/1nephi/1");
+      const nav = page.getByRole("navigation", { name: "Next chapter", exact: true });
+      await nav.scrollIntoViewIfNeeded();
+      return pad(union(await page.locator(".reader-verse").last().boundingBox(), await nav.boundingBox()), 20, viewport);
+    },
+  },
+  {
+    name: "2.15.0-lesson-explore",
+    viewport: { width: 1440, height: 1000 },
+    async run(page, viewport) {
+      await open(page, "/come-follow-me/2026-10-19");
+      const title = page.getByRole("heading", { level: 1 }).first();
+      await title.scrollIntoViewIfNeeded();
+      const point = await wordPoint(page, title, "Knew");
+      await page.mouse.dblclick(point.x, point.y);
+      await page.getByRole("button", { name: /^Explore/ }).first().click();
+      const panel = page.getByRole("complementary", { name: /^Explore / });
+      await panel.waitFor();
+      await page.waitForTimeout(6000);
+      return pad(union(await panel.boundingBox(), await title.boundingBox()), 8, viewport);
+    },
+  },
+  {
     name: "2.13.0-translations",
     viewport: { width: 1280, height: 900 },
     async run(page, viewport) {

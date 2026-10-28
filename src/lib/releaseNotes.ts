@@ -60,15 +60,52 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "new", text: "Approve the native desktop app in your browser to connect your account and sync study data." },
-    { kind: "improved", text: "On desktop, move between chapters with the Left and Right arrow keys, or use the next-chapter link below the verses." },
-    { kind: "improved", text: "Scripture and the Journal panel sit together in a centered layout. Log starts with reading only; choose Add a note to expand the full Markdown editor in the same panel." },
-    { kind: "new", text: "Select a word anywhere in Come, Follow Me to explore study helps, biblical languages, definitions, and word history in a sidebar beside the lesson." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.15.0",
+    date: "2026-10-28",
+    title: "Desktop sync, reading and word exploration",
+    items: [
+      { kind: "new", text: "Approve the native desktop app in your browser to connect your account and sync study data." },
+      {
+        kind: "improved",
+        text: "On desktop, move between chapters with the Left and Right arrow keys, or use the next-chapter link below the verses.",
+        screenshot: {
+          src: "/release-notes/2.15.0-next-chapter.webp",
+          width: 1600,
+          height: 410,
+          alt: "The last verse of 1 Nephi 1 with a Next chapter link below it on desktop.",
+          caption: "Continue reading with the next-chapter link below the verses.",
+        },
+      },
+      {
+        kind: "improved",
+        text: "Scripture and the Journal panel sit together in a centered layout. Log starts with reading only; choose Add a note to expand the full Markdown editor in the same panel.",
+        screenshot: {
+          src: "/release-notes/2.15.0-journal.webp",
+          width: 1600,
+          height: 761,
+          alt: "1 Nephi 1 beside the Journal panel, showing a reading chip, Add a note, a day field and Log reading.",
+          caption: "Log reading or start a note in the Journal beside the chapter.",
+        },
+      },
+      {
+        kind: "new",
+        text: "Select a word anywhere in Come, Follow Me to explore study helps, biblical languages, definitions, and word history in a sidebar beside the lesson.",
+        screenshot: {
+          src: "/release-notes/2.15.0-lesson-explore.webp",
+          width: 1600,
+          height: 1153,
+          alt: "The Come, Follow Me lesson Before I Formed Thee in the Belly I Knew Thee beside an Explore sidebar for knew, with a Topical Guide study help.",
+          caption: "Explore a word selected in the lesson title.",
+        },
+      },
+    ],
+    commits: ["daec09e", "f11c790", "ca2d0cd", "7d21571"],
+  },
   {
     version: "2.14.0",
     date: "2026-10-28",
@@ -84,6 +121,7 @@ export const RELEASES: readonly Release[] = [
       text: "Delete your account and all the study saved in it from Settings → Account, or at versetogether.org/delete-account. You confirm before anything is deleted, and a deletion that stops partway can be finished later.",
     },
     ],
+    masterCommit: "1647d51",
     commits: ["02b3e19", "b20083f", "1ffbafd", "1ab52f4", "0b0b8ef", "3eb0a87"],
   },
   {
