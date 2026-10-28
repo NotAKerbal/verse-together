@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <g transform="translate(-279.7811 -281.3305) scale(3.0989)">
+    <mask id="sd-pages" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/><path d="M172,159 C215,159 240,172 251.5,202 V290 C240,268 212,259 172,259 Z M339,159 C296,159 271,172 259.5,202 V290 C271,268 299,259 339,259 Z" fill="#000"/>
+    </mask>
+    <path d="M148.5,132 A28,28 0 0 1 176.5,104 H334.5 A28,28 0 0 1 362.5,132 V392 Q362.5,408 348.4,400.4 L264.3,355 Q255.5,350.3 246.7,355 L162.6,400.4 Q148.5,408 148.5,392 Z" fill="#eae4d8" mask="url(#sd-pages)"/>
+    <circle cx="255.5" cy="159" r="18.5" fill="#e58a70"/>
+  </g>
+</svg>

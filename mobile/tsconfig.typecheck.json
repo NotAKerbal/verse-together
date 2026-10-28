@@ -1,0 +1,17 @@
+{
+  // Typecheck only (npm run typecheck). The shared web modules under ../src and ../convex import a few packages for
+  // types; pin those to this app's own installs so the check never depends on (or mixes in) the web app's
+  // node_modules. Kept out of tsconfig.json because Metro and Jest also apply tsconfig.json's paths at runtime.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["../src/*"],
+      "convex/values": ["./node_modules/convex/values"],
+      "convex/browser": ["./node_modules/convex/browser"],
+      "convex/server": ["./node_modules/convex/server"],
+      "marked": ["./node_modules/marked"],
+      "react": ["./node_modules/@types/react"],
+      "csstype": ["./node_modules/csstype"]
+    }
+  }
+}

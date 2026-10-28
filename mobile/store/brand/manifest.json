@@ -1,0 +1,25 @@
+{
+  "generatedBy": "store/brand/render-brand.mjs",
+  "sharp": "0.34.4",
+  "librsvg": "2.61.1",
+  "fonts": {
+    "mobile/node_modules/@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf": "20ccb90498d8ca511bb0be31a74eccd5f29fbe1161852ef72781b703929e98ec",
+    "mobile/node_modules/@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf": "b3ee9c6f271318066adae56c3033e6e4192f88f5d127cb507686d89a0a269168",
+    "/usr/share/fonts/truetype/noto/NotoSerif-Regular.ttf": "9d7583b7dc9e812afd32a14280c5cac3160012efe50c8d08938f4fea266ff67f"
+  },
+  "files": {
+    "store/brand/svg/adaptive-foreground.svg": "6a95e9354907fe44268c85eb0d2fc06b1635423e4af34d5b25532b5e7a5b02db",
+    "store/brand/svg/adaptive-monochrome.svg": "5a16babf27b87fcf187be55ddea9a8a4e203ac1694045321ee82decbce6800c6",
+    "store/brand/svg/splash-light.svg": "14afa89ac3644ad2c6aae57cbcd29ec0703e72b44737ca4503c7161a885ba00e",
+    "store/brand/svg/splash-dark.svg": "c4503cfa45bef29a19020e4b03f20ee6a07abf7eaf791272b0bd555b0433b7fc",
+    "store/brand/svg/feature-graphic.svg": "c50c88614cb31c332017c14c0c9f1372f26d19f7477f6836bb7994b2f794d396",
+    "assets/brand/adaptive-foreground.png": "3d10ff139a300a0fc8b709d1663d42147447ece82c28b4a75de3320d37cc6829",
+    "assets/brand/adaptive-monochrome.png": "ff144a586a27c46082cd06488c6b03747001f76d94cfae56d57a7bcaf65200a2",
+    "assets/brand/splash-light.png": "f589e39b76bcfbf6dcfa3dfcb890354b687599c4b35bee0b66877329c6c35247",
+    "assets/brand/splash-dark.png": "825917c5855c42f177cd21fc71b79d0e13fb72d7572e52f05c1ad6b88301f11f",
+    "store/assets/feature-graphic-1024x500.png": "8e3a5df7927fe18c654762c3ab82e1a403caf46933a341d62fda8ea917691c65",
+    "store/assets/play-icon-512.png": "8251abcd662d80979e9d764f2206f17fadf8ed38ea5c3ac7f30856f2f18e25cc",
+    "store/brand/review/adaptive-icon-masks.png": "fec2dc5af0b502d06cac6595dfb6257c531ee181c2f8c0bfea333423163a5d3b",
+    "store/brand/review/splash-android12.png": "d1386076b4e6dd06b20994f54a652fba610aeb54431e441d070e6a4066f6967f"
+  }
+}
