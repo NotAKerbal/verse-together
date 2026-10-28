@@ -218,13 +218,13 @@ export function EnglishMeaningsSection({ word, english, onRetry, disclosure }: {
                 label={group.rows.length > 1 ? `${group.source} · entry ${index + 1}` : group.source}
                 title={entry.word}
               >
-                <DictionaryEntryCard entry={entry} edition={group.edition} variant="plain" />
+                <DictionaryEntryCard entry={entry} edition={group.edition} />
               </ExploreRow>
             ))
           )}
           {etymologyItems.map((item) => (
             <ExploreRow key={item.id} id={`etymology:${item.id}`} label={`Word history · ${item.source}`} title={item.word}>
-              <EtymologyEntryCard item={item} variant="plain" />
+              <EtymologyEntryCard item={item} />
             </ExploreRow>
           ))}
         </ExploreRows>

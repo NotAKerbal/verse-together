@@ -142,7 +142,7 @@ export default function NotesSheet({
 
   return (
     <div className="simple-hide lg:hidden">
-      <button type="button" tabIndex={-1} aria-label="Close Log" onClick={onClose} className={`${styles.backdrop} fixed inset-0 z-50 bg-black/30`} />
+      <button type="button" tabIndex={-1} aria-label="Close Journal" onClick={onClose} className={`${styles.backdrop} fixed inset-0 z-50 bg-black/30`} />
       <section
         ref={sheetRef}
         tabIndex={-1}
@@ -167,7 +167,7 @@ export default function NotesSheet({
         {children({
           titleId,
           closeButton: (
-            <button type="button" onClick={onClose} aria-label="Close Log" title="Close" className={CLOSE_BUTTON_CLASS}>
+            <button type="button" onClick={onClose} aria-label="Close Journal" title="Close" className={CLOSE_BUTTON_CLASS}>
               <FontAwesomeIcon icon={faXmark} className="h-4 w-4" aria-hidden="true" />
             </button>
           ),

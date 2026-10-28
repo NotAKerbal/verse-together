@@ -286,6 +286,8 @@
   grid-area: art;
   justify-self: center;
   width: 100cqw;
+  /* The reading column moves beside Explore; the full-width cover stays centered on the viewport. */
+  transform: translateX(calc(var(--cfm-sidebar-offset, 0px) / -2));
   min-width: 0;
 }
 

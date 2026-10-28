@@ -8,13 +8,7 @@ import type { NoteSource } from "./journal";
 import { useBelowLg } from "./useBelowLg";
 import { useConvexSignedIn } from "./useConvexSignedIn";
 
-/**
- * The reader and Come, Follow Me header's Log: opens the Log panel (below lg the phone sheet, else the nonmodal
- * desktop panel) on a blank entry for `source`, logging reading of it unless the person removes it. Nothing is
- * stored until the entry is saved, so opening is immediate and never lands on another page. `source` is the chapter
- * the header stands for, available before the chapter's text has loaded. While Log shows (below lg, while the sheet
- * is open) it closes it.
- */
+/** One launcher for notes and reading on desktop and mobile; Log opens a reading entry, preserving any unfinished text. */
 export default function JournalLogButton({
   reference,
   source,
@@ -28,8 +22,8 @@ export default function JournalLogButton({
 }) {
   const { loading } = useConvexSignedIn();
   const belowLg = useBelowLg();
-  const { isPanelOpen, isSheetOpen, panelView, openLog, setSheetOpen, closeBuilder } = useInsightBuilder();
-  const expanded = belowLg ? isSheetOpen : isPanelOpen && panelView === "log";
+  const { isPanelOpen, isSheetOpen, openLog, setSheetOpen, closeBuilder } = useInsightBuilder();
+  const expanded = belowLg ? isSheetOpen : isPanelOpen;
 
   function toggle() {
     if (belowLg && isSheetOpen) setSheetOpen(false);
@@ -45,7 +39,7 @@ export default function JournalLogButton({
       disabled={loading}
       aria-expanded={expanded}
       aria-label={`Log ${reference}`}
-      title="Log a note or reading"
+      title="Log reading or add a note"
       className={className}
     >
       <FontAwesomeIcon icon={faBook} className="h-3 w-3" aria-hidden="true" />

@@ -928,16 +928,36 @@ a.reader-toolbar-crumb:hover {
   gap: 1.5rem;
 }
 
-/* Keep a chapter page's text beside its open, nonmodal Log panel (NotesSidebar: 440px, 480px from xl, 1rem in). */
+/* Center the reading measure and its Log panel together, with a consistent 2rem gap.
+   When space is tight, keep the outer gutters and let the reader fit the remaining room. */
 @media (min-width: 1024px) {
+  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) {
+    --reader-notes-width: 440px;
+    --reader-notes-measure: 56rem;
+    --reader-notes-inset: max(2rem, calc((100% - var(--reader-notes-measure) - var(--reader-notes-width) - 2rem) / 2));
+  }
+
+  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-column[data-text-width="wide"]) {
+    --reader-notes-measure: var(--shell-max-width-wide);
+  }
+
+  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-column[data-text-width="full"]) {
+    --reader-notes-measure: 100%;
+  }
+
   :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) .app-main {
-    padding-right: 472px;
+    padding-left: var(--reader-notes-inset);
+    padding-right: calc(var(--reader-notes-inset) + var(--reader-notes-width) + 2rem);
+  }
+
+  :root:not([data-simple="true"]) [data-notes-panel="reader"] {
+    right: var(--reader-notes-inset);
   }
 }
 
 @media (min-width: 1280px) {
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) .app-main {
-    padding-right: 512px;
+  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) {
+    --reader-notes-width: 480px;
   }
 }
 

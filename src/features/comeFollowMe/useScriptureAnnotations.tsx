@@ -30,6 +30,7 @@ import {
 import styles from "./studyCompanion.module.css";
 import { useAddToNote } from "./useAddToNote";
 import { useHeldSelection } from "./useHeldSelection";
+import { useSelectionExplore } from "./WordExplore";
 
 type Book = { label: string; slug: string; volume: string };
 
@@ -91,6 +92,7 @@ function ScriptureSelectionMenu({
     [doc]
   );
   const { selection, clear, restore } = useHeldSelection({ menuRef, contains, read, same: sameSelection }, book.slug);
+  const explore = useSelectionExplore(selection?.text ?? "", clear, { volume: book.volume, book: book.slug, chapter: selection?.verses[0]?.chapter ?? 1 });
 
   const restoreRef = useRef<SelectedVerseTextRange[] | null>(null);
   useLayoutEffect(() => {
@@ -142,6 +144,7 @@ function ScriptureSelectionMenu({
         hasSelection={!!selection}
         selectionReference={formatScriptureSelection(book.label, verses)}
         selectedText={selection?.text ?? ""}
+        {...explore}
         quickMarks={quickMarks}
         annotationTitle="Annotate"
         annotationDescription="Highlight, underline, or note"

@@ -133,12 +133,11 @@ function QaApp(){
  const onNoteDeleted=(id:string)=>act({type:"noteDeleted",noteId:id});
  const chapter=panelChapters[chapterIndex];
  const chapterSource=chapter.logOptions[0].source;
- const summaries=docs.map(d=>({...d,visibility:"private" as const,tags:[],last_active_at:d.updated_at,excerpt:excerptOf(d.markdown_body)}));
  const restart=(defaults:Parameters<typeof restartEntryDraft>[1])=>changeEntryDraft(d=>restartEntryDraft(d,defaults));
  const logOpen=layout==="phone"?sheetOpen:panelOpen&&panelView==="log";
  // The header's Log: a blank entry for the chapter, logging reading of it, opened at once (nothing is stored).
  function onLog(){if(layout==="phone"&&sheetOpen){setSheetOpen(false);return;}if(layout==="desktop"&&logOpen){setPanelOpen(false);return;}restart({source:chapterSource,logReading:true});setPanelView("log");if(layout==="phone")setSheetOpen(true);else setPanelOpen(true);}
- const panelContent=(frame:NotesPanelFrame)=><NotesPanelContent frame={frame} autoFocus={layout==="desktop"} activeNoteId={active} activeNote={activeDoc} notes={summaries} isLoading={false} onSelect={async id=>{setActive(id);}} view={panelView} onViewChange={setPanelView} onNewEntry={()=>{restart({source:panelMode?chapterSource:source});setPanelView("log");}} readingOptions={panelMode?chapter.logOptions:[]}/>;
+ const panelContent=(frame:NotesPanelFrame)=><NotesPanelContent frame={frame} autoFocus={layout==="desktop"} activeNoteId={active} activeNote={activeDoc} isLoading={false} view={panelView} onViewChange={setPanelView} onNewEntry={()=>{restart({source:panelMode?chapterSource:source});setPanelView("log");}} readingOptions={panelMode?chapter.logOptions:[]}/>;
  const sidebarPane = (
    <>
      <section className="panel-card max-w-lg rounded-[20px] p-6">

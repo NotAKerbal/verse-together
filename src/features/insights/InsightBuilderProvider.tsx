@@ -49,7 +49,7 @@ type ScripturePayload = {
   text?: string | null;
 };
 
-type DictionaryPayload = {
+export type DictionaryPayload = {
   edition: "1828" | "1844" | "1913" | "ETY";
   word: string;
   heading?: string | null;

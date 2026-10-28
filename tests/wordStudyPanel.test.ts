@@ -11,10 +11,10 @@ vi.mock("@/lib/useFaithTradition", () => ({
 }));
 
 vi.mock("@/components/DictionaryEntryCard", () => ({
-  default: ({ entry, variant }: { entry: { word: string }; variant?: string }) => createElement("article", null, `definition(${variant}):${entry.word}`),
+  default: ({ entry }: { entry: { word: string } }) => createElement("article", null, `definition:${entry.word}`),
 }));
 vi.mock("@/components/EtymologyEntryCard", () => ({
-  default: ({ item, variant }: { item: { text: string }; variant?: string }) => createElement("article", null, `history(${variant}):${item.text}`),
+  default: ({ item }: { item: { text: string } }) => createElement("article", null, `history:${item.text}`),
 }));
 
 const { default: WordStudyPanel, EnglishMeaningsSection, englishResults } = await import("../src/components/WordStudyPanel");
@@ -202,8 +202,8 @@ describe("English meanings after the lookup", () => {
     expect(header).not.toContain("Definitions");
     expect(header).toMatch(/>1<span class="[^"]*"> entry<\/span>/);
     const html = render(lookup, opened("etymology:e1"));
-    expect(html).toContain("history(plain):from Latin fides");
-    expect(html).not.toContain("definition(");
+    expect(html).toContain("history:from Latin fides");
+    expect(html).not.toContain("definition:");
     expect(html).not.toContain("Our sources don’t have");
   });
 
@@ -215,13 +215,13 @@ describe("English meanings after the lookup", () => {
     expect(rows).toMatch(/<span[^>]*>Word history · etymonline<\/span><span[^>]*>faith<\/span>/);
     expect(countOf(rows, "data-explore-row")).toBe(2);
     expect(rows).not.toContain('data-explore-row="" aria-expanded="true"');
-    expect(rows).not.toContain("definition(");
-    expect(rows).not.toContain("history(");
+    expect(rows).not.toContain("definition:");
+    expect(rows).not.toContain("history:");
 
     const definition = render(found, opened("dictionary:1"));
     expect(countOf(definition, 'data-explore-row="" aria-expanded="true"')).toBe(1);
-    expect(definition).toContain("definition(plain):FAITH");
-    expect(definition).not.toContain("history(");
+    expect(definition).toContain("definition:FAITH");
+    expect(definition).not.toContain("history:");
   });
 });
 

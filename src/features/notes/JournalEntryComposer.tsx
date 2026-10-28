@@ -42,11 +42,14 @@ export default function JournalEntryComposer({
   autoFocus = false,
   heading,
   followPage = false,
+  readingFirst = false,
 }: {
   /** What can be logged from here (the page's chapter or guide, or recent sources). */
   options: ReadingOption[];
   /** The first option is the page in view: an untouched draft follows it as the page changes. */
   followPage?: boolean;
+  /** In the reader, start with reading only; activating the note opens the full Markdown editor. */
+  readingFirst?: boolean;
   /** Show this entry, now the active note: the one just saved, or (Open saved entry) the one a save concerned. */
   onSaved: (id: string, journalDate: string) => void;
   /** Focus the note on opening (desktop; on phones the keyboard waits for a tap). */
@@ -58,6 +61,9 @@ export default function JournalEntryComposer({
   const { user, ready: cloudReady, loading } = useConvexSignedIn();
   const ready = !loading && (!user || cloudReady);
   const fieldId = useId();
+  const [noteStarted, setNoteStarted] = useState(false);
+  const noteMode = !readingFirst || noteStarted || draft.text !== "" || !draft.logReading;
+  const saveLabel = readingFirst ? (noteMode ? "Save note" : "Log reading") : "Save entry";
   // Shared with every composer (and outliving this one), so a reopened sheet shows a save already in flight.
   const saving = entrySave.status === "saving";
   // Problems found before anything was sent; the provider's outcome otherwise.
@@ -101,14 +107,14 @@ export default function JournalEntryComposer({
 
   return (
     <form
-      className="flex min-w-0 flex-col gap-3 font-sans"
+      className={`flex min-w-0 flex-col gap-3 font-sans ${noteMode ? "flex-1" : ""}`}
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
       {heading}
-      <fieldset disabled={saving} className="flex min-w-0 flex-col gap-3">
+      <fieldset disabled={saving} className={`flex min-w-0 flex-col gap-3 ${noteMode ? "flex-1" : ""}`}>
         <legend className="sr-only">New entry</legend>
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <ReadingChip
@@ -130,16 +136,30 @@ export default function JournalEntryComposer({
             </p>
           ) : null}
         </div>
-        <div className="flex min-h-48 flex-col rounded-[1rem] border-2 border-[color:var(--surface-border)] px-3 py-2 focus-within:border-[color:var(--accent-secondary)]">
-          <LazyMarkdownEditor
-            value={draft.text}
-            onChange={(text) => updateEntryDraft((current) => ({ ...current, text }))}
-            readOnly={saving}
-            ariaLabel="Note"
-            placeholder={reading ? "Add a note (optional)…" : "Write a note…"}
-            autoFocus={autoFocus}
-          />
-        </div>
+        {noteMode ? (
+          <div className="flex min-h-48 flex-1 flex-col">
+            <LazyMarkdownEditor
+              value={draft.text}
+              onChange={(text) => updateEntryDraft((current) => ({ ...current, text }))}
+              readOnly={saving}
+              ariaLabel="Note"
+              placeholder={reading ? "Add a note (optional)…" : "Write a note…"}
+              autoFocus={noteStarted || autoFocus}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setNoteStarted(true);
+              updateEntryDraft((current) => ({ ...current, edited: true }));
+            }}
+            aria-label="Add a note"
+            className="min-h-16 w-full rounded-[1rem] border-2 border-[color:var(--surface-border)] px-3 py-3 text-left font-serif text-[1.0625rem] text-[color:var(--foreground-muted)] hover:border-[color:var(--accent-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+          >
+            Add a note…
+          </button>
+        )}
         {notice ? (
           <div role="alert" className="flex flex-col items-start gap-2">
             <p className="text-sm font-semibold wrap-anywhere text-[color:var(--accent-rubric)]">{notice}</p>
@@ -174,7 +194,7 @@ export default function JournalEntryComposer({
             disabled={saving || !ready}
             className="inline-flex h-11 shrink-0 items-center rounded-full border-2 border-[color:var(--surface-border)] bg-[color:var(--surface-button-active)] px-5 text-sm font-bold text-[color:var(--surface-button-active-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)] disabled:opacity-50 lg:h-9 lg:px-4"
           >
-            {saving ? "Saving…" : entrySave.status === "failed" ? "Try again" : detached ? "Save as new entry" : "Save entry"}
+            {saving ? "Saving…" : entrySave.status === "failed" ? "Try again" : detached ? "Save as new entry" : saveLabel}
           </button>
         </div>
       </fieldset>
