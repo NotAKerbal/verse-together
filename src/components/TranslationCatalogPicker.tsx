@@ -89,11 +89,13 @@ function LanguageChooser({ languages, current, onChoose }: { languages: ReturnTy
       onChange={(event) => { setQuery(event.target.value); setLimit(LANGUAGE_PAGE_SIZE); }}
       onKeyDown={(event) => { if (event.key === "Enter" && options[0]) { event.preventDefault(); onChoose(options[0].id); } }}
       placeholder="Search languages, e.g. Spanish or español"
-      className="soft-input w-full px-3 py-2.5 text-sm" />
-    {options.length ? <ul aria-label="Languages" className="panel-card divide-y divide-[color:var(--surface-border)]">
+      className="soft-input w-full px-3 py-2.5 text-sm md:max-w-md" />
+    {/* A single list on phones; a grid of names from md up, where one long column would leave the panel empty. */}
+    {options.length ? <ul aria-label="Languages"
+      className="panel-card divide-y divide-[color:var(--surface-border)] md:grid md:grid-cols-2 md:gap-1 md:divide-y-0 md:p-1.5 lg:grid-cols-3">
       {options.slice(0, limit).map((item) => <li key={item.id}>
         <button type="button" aria-pressed={item.id === current} onClick={() => onChoose(item.id)}
-          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-[color:var(--surface-button-hover)]">
+          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-[color:var(--surface-button-hover)] md:rounded-lg md:px-3 md:aria-pressed:bg-[color:var(--surface-card-soft)]">
           <span className="min-w-0 break-words" dir="auto">{languageDisplayName(item)}</span>
           {item.id === current ? <span aria-hidden="true" className="shrink-0">✓</span> : null}
         </button>
@@ -134,49 +136,60 @@ export default function TranslationCatalogPicker({ savedIds, onAdd, choosingLang
   const row = (item: Row) => <BibleRow key={item.item.id} row={item} added={savedSet.has(item.item.id.toLowerCase())}
     showLanguage={language === ALL_LANGUAGES} onAdd={onAdd} />;
 
+  // Phones stack everything in one column. From md up, search and language sit in a sidebar that stays put while
+  // the results scroll beside it.
   return (
-    <div className="space-y-3">
-      <label htmlFor={searchId} className="sr-only">Search Bibles</label>
-      <input id={searchId} type="search" autoFocus data-autofocus value={query} autoComplete="off" spellCheck={false}
-        onChange={(event) => { setQuery(event.target.value); setLimit(PAGE_SIZE); }}
-        placeholder="Search by name or abbreviation"
-        className="soft-input w-full px-3 py-2.5 text-sm" />
-      <button type="button" disabled={!catalog} onClick={() => onChoosingLanguageChange(true)}
-        aria-label={`Language: ${languageName}. Change language`}
-        className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm disabled:opacity-60 ${button}`}>
-        <span className="min-w-0 truncate"><span className="text-foreground/60">Language: </span><span className="font-medium">{languageName}</span></span>
-        <span aria-hidden="true" className="shrink-0 text-xs text-foreground/60">Change ›</span>
-      </button>
+    <div className="space-y-3 md:grid md:grid-cols-[17rem_minmax(0,1fr)] md:items-start md:gap-8 md:space-y-0">
+      <div className="space-y-3 md:sticky md:top-6">
+        <label htmlFor={searchId} className="sr-only">Search Bibles</label>
+        <input id={searchId} type="search" autoFocus data-autofocus value={query} autoComplete="off" spellCheck={false}
+          onChange={(event) => { setQuery(event.target.value); setLimit(PAGE_SIZE); }}
+          placeholder="Search by name or abbreviation"
+          className="soft-input w-full px-3 py-2.5 text-sm" />
+        <button type="button" disabled={!catalog} onClick={() => onChoosingLanguageChange(true)}
+          aria-label={`Language: ${languageName}. Change language`}
+          className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm disabled:opacity-60 ${button}`}>
+          <span className="min-w-0 truncate"><span className="text-foreground/60">Language: </span><span className="font-medium">{languageName}</span></span>
+          <span aria-hidden="true" className="shrink-0 text-xs text-foreground/60">Change ›</span>
+        </button>
+      </div>
 
-      {error ? <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[color:var(--surface-border)] p-3 text-xs">
-        <p>The full list of Bibles couldn’t load.</p>
-        <button type="button" onClick={retry} className={`px-3 py-1.5 font-medium ${button}`}>Try again</button>
-      </div> : null}
-
-      {rows.length ? <ul aria-label="Bibles" className="panel-card divide-y divide-[color:var(--surface-border)]">
-        {(featuredOnly ? rows : rows.slice(0, limit)).map(row)}
-      </ul> : null}
-
-      {loading && !featuredOnly ? <div aria-hidden="true" className="panel-card divide-y divide-[color:var(--surface-border)]">
-        {[0, 1, 2].map((index) => <div key={index} className="px-4 py-4"><div className="h-3 w-2/5 animate-pulse rounded bg-foreground/10" /></div>)}
-      </div> : null}
-
-      {featuredOnly && catalog ? <button type="button" onClick={() => setBrowsing(true)} className="w-full py-2 text-xs font-medium underline underline-offset-2">
-        Browse all English Bibles
-      </button> : null}
-      {!featuredOnly && rows.length > limit ? <button type="button" onClick={() => setLimit(limit + PAGE_SIZE)} className={`w-full p-2.5 text-xs font-medium ${button}`}>
-        Show more
-      </button> : null}
-
-      {catalog && !rows.length ? <div role="status" className="space-y-2 rounded-xl border border-dashed border-[color:var(--surface-border)] p-4 text-sm">
-        <p>No Bibles match “{query.trim()}”{language === ALL_LANGUAGES ? "" : ` in ${languageName}`}.</p>
-        {isLicensedOnlyQuery(query) ? <p className="text-xs leading-relaxed text-foreground/65">
-          NRSVue, NIV, NLT, CSB and ESV need a publisher’s license, so they aren’t available here.
+      <div className="min-w-0 space-y-3">
+        {rows.length ? <p className="hidden text-xs text-foreground/60 md:block">
+          {featuredOnly ? "Featured English Bibles"
+            : `${rows.length} ${rows.length === 1 ? "Bible" : "Bibles"}${language === ALL_LANGUAGES ? " in all languages" : ` in ${languageName}`}`}
         </p> : null}
-        {otherLanguageMatches ? <button type="button" onClick={() => chooseLanguage(ALL_LANGUAGES)} className="text-xs font-medium underline underline-offset-2">
-          Search all languages
+
+        {error ? <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[color:var(--surface-border)] p-3 text-xs">
+          <p>The full list of Bibles couldn’t load.</p>
+          <button type="button" onClick={retry} className={`px-3 py-1.5 font-medium ${button}`}>Try again</button>
+        </div> : null}
+
+        {rows.length ? <ul aria-label="Bibles" className="panel-card divide-y divide-[color:var(--surface-border)]">
+          {(featuredOnly ? rows : rows.slice(0, limit)).map(row)}
+        </ul> : null}
+
+        {loading && !featuredOnly ? <div aria-hidden="true" className="panel-card divide-y divide-[color:var(--surface-border)]">
+          {[0, 1, 2].map((index) => <div key={index} className="px-4 py-4"><div className="h-3 w-2/5 animate-pulse rounded bg-foreground/10" /></div>)}
+        </div> : null}
+
+        {featuredOnly && catalog ? <button type="button" onClick={() => setBrowsing(true)} className="w-full py-2 text-xs font-medium underline underline-offset-2">
+          Browse all English Bibles
         </button> : null}
-      </div> : null}
+        {!featuredOnly && rows.length > limit ? <button type="button" onClick={() => setLimit(limit + PAGE_SIZE)} className={`w-full p-2.5 text-xs font-medium ${button}`}>
+          Show more
+        </button> : null}
+
+        {catalog && !rows.length ? <div role="status" className="space-y-2 rounded-xl border border-dashed border-[color:var(--surface-border)] p-4 text-sm">
+          <p>No Bibles match “{query.trim()}”{language === ALL_LANGUAGES ? "" : ` in ${languageName}`}.</p>
+          {isLicensedOnlyQuery(query) ? <p className="text-xs leading-relaxed text-foreground/65">
+            NRSVue, NIV, NLT, CSB and ESV need a publisher’s license, so they aren’t available here.
+          </p> : null}
+          {otherLanguageMatches ? <button type="button" onClick={() => chooseLanguage(ALL_LANGUAGES)} className="text-xs font-medium underline underline-offset-2">
+            Search all languages
+          </button> : null}
+        </div> : null}
+      </div>
     </div>
   );
 }

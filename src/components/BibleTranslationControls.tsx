@@ -105,6 +105,7 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
   const [view, setView] = useState<View | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pressedBackdrop = useRef(false);
   const open = view !== null;
   const viewRef = useRef(view);
   useEffect(() => { viewRef.current = view; });
@@ -195,7 +196,7 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
   return <div className="space-y-3">
     <div className="flex items-center justify-between gap-2">
       <h3 className="text-sm font-medium">Your Bibles</h3>
-      <button type="button" onClick={() => goTo("list")} aria-haspopup="dialog" aria-label="Open Your Bibles full screen" title="Full screen"
+      <button type="button" onClick={() => goTo("list")} aria-haspopup="dialog" aria-label="Open Your Bibles in a larger view" title="Expand"
         className="rounded-lg p-1.5 text-foreground/55 hover:bg-[color:var(--surface-button-hover)] hover:text-foreground">
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
           <path d="M12 4h4v4M8 16H4v-4M16 4l-5 5M4 16l5-5" strokeLinecap="round" strokeLinejoin="round" />
@@ -205,11 +206,17 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
     <p className="text-xs text-foreground/60">Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.</p>
     {defaultError ? <p role="alert" className="text-xs text-red-700 dark:text-red-300">{defaultError}</p> : null}
     <BibleList {...listProps} />
+    {/* Full screen on phones. From md up, a centered panel over the page: the list of Bibles is narrow and as tall
+        as its rows, the catalog and language chooser wide with a steady height so the panel doesn't jump while
+        searching. Clicking the backdrop closes it, unless the press began inside (selecting text in the search). */}
     <dialog ref={dialogRef} aria-labelledby={editorTitleId} onClose={() => setView(null)}
-      className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden bg-background p-0 text-foreground backdrop:bg-black/40">
-      {view ? <div className="flex h-full flex-col text-left font-sans">
+      onPointerDown={(event) => { pressedBackdrop.current = event.target === event.currentTarget; }}
+      onClick={(event) => { if (pressedBackdrop.current && event.target === event.currentTarget) goTo(null); }}
+      className={`fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden bg-background p-0 text-foreground backdrop:bg-black/40 open:flex open:flex-col md:m-auto md:max-h-[calc(100dvh-4rem)] md:rounded-2xl md:border md:border-[color:var(--surface-border)] md:shadow-[var(--surface-shadow-lift)] ${
+        view === "list" ? "md:h-fit md:w-[min(36rem,calc(100vw-4rem))]" : "md:h-[min(48rem,calc(100dvh-4rem))] md:w-[min(60rem,calc(100vw-4rem))]"}`}>
+      {view ? <div className="flex min-h-0 flex-1 flex-col text-left font-sans">
         <header className="shrink-0 border-b border-[color:var(--surface-border)]">
-          <div className="mx-auto grid max-w-xl grid-cols-[5rem_1fr_5rem] items-center gap-2 px-4 py-3">
+          <div className="mx-auto grid max-w-xl grid-cols-[5rem_1fr_5rem] items-center gap-2 px-4 py-3 md:max-w-none md:px-5">
             {view === "list" ? <span /> : <button type="button" onClick={() => goTo(view === "language" ? "catalog" : "list")}
               className="justify-self-start rounded-lg px-2 py-2 text-sm">‹ Back</button>}
             <h2 id={editorTitleId} className="text-center text-base font-medium">{TITLES[view]}</h2>
@@ -218,7 +225,7 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
           </div>
         </header>
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto max-w-xl px-4 py-5">
+          <div className="mx-auto max-w-xl px-4 py-5 md:max-w-none md:px-8 md:py-6">
             {view === "list" ? <BibleList {...listProps} />
               : <TranslationCatalogPicker savedIds={favorites.map((item) => item.id)} onAdd={addBible}
                 choosingLanguage={view === "language"} onChoosingLanguageChange={(next) => goTo(next ? "language" : "catalog")} />}
