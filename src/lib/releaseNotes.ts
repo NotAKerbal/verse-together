@@ -60,7 +60,15 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
+  items: [],
+};
+
+export const RELEASES: readonly Release[] = [
+  {
+    version: "2.14.0",
+    date: "2026-10-28",
+    title: "Account control and desktop Bibles",
+    items: [
     { kind: "improved", text: "Adding a Bible on desktop now opens in a centered panel with search and language controls beside the results, plus a language grid for easier browsing." },
     {
       kind: "new",
@@ -69,12 +77,10 @@ export const UNRELEASED: UnreleasedNotes = {
     {
       kind: "new",
       text: "Delete your account and all the study saved in it from Settings → Account, or at versetogether.org/delete-account. You confirm before anything is deleted, and a deletion that stops partway can be finished later.",
-
     },
-  ],
-};
-
-export const RELEASES: readonly Release[] = [
+    ],
+    commits: ["02b3e19", "b20083f", "1ffbafd", "1ab52f4", "0b0b8ef", "3eb0a87"],
+  },
   {
     version: "2.13.0",
     date: "2026-10-27",
@@ -114,6 +120,7 @@ export const RELEASES: readonly Release[] = [
         },
       },
     ],
+    masterCommit: "2929d8a",
     commits: ["f7db30f", "04b2637", "9592336"],
   },
   {
