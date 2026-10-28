@@ -1,0 +1,362 @@
+/*
+  Release notes shown in Settings, and the app's version.
+
+  Versions follow production: master is what Verse Together serves. Version 2.0.0 is the Marker redesign that
+  replaced the whole interface (d65680e, 2026-09-25), together with everything master received directly before
+  production releases began coming from dev. Since then each merge of dev into master is one release, and each
+  release adds one to the minor version (2.1.0, 2.2.0, ...). The major version stays 2 unless the project owner
+  decides otherwise.
+
+  Work that is not on master yet goes in UNRELEASED. When dev is merged into master, it becomes the next release,
+  package.json and package-lock.json take its version, and `npm run release:check` confirms they agree. See
+  AGENTS.md ("Releases") for the full procedure.
+
+  This file is read by scripts/release-version.mjs with Node's type stripping: keep it free of imports and of
+  TypeScript syntax that needs compiling (enums, namespaces).
+*/
+
+export type ReleaseNoteKind = "new" | "improved";
+
+export type ReleaseScreenshot = {
+  /** A file under public/, e.g. /release-notes/2.10.0-explore.webp. */
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+  caption: string;
+  /**
+   * The screenshot was taken after this release, from the interface of the day. Set it on any screenshot
+   * captured later than the release it illustrates, so it's never mistaken for how things looked then.
+   */
+  currentInterface?: boolean;
+};
+
+export type ReleaseNoteItem = {
+  kind: ReleaseNoteKind;
+  text: string;
+  screenshot?: ReleaseScreenshot;
+};
+
+export type Release = {
+  /** Semantic version: 2.minor.0 for each dev-to-master release. */
+  version: string;
+  /** The day the release reached master (the release merge's commit date), YYYY-MM-DD. */
+  date: string;
+  /** For a release gathering earlier work on master, the day that work began. */
+  since?: string;
+  title: string;
+  items: ReleaseNoteItem[];
+  /** The master commit that made this release; omitted until a prepared release is merged. */
+  masterCommit?: string;
+  /** Short hashes of the commits the notes describe. Not shown. */
+  commits: string[];
+};
+
+export type UnreleasedNotes = {
+  title: string;
+  items: ReleaseNoteItem[];
+};
+
+/** Changes waiting for the next dev-to-master release. Empty items when there are none. */
+export const UNRELEASED: UnreleasedNotes = {
+  title: "Settings sections in the header, release notes with versions, and clearer note links",
+  items: [
+    {
+      kind: "improved",
+      text: "Settings shows one section at a time: your account, reading, study tools or these release notes. Choose one from the pill at the right of the app's header, beside the navigation; on phones and tablets, and in simple mode, the pill sits at the top of the page.",
+      screenshot: {
+        src: "/release-notes/unreleased-settings-header.webp",
+        width: 1600,
+        height: 973,
+        alt: "The Settings page. The app's navigation is at the top left and, at the top right of the same header, a pill with Account, Reading, Study tools and Release notes, Reading selected. Below, the Reading section spans the page: a John 1:1–3 preview beside text size, typeface, text width and comparison view controls, with simple mode below.",
+        caption: "Settings' sections in the header, with Reading open.",
+      },
+    },
+    {
+      kind: "new",
+      text: "Set text size, typeface, text width and comparison view in Settings with a live preview, or reset them. The reader's settings menu has the same controls.",
+      screenshot: {
+        src: "/release-notes/unreleased-reader-settings.webp",
+        width: 816,
+        height: 1034,
+        alt: "The reader's settings menu open over 1 Nephi 1, with simple mode, text size, typeface, text width, comparison view and a link to all settings.",
+        caption: "The same appearance controls in the reader's settings menu.",
+      },
+    },
+    { kind: "new", text: "Release notes show each release's version, with screenshots of what changed." },
+    {
+      kind: "improved",
+      text: "In the reader, a note appears once, as a small Note link at the start of each passage it links to. The passage you were reading when you wrote it no longer counts as a link.",
+    },
+    { kind: "improved", text: "Verses quoted together in a note are separated by a blank line." },
+  ],
+};
+
+export const RELEASES: readonly Release[] = [
+  {
+    version: "2.10.0",
+    date: "2026-10-27",
+    title: "Simpler translations, Explore sections and custom mark colors",
+    items: [
+      {
+        kind: "improved",
+        text: "Choosing a Bible translation is simpler, and translations in other languages are easier to find.",
+        screenshot: {
+          src: "/release-notes/2.10.0-translations.webp",
+          width: 1264,
+          height: 1126,
+          alt: "The Add a Bible screen in the reader: a search field, the language (English) with a Change option, suggested English Bibles each with an Add button, and a link to browse all English Bibles.",
+          caption: "Adding a Bible from the reader's settings.",
+          currentInterface: true,
+        },
+      },
+      {
+        kind: "improved",
+        text: "Explore groups study sources into colored, expandable sections and leaves out sections with nothing in them.",
+        screenshot: {
+          src: "/release-notes/2.10.0-explore.webp",
+          width: 1600,
+          height: 743,
+          alt: "Explore open for the word “commandments” in 1 Nephi 3:7, with a green Study helps section (Bible Dictionary, Guide to the Scriptures, Topical Guide) and a blue Biblical languages section (Hebrew and Greek), beside the chapter with the word selected.",
+          caption: "Explore's colored source sections.",
+          currentInterface: true,
+        },
+      },
+      {
+        kind: "new",
+        text: "Pick custom colors for highlights and underlines in quick marks, and preview each mark.",
+        screenshot: {
+          src: "/release-notes/2.10.0-quick-mark-colors.webp",
+          width: 1600,
+          height: 567,
+          alt: "Quick mark settings: the first preset uses a custom orange color, shown in its preview and its Custom button, above blue and green highlight presets with their color choices.",
+          caption: "Quick marks with color previews, now in the Study tools tab.",
+          currentInterface: true,
+        },
+      },
+      { kind: "improved", text: "The Joseph Smith Translation reads more simply inline in the Bible." },
+    ],
+    masterCommit: "54fb2ab",
+    commits: ["a7a4e9a", "dd444dd", "ca09d71", "86634f9"],
+  },
+  {
+    version: "2.9.0",
+    date: "2026-10-27",
+    title: "Joseph Smith Translation, study helps and lesson notes",
+    items: [
+      {
+        kind: "new",
+        text: "Read the Joseph Smith Translation inline in the Bible reader.",
+        screenshot: {
+          src: "/release-notes/2.9.0-jst.webp",
+          width: 1600,
+          height: 637,
+          alt: "Mark 9:42–45 in the Bible reader with the Joseph Smith Translation on: a small “JST 9:40–48” label, JST wording read in place with a dotted underline, and JST verse numbers in small type.",
+          caption: "The Joseph Smith Translation inline in the Bible reader.",
+          currentInterface: true,
+        },
+      },
+      { kind: "new", text: "Explore adds scripture study helps and Hebrew and Greek definitions." },
+      { kind: "new", text: "Preview scripture links from reader resources without leaving the chapter." },
+      { kind: "new", text: "Share focused scripture pages." },
+      { kind: "new", text: "Add lesson notes and save excerpts of selected text." },
+      { kind: "improved", text: "Note backlinks include verse numbers." },
+    ],
+    masterCommit: "7026160",
+    commits: ["68a7223", "aabd340", "7cb8fa9", "91268af", "17e9568", "de64abf"],
+  },
+  {
+    version: "2.8.0",
+    date: "2026-10-26",
+    title: "Lesson artwork to the page edges",
+    items: [
+      {
+        kind: "improved",
+        text: "Come, Follow Me lesson artwork reaches the top and edges of the page.",
+        screenshot: {
+          src: "/release-notes/2.8.0-lesson-artwork.webp",
+          width: 1600,
+          height: 1075,
+          alt: "The Come, Follow Me lesson for October 19–25, 2026, its painting of a potter's workshop filling the top of the page from edge to edge above the title “Before I Formed Thee in the Belly I Knew Thee”.",
+          caption: "A lesson's artwork at the top of its page.",
+          currentInterface: true,
+        },
+      },
+    ],
+    masterCommit: "68fbbe9",
+    commits: ["ba7fb66"],
+  },
+  {
+    version: "2.7.0",
+    date: "2026-10-26",
+    title: "A steadier reading width",
+    items: [
+      { kind: "improved", text: "Lesson context stays visible, with a consistent reading width." },
+      { kind: "improved", text: "The default scripture reading column is narrower." },
+    ],
+    masterCommit: "1af9264",
+    commits: ["df688d2", "58d65c9"],
+  },
+  {
+    version: "2.6.0",
+    date: "2026-10-26",
+    title: "Scripture-first Come, Follow Me",
+    items: [
+      {
+        kind: "improved",
+        text: "Come, Follow Me lessons put the scriptures first, with expandable lesson context.",
+        screenshot: {
+          src: "/release-notes/2.6.0-scripture-first.webp",
+          width: 1600,
+          height: 1598,
+          alt: "A Come, Follow Me lesson reading Jeremiah 1: the line “Read the scriptures. Open the context as you go.”, an opened Chapter context panel, then verses 1–3, then a closed Context for verses 1–3 panel.",
+          caption: "Scriptures first in a Come, Follow Me lesson.",
+          currentInterface: true,
+        },
+      },
+      { kind: "new", text: "Annotate in both Come, Follow Me panes." },
+      { kind: "improved", text: "Highlights keep the exact text you selected." },
+      { kind: "improved", text: "Logged reading shows as a line in the margin." },
+      { kind: "improved", text: "General settings work without signing in." },
+    ],
+    masterCommit: "1a975e5",
+    commits: ["6f50717", "bfa1ce5", "cf17793", "4769b14", "f4cc271"],
+  },
+  {
+    version: "2.5.0",
+    date: "2026-10-26",
+    title: "Inline verse marks",
+    items: [
+      {
+        kind: "new",
+        text: "Mark verses inline with quick marks at the top of the selection menu, and customize the presets.",
+        screenshot: {
+          src: "/release-notes/2.5.0-quick-marks.webp",
+          width: 1600,
+          height: 671,
+          alt: "1 Nephi 3:7 selected in the reader, with the selection menu above it: a row of quick mark highlight and underline buttons at the top, then New Note, Annotate, Resources, Focus scripture and Copy text.",
+          caption: "Quick marks in the selection menu.",
+          currentInterface: true,
+        },
+      },
+    ],
+    masterCommit: "6faa5e4",
+    commits: ["81d1f7e"],
+  },
+  {
+    version: "2.4.0",
+    date: "2026-10-25",
+    title: "Journal and notes without an account",
+    items: [
+      { kind: "new", text: "Save notes and study without signing in." },
+      {
+        kind: "new",
+        text: "The journal home page has weekly goals you can edit.",
+        screenshot: {
+          src: "/release-notes/2.4.0-journal-home.webp",
+          width: 1600,
+          height: 813,
+          alt: "The journal home page without an account: a month calendar, weekly goals to study 5 days and write 3 reflections with an Edit goals link, and a reflection prompt for today.",
+          caption: "The journal home page, without signing in.",
+          currentInterface: true,
+        },
+      },
+      { kind: "improved", text: "Notes render Markdown, in a more compact note panel." },
+      { kind: "improved", text: "Verse resources load each Come, Follow Me lesson's complete insights." },
+      { kind: "improved", text: "The Explore dictionary and etymology panel is more polished." },
+    ],
+    masterCommit: "f379baa",
+    commits: ["e8e3b9f", "6130649", "d966f3e", "5be17c0", "d7d86a6", "b0b0707"],
+  },
+  {
+    version: "2.3.0",
+    date: "2026-10-25",
+    title: "One journal on mobile and desktop",
+    items: [
+      { kind: "improved", text: "Journal notes and reading entries work the same on mobile and desktop, with notes beside Log on mobile." },
+      { kind: "new", text: "Delete a note, with a confirmation first." },
+      { kind: "improved", text: "Scripture selection tools are more polished, with direct links to a focused verse." },
+      { kind: "improved", text: "The Come, Follow Me header has expanding icon controls." },
+      { kind: "improved", text: "Account settings are simpler." },
+      { kind: "new", text: "The October 26 Come, Follow Me guide, pairing scriptures from more than one book." },
+    ],
+    masterCommit: "4d68d54",
+    commits: ["7abe450", "a481bce", "812ecc7", "5ee9132", "c29c96d", "4d7e404", "40601af", "ed29b66", "6e1ae94", "f5542b0"],
+  },
+  {
+    version: "2.2.0",
+    date: "2026-10-25",
+    title: "Google sign-in and book artwork",
+    items: [
+      { kind: "new", text: "Sign in directly with Google." },
+      {
+        kind: "new",
+        text: "Scripture books have artwork, colored by section.",
+        screenshot: {
+          src: "/release-notes/2.2.0-book-artwork.webp",
+          width: 1600,
+          height: 695,
+          alt: "Book of Mormon books in Browse, each card with a painting: green-toned art for the small plates (1 Nephi to Omni) and warm orange art for Mormon's record (Words of Mormon to 4 Nephi).",
+          caption: "Book artwork in Browse.",
+          currentInterface: true,
+        },
+      },
+      { kind: "improved", text: "Reading log and notes share one panel in the reader." },
+      { kind: "improved", text: "A guide's Contents and Log stay in the header at every screen size." },
+    ],
+    masterCommit: "8bb840c",
+    commits: ["b4b7191", "61ebef2", "10c1936", "c179eba", "e929412"],
+  },
+  {
+    version: "2.1.0",
+    date: "2026-10-24",
+    title: "Floating navigation, faster browsing and the journal",
+    items: [
+      { kind: "new", text: "Keep journal notes and a reading history, linked from Come, Follow Me." },
+      {
+        kind: "improved",
+        text: "Navigation is one collapsible floating bar, and Browse cards are illustrated with coordinated artwork.",
+        screenshot: {
+          src: "/release-notes/2.1.0-browse.webp",
+          width: 1600,
+          height: 779,
+          alt: "The Browse page under the floating navigation bar and search field, with illustrated cards for this week's Come, Follow Me reading, the journal and each volume of scripture.",
+          caption: "Floating navigation and illustrated Browse cards.",
+          currentInterface: true,
+        },
+      },
+      { kind: "improved", text: "Scripture browsing works from local data: chapters open at once and their text fades in." },
+      { kind: "improved", text: "Search and page controls live in the floating header." },
+      { kind: "improved", text: "Come, Follow Me opens at this week's lesson, with a cover card for each week." },
+    ],
+    masterCommit: "a977f5d",
+    commits: ["d325f68", "c2d491d", "23a571c", "29d9721", "52be91e", "0065b4c", "01261ee", "37abbc0", "3e50145", "d2de70d", "9cbcae9"],
+  },
+  {
+    version: "2.0.0",
+    date: "2026-10-23",
+    since: "2026-09-25",
+    title: "Version 2: the Marker redesign",
+    items: [
+      { kind: "improved", text: "A new look throughout: a paper grid, ink borders, offset shadows and new typefaces." },
+      { kind: "new", text: "Study plans, with reading progress in the reader and a plan builder." },
+      { kind: "new", text: "Simple mode hides study tools so only the text remains." },
+      { kind: "new", text: "Choose a text width for the reader, and share a passage by link." },
+      { kind: "improved", text: "Notes moved to a Notebook panel in the reader and a three-column Notes page." },
+      { kind: "new", text: "Study each Come, Follow Me lesson beside the scriptures it covers." },
+      { kind: "improved", text: "Reader navigation is simpler, with chapter progress in the reader's settings." },
+    ],
+    masterCommit: "5f27da5",
+    commits: ["d65680e", "c662a30", "27a4595", "d475a1d", "994cb4d", "721e165", "173c3fd", "a30c9bf", "fd5b0b5", "7cd297d"],
+  },
+];
+
+/** The version master serves: the newest release. Matches package.json (npm run release:check). */
+export const CURRENT_VERSION = RELEASES[0].version;
+
+const DATE_FORMAT = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+
+/** "October 27, 2026": the same on the server and in every time zone. */
+export function formatReleaseDate(date: string): string {
+  return DATE_FORMAT.format(new Date(`${date}T00:00:00Z`));
+}
