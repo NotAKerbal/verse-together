@@ -44,7 +44,21 @@ pub struct OpenNote {
     pub redo: Vec<String>,
     /// The last edit's kind and time: typing within a word groups into one undo step.
     pub last_edit: Option<(EditKind, std::time::Instant)>,
+    /// The note's status on the account ("draft", "published", "archived"). Only drafts can be changed, as on the
+    /// website; the others are shown read-only.
+    pub status: String,
 }
+impl OpenNote {
+    pub fn read_only(&self) -> bool {
+        store::status_is_read_only(&self.status)
+    }
+    /// The website keeps published notes (they may be shared); archived ones can still be deleted.
+    pub fn can_delete(&self) -> bool {
+        self.status != "published"
+    }
+}
+/// What the journal says when text written in a note that became read-only was kept as a separate draft.
+pub const READ_ONLY_COPY_NOTICE: &str = "This note was published, so it can't be changed. What you wrote was kept as a separate draft, which you're editing now.";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditKind {
     Typing,
@@ -68,6 +82,8 @@ pub struct JournalState {
     pub goals_saved: bool,
     /// Something the journal needs to tell the reader (shown above the note).
     pub notice: Option<String>,
+    /// Account notes that aren't drafts (local id → "published" / "archived"), tagged in the day's list.
+    pub statuses: std::collections::HashMap<String, String>,
 }
 impl JournalState {
     pub fn new(now: Instant) -> Self {
@@ -84,6 +100,7 @@ impl JournalState {
             goal_error: None,
             goals_saved: false,
             notice: None,
+            statuses: Default::default(),
         }
     }
 }
@@ -145,6 +162,7 @@ impl App {
                 .unwrap_or(0)
         };
         let notes = s.all_notes();
+        let statuses = s.read_only_notes();
         let readings = s.readings_between(&from, &to);
         // A day either side covers every time zone; entries are then placed by their local day.
         let verses = s.verse_notes_between(epoch(&from, -86_400), epoch(&to, 2 * 86_400));
@@ -160,6 +178,9 @@ impl App {
                 .collect();
             self.journal.entries = journal::entries(in_window, readings, verses);
             self.journal.notes = notes;
+        }
+        if let Some(statuses) = self.report(statuses) {
+            self.journal.statuses = statuses;
         }
     }
     /// Saves the open note if it changed. Returns false (keeping the draft) when saving fails.
@@ -193,7 +214,12 @@ impl App {
                 // Later saves from this editor continue the note it saved to.
                 open.note.id = saved.id;
                 open.note.rev = saved.rev;
-                if saved.forked {
+                if saved.read_only {
+                    // The copy is a draft of its own; the published note keeps its reading.
+                    open.note.reading_at = None;
+                    open.status = "draft".into();
+                    self.journal.notice = Some(READ_ONLY_COPY_NOTICE.into());
+                } else if saved.forked {
                     self.journal.notice = Some(
                         "This note changed on another device while you wrote. Your version was saved as a separate note, so both are kept.".into(),
                     );
@@ -214,6 +240,11 @@ impl App {
     }
     pub(crate) fn open_note(&mut self, note: Note, prompt: Option<String>) {
         let body = md_editor::Content::with_text(&note.body);
+        let status = self
+            .store
+            .as_ref()
+            .and_then(|s| s.note_status(&note.id).ok())
+            .unwrap_or_else(|| "draft".into());
         self.journal.month = journal::month_of(&note.journal_date);
         self.journal.day = note.journal_date.clone();
         self.set_note_open(Some(OpenNote {
@@ -225,7 +256,72 @@ impl App {
             undo: vec![],
             redo: vec![],
             last_edit: None,
+            status,
         }));
+    }
+    /// A sync found the open note published (or archived) while unsent text written in it was waiting: that text was
+    /// kept as a separate draft, which the editor continues.
+    pub(crate) fn follow_read_only_copies(&mut self, copies: &[(String, String, i64)]) {
+        let Some(open) = &mut self.journal.open else {
+            return;
+        };
+        if let Some((_, copy, rev)) = copies.iter().find(|(id, ..)| *id == open.note.id) {
+            open.note.id = copy.clone();
+            open.note.rev = *rev;
+            open.note.reading_at = None;
+            open.status = "draft".into();
+            self.journal.notice = Some(READ_ONLY_COPY_NOTICE.into());
+        }
+    }
+    /// After a sync: the open note follows its status on the account. A note that became read-only while text was
+    /// being written in it keeps that text as a separate draft (`Store::save_note`); one that is read-only shows
+    /// the account's current version.
+    pub(crate) fn refresh_open_note(&mut self) {
+        let Some(open) = &self.journal.open else {
+            return;
+        };
+        let id = open.note.id.clone();
+        let status = self.store.as_ref().map(|s| s.note_status(&id));
+        let Some(status) = status.and_then(|r| self.report(r)) else {
+            return;
+        };
+        let open = self.journal.open.as_mut().expect("checked above");
+        if !store::status_is_read_only(&status) {
+            if open.read_only() {
+                // Back to a draft on the account: editable again, with its current text.
+                open.status = status;
+                self.reload_open_note();
+            }
+            return;
+        }
+        if open.dirty {
+            // Saving keeps the text as its own draft and leaves the published note untouched.
+            self.save_journal_note();
+            return;
+        }
+        open.status = status;
+        open.confirm_delete &= open.can_delete();
+        self.reload_open_note();
+    }
+    /// Shows the stored version of the open note (which has nothing unsaved).
+    fn reload_open_note(&mut self) {
+        let Some(open) = &self.journal.open else {
+            return;
+        };
+        if open.dirty {
+            return;
+        }
+        let stored = self.store.as_ref().map(|s| s.note(&open.note.id));
+        if let Some(Some(note)) = stored.and_then(|r| self.report(r))
+            && let Some(open) = &mut self.journal.open
+        {
+            if note.body != open.body.text() {
+                open.body = md_editor::Content::with_text(&note.body);
+                open.undo.clear();
+                open.redo.clear();
+            }
+            open.note = note;
+        }
     }
     /// Starts a note (saved once something is written), optionally quoting scripture from a source.
     pub(crate) fn start_note(
@@ -292,13 +388,19 @@ impl App {
                 }
             }
             JournalMsg::Title(title) => {
-                if let Some(open) = &mut self.journal.open {
+                if let Some(open) = &mut self.journal.open
+                    && !open.read_only()
+                {
                     open.note.title = title.chars().take(store::NOTE_TITLE_MAX).collect();
                     open.dirty = true;
                 }
             }
             JournalMsg::Body(action) => {
                 if let Some(open) = &mut self.journal.open {
+                    // A read-only note can be selected and copied, never changed.
+                    if open.read_only() && action.is_edit() {
+                        return Task::none();
+                    }
                     if let md_editor::Action::Edit(edit) = &action {
                         let kind = match edit {
                             md_editor::Edit::Insert(c) if !c.is_whitespace() => EditKind::Typing,
@@ -326,7 +428,9 @@ impl App {
                 }
             }
             JournalMsg::Undo | JournalMsg::Redo => {
-                if let Some(open) = &mut self.journal.open {
+                if let Some(open) = &mut self.journal.open
+                    && !open.read_only()
+                {
                     let undo = matches!(message, JournalMsg::Undo);
                     let (from, to) = if undo {
                         (&mut open.undo, &mut open.redo)
@@ -350,6 +454,7 @@ impl App {
             JournalMsg::ToggleReading => {
                 if let Some(open) = &mut self.journal.open
                     && open.note.source.is_some()
+                    && !open.read_only()
                 {
                     open.note.reading_at = match open.note.reading_at {
                         Some(_) => None,
@@ -360,13 +465,13 @@ impl App {
             }
             JournalMsg::Delete => {
                 if let Some(open) = &mut self.journal.open {
-                    open.confirm_delete = true;
+                    open.confirm_delete = open.can_delete();
                 }
             }
             JournalMsg::ConfirmDelete(confirm) => {
                 if let Some(open) = &mut self.journal.open {
                     open.confirm_delete = false;
-                    if confirm {
+                    if confirm && open.can_delete() {
                         let id = open.note.id.clone();
                         if let Some(s) = &mut self.store {
                             let r = s.delete_note(&id);
@@ -1159,11 +1264,39 @@ impl App {
                     .color(p.muted),
             );
         }
-        let head = if prominent {
+        let mut head = if prominent {
             row![note_icon(p, glyph), copy].spacing(16).align_y(Center)
         } else {
             row![icon(glyph, p.goal, 13.), copy].spacing(10)
         };
+        // `JournalNoteCard`: a note that isn't a draft says so ("Published" / "Archived", mint).
+        if let Entry::Note(n) = entry
+            && let Some(status) = self.journal.statuses.get(&n.id)
+        {
+            // `.pill-tag` (0.68rem semibold capitals, rubric text and outline) on `--accent-mint`, 0.62rem here.
+            head = head.push(
+                container(
+                    text(if status == "published" {
+                        "PUBLISHED"
+                    } else {
+                        "ARCHIVED"
+                    })
+                    .size(9.9)
+                    .font(sans(font::Weight::Semibold))
+                    .color(p.accent),
+                )
+                .padding([2, 8])
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(p.mint.into()),
+                    border: Border {
+                        color: p.rubric_line,
+                        width: 1.0,
+                        radius: 999.0.into(),
+                    },
+                    ..Default::default()
+                }),
+            );
+        }
         let time = chrono::DateTime::from_timestamp(when, 0)
             .map(|t| {
                 t.with_timezone(&chrono::Local)
@@ -1252,7 +1385,12 @@ impl App {
                 .on_press_maybe(m)
                 .style(design::outlined(p, 18.0))
         };
-        let status = if open.dirty {
+        // A published or archived note (`JournalNoteEditor`'s `readOnly`): nothing can be changed, there is no save
+        // state, and only an archived one can still be deleted.
+        let read_only = open.read_only();
+        let status = if read_only {
+            Element::from(space::horizontal().width(0))
+        } else if open.dirty {
             button(text("Save").size(13).font(sans(font::Weight::Semibold)))
                 .padding([8, 14])
                 .on_press_maybe(msg(JournalMsg::Save))
@@ -1268,28 +1406,42 @@ impl App {
                 .align_y(Center),
             )
         };
-        let toolbar = row![
+        let mut toolbar = row![
             round(&icons::ARROW_LEFT, msg(JournalMsg::Close)),
             space::horizontal(),
-            round(&icons::TRASH, msg(JournalMsg::Delete)),
-            status,
         ]
         .spacing(10)
         .align_y(Center);
-        let title = text_input(store::DEFAULT_NOTE_TITLE, &open.note.title)
-            .id("journal-title")
-            .on_input(|t| Message::Journal(JournalMsg::Title(t)))
-            .font(serif())
-            .size(30)
+        if open.can_delete() {
+            toolbar = toolbar.push(round(&icons::TRASH, msg(JournalMsg::Delete)));
+        }
+        toolbar = toolbar.push(status);
+        let title: Element<'_, Message> = if read_only {
+            container(
+                text(open.note.display_title().to_string())
+                    .font(serif())
+                    .size(30)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            )
             .padding([4, 0])
-            .style(move |_, _| text_input::Style {
-                background: Color::TRANSPARENT.into(),
-                border: Border::default(),
-                icon: p.muted,
-                placeholder: p.faint,
-                value: p.ink,
-                selection: p.gold,
-            });
+            .into()
+        } else {
+            text_input(store::DEFAULT_NOTE_TITLE, &open.note.title)
+                .id("journal-title")
+                .on_input(|t| Message::Journal(JournalMsg::Title(t)))
+                .font(serif())
+                .size(30)
+                .padding([4, 0])
+                .style(move |_, _| text_input::Style {
+                    background: Color::TRANSPARENT.into(),
+                    border: Border::default(),
+                    icon: p.muted,
+                    placeholder: p.faint,
+                    value: p.ink,
+                    selection: p.gold,
+                })
+                .into()
+        };
         let mut meta = row![
             text(journal::day_heading(&open.note.journal_date))
                 .size(12.5)
@@ -1309,28 +1461,31 @@ impl App {
                 .style(design::link(p.accent)),
             );
             let logged = open.note.reading_at.is_some();
-            meta = meta.push(
-                button(
-                    row![
-                        icon(&icons::BOOK_OPEN, if logged { p.paper } else { p.ink }, 11.),
-                        text(if logged {
-                            "Reading logged"
-                        } else {
-                            "Log reading"
-                        })
-                        .size(12)
-                    ]
-                    .spacing(6)
-                    .align_y(Center),
-                )
-                .padding([5, 10])
-                .on_press_maybe(msg(JournalMsg::ToggleReading))
-                .style(if logged {
-                    design::segment(p, true)
-                } else {
-                    design::segment(p, false)
-                }),
-            );
+            // Read-only, the reading shows only when the note logs one, and can't be switched.
+            if !read_only || logged {
+                meta = meta.push(
+                    button(
+                        row![
+                            icon(&icons::BOOK_OPEN, if logged { p.paper } else { p.ink }, 11.),
+                            text(if logged {
+                                "Reading logged"
+                            } else {
+                                "Log reading"
+                            })
+                            .size(12)
+                        ]
+                        .spacing(6)
+                        .align_y(Center),
+                    )
+                    .padding([5, 10])
+                    .on_press_maybe(if read_only {
+                        None
+                    } else {
+                        msg(JournalMsg::ToggleReading)
+                    })
+                    .style(design::segment(p, logged)),
+                );
+            }
         }
         // The website's editor: Markdown styled as it is written, its syntax hidden off the caret's line.
         let rule_strong = if self.preferences.dark {
@@ -1354,16 +1509,52 @@ impl App {
         .id("journal-body")
         .on_undo(Message::Journal(JournalMsg::Undo))
         .on_redo(Message::Journal(JournalMsg::Redo))
-        .on_link(Message::NoteLink);
+        .on_link(Message::NoteLink)
+        .read_only(read_only);
         // The reflection prompt it was started from, else the website's "Write a note…".
-        editor = editor.placeholder(match &open.prompt {
-            Some(prompt) => prompt.clone(),
-            None if open.note.reading_at.is_some() => "Add a note (optional)…".to_string(),
-            None => "Write a note…".to_string(),
-        });
-        let body: Element<'_, Message> = container(editor).padding([8, 0]).height(Fill).into();
-        let mut content = column![toolbar, title, meta, rule(p), body].spacing(12);
-        if open.confirm_delete {
+        if !read_only {
+            editor = editor.placeholder(match &open.prompt {
+                Some(prompt) => prompt.clone(),
+                None if open.note.reading_at.is_some() => "Add a note (optional)…".to_string(),
+                None => "Write a note…".to_string(),
+            });
+        }
+        let body: Element<'_, Message> = if read_only && open.body.text().trim().is_empty() {
+            container(text("This note is empty.").size(14).color(p.muted))
+                .padding([8, 0])
+                .height(Fill)
+                .into()
+        } else {
+            container(editor).padding([8, 0]).height(Fill).into()
+        };
+        let mut content = column![toolbar, title, meta].spacing(12);
+        if read_only {
+            // "Published · read-only": a mint pill with the surface border.
+            content = content.push(
+                container(
+                    text(if open.status == "published" {
+                        "Published · read-only"
+                    } else {
+                        "Archived · read-only"
+                    })
+                    .size(12)
+                    .font(sans(font::Weight::Bold)),
+                )
+                .padding([4, 12])
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(p.mint.into()),
+                    text_color: Some(p.ink),
+                    border: Border {
+                        color: p.rule,
+                        width: 2.0,
+                        radius: 999.0.into(),
+                    },
+                    ..Default::default()
+                }),
+            );
+        }
+        content = content.push(rule(p)).push(body);
+        if open.confirm_delete && open.can_delete() {
             content = content.push(
                 container(
                     row![

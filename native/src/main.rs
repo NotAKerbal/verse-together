@@ -24,6 +24,7 @@ mod lesson_page;
 mod lessons;
 mod lessons_ui;
 mod library_ui;
+mod margin;
 mod mark_layer;
 mod marks;
 mod md_editor;
@@ -188,6 +189,8 @@ enum Message {
     Pick(text_selection::Area, usize, usize, select_text::Phase),
     /// The pointer came up anywhere: a drag selection ends.
     EndDrag,
+    /// Where the pointer is (its y in the window) while a selection is dragged.
+    DragAt(f32),
     ClearSelection,
     ToggleLog,
     Copy,
@@ -274,6 +277,8 @@ struct App {
     word_selection: Vec<(usize, TextRange)>,
     /// A text selection being made or made, in the reader, a lesson's chapters or a guide.
     drag: Option<text_selection::Drag>,
+    /// While a selection is dragged past the window's top or bottom edge: how far the page scrolls each frame.
+    edge_scroll: f32,
     styles_open: bool,
     style_kind: MarkKind,
     custom_color: String,
@@ -318,6 +323,7 @@ struct App {
     label_widths: [f32; 3],
     /// The open Settings section, the feedback form, the release notes' images, and the chapter's note links.
     settings_tab: settings_ui::SettingsTab,
+    settings_motion: settings_ui::TabMotion,
     feedback: feedback::FeedbackUi,
     release: release_notes::ReleaseState,
     note_links: note_links::NoteLinks,
@@ -374,6 +380,7 @@ impl App {
             annotations: vec![],
             word_selection: vec![],
             drag: None,
+            edge_scroll: 0.0,
             styles_open: false,
             style_kind: MarkKind::Highlight,
             custom_color: String::new(),
@@ -414,6 +421,7 @@ impl App {
             motion: header::Motion::new(0, label_widths, !anim::reduced_motion(), now),
             label_widths,
             settings_tab: settings_ui::SettingsTab::default(),
+            settings_motion: settings_ui::TabMotion::new(settings_ui::SettingsTab::default(), now),
             feedback: Default::default(),
             release: Default::default(),
             note_links: Default::default(),
@@ -499,18 +507,32 @@ impl App {
             Subscription::none()
         };
         // While a selection is dragged, the button coming up anywhere (even outside the text) ends it.
-        let drag = if self.drag.as_ref().is_some_and(|d| d.dragging) {
+        let dragging = self.drag.as_ref().is_some_and(|d| d.dragging);
+        let drag = if dragging {
             iced::event::listen_with(|event, _, _| match event {
                 Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                     Some(Message::EndDrag)
+                }
+                Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                    Some(Message::DragAt(position.y))
                 }
                 _ => None,
             })
         } else {
             Subscription::none()
         };
+        // Past the window's edge, the page scrolls on each frame until the pointer comes back or the button is up.
+        let edge = if dragging && self.edge_scroll != 0.0 {
+            window::frames().map(Message::Frame)
+        } else {
+            Subscription::none()
+        };
+        let drag = Subscription::batch([drag, edge]);
         let events = Subscription::batch([events, drag]);
-        if self.motion.is_animating(self.now) || self.journal.motion.is_animating(self.now) {
+        if self.motion.is_animating(self.now)
+            || self.journal.motion.is_animating(self.now)
+            || self.settings_motion.is_animating(self.now)
+        {
             Subscription::batch([
                 events,
                 account,
@@ -1011,7 +1033,39 @@ impl App {
             Message::Library(message) => return self.update_library(message),
             Message::DismissError => self.error = None,
             Message::Presented => {}
-            Message::Frame(now) => self.now = now,
+            Message::Frame(now) => {
+                self.now = now;
+                if self.edge_scroll != 0.0
+                    && let Some(d) = self.drag.as_ref().filter(|d| d.dragging)
+                {
+                    let id = match d.area {
+                        text_selection::Area::Reader => "reader",
+                        text_selection::Area::Lesson | text_selection::Area::Guide => "guide",
+                    };
+                    return operation::scroll_by(
+                        id,
+                        scrollable::AbsoluteOffset {
+                            x: 0.0,
+                            y: self.edge_scroll,
+                        },
+                    );
+                }
+            }
+            Message::DragAt(y) => {
+                // Further past the edge scrolls faster, up to 40px a frame (as the guide's editor scrolls).
+                let past = if y < 0.0 {
+                    y
+                } else if y > self.window_height {
+                    y - self.window_height
+                } else {
+                    0.0
+                };
+                self.edge_scroll = if self.drag.as_ref().is_some_and(|d| d.dragging) {
+                    past.clamp(-40.0, 40.0)
+                } else {
+                    0.0
+                };
+            }
             Message::Navigate(l, v) => return self.navigate(l, v),
             Message::Adjacent(d) => {
                 if let Some(l) = store::adjacent(&self.books, &self.preferences.last, d) {
@@ -1095,8 +1149,16 @@ impl App {
                     return presented(jump::to_verse(v));
                 }
             }
-            Message::Pick(area, block, at, phase) => return self.pick(area, block, at, phase),
-            Message::EndDrag => return self.end_drag(),
+            Message::Pick(area, block, at, phase) => {
+                if matches!(phase, select_text::Phase::Press { .. }) {
+                    self.edge_scroll = 0.0;
+                }
+                return self.pick(area, block, at, phase);
+            }
+            Message::EndDrag => {
+                self.edge_scroll = 0.0;
+                return self.end_drag();
+            }
             Message::ClearWords => self.clear_words(),
             Message::QuoteInJournal => {
                 let verses: Vec<u32> = self
@@ -1286,7 +1348,10 @@ impl App {
                     self.popover = None;
                     // `/account` without a section opens Account.
                     if entering {
+                        // A page that opens shows its tab without a transition, as the website's does.
                         self.settings_tab = settings_ui::SettingsTab::Account;
+                        self.settings_motion
+                            .set(self.settings_tab, Instant::now(), false);
                     }
                     return self.update_account(account::AccountMsg::LoadDetails);
                 }
@@ -1300,13 +1365,18 @@ impl App {
             }
             Message::SettingsTab(tab) => {
                 let mut tasks = vec![];
-                if self.screen != Screen::Settings {
+                let entering = self.screen != Screen::Settings;
+                if entering {
                     tasks.push(self.update(Message::SetScreen(Screen::Settings)));
                     if self.screen != Screen::Settings {
                         return Task::batch(tasks);
                     }
                 }
                 self.settings_tab = tab;
+                // Switching sections animates the tabs (unless motion is reduced); arriving shows the tab at once.
+                self.now = Instant::now();
+                self.settings_motion
+                    .set(tab, self.now, self.motion.animate && !entering);
                 // A new section starts at its heading even when the previous one was long.
                 tasks.push(presented(operation::scroll_to(
                     "account",
@@ -1395,6 +1465,8 @@ impl App {
                     let r = s.set_read(&self.preferences.last, &source, !self.read);
                     if self.report(r).is_some() {
                         self.read = !self.read;
+                        // The chapter's mark is a reading in the log: the verses show it at once.
+                        self.refresh_note_links();
                         self.sync_soon();
                     }
                 }
@@ -1459,6 +1531,18 @@ impl App {
                 Event::Keyboard(keyboard::Event::ModifiersChanged(m)) => self.modifiers = m,
                 Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                     self.modifiers = modifiers;
+                    // The Your Bibles dialog is modal: the page behind takes no keys. Escape in the language chooser
+                    // steps back to the catalog; otherwise it closes the dialog (reader settings stay open behind).
+                    if self.tools.bibles_dialog.is_some() {
+                        if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
+                            return self.update_tools(if self.tools.choosing_language {
+                                reader_tools::ToolsMsg::ChooseLanguage(false)
+                            } else {
+                                reader_tools::ToolsMsg::CloseBibles
+                            });
+                        }
+                        return Task::none();
+                    }
                     match key.as_ref() {
                         keyboard::Key::Character("k") if modifiers.command() => {
                             return self.update(Message::OpenSearch);
@@ -1485,8 +1569,12 @@ impl App {
                         keyboard::Key::Named(keyboard::key::Named::Escape) => {
                             if self.release.viewing.is_some() {
                                 self.release.viewing = None;
-                            } else if self.note_links.picker.is_some() {
+                            } else if self.note_links.picker.is_some()
+                                || self.note_links.read_picker.is_some()
+                            {
+                                // As the website's marker dialog: Escape closes it (the marker keeps its place).
                                 self.note_links.picker = None;
+                                self.note_links.read_picker = None;
                             } else if self.popover.is_some() {
                                 self.popover = None;
                             } else if self.screen == Screen::Journal && self.journal.open.is_some()
@@ -1532,7 +1620,10 @@ impl App {
                             named @ (keyboard::key::Named::ArrowDown
                             | keyboard::key::Named::ArrowUp
                             | keyboard::key::Named::Enter),
-                        ) if self.note_links.picker.is_some() && modifiers.is_empty() => {
+                        ) if (self.note_links.picker.is_some()
+                            || self.note_links.read_picker.is_some())
+                            && modifiers.is_empty() =>
+                        {
                             return self.update_note_links(match named {
                                 keyboard::key::Named::ArrowDown => note_links::NoteLinkMsg::Step(1),
                                 keyboard::key::Named::ArrowUp => note_links::NoteLinkMsg::Step(-1),
@@ -1770,6 +1861,34 @@ mod interaction_tests {
         ));
         let _ = app.update(Message::Pick(area, to.0, to.1, Phase::Drag));
         let _ = app.update(Message::Pick(area, to.0, to.1, Phase::Release));
+    }
+    #[test]
+    fn dragging_a_selection_past_the_window_edge_scrolls_the_page_until_it_ends() {
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        app.window_height = 800.0;
+        let area = text_selection::Area::Reader;
+        let _ = app.update(Message::Pick(area, 2, 0, Phase::Press { clicks: 1 }));
+        let _ = app.update(Message::Pick(area, 3, 4, Phase::Drag));
+        assert!(app.drag.as_ref().is_some_and(|d| d.dragging));
+        // Inside the window nothing scrolls; past the bottom it scrolls down, faster further out (at most 40px a
+        // frame); past the top it scrolls up.
+        let _ = app.update(Message::DragAt(400.0));
+        assert_eq!(app.edge_scroll, 0.0);
+        let _ = app.update(Message::DragAt(812.0));
+        assert_eq!(app.edge_scroll, 12.0);
+        let _ = app.update(Message::DragAt(1200.0));
+        assert_eq!(app.edge_scroll, 40.0);
+        let _ = app.update(Message::DragAt(-6.0));
+        assert_eq!(app.edge_scroll, -6.0);
+        // The button coming up stops it, and the next drag starts still.
+        let _ = app.update(Message::EndDrag);
+        assert_eq!(app.edge_scroll, 0.0);
+        app.edge_scroll = 9.0;
+        let _ = app.update(Message::Pick(area, 1, 0, Phase::Press { clicks: 1 }));
+        assert_eq!(app.edge_scroll, 0.0);
+        drop(app);
+        let _ = std::fs::remove_dir_all(dir);
     }
     #[test]
     fn copied_words_never_include_the_verse_number_indent() {

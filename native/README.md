@@ -47,7 +47,11 @@ under your user data directory, needs no sudo, and creates no services or autost
   note glides the day's list into the rail. Notes have a title, a Markdown body written in the website's live
   editor (headings at their sizes, bold, italics, links, quotes, lists and code styled in place, syntax hidden
   off the caret's line, Ctrl/⌘-click to follow a safe link, list continuation on Enter, undo/redo), an optional
-  source (scripture or lesson) and reading log, and save automatically, on leaving, closing or Ctrl+S.
+  source (scripture or lesson) and reading log, and save automatically, on leaving, closing or Ctrl+S. A note the
+  account has published (or archived) opens read-only, as on the website ("Published · read-only"): its text can be
+  selected, copied and its links followed, but nothing can be typed, undone, re-dated, logged or deleted (archived
+  notes can still be deleted). If a note is published elsewhere while you are writing in it here, what you wrote is
+  kept as a separate draft on the same day and the published note is left as the account has it.
 - **Browse** (the website's `/browse` Library): this week's Come, Follow Me, Continue reading, the Journal and the
   five volumes as art cards; a volume's books with their art and categories; a book's chapters with read and
   current chapters marked. The navigation's Browse opens the Library from the reader and otherwise returns to where
@@ -57,6 +61,7 @@ under your user data directory, needs no sudo, and creates no services or autost
   the following verses, in the reader (plain or read against other Bibles), on a lesson's chapters (across a
   chapter break) and in guide prose (across paragraphs). Marks, Copy, Add to note and verse notes take exactly the
   scripture's own words, as UTF-16 ranges of the KJV text; another Bible's words or a verse number never are.
+  Dragging past the window's top or bottom edge scrolls the page along, extending the selection as it goes.
 - Reader settings (gear in the chapter pill): simple mode, the website's 85–130% text-size range in 1% steps, serif/sans, and text width
   (comfortable/wide/full). Appearance (light/dark) is under the navigation's settings gear. Preferences persist;
   profiles from earlier builds keep their notes and move from the old 22px default to the website's 16px.
@@ -72,7 +77,8 @@ under your user data directory, needs no sudo, and creates no services or autost
   word (Bible Dictionary/Guide/Topical Guide topics matched on this computer and read from the website, Strong's
   Hebrew and Greek, English dictionaries), **Resources** for selected verses from the published lessons, and for
   the Bible **Your Bibles** in Reader settings (other translations shown verse by verse beside the KJV with their
-  changed words colored) and the **Joseph Smith Translation** passages for the chapter. Each shows loading and
+  changed words colored; "+ Add Bible" and the full-screen button open the website's full-window Your Bibles dialog
+  with the catalog and language chooser, Back, Done and Escape) and the **Joseph Smith Translation** passages for the chapter. Each shows loading and
   failure states; nothing is invented when a service is unavailable.
 - **Guide prose marks**: drag across words in a Come, Follow Me guide (across paragraphs too) to highlight,
   underline or note them, with the same quick marks as the reader, Copy and Add to note; marks apply to exactly the
@@ -83,7 +89,8 @@ under your user data directory, needs no sudo, and creates no services or autost
   builder and editor (dates typed as the browser shows them or chosen from a calendar).
 - **Copy share link** for selected verses: the website's `/share/...` passage link.
 - **Settings**, as the website's `/account`: six sections in a pill of tabs at the header's right (at the top of the
-  page in simple mode), Left/Right/Home/End to move between them. **Account**; **Reading** (a preview, the faith
+  page in simple mode), Left/Right/Home/End to move between them; the open tab's name slides open over 280ms as on
+  the website (no motion with animations off). **Account**; **Reading** (a preview, the faith
   tradition, scripture appearance with Reset, simple mode, and this app's dark appearance); **Translations** (Your
   Bibles and the default Bible); **Study tools** (quick marks); **Release notes** (the website's own release history
   and screenshots, embedded); **Feedback** (the website's feedback form, anonymous unless signed in).
@@ -94,7 +101,10 @@ under your user data directory, needs no sudo, and creates no services or autost
   chapter; if it can't load, the bundled King James Bible shows with a notice). Marks stay on their verses; marks on
   particular words show only where those words are in the text you're reading.
 - **Note links beside verses**: "Note" (or "2 notes") beside the first verse of each passage a journal note links to;
-  it opens the note (or a list of them), saving anything you were writing first.
+  it opens the note (or a list of them floating beside it), saving anything you were writing first.
+- **Reading log beside verses**: a rule down the verses your reading log covers (chapter marks, logged readings and
+  journal entries that log a reading, this computer's or the signed-in account's) and a check at the start of each
+  read passage; it opens that reading's journal entry or day (or a "Reading log" list of them).
 - **Sign-in**, as the website's `/sign-in`: the navigation's gear opens Settings; signed in, the avatar opens the account menu. "Continue with
   Google" opens the website in your browser; after you approve there, the app receives its own session through a
   one-time, PKCE-protected code on `127.0.0.1` (Cancel on the website stops the app waiting). The session is kept

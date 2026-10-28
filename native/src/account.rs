@@ -596,9 +596,24 @@ impl App {
                                 "{} changed both here and on another device. Both versions were kept in your journal.",
                                 crate::journal::plural(report.kept_both, "note", "notes")
                             ))
+                        } else if !report.read_only_copies.is_empty() {
+                            Some(format!(
+                                "{} published elsewhere while you changed {} here. Your changes were kept as separate drafts in your journal.",
+                                crate::journal::plural(
+                                    report.read_only_copies.len(),
+                                    "note was",
+                                    "notes were"
+                                ),
+                                if report.read_only_copies.len() == 1 {
+                                    "it"
+                                } else {
+                                    "them"
+                                }
+                            ))
                         } else {
                             None
                         };
+                        self.follow_read_only_copies(&report.read_only_copies);
                         self.show_synced();
                     }
                     Err(CallError::SignedOut) => return self.session_ended(),
@@ -844,6 +859,8 @@ impl App {
         {
             self.read = read;
         }
+        // An open note follows its status on the account (a note published elsewhere becomes read-only).
+        self.refresh_open_note();
         if self.screen == Screen::Journal && self.journal.open.is_none() {
             self.reload_journal();
         }
@@ -851,6 +868,10 @@ impl App {
         let picker = self.note_links.picker;
         self.refresh_note_links();
         self.note_links.picker = picker.filter(|v| self.note_links.by_verse.contains_key(v));
+        let read_picker = self.note_links.read_picker;
+        let read = self.read_passages();
+        self.note_links.read_picker =
+            read_picker.filter(|v| read.get(v).is_some_and(|p| p.start == *v));
         if self.lessons.open.is_some() {
             self.load_lesson_log();
             if self.lessons.selected.is_empty() {

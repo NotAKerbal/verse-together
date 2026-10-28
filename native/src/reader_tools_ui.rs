@@ -9,7 +9,8 @@ use crate::reader_tools::{
 use crate::select_text::{Piece, Shown};
 use crate::{App, Message};
 use iced::widget::{
-    button, column, container, markdown, rich_text, row, space, span, stack, text, text_input,
+    button, column, container, markdown, opaque, rich_text, row, space, span, stack, text,
+    text_input,
 };
 use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, font};
 
@@ -489,15 +490,6 @@ impl App {
             );
         }
         let mut body = column![first_line].spacing(4);
-        if self.note_links.picker == Some(number)
-            && let Some(picker) = self.note_link_picker()
-        {
-            body = body.push(
-                container(picker)
-                    .width(Fill)
-                    .align_x(iced::alignment::Horizontal::Right),
-            );
-        }
         for (i, (id, state)) in self.tools.compare.iter().enumerate() {
             let Load::Ready(verses) = state else { continue };
             let Some(v) = verses.iter().find(|v| v.number == number) else {
@@ -1227,191 +1219,30 @@ impl App {
             return None;
         }
         let p = self.p();
-        let default = self.preferences.default_bible.clone();
-        let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
         let mut c = column![].spacing(12);
-        match self.tools.bibles_view {
-            BiblesView::List => {
-                c = c.push(
-                    text("Your Bibles")
-                        .size(14)
-                        .font(sans(font::Weight::Medium)),
-                );
-                c = c.push(
-                    text("Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.")
-                        .size(12)
-                        .color(Color { a: 0.6, ..p.ink }),
-                );
-                let make_default = |id: &str| -> Element<'_, Message> {
-                    let current = same(&default, id);
-                    button(design::underlined(
-                        if current { "Default" } else { "Make default" },
-                        12.,
-                        p.ink,
-                        font::Weight::Medium,
-                    ))
-                    .padding([6, 8])
-                    .on_press(msg(ToolsMsg::SetDefault(id.to_string())))
-                    .style(design::underlined_link(p))
-                    .into()
-                };
-                let base = crate::faith::base_bible_label(self.show_lds());
-                let mut list = column![
-                    container(
-                        row![
-                            column![
-                                text(base).size(14).font(sans(font::Weight::Medium)),
-                                text("English · Available offline")
-                                    .size(12)
-                                    .color(Color { a: 0.6, ..p.ink }),
-                            ]
-                            .spacing(2)
-                            .width(Fill),
-                            make_default(crate::faith::LDS_BIBLE_ID),
-                        ]
-                        .spacing(8)
-                        .align_y(Center),
-                    )
-                    .padding([10, 12])
-                ];
-                // Saved Bibles, then (in the reader) any shown but not saved (`rows`).
-                let mut rows: Vec<(reader_tools::FavoriteBible, bool)> = self
-                    .preferences
-                    .bibles
-                    .iter()
-                    .map(|b| (b.clone(), true))
-                    .collect();
-                if in_reader {
-                    for id in &self.preferences.compare_bibles {
-                        if !rows.iter().any(|(b, _)| same(&b.id, id)) {
-                            let known = reader_tools::featured_bibles()
-                                .into_iter()
-                                .find(|b| same(&b.id, id))
-                                .unwrap_or(reader_tools::FavoriteBible {
-                                    id: id.clone(),
-                                    label: id.clone(),
-                                    language: None,
-                                    abbreviation: None,
-                                });
-                            rows.push((known, false));
-                        }
-                    }
-                }
-                for (bible, saved) in rows {
-                    let shown = self
-                        .preferences
-                        .compare_bibles
-                        .iter()
-                        .any(|t| same(t, &bible.id));
-                    let detail = [
-                        bible.language.clone(),
-                        bible.abbreviation.clone(),
-                        (!saved).then(|| "Not saved".to_string()),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" · ");
-                    let id = bible.id.clone();
-                    let mut line = row![
-                        column![
-                            text(bible.label.clone())
-                                .size(14)
-                                .font(sans(font::Weight::Medium)),
-                            text(detail).size(12).color(Color { a: 0.6, ..p.ink }),
-                        ]
-                        .spacing(2)
-                        .width(Fill),
-                    ]
-                    .spacing(8)
-                    .align_y(Center);
-                    if saved {
-                        line = line.push(make_default(&id));
-                    }
-                    if in_reader && !same(&default, &id) {
-                        line = line
-                            .push(self.switch(shown, msg(ToolsMsg::ShowBible(id.clone(), !shown))));
-                    }
-                    line = line.push(if saved {
-                        Element::from(
-                            button(icon(&icons::TRASH, Color { a: 0.5, ..p.ink }, 13.))
-                                .padding(8)
-                                .on_press(msg(ToolsMsg::RemoveBible(id)))
-                                .style(design::quiet(p)),
-                        )
-                    } else {
-                        button(design::underlined("Save", 12., p.ink, font::Weight::Medium))
-                            .padding([6, 8])
-                            .on_press(msg(ToolsMsg::SaveBible(bible.clone())))
-                            .style(design::underlined_link(p))
-                            .into()
-                    });
-                    list = list.push(divider(p));
-                    list = list.push(container(line).padding([10, 12]));
-                }
-                c = c.push(
-                    container(list)
-                        .width(Fill)
-                        .style(move |_| container::Style {
-                            border: Border {
-                                color: p.rule,
-                                width: 1.0,
-                                radius: 12.0.into(),
-                            },
-                            ..Default::default()
-                        }),
-                );
-                if self.preferences.bibles.is_empty() {
-                    c = c.push(
-                        text("Add a Bible to read it verse by verse beside the base text.")
-                            .size(12)
-                            .color(Color { a: 0.6, ..p.ink }),
-                    );
-                }
-                c = c.push(
-                    button(
-                        text("+ Add Bible")
-                            .size(14)
-                            .font(sans(font::Weight::Medium))
-                            .center()
-                            .width(Fill),
-                    )
-                    .padding([10, 12])
-                    .width(Fill)
-                    .on_press(msg(ToolsMsg::BiblesView(BiblesView::Add)))
-                    .style(design::outlined(p, 8.0)),
-                );
-            }
-            BiblesView::Add => {
-                let choosing = self.tools.choosing_language
-                    && matches!(self.tools.catalog, Some(Load::Ready(_)));
-                c = c.push(
-                    row![
-                        link_button(
-                            p,
-                            "‹ Back",
-                            if choosing {
-                                msg(ToolsMsg::ChooseLanguage(false))
-                            } else {
-                                msg(ToolsMsg::BiblesView(BiblesView::List))
-                            }
-                        ),
-                        space::horizontal(),
-                        self.setting_label(if choosing {
-                            "Choose a language"
-                        } else {
-                            "Add a Bible"
-                        }),
-                    ]
-                    .align_y(Center),
-                );
-                c = c.push(if choosing {
-                    self.language_chooser()
-                } else {
-                    self.catalog_picker()
-                });
-            }
-        }
+        // "Your Bibles" with a button opening it full screen, the website's note, then the list.
+        c = c.push(
+            row![
+                text("Your Bibles")
+                    .size(14)
+                    .font(sans(font::Weight::Medium))
+                    .width(Fill),
+                self.hint(
+                    button(expand_icon(Color { a: 0.55, ..p.ink }, 16.0))
+                        .padding(6)
+                        .on_press(msg(ToolsMsg::BiblesView(BiblesView::List)))
+                        .style(design::quiet(p)),
+                    "Full screen".into(),
+                ),
+            ]
+            .align_y(Center),
+        );
+        c = c.push(
+            text("Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.")
+                .size(12)
+                .color(Color { a: 0.6, ..p.ink }),
+        );
+        c = c.push(self.bible_list(in_reader));
         // The JST is Latter-day Saint content: its switch shows only for that tradition, in a disclosure.
         if self.show_lds() {
             let open = self.tools.jst_details;
@@ -1469,6 +1300,225 @@ impl App {
             }
         }
         Some(c.into())
+    }
+    /// `BibleList`: the bundled Bible and each saved one (in the reader, also those shown but not saved), each with
+    /// Make default, its Show switch in the reader, and Remove (or Save); then "+ Add Bible", which opens the catalog
+    /// full screen.
+    fn bible_list(&self, in_reader: bool) -> Element<'_, Message> {
+        let p = self.p();
+        let default = self.preferences.default_bible.clone();
+        let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
+        let mut c = column![].spacing(12);
+        let make_default = |id: &str| -> Element<'_, Message> {
+            let current = same(&default, id);
+            button(design::underlined(
+                if current { "Default" } else { "Make default" },
+                12.,
+                p.ink,
+                font::Weight::Medium,
+            ))
+            .padding([6, 8])
+            .on_press(msg(ToolsMsg::SetDefault(id.to_string())))
+            .style(design::underlined_link(p))
+            .into()
+        };
+        let base = crate::faith::base_bible_label(self.show_lds());
+        let mut list = column![
+            container(
+                row![
+                    column![
+                        text(base).size(14).font(sans(font::Weight::Medium)),
+                        text("English · Available offline")
+                            .size(12)
+                            .color(Color { a: 0.6, ..p.ink }),
+                    ]
+                    .spacing(2)
+                    .width(Fill),
+                    make_default(crate::faith::LDS_BIBLE_ID),
+                ]
+                .spacing(8)
+                .align_y(Center),
+            )
+            .padding([10, 12])
+        ];
+        // Saved Bibles, then (in the reader) any shown but not saved (`rows`).
+        let mut rows: Vec<(reader_tools::FavoriteBible, bool)> = self
+            .preferences
+            .bibles
+            .iter()
+            .map(|b| (b.clone(), true))
+            .collect();
+        if in_reader {
+            for id in &self.preferences.compare_bibles {
+                if !rows.iter().any(|(b, _)| same(&b.id, id)) {
+                    let known = reader_tools::featured_bibles()
+                        .into_iter()
+                        .find(|b| same(&b.id, id))
+                        .unwrap_or(reader_tools::FavoriteBible {
+                            id: id.clone(),
+                            label: id.clone(),
+                            language: None,
+                            abbreviation: None,
+                        });
+                    rows.push((known, false));
+                }
+            }
+        }
+        for (bible, saved) in rows {
+            let shown = self
+                .preferences
+                .compare_bibles
+                .iter()
+                .any(|t| same(t, &bible.id));
+            let detail = [
+                bible.language.clone(),
+                bible.abbreviation.clone(),
+                (!saved).then(|| "Not saved".to_string()),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · ");
+            let id = bible.id.clone();
+            let mut line = row![
+                column![
+                    text(bible.label.clone())
+                        .size(14)
+                        .font(sans(font::Weight::Medium)),
+                    text(detail).size(12).color(Color { a: 0.6, ..p.ink }),
+                ]
+                .spacing(2)
+                .width(Fill),
+            ]
+            .spacing(8)
+            .align_y(Center);
+            if saved {
+                line = line.push(make_default(&id));
+            }
+            if in_reader && !same(&default, &id) {
+                line = line.push(self.switch(shown, msg(ToolsMsg::ShowBible(id.clone(), !shown))));
+            }
+            line = line.push(if saved {
+                Element::from(
+                    button(icon(&icons::TRASH, Color { a: 0.5, ..p.ink }, 13.))
+                        .padding(8)
+                        .on_press(msg(ToolsMsg::RemoveBible(id)))
+                        .style(design::quiet(p)),
+                )
+            } else {
+                button(design::underlined("Save", 12., p.ink, font::Weight::Medium))
+                    .padding([6, 8])
+                    .on_press(msg(ToolsMsg::SaveBible(bible.clone())))
+                    .style(design::underlined_link(p))
+                    .into()
+            });
+            list = list.push(divider(p));
+            list = list.push(container(line).padding([10, 12]));
+        }
+        c = c.push(
+            container(list)
+                .width(Fill)
+                .style(move |_| container::Style {
+                    border: Border {
+                        color: p.rule,
+                        width: 1.0,
+                        radius: 12.0.into(),
+                    },
+                    ..Default::default()
+                }),
+        );
+        if self.preferences.bibles.is_empty() {
+            c = c.push(
+                text("Add a Bible to read it verse by verse beside the base text.")
+                    .size(12)
+                    .color(Color { a: 0.6, ..p.ink }),
+            );
+        }
+        c = c.push(
+            button(
+                text("+ Add Bible")
+                    .size(14)
+                    .font(sans(font::Weight::Medium))
+                    .center()
+                    .width(Fill),
+            )
+            .padding([10, 12])
+            .width(Fill)
+            .on_press(msg(ToolsMsg::BiblesView(BiblesView::Add)))
+            .style(design::outlined(p, 8.0)),
+        );
+        c.into()
+    }
+    /// The website's full-screen Your Bibles dialog (`<dialog>` in `BibleTranslationControls`): over everything, a
+    /// header with ‹ Back (in the catalog and language chooser), the view's title and Done, and the list of Bibles,
+    /// the catalog ("Add a Bible") or the language chooser ("Choose a language") in a 36rem column that scrolls.
+    pub(crate) fn bibles_dialog(&self) -> Option<Element<'_, Message>> {
+        let view = self.tools.bibles_dialog.clone()?;
+        let p = self.p();
+        let in_reader = self.screen != crate::Screen::Settings;
+        let choosing = view == BiblesView::Add
+            && self.tools.choosing_language
+            && matches!(self.tools.catalog, Some(Load::Ready(_)));
+        let title = match (&view, choosing) {
+            (BiblesView::List, _) => "Your Bibles",
+            (_, false) => "Add a Bible",
+            (_, true) => "Choose a language",
+        };
+        let back: Element<'_, Message> = match (&view, choosing) {
+            (BiblesView::List, _) => space().width(80).into(),
+            (_, true) => link_button(p, "‹ Back", msg(ToolsMsg::ChooseLanguage(false))),
+            (_, false) => link_button(p, "‹ Back", msg(ToolsMsg::BiblesView(BiblesView::List))),
+        };
+        let done = button(text("Done").size(14).font(sans(font::Weight::Medium)))
+            .padding([8, 16])
+            .on_press(msg(ToolsMsg::CloseBibles))
+            .style(design::outlined(p, 8.0));
+        let bar = container(
+            row![
+                container(back).width(80),
+                text(title)
+                    .size(16)
+                    .font(sans(font::Weight::Medium))
+                    .center()
+                    .width(Fill),
+                container(done)
+                    .width(80)
+                    .align_x(iced::alignment::Horizontal::Right),
+            ]
+            .spacing(8)
+            .align_y(Center),
+        )
+        .max_width(576)
+        .padding([12, 16]);
+        let header = column![
+            container(bar).center_x(Fill),
+            container(space())
+                .width(Fill)
+                .height(1)
+                .style(move |_| container::Style {
+                    background: Some(p.rule.into()),
+                    ..Default::default()
+                }),
+        ];
+        let body: Element<'_, Message> = match view {
+            BiblesView::List => self.bible_list(in_reader),
+            BiblesView::Add if choosing => self.language_chooser(),
+            BiblesView::Add => self.catalog_picker(),
+        };
+        let body = self
+            .scroll(container(container(body).max_width(576).padding([20, 16])).center_x(Fill))
+            .id("bibles-dialog")
+            .height(Fill);
+        Some(opaque(
+            container(column![header, body])
+                .width(Fill)
+                .height(Fill)
+                .style(move |_| container::Style {
+                    background: Some(p.paper.into()),
+                    text_color: Some(p.ink),
+                    ..Default::default()
+                }),
+        ))
     }
     /// The language chooser's options: "All languages" (while the search fits it), then the matching languages.
     pub(crate) fn language_options(&self) -> Vec<bible_catalog::Language> {
@@ -1539,11 +1589,7 @@ impl App {
                 .style(design::quiet(p)),
             );
         }
-        let rows = options.len().min(self.tools.language_limit) as f32;
-        c = c.push(
-            self.scroll(boxed(p, list))
-                .height(Length::Fixed((rows * 39.0 + 2.0).min(260.0))),
-        );
+        c = c.push(boxed(p, list));
         if options.len() > self.tools.language_limit {
             c = c.push(more_button(p, msg(ToolsMsg::LanguagesMore)));
         }
@@ -1623,6 +1669,7 @@ impl App {
         };
         let mut c = column![
             text_input("Search by name or abbreviation", query)
+                .id("catalog-search")
                 .on_input(|q| msg(ToolsMsg::CatalogQuery(q)))
                 .padding([9, 12])
                 .size(13),
@@ -1698,10 +1745,7 @@ impl App {
                     .align_y(Center),
                 );
             }
-            c = c.push(
-                self.scroll(boxed(p, list))
-                    .height(Length::Fixed((shown as f32 * 56.0 + 2.0).min(280.0))),
-            );
+            c = c.push(boxed(p, list));
         }
         if matches!(self.tools.catalog, Some(Load::Loading)) && !featured_only {
             c = c.push(muted(p, "Loading the catalog…"));
@@ -1887,4 +1931,18 @@ fn strip_tags(text: &str) -> String {
         .replace("&gt;", ">")
         .replace("&nbsp;", " ")
         .replace("&amp;", "&")
+}
+
+/// The website's "Full screen" icon (two arrows apart), drawn from its own SVG.
+fn expand_icon<'a>(color: Color, size: f32) -> iced::widget::Svg<'a> {
+    static HANDLE: std::sync::OnceLock<iced::widget::svg::Handle> = std::sync::OnceLock::new();
+    let handle = HANDLE.get_or_init(|| {
+        iced::widget::svg::Handle::from_memory(
+            &br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4h4v4M8 16H4v-4M16 4l-5 5M4 16l5-5"/></svg>"##[..],
+        )
+    });
+    iced::widget::svg(handle.clone())
+        .width(size)
+        .height(size)
+        .style(move |_, _| iced::widget::svg::Style { color: Some(color) })
 }

@@ -541,6 +541,7 @@ pub struct MdEditor<'a, Message> {
     on_undo: Option<Message>,
     on_redo: Option<Message>,
     on_link: Option<Box<dyn Fn(String) -> Message + 'a>>,
+    read_only: bool,
 }
 pub fn md_editor<'a, Message>(
     content: &'a Content,
@@ -557,6 +558,7 @@ pub fn md_editor<'a, Message>(
         on_undo: None,
         on_redo: None,
         on_link: None,
+        read_only: false,
     }
 }
 impl<'a, Message> MdEditor<'a, Message> {
@@ -578,6 +580,13 @@ impl<'a, Message> MdEditor<'a, Message> {
     }
     pub fn on_link(mut self, f: impl Fn(String) -> Message + 'a) -> Self {
         self.on_link = Some(Box::new(f));
+        self
+    }
+    /// A published note (`NoteMarkdown` on the website): shown as rendered Markdown everywhere (syntax hidden on every
+    /// line), selectable and copyable, its links followed with a plain click; nothing can be typed, pasted, cut or
+    /// undone, and there is no caret or input method.
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
         self
     }
 }
@@ -752,7 +761,7 @@ impl<Message: Clone> MdEditor<'_, Message> {
         let (a, b) = content
             .selection()
             .unwrap_or((content.cursor, content.cursor));
-        let active = |i: usize| state.focused && i >= a.line && i <= b.line;
+        let active = |i: usize| state.focused && !self.read_only && i >= a.line && i <= b.line;
         let analysed = md_live::analyze(&lines, &active);
         let p = self.palette;
         let mut top = PAD_TOP;
@@ -1054,7 +1063,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
                     state.focused = true;
                     shell.invalidate_layout();
                 }
-                if state.modifiers.command()
+                if (state.modifiers.command() || self.read_only)
                     && let (Some(href), Some(on_link)) = (self.link_at(state, point), &self.on_link)
                 {
                     shell.publish(on_link(href));
@@ -1160,7 +1169,9 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
                 let shift = modifiers.shift();
                 let c = self.content;
                 let publish = |shell: &mut Shell<'_, Message>, a: Action| {
-                    shell.publish((self.on_action)(a));
+                    if !(self.read_only && a.is_edit()) {
+                        shell.publish((self.on_action)(a));
+                    }
                     shell.capture_event();
                 };
                 let x_of = |state: &State| {
@@ -1258,13 +1269,13 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
                         }
                         "z" => {
                             let m = if shift { &self.on_redo } else { &self.on_undo };
-                            if let Some(m) = m {
+                            if let Some(m) = m.as_ref().filter(|_| !self.read_only) {
                                 shell.publish(m.clone());
                             }
                             shell.capture_event();
                         }
                         "y" => {
-                            if let Some(m) = &self.on_redo {
+                            if let Some(m) = self.on_redo.as_ref().filter(|_| !self.read_only) {
                                 shell.publish(m.clone());
                             }
                             shell.capture_event();
@@ -1292,7 +1303,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
                     }
                 }
             }
-            Event::InputMethod(event) if state.focused => match event {
+            Event::InputMethod(event) if state.focused && !self.read_only => match event {
                 input_method::Event::Opened | input_method::Event::Closed => {
                     state.preedit = matches!(event, input_method::Event::Opened)
                         .then(input_method::Preedit::new);
@@ -1317,7 +1328,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
             Event::Window(window::Event::Focused) => state.window_focused = true,
             Event::Window(window::Event::Unfocused) => state.window_focused = false,
             Event::Window(window::Event::RedrawRequested(_))
-                if state.focused && state.window_focused =>
+                if state.focused && state.window_focused && !self.read_only =>
             {
                 let caret = self
                     .caret_rect(state, self.content.cursor)
@@ -1469,6 +1480,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
                 );
             }
             if state.focused
+                && !self.read_only
                 && selection.is_none()
                 && let Some(r) = self.caret_rect(state, self.content.cursor)
             {
@@ -1518,7 +1530,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
         };
         let state = tree.state.downcast_ref::<State>();
         let point = Point::new(p.x - bounds.x, p.y - bounds.y + state.scroll);
-        if state.modifiers.command() && self.link_at(state, point).is_some() {
+        if (state.modifiers.command() || self.read_only) && self.link_at(state, point).is_some() {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::Text

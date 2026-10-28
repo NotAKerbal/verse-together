@@ -2,6 +2,7 @@
 // `page.module.css`): six sections in a pill of tabs, the open one dark with its name and the others as icons, one
 // section open at a time. Wide windows put the pill at the header's right, beside the navigation; simple mode keeps
 // it at the top of the page. Left and Right step along the tabs (wrapping), Home and End go to the ends.
+use crate::anim::{EASE, FADE, NAV, NAV_EASE, TINT, Transition};
 use crate::design::{self, Colors, icon, sans, serif};
 use crate::header::{CONTENT_TOP, CONTROL, PILL_HEIGHT};
 use crate::icons;
@@ -159,6 +160,73 @@ const SAMPLE_VERSES: [(u32, &str); 3] = [
     ),
 ];
 
+/// The tabs' transitions (`page.module.css`): the open tab's name reveals as its `max-width` grows to 10rem and its
+/// `margin-left` to .375rem, with the header tab's padding (.6 → .75rem) and the page tab's `flex-grow` (1 → 3), all
+/// over 280ms `cubic-bezier(0.22, 0.61, 0.36, 1)`; the name fades in over 180ms `ease`; the dark fill and the
+/// icon's color change over 120ms `ease`. The tab left does the reverse. Reduced motion jumps (`transition: none`).
+#[derive(Debug, Clone)]
+pub struct TabMotion {
+    pub label: [Transition; 6],
+    pub opacity: [Transition; 6],
+    pub tint: [Transition; 6],
+}
+impl TabMotion {
+    pub fn new(active: SettingsTab, now: std::time::Instant) -> Self {
+        let on = |i: usize| if SETTINGS_TABS[i] == active { 1.0 } else { 0.0 };
+        Self {
+            label: std::array::from_fn(|i| Transition::new(on(i), NAV, NAV_EASE, now)),
+            opacity: std::array::from_fn(|i| Transition::new(on(i), FADE, EASE, now)),
+            tint: std::array::from_fn(|i| Transition::new(on(i), TINT, EASE, now)),
+        }
+    }
+    pub fn set(&mut self, active: SettingsTab, now: std::time::Instant, animate: bool) {
+        for (i, tab) in SETTINGS_TABS.iter().enumerate() {
+            let on = if *tab == active { 1.0 } else { 0.0 };
+            self.label[i].set(on, now, animate);
+            self.opacity[i].set(on, now, animate);
+            self.tint[i].set(on, now, animate);
+        }
+    }
+    pub fn is_animating(&self, now: std::time::Instant) -> bool {
+        self.label
+            .iter()
+            .chain(&self.opacity)
+            .chain(&self.tint)
+            .any(|t| t.is_animating(now))
+    }
+}
+/// `.tabLabel`'s open `max-width` (10rem) and `margin-left` (.375rem).
+const LABEL_MAX: f32 = 160.0;
+const LABEL_GAP: f32 = 6.0;
+/// The page tabs' widths (`flex: 1 1 0`, the open one `flex-grow: 3` and never narrower than its content, the others
+/// at least 2.75rem), sharing `space` as CSS flexbox resolves it.
+pub fn page_tab_widths(space: f32, grow: [f32; 6], min: [f32; 6]) -> [f32; 6] {
+    let mut frozen = [false; 6];
+    let mut widths = [0.0; 6];
+    loop {
+        let free = space
+            - (0..6)
+                .filter(|i| frozen[*i])
+                .map(|i| widths[i])
+                .sum::<f32>();
+        let total: f32 = (0..6).filter(|i| !frozen[*i]).map(|i| grow[i]).sum();
+        let mut violated = false;
+        for i in (0..6).filter(|i| !frozen[*i]) {
+            widths[i] = free * grow[i] / total.max(f32::EPSILON);
+        }
+        for i in 0..6 {
+            if !frozen[i] && widths[i] < min[i] {
+                widths[i] = min[i];
+                frozen[i] = true;
+                violated = true;
+            }
+        }
+        if !violated || frozen.iter().all(|f| *f) {
+            return widths;
+        }
+    }
+}
+
 impl App {
     /// Whether the tabs sit in the header (`useSettingsTabsFitHeader`).
     pub(crate) fn settings_tabs_in_header(&self) -> bool {
@@ -178,48 +246,98 @@ impl App {
     pub(crate) fn settings_tabs(&self, in_header: bool) -> Element<'_, Message> {
         let p = self.p();
         let selected = self.settings_tab;
+        let now = self.now;
+        let m = &self.settings_motion;
+        let label_size = if in_header { 13.0 } else { 12.8 };
+        let height = if in_header { CONTROL } else { 44.0 };
+        // Each tab at this moment: its name's shown width and gap, its padding and its content's width.
+        let parts: Vec<(f32, f32, f32, f32)> = SETTINGS_TABS
+            .iter()
+            .enumerate()
+            .map(|(i, tab)| {
+                let l = m.label[i].value(now);
+                let full =
+                    design::measure(tab.label(), label_size, sans(font::Weight::Medium)).ceil();
+                let shown = full.min(LABEL_MAX * l);
+                let gap = LABEL_GAP * l;
+                let pad = if in_header { 9.6 + 2.4 * l } else { 9.6 };
+                (shown, gap, pad, 2.0 * pad + 16.8 + gap + shown)
+            })
+            .collect();
+        let widths = (!in_header).then(|| {
+            let pill = self.settings_width().min(480.0);
+            let space = pill - 10.0 - 4.0 * 5.0;
+            let grow = std::array::from_fn(|i| 1.0 + 2.0 * m.label[i].value(now));
+            // The open tab is never narrower than its content (`min-width: max-content`), the others 2.75rem.
+            let min = std::array::from_fn(|i| {
+                if SETTINGS_TABS[i] == selected {
+                    parts[i].3.max(44.0)
+                } else {
+                    44.0
+                }
+            });
+            page_tab_widths(space, grow, min)
+        });
         let mut tabs = row![]
             .spacing(if in_header { 6 } else { 4 })
             .align_y(Center);
-        for tab in SETTINGS_TABS {
+        for (i, tab) in SETTINGS_TABS.into_iter().enumerate() {
             let on = tab == selected;
-            let color = if on { p.paper } else { p.ink };
+            let tint = m.tint[i].value(now);
+            let mix = |a: Color, b: Color| Color {
+                r: a.r + (b.r - a.r) * tint,
+                g: a.g + (b.g - a.g) * tint,
+                b: a.b + (b.b - a.b) * tint,
+                a: 1.0,
+            };
+            let color = mix(p.ink, p.paper);
+            let (shown, gap, pad, _) = parts[i];
             let mut content = row![icon(tab.icon(), color, 16.8)].align_y(Center);
-            if on {
-                content = content.push(
-                    text(tab.label())
-                        .size(if in_header { 13.0 } else { 12.8 })
-                        .font(sans(font::Weight::Medium))
-                        .color(color)
-                        .wrapping(text::Wrapping::None),
+            if shown > 0.0 {
+                content = content.push(space().width(gap)).push(
+                    container(
+                        text(tab.label())
+                            .size(label_size)
+                            .font(sans(font::Weight::Medium))
+                            .color(Color {
+                                a: m.opacity[i].value(now),
+                                ..color
+                            })
+                            .wrapping(text::Wrapping::None),
+                    )
+                    .width(shown)
+                    .clip(true),
                 );
-                content = content.spacing(6);
             }
-            let height = if in_header { CONTROL } else { 44.0 };
-            let b = button(container(content).center_y(height).center_x(Length::Shrink))
-                .padding([0.0, if in_header && on { 12.0 } else { 9.6 }])
-                .height(height)
-                .on_press(Message::SettingsTab(tab))
-                .style(move |_, status| button::Style {
-                    background: if on {
-                        Some(p.ink.into())
-                    } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-                        Some(p.hover.into())
-                    } else {
-                        None
-                    },
-                    text_color: color,
-                    border: Border {
-                        radius: if in_header { 11.2 } else { 999.0 }.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-            let b: Element<'_, Message> = if in_header {
-                b.width(Length::Shrink).into()
+            let b = button(container(content).center_y(height).center_x(if in_header {
+                Length::Shrink
             } else {
+                Fill
+            }))
+            .padding([0.0, pad])
+            .height(height)
+            .on_press(Message::SettingsTab(tab))
+            .style(move |_, status| button::Style {
+                background: if !on
+                    && matches!(status, button::Status::Hovered | button::Status::Pressed)
+                {
+                    Some(p.hover.into())
+                } else if tint > 0.0 {
+                    Some(Color { a: tint, ..p.ink }.into())
+                } else {
+                    None
+                },
+                text_color: color,
+                border: Border {
+                    radius: if in_header { 11.2 } else { 999.0 }.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            let b: Element<'_, Message> = match &widths {
+                None => b.width(Length::Shrink).into(),
                 // In the page the tabs share the row, the open one three times as wide.
-                b.width(Length::FillPortion(if on { 3 } else { 1 })).into()
+                Some(w) => b.width(Length::Fixed(w[i])).into(),
             };
             // The pill shows only the open section's name, so the others name themselves on hover.
             tabs = tabs.push(if on {

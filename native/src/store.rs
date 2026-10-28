@@ -518,6 +518,15 @@ pub struct RemoteReading {
     pub read_at: i64,
     pub origin: String,
 }
+/// An entry of the reading log (`ReadingLogRow`): a logged reading, or a journal entry that logs one (`note`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoggedReading {
+    pub id: String,
+    pub note: bool,
+    pub journal_date: String,
+    pub read_at: i64,
+    pub source: NoteSource,
+}
 /// A note already here that the account has: local id, server id, Markdown revision, server change time, and
 /// whether it has unsent changes.
 pub type KnownNote = (String, String, i64, Option<String>, bool);
@@ -529,6 +538,14 @@ pub struct NoteSaved {
     /// The note had changed underneath the editor (a sync brought another device's edit), so this text was kept
     /// as a separate note instead of overwriting that edit.
     pub forked: bool,
+    /// The note had become read-only (published or archived on the account), so this text was kept as a separate
+    /// draft and the published note was left as it is.
+    pub read_only: bool,
+}
+/// Whether an account note can be changed here: the website edits drafts only (`JournalNoteEditor`'s `readOnly`),
+/// and the server refuses edits to any other status (`nativeSync:saveJournalNote`).
+pub fn status_is_read_only(status: &str) -> bool {
+    status != "draft"
 }
 
 pub struct Store {
@@ -733,6 +750,17 @@ fn read_note(r: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
     })
 }
 const NOTE_COLUMNS: &str = "id,title,body,journal_date,reading_at,source,created,updated,rev";
+fn note_status_in(c: &Connection, owner: &str, id: &str) -> Result<String> {
+    match c.query_row(
+        "SELECT COALESCE(s.status,'draft') FROM notes n LEFT JOIN note_status s ON s.owner=n.owner AND s.remote_id=n.remote_id WHERE n.owner=?1 AND n.id=?2",
+        params![owner, id],
+        |r| r.get(0),
+    ) {
+        Ok(status) => Ok(status),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok("draft".into()),
+        Err(e) => Err(error(e)),
+    }
+}
 fn source_json(source: Option<&NoteSource>) -> Result<Option<String>> {
     source.map(serde_json::to_string).transpose().map_err(error)
 }
@@ -1125,6 +1153,19 @@ impl Store {
             Err(e) => Err(error(e)),
         }
     }
+    /// The account notes here that aren't drafts (published or archived): local id → status.
+    pub fn read_only_notes(&self) -> Result<std::collections::HashMap<String, String>> {
+        let mut stmt = self.study.prepare_cached("SELECT n.id, s.status FROM notes n JOIN note_status s ON s.owner=n.owner AND s.remote_id=n.remote_id WHERE n.owner=?1 AND n.deleted=0 AND s.status<>'draft'").map_err(error)?;
+        stmt.query_map([&self.owner], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(error)?
+            .collect::<std::result::Result<_, _>>()
+            .map_err(error)
+    }
+    /// The note's status as the account lists it: "draft" (also every note of this computer's own study and every
+    /// note not yet on the account), "published" or "archived".
+    pub fn note_status(&self, id: &str) -> Result<String> {
+        note_status_in(&self.study, &self.owner, id)
+    }
     /// Saves a note from an editor that loaded it at `note.rev`. If the stored note changed since (a sync brought
     /// an edit made elsewhere), that edit is kept and this text is saved as a separate note on the same day.
     pub fn save_note(&mut self, note: &Note) -> Result<NoteSaved> {
@@ -1156,11 +1197,47 @@ impl Store {
                     |r| r.get::<_, bool>(0),
                 )
                 .map_err(error)?;
+        // A published (or archived) note is never changed here: the account refuses it, and its text may be shared.
+        // Text written in it is kept as a separate draft on the same day instead.
+        let read_only = match &existing {
+            Some((stored, false))
+                if status_is_read_only(&note_status_in(&tx, &self.owner, &note.id)?) =>
+            {
+                let text = stored.title != title || stored.body != note.body;
+                if !text {
+                    let meta = stored.journal_date != note.journal_date
+                        || stored.source != note.source
+                        || stored.reading_at != note.reading_at;
+                    if meta {
+                        return Err("Published notes can't be changed.".into());
+                    }
+                    return Ok(NoteSaved {
+                        id: note.id.clone(),
+                        rev: stored.rev,
+                        forked: false,
+                        read_only: false,
+                    });
+                }
+                true
+            }
+            _ => false,
+        };
         let rev = next_rev(&tx)?;
         let stale = existing
             .as_ref()
             .is_some_and(|(stored, deleted)| *deleted || stored.rev != note.rev);
-        let saved = if taken || stale {
+        let saved = if read_only {
+            // The copy doesn't log the reading again: the published note keeps it.
+            let id = new_id();
+            tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,NULL,?7,?7,?8,?9,?8,?8,?10)",
+                params![id, self.owner, title, note.body, note.journal_date, source, now(), account, rev, new_id()]).map_err(error)?;
+            NoteSaved {
+                id,
+                rev,
+                forked: true,
+                read_only: true,
+            }
+        } else if taken || stale {
             let id = new_id();
             tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?8,?9,?10,?9,?9,?11)",
                 params![id, self.owner, title, note.body, note.journal_date, source, note.reading_at, now(), account, rev, new_id()]).map_err(error)?;
@@ -1168,6 +1245,7 @@ impl Store {
                 id,
                 rev,
                 forked: existing.is_some() || taken,
+                read_only: false,
             }
         } else if let Some((stored, _)) = &existing {
             let body = stored.title != title || stored.body != note.body;
@@ -1179,6 +1257,7 @@ impl Store {
                     id: note.id.clone(),
                     rev: stored.rev,
                     forked: false,
+                    read_only: false,
                 });
             }
             tx.execute("UPDATE notes SET title=?3, body=?4, journal_date=?5, source=?6, reading_at=?7, updated=?8, rev=?9,
@@ -1188,6 +1267,7 @@ impl Store {
                 id: note.id.clone(),
                 rev,
                 forked: false,
+                read_only: false,
             }
         } else {
             tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?10,?10,?12)",
@@ -1196,6 +1276,7 @@ impl Store {
                 id: note.id.clone(),
                 rev,
                 forked: false,
+                read_only: false,
             }
         };
         tx.commit().map_err(error)?;
@@ -1204,6 +1285,10 @@ impl Store {
     pub fn delete_note(&mut self, id: &str) -> Result<()> {
         let account = self.is_account();
         let tx = self.study.transaction().map_err(error)?;
+        // Published notes stay, as on the website: they may be shared, and the account refuses to delete them.
+        if note_status_in(&tx, &self.owner, id)? == "published" {
+            return Err("Published notes can't be deleted.".into());
+        }
         let rev = next_rev(&tx)?;
         tx.execute(
             "UPDATE notes SET deleted=1, dirty=?4, updated=?3, rev=?5 WHERE owner=?1 AND id=?2",
@@ -1229,6 +1314,37 @@ impl Store {
             if let Some(reading) = row.map_err(error)? {
                 out.push(reading);
             }
+        }
+        Ok(out)
+    }
+    /// The reading log's entries for a chapter number (`listMyReadingLog` for the account, the device's own log signed
+    /// out): logged readings and journal entries that log one, newest day first. Callers match the volume and book.
+    pub fn chapter_reading_log(&self, chapter: u32) -> Result<Vec<LoggedReading>> {
+        let mut stmt = self.study.prepare_cached(
+            "SELECT id, 0, journal_date, read_at, source FROM reading_log WHERE owner=?1 AND deleted=0 AND json_extract(source,'$.chapter')=?2
+             UNION ALL
+             SELECT id, 1, journal_date, reading_at, source FROM notes WHERE owner=?1 AND deleted=0 AND reading_at IS NOT NULL AND source IS NOT NULL AND json_extract(source,'$.chapter')=?2
+             ORDER BY 3 DESC, 4 DESC",
+        ).map_err(error)?;
+        let rows = stmt
+            .query_map(params![self.owner, chapter], |r| {
+                let source: String = r.get(4)?;
+                let (id, note, journal_date, read_at) =
+                    (r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?);
+                Ok(serde_json::from_str::<NoteSource>(&source)
+                    .ok()
+                    .map(|source| LoggedReading {
+                        id,
+                        note,
+                        journal_date,
+                        read_at,
+                        source,
+                    }))
+            })
+            .map_err(error)?;
+        let mut out = vec![];
+        for row in rows {
+            out.extend(row.map_err(error)?);
         }
         Ok(out)
     }
@@ -1425,6 +1541,41 @@ impl Store {
         self.study.execute("UPDATE notes SET remote_id=NULL, remote_revision=NULL, remote_updated=NULL, request_id=?3, attempted=0, dirty=1, body_dirty=1, meta_dirty=1 WHERE owner=?1 AND id=?2",
             params![self.owner, id, new_id()]).map_err(error)?;
         Ok(())
+    }
+    /// The account refused a change to a note because it is no longer a draft (published or archived elsewhere).
+    /// Text written here is kept as its own new draft on the same day (returned: its id and revision), and the note
+    /// itself goes back to the account's version, which the next pull fetches again. A refused deletion brings the
+    /// note back. Nothing is overwritten on the account and no text written here is lost.
+    pub fn note_read_only(&mut self, id: &str) -> Result<Option<(String, i64)>> {
+        let tx = self.study.transaction().map_err(error)?;
+        let row = match tx.query_row(
+            &format!(
+                "SELECT {NOTE_COLUMNS},body_dirty,deleted FROM notes WHERE owner=?1 AND id=?2"
+            ),
+            params![self.owner, id],
+            |r| Ok((read_note(r)?, r.get::<_, bool>(9)?, r.get::<_, bool>(10)?)),
+        ) {
+            Ok(row) => row,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(error(e)),
+        };
+        let (note, body_dirty, deleted) = row;
+        let mut copy = None;
+        if body_dirty && !deleted && !(note.title.trim().is_empty() && note.body.trim().is_empty())
+        {
+            let rev = next_rev(&tx)?;
+            let copy_id = new_id();
+            // The copy doesn't log the reading again: the account's note keeps it.
+            tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,NULL,?7,?7,1,?8,1,1,?9)",
+                params![copy_id, self.owner, note.title, note.body, note.journal_date, source_json(note.source.as_ref())?, now(), rev, new_id()]).map_err(error)?;
+            copy = Some((copy_id, rev));
+        }
+        // A revision the server never has (-1) makes the next pull fetch its text again.
+        let rev = next_rev(&tx)?;
+        tx.execute("UPDATE notes SET deleted=0, dirty=0, body_dirty=0, meta_dirty=0, remote_revision=-1, remote_updated=NULL, rev=?3 WHERE owner=?1 AND id=?2",
+            params![self.owner, id, rev]).map_err(error)?;
+        tx.commit().map_err(error)?;
+        Ok(copy)
     }
     /// The server's ids, revisions and change times of notes already here, and whether each has unsent changes.
     pub fn remote_notes(&self) -> Result<Vec<KnownNote>> {

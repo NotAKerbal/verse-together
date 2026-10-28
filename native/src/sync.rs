@@ -30,6 +30,9 @@ pub struct SyncReport {
     pub problems: Vec<String>,
     /// Notes changed both here and on the account: both versions were kept.
     pub kept_both: usize,
+    /// Notes published (or archived) on the account while they were changed here: (the note, the separate draft
+    /// its text was kept in, that draft's revision). The note itself stays as the account has it.
+    pub read_only_copies: Vec<(String, String, i64)>,
     /// More unsent changes are waiting than one sync sends.
     pub more: bool,
 }
@@ -420,6 +423,7 @@ impl Sync<'_> {
                         Err(e) if matches!(e.code(), Some("REVISION_CONFLICT" | "NOT_FOUND")) => {
                             self.kept_both(&id)
                         }
+                        Err(e) if e.code() == Some("READ_ONLY") => self.read_only(&id),
                         Err(e) => Err(e),
                     }
                 }
@@ -450,8 +454,22 @@ impl Sync<'_> {
         )))
     }
     fn delete_remote_note(&mut self, id: &str, rev: i64, remote: &str) -> Result<(), CallError> {
-        self.mutation("nativeSync:deleteJournalNote", json!({ "draftId": remote }))?;
-        self.write(|s| s.note_gone(id, rev))
+        match self.mutation("nativeSync:deleteJournalNote", json!({ "draftId": remote })) {
+            Ok(_) => self.write(|s| s.note_gone(id, rev)),
+            // Published on the account meanwhile: it stays, and comes back here with the next pull.
+            Err(e) if e.code() == Some("READ_ONLY") => self.read_only(id),
+            Err(e) => Err(e),
+        }
+    }
+    /// The account refused a change because the note is no longer a draft. Text written here is kept as its own
+    /// draft; the note goes back to the account's version.
+    fn read_only(&mut self, id: &str) -> Result<(), CallError> {
+        if let Some((copy, rev)) = self.write(|s| s.note_read_only(id))? {
+            self.report
+                .read_only_copies
+                .push((id.to_string(), copy, rev));
+        }
+        Ok(())
     }
     fn kept_both(&mut self, id: &str) -> Result<(), CallError> {
         self.write(|s| s.note_conflict(id))?;

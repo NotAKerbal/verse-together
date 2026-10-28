@@ -61,6 +61,23 @@ fn bounds(ui: &mut Simulator<'_, Message>, id: &'static str) -> Rectangle {
 pub(crate) fn simulator_for(app: &App) -> Simulator<'_, Message> {
     simulator(app)
 }
+/// Every text visible in the view, in drawing order (for other test modules).
+pub(crate) fn visible_texts(app: &App) -> Vec<String> {
+    let mut ui = simulator(app);
+    let mut texts = Vec::new();
+    let _ = ui.find(|candidate: Candidate<'_>| -> Option<Rectangle> {
+        if let Candidate::Text {
+            content,
+            visible_bounds: Some(_),
+            ..
+        } = candidate
+        {
+            texts.push(content.to_string());
+        }
+        None
+    });
+    texts
+}
 /// Clicks visible text, as `click` does (for other test modules).
 pub(crate) fn click_label(app: &mut App, label: &'static str) -> Vec<Message> {
     click(app, label)
@@ -581,6 +598,95 @@ fn website_213_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     let _ = app.update(Message::SetScreen(Screen::Guides));
     shot(app, "faith-other-hidden");
     let _ = app.update(Message::SetFaith(crate::faith::LATTER_DAY_SAINT));
+
+    // The Settings tabs part way through a change (120ms of 280ms).
+    let _ = app.update(Message::SettingsTab(
+        crate::settings_ui::SettingsTab::Account,
+    ));
+    let _ = app.update(Message::SettingsTab(
+        crate::settings_ui::SettingsTab::Reading,
+    ));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(120)));
+    shot(app, "settings-tabs-120ms");
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
+    // Your Bibles full screen: the list, then the catalog.
+    let _ = app.update(Message::SettingsTab(
+        crate::settings_ui::SettingsTab::BibleTranslations,
+    ));
+    shot(app, "settings-translations");
+    let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::BiblesView(
+        crate::reader_tools::BiblesView::List,
+    )));
+    shot(app, "bibles-dialog-list");
+    let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::BiblesView(
+        crate::reader_tools::BiblesView::Add,
+    )));
+    app.tools.catalog = Some(crate::reader_tools::Load::Ready(vec![]));
+    shot(app, "bibles-dialog-catalog");
+    let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::CloseBibles));
+    // The reading log beside the verses it covers, and its dialog of several readings.
+    let jeremiah = Location {
+        volume: "oldtestament".into(),
+        book: "jeremiah".into(),
+        chapter: 31,
+    };
+    {
+        let store = app.store.as_mut().unwrap();
+        for (day, verses) in [("2026-10-20", (3, 4)), ("2026-10-22", (5, 6))] {
+            store
+                .log_reading(
+                    day,
+                    &crate::store::NoteSource::scripture("Jeremiah", &jeremiah, Some(verses)),
+                )
+                .unwrap();
+        }
+    }
+    let _ = app.update(Message::Navigate(jeremiah.clone(), None));
+    shot(app, "reader-reading-log");
+    let _ = app.update(Message::NoteLinks(
+        crate::note_links::NoteLinkMsg::ReadMarker(3),
+    ));
+    shot(app, "reader-reading-log-picker");
+    let _ = app.update(Message::NoteLinks(crate::note_links::NoteLinkMsg::Close));
+    // A published account note, read-only.
+    {
+        let store = app.store.as_mut().unwrap();
+        store.set_owner("account-1");
+        store
+            .apply_remote_note(&crate::store::RemoteNote {
+                remote_id: "r1".into(),
+                revision: 1,
+                updated_at: "2026-10-27T00:00:00.000Z".into(),
+                journal_date: "2026-10-27".into(),
+                source: Some(crate::store::NoteSource::scripture(
+                    "Jeremiah",
+                    &jeremiah,
+                    Some((33, 33)),
+                )),
+                reading_at: Some(1_793_000_000),
+                created: 1_793_000_000,
+                updated: 1_793_000_000,
+                text: Some((
+                    "Written in hearts".into(),
+                    "## The law within\n\n> I will put my law in their inward parts\n\nSee [Jeremiah 31:33](/browse/oldtestament/jeremiah/31#v-33).".into(),
+                )),
+            })
+            .unwrap();
+        store
+            .set_note_statuses(&[("r1".into(), "published".into())])
+            .unwrap();
+    }
+    let id = app.store.as_ref().unwrap().all_notes().unwrap()[0]
+        .id
+        .clone();
+    let _ = app.update(Message::SetScreen(Screen::Journal));
+    let _ = app.update(Message::Journal(crate::journal_ui::JournalMsg::Open(id)));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(400)));
+    shot(app, "journal-published");
+    let _ = app.update(Message::Journal(crate::journal_ui::JournalMsg::Close));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(400)));
+    shot(app, "journal-published-list");
+    app.store.as_mut().unwrap().set_owner("");
 }
 
 #[test]
@@ -646,7 +752,10 @@ fn your_bibles_opens_its_catalog_from_reader_settings() {
         "{messages:?}"
     );
     assert_eq!(app.popover, Some(Popover::ReaderSettings));
-    assert_eq!(app.tools.bibles_view, crate::reader_tools::BiblesView::Add);
+    assert_eq!(
+        app.tools.bibles_dialog,
+        Some(crate::reader_tools::BiblesView::Add)
+    );
 }
 
 #[test]
@@ -707,6 +816,95 @@ fn the_bible_catalog_chooses_languages_like_the_website() {
             .iter()
             .any(|b| b.id.starts_with("spa_"))
     );
+    // Added, the dialog returns to the list of Bibles, where it shows (in the reader, switched on).
+    assert_eq!(
+        app.tools.bibles_dialog,
+        Some(crate::reader_tools::BiblesView::List)
+    );
+    let mut ui = simulator(app);
+    assert!(ui.find("Reina-Valera 1909").is_ok());
+    assert!(ui.find("Spanish · SPA_RVR").is_ok());
+    assert!(ui.find("Done").is_ok());
+    drop(ui);
+    assert_eq!(app.popover, Some(Popover::ReaderSettings));
+}
+
+#[test]
+fn your_bibles_opens_full_screen_like_the_websites_dialog() {
+    use crate::reader_tools::{BiblesView, Load, ToolsMsg};
+    use crate::settings_ui::SettingsTab;
+    use iced::keyboard::{self, key::Named};
+    let mut f = fixture();
+    let app = &mut f.app;
+    let key = |app: &mut App, named: Named| {
+        let _ = app.update(Message::Event(iced::Event::Keyboard(
+            keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(named),
+                modified_key: keyboard::Key::Named(named),
+                physical_key: keyboard::key::Physical::Unidentified(
+                    keyboard::key::NativeCode::Unidentified,
+                ),
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::default(),
+                text: None,
+                repeat: false,
+            },
+        )));
+    };
+    let _ = app.update(Message::SettingsTab(SettingsTab::BibleTranslations));
+    // In place: the list and "+ Add Bible", no catalog.
+    let mut ui = simulator(app);
+    assert!(ui.find("Your Bibles").is_ok());
+    assert!(ui.find("+ Add Bible").is_ok());
+    assert!(ui.find("Search by name or abbreviation").is_err());
+    drop(ui);
+    // The full-screen button opens the list over the whole window, header included.
+    let _ = app.update(Message::Tools(ToolsMsg::BiblesView(BiblesView::List)));
+    let mut ui = simulator(app);
+    let done = ui.find("Done").expect("Done").bounds();
+    assert!(
+        done.y < 64.0 && done.x > 640.0 && done.x < 640.0 + 288.0 + 40.0,
+        "{done:?}"
+    );
+    assert!(ui.find("‹ Back").is_err(), "the list has no Back");
+    drop(ui);
+    // The page underneath takes no clicks.
+    let messages = click_id(app, "settings-tab-reading");
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::SettingsTab(_))),
+        "{messages:?}"
+    );
+    // Modal: the page's keys do nothing while it is open; Escape closes it.
+    key(app, Named::ArrowRight);
+    assert_eq!(app.settings_tab, SettingsTab::BibleTranslations);
+    key(app, Named::Escape);
+    assert_eq!(app.tools.bibles_dialog, None);
+    // "+ Add Bible" opens the catalog in it, with Back, its title and Done.
+    let _ = click(app, "+ Add Bible");
+    assert_eq!(app.tools.bibles_dialog, Some(BiblesView::Add));
+    app.tools.catalog = Some(Load::Ready(vec![]));
+    let mut ui = simulator(app);
+    assert!(ui.find("Add a Bible").is_ok());
+    assert!(ui.find("‹ Back").is_ok());
+    assert!(ui.find("Search by name or abbreviation").is_ok());
+    drop(ui);
+    // The language chooser: Escape steps back to the catalog, then closes; Back goes to the list; Done closes.
+    let _ = click(app, "Change ›");
+    assert!(app.tools.choosing_language);
+    assert!(simulator(app).find("Choose a language").is_ok());
+    key(app, Named::Escape);
+    assert!(!app.tools.choosing_language);
+    assert_eq!(app.tools.bibles_dialog, Some(BiblesView::Add));
+    let _ = click(app, "‹ Back");
+    assert_eq!(app.tools.bibles_dialog, Some(BiblesView::List));
+    let _ = click(app, "Done");
+    assert_eq!(app.tools.bibles_dialog, None);
+    let _ = app.update(Message::Tools(ToolsMsg::BiblesView(BiblesView::Add)));
+    key(app, Named::Escape);
+    assert_eq!(app.tools.bibles_dialog, None);
+    assert_eq!(app.screen, Screen::Settings);
 }
 
 #[test]
@@ -795,4 +993,134 @@ fn settings_has_the_websites_six_tabs_in_the_header_and_follows_the_keyboard() {
     let _ = app.update(Message::SetScreen(Screen::Journal));
     let _ = app.update(Message::SetScreen(Screen::Settings));
     assert_eq!(app.settings_tab, SettingsTab::Account);
+}
+
+#[test]
+fn settings_tabs_move_like_the_websites_over_280ms_and_then_stop() {
+    use crate::settings_ui::{SettingsTab, page_tab_widths};
+    use std::time::Duration;
+    // `flex: 1 1 0` with the open tab's `flex-grow: 3`, and minimum widths taking their share first.
+    let w = page_tab_widths(450.0, [3.0, 1.0, 1.0, 1.0, 1.0, 1.0], [44.0; 6]);
+    assert!(
+        (w[0] - 168.75).abs() < 0.01 && (w[1] - 56.25).abs() < 0.01,
+        "{w:?}"
+    );
+    let w = page_tab_widths(
+        450.0,
+        [3.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        [200.0, 44.0, 44.0, 44.0, 44.0, 44.0],
+    );
+    assert!(
+        (w[0] - 200.0).abs() < 0.01 && (w[5] - 50.0).abs() < 0.01,
+        "{w:?}"
+    );
+
+    let mut f = fixture();
+    let app = &mut f.app;
+    app.motion.animate = true;
+    let _ = app.update(Message::SetScreen(Screen::Settings));
+    // Arriving shows the open tab at once.
+    assert!(!app.settings_motion.is_animating(app.now));
+    let width = |app: &App, id: &'static str| bounds(&mut simulator(app), id).width;
+    let account_open = width(app, "settings-tab-account");
+    let reading_closed = width(app, "settings-tab-reading");
+    let _ = click_id(app, "settings-tab-reading");
+    let t0 = app.now;
+    assert!(
+        app.settings_motion.is_animating(t0),
+        "frames run while it moves"
+    );
+    // At the start nothing has moved yet; part way through both tabs are between their sizes.
+    assert!((width(app, "settings-tab-reading") - reading_closed).abs() < 0.5);
+    let _ = app.update(Message::Frame(t0 + Duration::from_millis(100)));
+    let (reading, account) = (
+        width(app, "settings-tab-reading"),
+        width(app, "settings-tab-account"),
+    );
+    assert!(reading > reading_closed + 4.0, "{reading}");
+    assert!(
+        account < account_open - 1.0 && account > reading_closed,
+        "{account}"
+    );
+    // Settled after 280ms: the open tab named, the other an icon, and no more frames.
+    let _ = app.update(Message::Frame(t0 + Duration::from_millis(300)));
+    assert!(!app.settings_motion.is_animating(app.now));
+    assert!((width(app, "settings-tab-account") - reading_closed).abs() < 0.5);
+    let reading_open = width(app, "settings-tab-reading");
+    assert!(reading_open > reading + 1.0);
+    let mut ui = simulator(app);
+    assert!(ui.find("Reading").is_ok());
+    assert!(ui.find("Account").is_err());
+    drop(ui);
+    // The keyboard moves them the same way.
+    let _ = app.update(Message::Event(iced::Event::Keyboard(
+        iced::keyboard::Event::KeyPressed {
+            key: iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowRight),
+            modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowRight),
+            physical_key: iced::keyboard::key::Physical::Unidentified(
+                iced::keyboard::key::NativeCode::Unidentified,
+            ),
+            location: iced::keyboard::Location::Standard,
+            modifiers: iced::keyboard::Modifiers::default(),
+            text: None,
+            repeat: false,
+        },
+    )));
+    assert_eq!(app.settings_tab, SettingsTab::BibleTranslations);
+    assert!(app.settings_motion.is_animating(app.now));
+    let t1 = app.now;
+    let _ = app.update(Message::Frame(t1 + Duration::from_millis(300)));
+
+    // Simple mode: the page pill's open tab grows from an equal share to three.
+    let _ = app.update(Message::ToggleFocus);
+    let share = width(app, "settings-tab-account");
+    let _ = app.update(Message::SettingsTab(SettingsTab::Account));
+    let t2 = app.now;
+    assert!((width(app, "settings-tab-account") - share).abs() < 0.5);
+    let _ = app.update(Message::Frame(t2 + Duration::from_millis(140)));
+    let middle = width(app, "settings-tab-account");
+    let _ = app.update(Message::Frame(t2 + Duration::from_millis(300)));
+    let end = width(app, "settings-tab-account");
+    assert!(share < middle && middle < end, "{share} {middle} {end}");
+
+    // Reduced motion: no transition at all.
+    app.motion.animate = false;
+    let _ = app.update(Message::SettingsTab(SettingsTab::Feedback));
+    assert!(!app.settings_motion.is_animating(app.now));
+}
+
+#[test]
+fn a_dragged_selection_follows_the_page_as_it_scrolls_under_a_still_pointer() {
+    use crate::select_text::Phase;
+    use crate::text_selection::Area;
+    let mut f = fixture();
+    let app = &mut f.app;
+    // A drag started in the first verse.
+    let _ = app.update(Message::Pick(
+        Area::Reader,
+        0,
+        3,
+        Phase::Press { clicks: 1 },
+    ));
+    let _ = app.update(Message::Pick(Area::Reader, 0, 8, Phase::Drag));
+    assert!(app.drag.as_ref().is_some_and(|d| d.dragging));
+    let mut ui = simulator(app);
+    let pointer = iced::Point::new(640.0, 520.0);
+    ui.point_at(pointer);
+    // The page scrolls (as the edge scroll does each frame) while the pointer stays put; the next frame picks the
+    // words now under it, in a verse further on.
+    let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+        delta: iced::mouse::ScrollDelta::Pixels { x: 0.0, y: -900.0 },
+    })]);
+    let _ = ui.simulate([iced::Event::Window(iced::window::Event::RedrawRequested(
+        std::time::Instant::now(),
+    ))]);
+    let blocks: Vec<usize> = ui
+        .into_messages()
+        .filter_map(|m| match m {
+            Message::Pick(Area::Reader, block, _, Phase::Drag) => Some(block),
+            _ => None,
+        })
+        .collect();
+    assert!(blocks.last().is_some_and(|b| *b > 3), "{blocks:?}");
 }

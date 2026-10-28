@@ -1,6 +1,7 @@
 use crate::design::{self, icon, sans, serif};
 use crate::header::{self, CONTENT_TOP, PILL_HEIGHT, TOP, shell_inset};
 use crate::icons;
+use crate::margin;
 use crate::marks;
 use crate::select_text::{Paint, Shown, select_text};
 use crate::store::{self, Location, TextWidth};
@@ -12,11 +13,13 @@ use iced::widget::{
     button, column, container, mouse_area, opaque, row, scrollable, slider, space, stack, text,
     text_editor, text_input,
 };
-use iced::{Alignment::Center, Border, Color, Element, Fill, Font, Length, Padding, font};
+use iced::{Alignment::Center, Border, Color, Element, Fill, Font, Length, Padding, Vector, font};
 
 /// The study panel beside the reader, and the gap before it.
 pub(crate) const PANEL_WIDTH: f32 = 300.0;
 const PANEL_GAP: f32 = 12.0;
+/// `--verse-gap` (0.75rem from 640px; the window is always wider).
+const VERSE_GAP: f32 = 12.0;
 /// The book and chapter picker's scrolling area, and one book row in it (13px label, 7px padding, 1px gap).
 const LIBRARY_HEIGHT: f32 = 416.0;
 const BOOK_ROW: f32 = 32.0;
@@ -170,7 +173,16 @@ impl App {
         let mut layers = stack![content, shade, header, self.overlay()]
             .width(Fill)
             .height(Fill);
-        if self.motion.is_animating(self.now) || self.journal.motion.is_animating(self.now) {
+        // The full-screen Your Bibles dialog covers everything, header included, as a modal `<dialog>` does.
+        if let Some(dialog) = self.bibles_dialog() {
+            layers = layers.push(dialog);
+        }
+        // Frames keep coming while the header, journal or Settings tabs move, or a selection drags the page along.
+        if self.motion.is_animating(self.now)
+            || self.journal.motion.is_animating(self.now)
+            || self.settings_motion.is_animating(self.now)
+            || (self.edge_scroll != 0.0 && self.drag.as_ref().is_some_and(|d| d.dragging))
+        {
             layers = layers.push(crate::ticker::ticker());
         }
         layers.into()
@@ -412,9 +424,38 @@ impl App {
         for card in self.jst_leading_cards() {
             passage = passage.push(card);
         }
+        // The reading log's passages: a rule down their verses and a check at each one's first verse.
+        let read = self.read_passages();
+        let mut verses = column![];
         for (index, verse) in self.verses.iter().enumerate() {
-            passage = passage.push(self.verse_row(index, verse.number, font, size, line));
+            let row = self.verse_row(index, verse.number, font, size, line);
+            // The gap between verses belongs to the verse above, so a passage's rule runs across it.
+            let gap = if index + 1 < self.verses.len() {
+                VERSE_GAP
+            } else {
+                0.0
+            };
+            let row = container(row).padding(Padding::ZERO.bottom(gap));
+            verses = verses.push(match read.get(&verse.number) {
+                Some(run) => {
+                    // `.reader-verse[data-read]::before`: from 2rem down on the first verse, to 0.5rem above the end
+                    // of the last; the check (`.verse-read-marker`) at -0.75rem, 0.375rem.
+                    let top = if run.start == verse.number { 32.0 } else { 0.0 };
+                    let bottom = if run.end == verse.number {
+                        8.0 + gap
+                    } else {
+                        0.0
+                    };
+                    let mut m = margin::margin(row).rule(top, bottom, self.read_color());
+                    if run.start == verse.number {
+                        m = m.marker(self.read_marker(run), Vector::new(-12.0, 6.0));
+                    }
+                    m.into()
+                }
+                None => Element::from(row),
+            });
         }
+        passage = passage.push(verses);
         if self.focus {
             passage = passage.push(self.chapter_links());
         }
@@ -559,22 +600,9 @@ impl App {
         } else {
             container(space()).width(0)
         };
+        // The note picker floats over the page (see `note_links::floating`), so opening it moves nothing.
         let verse_line =
             row![stack![words, number_button], marker_slot].align_y(iced::Alignment::Start);
-        let picker = (self.note_links.picker == Some(number))
-            .then(|| self.note_link_picker())
-            .flatten();
-        let verse_line: Element<'_, Message> = match picker {
-            Some(picker) => column![
-                verse_line,
-                container(picker)
-                    .width(Fill)
-                    .align_x(Horizontal::Right)
-                    .padding(Padding::ZERO.top(8))
-            ]
-            .into(),
-            _ => verse_line.into(),
-        };
         container(verse_line)
             .id(format!("verse-{number}"))
             .padding([8, 12])

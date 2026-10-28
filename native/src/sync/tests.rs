@@ -28,6 +28,8 @@ struct Draft {
     updated: i64,
     /// What the create that made it carried, to tell a retry from an edit (`entryRequestFingerprint`).
     request_content: Option<String>,
+    /// "draft", "published" or "archived".
+    status: String,
 }
 #[derive(Clone)]
 struct Log {
@@ -205,6 +207,7 @@ impl Fake {
                         created: now,
                         updated: now,
                         request_content: Some(content),
+                        status: "draft".into(),
                     },
                 );
                 json!({ "id": id, "duplicate": false, "deleted": false, "markdownRevision": 0 })
@@ -215,6 +218,9 @@ impl Fake {
                 let Some(draft) = a.drafts.get_mut(id) else {
                     return Err(conflict("NOT_FOUND"));
                 };
+                if draft.status != "draft" {
+                    return Err(conflict("READ_ONLY"));
+                }
                 if let Some(markdown) = args.get("markdownBody") {
                     if args["expectedRevision"].as_i64() != Some(draft.revision) {
                         return Err(conflict("REVISION_CONFLICT"));
@@ -232,6 +238,9 @@ impl Fake {
             }
             "nativeSync:deleteJournalNote" => {
                 let id = args["draftId"].as_str().unwrap();
+                if a.drafts.get(id).is_some_and(|d| d.status == "published") {
+                    return Err(conflict("READ_ONLY"));
+                }
                 let removed = a.drafts.remove(id);
                 if let Some(request) = removed.as_ref().and_then(|d| d.request_id.clone()) {
                     a.deleted_requests.push(request);
@@ -243,7 +252,7 @@ impl Fake {
                     .iter()
                     .map(|(id, d)| {
                         json!({
-                            "kind": "note", "id": id, "journal_date": d.journal_date, "source": d.source,
+                            "kind": "note", "id": id, "status": d.status, "journal_date": d.journal_date, "source": d.source,
                             "reading_at": d.reading_at.map(stamp), "markdown_revision": d.revision,
                             "created_at": stamp(d.created), "updated_at": stamp(d.updated),
                         })
@@ -325,6 +334,14 @@ impl Fake {
         let d = a.drafts.get_mut(id).unwrap();
         d.markdown = markdown.into();
         d.revision += 1;
+        d.updated = now;
+    }
+    /// Publishing (or archiving) a note on the website.
+    fn web_status(&self, id: &str, status: &str) {
+        let mut a = self.account.borrow_mut();
+        let now = Self::tick(&mut a);
+        let d = a.drafts.get_mut(id).unwrap();
+        d.status = status.into();
         d.updated = now;
     }
     fn only_draft(&self) -> (String, Draft) {
@@ -964,4 +981,130 @@ fn reading_progress_uses_the_canonical_volume_and_marks_use_the_slug() {
     };
     assert_eq!(progress_args(&dc)["volume"], "doctrineandcovenants");
     assert_eq!(chapter_args(&dc)["volume"], "dnc");
+}
+
+#[test]
+fn text_written_here_in_a_note_published_elsewhere_is_kept_as_a_separate_draft() {
+    let dir = directory();
+    let fake = Fake::default();
+    let mut store = open(&dir);
+    let mut note = Note::new(
+        "2026-10-27",
+        Some(NoteSource::scripture("Alma", &alma(), Some((21, 21)))),
+    );
+    note.body = "Faith grows".into();
+    note.reading_at = Some(1_790_000_000);
+    store.save_note(&note).unwrap();
+    sync(&fake, &dir, &[]).unwrap();
+    let (remote, _) = fake.only_draft();
+    // Written here (the status isn't known here yet) while the website publishes it.
+    let mut editor = store.note(&note.id).unwrap().unwrap();
+    editor.body = "Faith grows, like a seed".into();
+    store.save_note(&editor).unwrap();
+    fake.web_status(&remote, "published");
+    let report = sync(&fake, &dir, &[]).unwrap();
+    assert!(report.problems.is_empty(), "{:?}", report.problems);
+    assert_eq!(report.read_only_copies.len(), 1);
+    let (original, copy, _) = &report.read_only_copies[0];
+    assert_eq!(original, &note.id);
+    // The published note is the account's again, read-only, and its reading is its own.
+    let published = store.note(&note.id).unwrap().unwrap();
+    assert_eq!(published.body, "Faith grows");
+    assert!(published.reading_at.is_some());
+    assert_eq!(store.note_status(&note.id).unwrap(), "published");
+    // The text written here is a draft of the same account, without logging the reading again.
+    let kept = store.note(copy).unwrap().unwrap();
+    assert_eq!(kept.body, "Faith grows, like a seed");
+    assert_eq!(kept.reading_at, None);
+    assert_eq!(kept.source, published.source);
+    assert_eq!(store.note_status(copy).unwrap(), "draft");
+    // The next sync sends the copy as its own entry and leaves the published one alone.
+    sync(&fake, &dir, &[]).unwrap();
+    let a = fake.account.borrow();
+    assert_eq!(a.drafts[&remote].markdown, "Faith grows");
+    assert_eq!(a.drafts[&remote].status, "published");
+    let mut others: Vec<(&str, bool)> = a
+        .drafts
+        .iter()
+        .filter(|(id, _)| **id != remote)
+        .map(|(_, d)| (d.markdown.as_str(), d.reading_at.is_some()))
+        .collect();
+    others.sort();
+    assert_eq!(others, [("Faith grows, like a seed", false)]);
+    drop(a);
+    assert_eq!(store.unsynced(OWNER).unwrap(), 0);
+    // Nothing of this belongs to this computer's own study.
+    store.set_owner("");
+    assert!(store.all_notes().unwrap().is_empty());
+    drop(store);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_published_note_refuses_every_change_here_and_comes_back_if_deleted() {
+    let dir = directory();
+    let fake = Fake::default();
+    let mut store = open(&dir);
+    let mut note = Note::new("2026-10-27", None);
+    note.title = "Shared".into();
+    note.body = "Published words".into();
+    store.save_note(&note).unwrap();
+    sync(&fake, &dir, &[]).unwrap();
+    let (remote, _) = fake.only_draft();
+    // Deleted here before the publish was known: the account refuses, so it comes back.
+    store.delete_note(&note.id).unwrap();
+    fake.web_status(&remote, "published");
+    let report = sync(&fake, &dir, &[]).unwrap();
+    assert!(report.problems.is_empty(), "{:?}", report.problems);
+    assert!(report.read_only_copies.is_empty());
+    let back = store
+        .note(&note.id)
+        .unwrap()
+        .expect("the published note is back");
+    assert_eq!(
+        (back.title.as_str(), back.body.as_str()),
+        ("Shared", "Published words")
+    );
+    assert_eq!(fake.account.borrow().drafts.len(), 1);
+    // Known as published now: every change is refused or kept apart.
+    assert!(store.delete_note(&note.id).is_err());
+    let mut moved = back.clone();
+    moved.journal_date = "2026-10-20".into();
+    assert!(store.save_note(&moved).is_err(), "its day can't change");
+    let mut logged = back.clone();
+    logged.reading_at = Some(1);
+    assert!(store.save_note(&logged).is_err(), "nor its reading");
+    let unchanged = store.save_note(&back).unwrap();
+    assert!(!unchanged.forked && unchanged.id == note.id);
+    let mut typed = back.clone();
+    typed.body = "Published words, and more".into();
+    let saved = store.save_note(&typed).unwrap();
+    assert!(saved.forked && saved.read_only && saved.id != note.id);
+    assert_eq!(
+        store.note(&note.id).unwrap().unwrap().body,
+        "Published words"
+    );
+    assert_eq!(
+        store.note(&saved.id).unwrap().unwrap().body,
+        "Published words, and more"
+    );
+    sync(&fake, &dir, &[]).unwrap();
+    assert_eq!(
+        fake.account.borrow().drafts[&remote].markdown,
+        "# Shared\n\nPublished words"
+    );
+    assert_eq!(fake.account.borrow().drafts.len(), 2);
+    // An archived note is read-only too, but can be deleted, as on the website.
+    fake.web_status(&remote, "archived");
+    sync(&fake, &dir, &[]).unwrap();
+    assert_eq!(store.note_status(&note.id).unwrap(), "archived");
+    let again = store.note(&note.id).unwrap().unwrap();
+    let mut typed = again.clone();
+    typed.body = "Archived words?".into();
+    assert!(store.save_note(&typed).unwrap().read_only);
+    store.delete_note(&note.id).unwrap();
+    sync(&fake, &dir, &[]).unwrap();
+    assert!(!fake.account.borrow().drafts.contains_key(&remote));
+    drop(store);
+    let _ = std::fs::remove_dir_all(dir);
 }

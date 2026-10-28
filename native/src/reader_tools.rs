@@ -960,7 +960,8 @@ pub struct ToolsState {
     pub jst_omitted: bool,
     /// The Your Bibles "Joseph Smith Translation" disclosure is open.
     pub jst_details: bool,
-    pub bibles_view: BiblesView,
+    /// The full-screen Your Bibles dialog, when open: its list, or the catalog (with the language chooser).
+    pub bibles_dialog: Option<BiblesView>,
     pub catalog: Option<Load<Vec<Translation>>>,
     pub catalog_query: String,
     /// The catalog's language ("eng", a language id, or all), whether all English Bibles are being browsed, and
@@ -992,7 +993,7 @@ impl ToolsState {
             jst_reading: Default::default(),
             jst_omitted: false,
             jst_details: false,
-            bibles_view: BiblesView::List,
+            bibles_dialog: None,
             catalog: None,
             catalog_query: String::new(),
             catalog_language: crate::bible_catalog::DEFAULT_LANGUAGE.into(),
@@ -1059,7 +1060,10 @@ pub enum ToolsMsg {
     ShowBible(String, bool),
     SaveBible(FavoriteBible),
     RemoveBible(String),
+    /// Opens the Your Bibles dialog on a view (or moves it there).
     BiblesView(BiblesView),
+    /// Done, or Escape: the dialog closes.
+    CloseBibles,
     Catalog(Result<Vec<Translation>, String>),
     CatalogQuery(String),
     /// Open or close the language chooser.
@@ -1542,7 +1546,10 @@ impl App {
                 {
                     favorites.push(bible.clone());
                 }
-                self.tools.bibles_view = BiblesView::List;
+                // Added from the catalog, the dialog returns to the list (`addBible` → `goTo("list")`).
+                if self.tools.bibles_dialog.is_some() {
+                    self.tools.bibles_dialog = Some(BiblesView::List);
+                }
                 self.persist();
                 // Added in the reader it shows beside the text; in Settings it is only saved (`onShownChange`).
                 if self.screen == crate::Screen::Settings {
@@ -1567,21 +1574,37 @@ impl App {
                 }
                 return hide;
             }
-            ToolsMsg::BiblesView(view) => {
-                self.tools.bibles_view = view.clone();
+            ToolsMsg::CloseBibles => {
+                self.tools.bibles_dialog = None;
                 self.tools.choosing_language = false;
-                if view == BiblesView::Add
-                    && !matches!(
-                        self.tools.catalog,
-                        Some(Load::Ready(_)) | Some(Load::Loading)
-                    )
-                {
+            }
+            ToolsMsg::BiblesView(view) => {
+                self.tools.bibles_dialog = Some(view.clone());
+                self.tools.choosing_language = false;
+                // Each view starts at its top; the catalog's search has the keyboard (`data-autofocus`).
+                let top = crate::presented(iced::widget::operation::scroll_to(
+                    "bibles-dialog",
+                    iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
+                ));
+                if view != BiblesView::Add {
+                    return top;
+                }
+                let focus = crate::presented(iced::widget::operation::focus("catalog-search"));
+                if !matches!(
+                    self.tools.catalog,
+                    Some(Load::Ready(_)) | Some(Load::Loading)
+                ) {
                     self.tools.catalog = Some(Load::Loading);
                     let site = self.tools.site.clone();
-                    return Task::perform(background(move || fetch_translations(&site)), |r| {
-                        msg(ToolsMsg::Catalog(r))
-                    });
+                    return Task::batch([
+                        top,
+                        focus,
+                        Task::perform(background(move || fetch_translations(&site)), |r| {
+                            msg(ToolsMsg::Catalog(r))
+                        }),
+                    ]);
                 }
+                return Task::batch([top, focus]);
             }
             ToolsMsg::Catalog(r) => {
                 self.tools.catalog = Some(match r {
@@ -1597,14 +1620,27 @@ impl App {
                 self.tools.choosing_language = open;
                 self.tools.language_query.clear();
                 self.tools.language_limit = crate::bible_catalog::PAGE_SIZE;
-                if open {
-                    return crate::presented(iced::widget::operation::focus("language-search"));
-                }
+                let top = crate::presented(iced::widget::operation::scroll_to(
+                    "bibles-dialog",
+                    iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
+                ));
+                return Task::batch([
+                    top,
+                    crate::presented(iced::widget::operation::focus(if open {
+                        "language-search"
+                    } else {
+                        "catalog-search"
+                    })),
+                ]);
             }
             ToolsMsg::CatalogLanguage(id) => {
                 self.tools.catalog_language = id;
                 self.tools.catalog_limit = crate::bible_catalog::PAGE_SIZE;
                 self.tools.choosing_language = false;
+                return crate::presented(iced::widget::operation::scroll_to(
+                    "bibles-dialog",
+                    iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
+                ));
             }
             ToolsMsg::LanguageQuery(q) => {
                 self.tools.language_query = q;

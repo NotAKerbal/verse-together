@@ -399,7 +399,14 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for SelectText<'_, Me
                 shell.publish(on_pick(at, Phase::Press { clicks }));
                 shell.capture_event();
             }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) if state.pressed || self.dragging => {
+            // While a drag scrolls the page under a still pointer, each frame finds the words now under it, as a
+            // browser extends its selection while it auto-scrolls.
+            Event::Mouse(mouse::Event::CursorMoved { .. })
+            | Event::Window(iced::window::Event::RedrawRequested(_))
+                if (state.pressed || self.dragging)
+                    && (self.dragging
+                        || matches!(event, Event::Mouse(mouse::Event::CursorMoved { .. }))) =>
+            {
                 let Some(p) = position(cursor) else {
                     return;
                 };

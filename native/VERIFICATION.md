@@ -1,3 +1,85 @@
+# Independent final-polish acceptance — October 28, 2026
+
+Codex reviewed the seventh Claude pass on base `cb9cf21`, including publication races and owner-scoped recovery,
+read-only UI/store guards, reading-log matching, overlay placement, animation subscriptions and dialog handling.
+**Passed independently:** 175 native tests (1 optional exporter ignored), 5 renderer tests, strict clippy,
+formatting, whitespace and release-history generation check. Logs: `/tmp/verse-polish-review-{tests,renderer,clippy}.log`.
+The release and packaged executables have the same SHA-256:
+`ac11798ad9e7c8d39ba68cb0d2594b0d199d5b0991a142b2eb2d86ce342a72e0`.
+
+**Passed, actual release window:** isolated `/tmp/verse-polish-root-qa`, `--no-account`, GNOME Wayland. Opened Settings,
+switched to Translations, expanded Your Bibles to the window-sized dialog, opened the live catalog and exercised its
+focused search/Escape. No account, keyring or feedback was used. The QA window was closed after review.
+Published-account flows remain covered by state/sync tests, not a live deployment. Remaining differences are named
+in `PARITY.md`; full visual/functional parity is not claimed.
+
+Prepared `/tmp/verse-native-account-activation.patch` from the minimal file set in `ACCOUNT_ACTIVATION.md`.
+**Passed:** patch applicability to current `origin/dev` `8022458` in a temporary source-only snapshot. No dev or
+production branch/deployment was changed. Live Google/account acceptance remains **Blocked** on deployment;
+macOS/Windows and accessibility/IME remain **Not run**.
+
+# Final polish: motion, dialogs, reading log and published notes — October 28, 2026 (seventh Claude pass)
+
+**Tree:** `t3/rust-desktop-app` at `cb9cf21` plus this pass's **uncommitted** native changes (no commit, push, PR,
+merge or deployment; no web, Convex, provider or environment files changed; backend security untouched; no release
+bump). Target: production 2.13.0 source (`2929d8a`). Environment: Ubuntu GNOME Wayland 1280×800, Rust from
+`/tmp/verse-native-tools/env.sh`, `CARGO_BUILD_JOBS=4`, ≥300 GiB free. The previous pass's journal-only migration
+backup and hidden-content window title fixes are kept. Release binary SHA-256:
+`ac11798ad9e7c8d39ba68cb0d2594b0d199d5b0991a142b2eb2d86ce342a72e0` (the package's own hash is in `dist/*.sha256`,
+written after this file).
+
+## What changed (details and remaining gaps per row in `PARITY.md`)
+
+1. **Settings tab motion** (`settings_ui.rs` `TabMotion`): the open tab's name reveals by the website's `max-width`
+   (10rem) and `margin-left`, padding and `flex-grow` over 280ms `cubic-bezier(0.22,0.61,0.36,1)`, fades over 180ms and
+   tints over 120ms; header and simple-mode placements; keyboard; reduced motion; frames only while moving.
+2. **Your Bibles full-screen dialog** (`reader_tools_ui.rs` `bibles_dialog`): list in place with the full-screen
+   button; catalog and language chooser in a window-covering modal with ‹ Back, title and Done, Escape steps.
+3. **Floating note picker** (`note_links.rs` `floating`, `popup.rs` `Placement`): an overlay right-aligned to the
+   marker, inside the window, following scroll; the chapter no longer moves when it opens.
+4. **Reading-log marker** (`note_links.rs` `chapter_read_passages`, `margin.rs`, `store.rs` `chapter_reading_log`):
+   the website's rule and check from this computer's or the signed-in account's log, owner-isolated; readings are
+   not note links. Found during desktop QA and fixed: marking a chapter read didn't refresh the marker until the
+   chapter was reopened.
+5. **Published notes read-only** (`store.rs`, `sync.rs`, `journal_ui.rs`, `md_editor.rs` `read_only`): every
+   mutation path guarded in the store and the UI; a `READ_ONLY` refusal or a publish while writing keeps the text as a
+   separate draft of the same owner; refused deletes come back; status pill and list tags as on the website.
+6. **Plan builder faith filter**: a rendered-view regression for other denominations, including editing a saved plan
+   that keeps its Book of Mormon selection.
+7. **Drag auto-scroll** past the window's edge (`main.rs` `edge_scroll`, `select_text.rs` re-picks on redraw). The
+   caption italic was **not** changed (see PARITY: the website's slant is browser-synthesized; not a small change).
+
+## Checks
+
+| Check | Command / procedure | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --locked` | **Passed**: 175, 1 ignored (snapshot exporter); 10 new (`/tmp/verse-polish-tests.log`) |
+| Renderer tests | `cargo test --locked -p iced_tiny_skia` | **Passed**: 5 |
+| Clippy / format / whitespace | `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check` | **Passed** |
+| Release notes current | `node native/scripts/generate-release-notes.mjs --check` | **Passed** |
+| Headless snapshots | `VERSE_SNAPSHOTS=/tmp/verse-polish-snap cargo test snapshots -- --ignored` | **Passed**; reviewed `journal-published`, `journal-published-list`, `reader-reading-log(-picker)`, `settings-tabs-120ms`, `settings-translations`, `bibles-dialog-list/-catalog` |
+| Release build, package | `cargo build --release --locked`, `native/package-linux.sh` | **Passed** (hash above) |
+| Web / Convex tests | — | **Not run**: no web or Convex file changed |
+
+## Real desktop check (release build, Linux Computer Use, `--no-account --data-dir /tmp/verse-polish-qa/profile`)
+
+Screenshots `/tmp/verse-polish-qa/screens/01…13.png`. **Passed:** Mark chapter read on 1 Nephi 1 → rule and check
+at the verses' left edge with the text unmoved (x=229 before and after); "Logged as read" on hover; the check opened
+Oct 28 in the journal with "Read 1 Nephi 1". Settings → Reading: a mid-transition frame and the settled tabs; 0 CPU
+ticks over 5s idle afterwards. Translations: full-screen button → dialog over the whole window; "+ Add Bible" → live
+catalog with the search focused; Change › → "espanol" → Spanish · español; Escape back to the catalog; BSB added →
+dialog list; Escape closed. Reader: two notes added on 1:2 → "2 notes" → the picker floated over verse 3 (unmoved),
+followed a wheel scroll, Down + Enter opened "First thought". The QA window was closed; no account, keyring or
+feedback was used.
+
+## Not run / Blocked
+
+- **Blocked:** live sign-in/sync (deployment, `ACCOUNT_ACTIVATION.md`). Published/archived read-only notes, the
+  account's reading log, the `READ_ONLY` sync recovery and the plan builder are verified by unit/state tests against
+  the real views and a stand-in following `convex/nativeSync.ts`, and by headless renders — **not live**.
+- **Not run:** drag auto-scroll in a live window (the desktop tool can't hold the button outside the window; verified
+  headlessly); macOS/Windows; accessibility/IME.
+
 # Independent settings acceptance — October 28, 2026
 
 Codex reviewed the sixth Claude pass on base `27c2908`, including asynchronous translation loading and stale-result

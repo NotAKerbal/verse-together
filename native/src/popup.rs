@@ -15,6 +15,29 @@ pub struct Popup<'a, Message> {
     panel: Option<Element<'a, Message>>,
     on_dismiss: Option<Message>,
     on_key: Option<Box<KeyMap<'a, Message>>>,
+    placement: Placement,
+}
+/// Where the panel goes: its gap from the anchor, its margin from the window's edges, and whether it lines up with
+/// the anchor's right edge (else its left). Escape dismisses it unless the app handles that key itself.
+#[derive(Debug, Clone, Copy)]
+pub struct Placement {
+    pub gap: f32,
+    pub margin: f32,
+    /// The room it needs to keep from the window's top or bottom edge to open on that side.
+    pub clearance: f32,
+    pub right: bool,
+    pub escape: bool,
+}
+impl Default for Placement {
+    fn default() -> Self {
+        Self {
+            gap: 6.0,
+            margin: 8.0,
+            clearance: 0.0,
+            right: false,
+            escape: true,
+        }
+    }
 }
 pub fn popup<'a, Message>(
     anchor: impl Into<Element<'a, Message>>,
@@ -25,11 +48,16 @@ pub fn popup<'a, Message>(
         panel,
         on_dismiss: None,
         on_key: None,
+        placement: Placement::default(),
     }
 }
 impl<'a, Message> Popup<'a, Message> {
     pub fn on_dismiss(mut self, m: Message) -> Self {
         self.on_dismiss = Some(m);
+        self
+    }
+    pub fn placement(mut self, placement: Placement) -> Self {
+        self.placement = placement;
         self
     }
     pub fn on_key(
@@ -160,6 +188,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for Popup<'_, 
                 anchor: layout.bounds() + translation,
                 on_dismiss: self.on_dismiss.clone(),
                 on_key: self.on_key.as_deref(),
+                placement: self.placement,
             }))),
             _ => None,
         };
@@ -178,6 +207,7 @@ struct Panel<'a, 'b, Message> {
     anchor: Rectangle,
     on_dismiss: Option<Message>,
     on_key: Option<&'b KeyMap<'a, Message>>,
+    placement: Placement,
 }
 
 impl<Message: Clone> overlay::Overlay<Message, iced::Theme, iced::Renderer>
@@ -190,14 +220,27 @@ impl<Message: Clone> overlay::Overlay<Message, iced::Theme, iced::Renderer>
             &layout::Limits::new(Size::ZERO, bounds),
         );
         let size = node.size();
-        let gap = 6.0;
+        let Placement {
+            gap,
+            margin,
+            clearance,
+            right,
+            ..
+        } = self.placement;
         // Below the anchor, else above it; always inside the window.
         let mut y = self.anchor.y + self.anchor.height + gap;
-        if y + size.height > bounds.height && self.anchor.y - gap - size.height >= 0.0 {
+        if y + size.height > bounds.height - clearance
+            && self.anchor.y - gap - size.height >= clearance
+        {
             y = self.anchor.y - gap - size.height;
         }
-        let x = self.anchor.x.min(bounds.width - size.width - 8.0).max(8.0);
-        node.move_to(Point::new(x, y.max(8.0)))
+        let x = if right {
+            self.anchor.x + self.anchor.width - size.width
+        } else {
+            self.anchor.x
+        };
+        let x = x.min(bounds.width - size.width - margin).max(margin);
+        node.move_to(Point::new(x, y.max(margin)))
     }
     fn draw(
         &self,
@@ -245,7 +288,9 @@ impl<Message: Clone> overlay::Overlay<Message, iced::Theme, iced::Renderer>
             }
             Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
-                    if let Some(m) = &self.on_dismiss {
+                    if self.placement.escape
+                        && let Some(m) = &self.on_dismiss
+                    {
                         shell.publish(m.clone());
                         shell.capture_event();
                     }
@@ -258,6 +303,16 @@ impl<Message: Clone> overlay::Overlay<Message, iced::Theme, iced::Renderer>
             }
             _ => {}
         }
+    }
+    fn operate(
+        &mut self,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        self.panel
+            .as_widget_mut()
+            .operate(self.tree, layout, renderer, operation);
     }
     fn mouse_interaction(
         &self,

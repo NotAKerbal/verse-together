@@ -433,10 +433,30 @@ fn verse_links_open_the_journal_notes_that_link_them_without_losing_drafts() {
 
     // Several notes at a verse: the picker lists them; the arrow keys and Enter choose one.
     let _ = app.update(Message::Navigate(jeremiah.clone(), None));
+    let place = |app: &App, id: &'static str| {
+        crate::ui_tests::simulator_for(app)
+            .find(iced_test::selector::id(id))
+            .unwrap()
+            .bounds()
+    };
+    let (verse_6, marker) = {
+        let mut ui = crate::ui_tests::simulator_for(&app);
+        (
+            ui.find(iced_test::selector::id("verse-6"))
+                .unwrap()
+                .bounds(),
+            ui.find("2 notes").unwrap().bounds(),
+        )
+    };
     let _ = crate::ui_tests::click_label(&mut app, "2 notes");
     assert_eq!(app.note_links.picker, Some(5));
+    // It floats over the page: nothing below the marker moves, and it opens just below the marker, lined up with
+    // its right edge and inside the window.
+    assert_eq!(place(&app, "verse-6"), verse_6);
     let mut ui = crate::ui_tests::simulator_for(&app);
-    assert!(ui.find("Your notes").is_ok());
+    let title = ui.find("Your notes").unwrap().bounds();
+    assert!(title.y > marker.y + marker.height && title.y < marker.y + marker.height + 40.0);
+    assert!(title.x < marker.x && title.x > marker.x + marker.width - 288.0);
     assert!(ui.find("Verse 5").is_ok());
     assert!(ui.find("The new covenant").is_ok());
     assert!(ui.find("Vineyards").is_ok());
@@ -694,4 +714,325 @@ fn a_bible_added_in_settings_is_saved_but_only_shown_when_added_in_the_reader() 
     let _ = app.update(Message::Navigate(at("newtestament", "john", 3), None));
     let _ = app.update(Message::Tools(ToolsMsg::SaveBible(net.clone())));
     assert_eq!(app.preferences.compare_bibles, [net.id]);
+}
+
+fn remote_note(
+    id: &str,
+    title: &str,
+    body: &str,
+    source: Option<NoteSource>,
+) -> crate::store::RemoteNote {
+    crate::store::RemoteNote {
+        remote_id: id.into(),
+        revision: 1,
+        updated_at: "2026-10-27T00:00:00.000Z".into(),
+        journal_date: "2026-10-27".into(),
+        reading_at: source.as_ref().map(|_| 1_793_000_000),
+        source,
+        created: 1_793_000_000,
+        updated: 1_793_000_000,
+        text: Some((title.into(), body.into())),
+    }
+}
+
+#[test]
+fn published_notes_open_read_only_everywhere_and_text_typed_as_one_is_published_is_kept() {
+    use crate::journal_ui::{JournalMsg, READ_ONLY_COPY_NOTICE};
+    use crate::md_editor::{Action, Edit};
+    let dir = profile();
+    let mut app = App::from_directory(&dir.0);
+    app.window_width = 1280.0;
+    app.window_height = 800.0;
+    let jeremiah = at("oldtestament", "jeremiah", 31);
+    let store = app.store.as_mut().unwrap();
+    store.set_owner("account-1");
+    let source = NoteSource::scripture("Jeremiah", &jeremiah, Some((3, 3)));
+    for (id, title, verse) in [("r1", "Shared covenant", 3), ("r2", "Still a draft", 4)] {
+        store
+            .apply_remote_note(&remote_note(
+                id,
+                title,
+                &format!("[Jeremiah 31:{verse}](/browse/oldtestament/jeremiah/31#v-{verse}) [site](/come-follow-me)"),
+                (verse == 3).then(|| source.clone()),
+            ))
+            .unwrap();
+    }
+    store
+        .set_note_statuses(&[
+            ("r1".into(), "published".into()),
+            ("r2".into(), "draft".into()),
+        ])
+        .unwrap();
+    let id_of = |app: &App, title: &str| {
+        app.store
+            .as_ref()
+            .unwrap()
+            .all_notes()
+            .unwrap()
+            .into_iter()
+            .find(|n| n.title == title)
+            .unwrap()
+    };
+    let published = id_of(&app, "Shared covenant");
+
+    // The verse's "Note" link opens it read-only, as the website's journal shows a published note.
+    let _ = app.update(Message::Navigate(jeremiah.clone(), None));
+    let _ = app.update(Message::NoteLinks(note_links::NoteLinkMsg::Marker(3)));
+    assert_eq!(app.screen, Screen::Journal);
+    let open = app.journal.open.as_ref().unwrap();
+    assert_eq!(open.note.id, published.id);
+    assert!(open.read_only() && !open.can_delete());
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Published · read-only").is_ok());
+    assert!(ui.find("Shared covenant").is_ok());
+    assert!(ui.find("Reading logged").is_ok(), "its reading shows");
+    assert!(
+        ui.find("Saved").is_err() && ui.find("Save").is_err(),
+        "no save state"
+    );
+    drop(ui);
+    // Every way of changing it does nothing: title, typing, pasting, undo, the reading, deleting.
+    for m in [
+        JournalMsg::Title("Changed".into()),
+        JournalMsg::Body(Action::Edit(Edit::Insert('x'))),
+        JournalMsg::Body(Action::Edit(Edit::Paste(std::sync::Arc::new(
+            "pasted".into(),
+        )))),
+        JournalMsg::Body(Action::Edit(Edit::Backspace)),
+        JournalMsg::Undo,
+        JournalMsg::Redo,
+        JournalMsg::ToggleReading,
+        JournalMsg::Delete,
+        JournalMsg::ConfirmDelete(true),
+        JournalMsg::Save,
+    ] {
+        let _ = app.update(Message::Journal(m));
+    }
+    let open = app.journal.open.as_ref().unwrap();
+    assert!(!open.dirty && !open.confirm_delete);
+    assert_eq!(open.note, published);
+    assert_eq!(open.body.text(), published.body);
+    // Its text can still be selected (and so copied).
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::SelectAll)));
+    assert_eq!(
+        app.journal
+            .open
+            .as_ref()
+            .unwrap()
+            .body
+            .selected_text()
+            .as_deref(),
+        Some(published.body.as_str())
+    );
+    let _ = app.update(Message::Journal(JournalMsg::Close));
+    assert_eq!(
+        app.store.as_ref().unwrap().note(&published.id).unwrap(),
+        Some(published.clone())
+    );
+    // The day's list tags it; opening it from there is read-only too.
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("PUBLISHED").is_ok());
+    drop(ui);
+    let _ = app.update(Message::Journal(JournalMsg::Open(published.id.clone())));
+    assert!(app.journal.open.as_ref().unwrap().read_only());
+
+    // A draft being written when a sync finds it published: the published note is left as the account has it, and
+    // what was typed continues as a separate draft of the same account.
+    let draft = id_of(&app, "Still a draft");
+    let _ = app.update(Message::Journal(JournalMsg::Open(draft.id.clone())));
+    assert!(!app.journal.open.as_ref().unwrap().read_only());
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Move(
+        crate::md_editor::Motion::DocEnd,
+        false,
+    ))));
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Edit(
+        Edit::Paste(std::sync::Arc::new(" typed meanwhile".into())),
+    ))));
+    assert!(app.journal.open.as_ref().unwrap().dirty);
+    app.store
+        .as_mut()
+        .unwrap()
+        .set_note_statuses(&[
+            ("r1".into(), "published".into()),
+            ("r2".into(), "published".into()),
+        ])
+        .unwrap();
+    app.refresh_open_note();
+    let open = app.journal.open.as_ref().unwrap();
+    assert_ne!(open.note.id, draft.id);
+    assert!(!open.read_only() && !open.dirty);
+    assert!(open.body.text().ends_with(" typed meanwhile"));
+    assert_eq!(app.journal.notice.as_deref(), Some(READ_ONLY_COPY_NOTICE));
+    let copy = open.note.id.clone();
+    let store = app.store.as_mut().unwrap();
+    assert_eq!(store.note(&draft.id).unwrap().unwrap().body, draft.body);
+    assert!(
+        store
+            .note(&copy)
+            .unwrap()
+            .unwrap()
+            .body
+            .ends_with(" typed meanwhile")
+    );
+    assert_eq!(store.note_status(&copy).unwrap(), "draft");
+    store.set_owner("");
+    assert_eq!(
+        store.note(&copy).unwrap(),
+        None,
+        "kept under the same account"
+    );
+    store.set_owner("account-1");
+    // Typing on continues in that copy.
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Edit(
+        Edit::Insert('!'),
+    ))));
+    assert!(app.save_journal_note());
+    assert_eq!(app.journal.open.as_ref().unwrap().note.id, copy);
+    // Without anything unsaved, an open note that becomes published just turns read-only.
+    let _ = app.update(Message::Journal(JournalMsg::Open(draft.id.clone())));
+    assert!(app.journal.open.as_ref().unwrap().read_only());
+    app.journal.open.as_mut().unwrap().status = "draft".into();
+    app.refresh_open_note();
+    assert!(app.journal.open.as_ref().unwrap().read_only());
+    assert_eq!(app.journal.open.as_ref().unwrap().note.id, draft.id);
+}
+
+#[test]
+fn the_reading_log_marks_read_passages_and_opens_their_entries_without_moving_the_text() {
+    use crate::journal_ui::JournalMsg;
+    use note_links::NoteLinkMsg;
+    let dir = profile();
+    let mut app = App::from_directory(&dir.0);
+    app.window_width = 1280.0;
+    app.window_height = 800.0;
+    let jeremiah = at("oldtestament", "jeremiah", 31);
+    let store = app.store.as_mut().unwrap();
+    // This computer's own log: verses 3–4 one day, verse 5 another (adjoining: one passage), and a journal entry
+    // logging 7–8 whose body links nothing (a reading isn't a note link).
+    store
+        .log_reading(
+            "2026-10-20",
+            &NoteSource::scripture("Jeremiah", &jeremiah, Some((3, 4))),
+        )
+        .unwrap();
+    store
+        .log_reading(
+            "2026-10-22",
+            &NoteSource::scripture("Jeremiah", &jeremiah, Some((5, 5))),
+        )
+        .unwrap();
+    let mut entry = Note::new(
+        "2026-10-24",
+        Some(NoteSource::scripture("Jeremiah", &jeremiah, Some((7, 8)))),
+    );
+    entry.title = "Read about the new covenant".into();
+    entry.reading_at = Some(1_793_000_000);
+    store.save_note(&entry).unwrap();
+    // A signed-in account's log on this computer never shows for the device, nor the device's for the account.
+    store.set_owner("account-1");
+    store
+        .log_reading(
+            "2026-10-21",
+            &NoteSource::scripture("Jeremiah", &jeremiah, Some((20, 21))),
+        )
+        .unwrap();
+    store.set_owner("");
+
+    let _ = app.update(Message::Navigate(jeremiah.clone(), None));
+    // Marking a chapter read logs it, and the reader shows it straight away (then takes it back).
+    let mut marked = App::from_directory(&profile().0);
+    let _ = marked.update(Message::Navigate(at("oldtestament", "jeremiah", 30), None));
+    let _ = marked.update(Message::MarkRead);
+    let whole = marked.read_passages();
+    assert_eq!((whole[&1].start, whole[&1].end), (1, 24));
+    let _ = marked.update(Message::MarkRead);
+    assert!(marked.read_passages().is_empty());
+    let read = app.read_passages();
+    assert_eq!(read.keys().copied().collect::<Vec<_>>(), [3, 4, 5, 7, 8]);
+    assert_eq!(
+        (read[&3].start, read[&3].end, read[&3].readings.len()),
+        (3, 5, 2)
+    );
+    assert_eq!((read[&7].start, read[&7].end), (7, 8));
+    assert!(read[&7].readings[0].note);
+    assert!(
+        app.note_links.by_verse.is_empty(),
+        "readings make no note links"
+    );
+
+    // The check and its rule sit in the verse's margin: the verses keep their places.
+    let mut plain = App::from_directory(&profile().0);
+    plain.window_width = 1280.0;
+    plain.window_height = 800.0;
+    let _ = plain.update(Message::Navigate(jeremiah.clone(), None));
+    let place = |app: &App, id: &'static str| {
+        crate::ui_tests::simulator_for(app)
+            .find(iced_test::selector::id(id))
+            .unwrap()
+            .bounds()
+    };
+    for id in ["verse-3", "verse-6", "verse-9"] {
+        assert_eq!(place(&app, id), place(&plain, id), "{id}");
+    }
+
+    // One reading opens its journal entry.
+    let _ = app.update(Message::NoteLinks(NoteLinkMsg::ReadMarker(7)));
+    assert_eq!(app.screen, Screen::Journal);
+    assert_eq!(app.journal.open.as_ref().unwrap().note.id, entry.id);
+
+    // Several: "Reading log" floats beside the check with each day; the keys choose one, which opens its day.
+    let _ = app.update(Message::Navigate(jeremiah.clone(), None));
+    let before = place(&app, "verse-6");
+    let _ = app.update(Message::NoteLinks(NoteLinkMsg::ReadMarker(3)));
+    assert_eq!(app.note_links.read_picker, Some(3));
+    let today = crate::note_links::read_date(crate::store::now());
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Reading log").is_ok());
+    assert!(ui.find("verses 3–5").is_ok());
+    assert!(ui.find(today.as_str()).is_ok());
+    assert!(ui.find("vv. 3-4").is_ok() && ui.find("v. 5").is_ok());
+    assert!(ui.find("DRAFT").is_err(), "readings have no status");
+    drop(ui);
+    assert_eq!(place(&app, "verse-6"), before, "the dialog moves nothing");
+    let order: Vec<String> = app.read_passages()[&3]
+        .readings
+        .iter()
+        .map(|r| r.journal_date.clone())
+        .collect();
+    // In the order of the verses they reach, as the website lists them.
+    assert_eq!(order, ["2026-10-20", "2026-10-22"]);
+    let _ = app.update(Message::NoteLinks(NoteLinkMsg::Step(1)));
+    let _ = app.update(Message::NoteLinks(NoteLinkMsg::Step(-1)));
+    let _ = app.update(Message::NoteLinks(NoteLinkMsg::Choose));
+    assert_eq!(app.screen, Screen::Journal);
+    assert!(app.journal.open.is_none());
+    assert_eq!(app.journal.day, "2026-10-20");
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Read Jeremiah 31:3-4").is_ok());
+    drop(ui);
+    let _ = app.update_journal(JournalMsg::Today);
+
+    // Escape closes the dialog; signed in, the account's own log shows instead.
+    let _ = app.update(Message::Navigate(jeremiah.clone(), None));
+    let _ = app.update(Message::NoteLinks(NoteLinkMsg::ReadMarker(3)));
+    let _ = app.update(Message::Event(iced::Event::Keyboard(
+        iced::keyboard::Event::KeyPressed {
+            key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+            modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+            physical_key: iced::keyboard::key::Physical::Unidentified(
+                iced::keyboard::key::NativeCode::Unidentified,
+            ),
+            location: iced::keyboard::Location::Standard,
+            modifiers: iced::keyboard::Modifiers::default(),
+            text: None,
+            repeat: false,
+        },
+    )));
+    assert_eq!(app.note_links.read_picker, None);
+    app.store.as_mut().unwrap().set_owner("account-1");
+    app.refresh_note_links();
+    assert_eq!(
+        app.read_passages().keys().copied().collect::<Vec<_>>(),
+        [20, 21]
+    );
 }

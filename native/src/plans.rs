@@ -2950,4 +2950,117 @@ mod tests {
         drop(app);
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    #[test]
+    fn other_traditions_build_bible_plans_and_keep_a_saved_plans_hidden_volumes() {
+        use crate::{Message, Screen, faith};
+        let (mut app, dir) = signed_in();
+        let _ = app.update(Message::SetScreen(Screen::Plans));
+        let _ = app.update(Message::SetFaith(faith::OTHER));
+        let _ = app.update_plans(PlansMsg::New);
+        let count = |app: &App, label: &str| {
+            crate::ui_tests::visible_texts(app)
+                .iter()
+                .filter(|t| t.as_str() == label)
+                .count()
+        };
+        // Only the Bible's volumes are offered, whole or by book, and no Book of Mormon quick start; the volume tab
+        // left on the Book of Mormon shows the New Testament instead.
+        for hidden in [
+            "Book of Mormon",
+            "Doctrine & Covenants",
+            "D&C",
+            "Pearl of Great Price",
+        ] {
+            assert_eq!(count(&app, hidden), 0, "{hidden}");
+        }
+        assert_eq!(count(&app, "Book of Mormon in 30 days"), 0);
+        assert!(count(&app, "Old Testament") >= 2 && count(&app, "New Testament") >= 2);
+        assert_eq!(
+            app.plans.builder.as_ref().unwrap().active_volume,
+            "bookofmormon"
+        );
+        assert!(count(&app, "Matthew") >= 1, "the New Testament's books");
+        assert_eq!(count(&app, "1 Nephi"), 0);
+        // A plan made here holds only what was offered.
+        send(&mut app, BuilderMsg::ToggleVolume("oldtestament"));
+        send(&mut app, BuilderMsg::Driver(Driver::Days));
+        send(&mut app, BuilderMsg::Draft(Field::Days, "90".into()));
+        let (name, args) = app.plan_call().unwrap();
+        assert_eq!(name, "readingPlans:createPlan");
+        assert_eq!(
+            args["selections"],
+            json!([{"kind": "volume", "volume": "oldtestament"}])
+        );
+        assert!(
+            args["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|s| s["volume"] == "oldtestament")
+        );
+
+        // Editing a plan saved with a Latter-day Saint volume keeps it: its tile shows, it stays in the plan, and
+        // the update sends it back unchanged with the new pace, as the website does. Nothing is dropped.
+        let steps: Vec<PlanStep> = (1..=22)
+            .map(|c| PlanStep {
+                volume: "bookofmormon".into(),
+                book: "1nephi".into(),
+                chapter: c,
+                label: format!("1 Nephi {c}"),
+                index: c as usize - 1,
+                read_at: None,
+            })
+            .collect();
+        let plan = Plan {
+            summary: PlanSummary {
+                id: "plan-lds".into(),
+                title: "1 Nephi + Mark".into(),
+                template: "custom".into(),
+                step_count: 22,
+                read_count: 0,
+                start_date: Some("2026-10-01".into()),
+                chapters_per_day: Some(1),
+                reading_days: None,
+                selections: Some(vec![
+                    Selection::book("bookofmormon", "1nephi"),
+                    Selection::book("newtestament", "mark"),
+                ]),
+            },
+            steps,
+        };
+        app.plans.open = Some(PlansLoad::Ready(plan));
+        let _ = app.update_plans(PlansMsg::Edit("plan-lds".into()));
+        let form = app.plans.builder.as_ref().unwrap();
+        assert_eq!(form.state.selections.len(), 2);
+        assert_eq!(
+            count(&app, "1 Nephi"),
+            1,
+            "its selection tile, not a book to add"
+        );
+        assert_eq!(count(&app, "Book of Mormon"), 0, "no volume chip or tab");
+        send(&mut app, BuilderMsg::Stepper(Field::PerDay, 2));
+        let (name, args) = app.plan_call().unwrap();
+        assert_eq!(name, "readingPlans:updatePlan");
+        assert_eq!(
+            args["selections"],
+            json!([
+                {"kind": "book", "volume": "bookofmormon", "book": "1nephi"},
+                {"kind": "book", "volume": "newtestament", "book": "mark"}
+            ])
+        );
+        let steps = args["steps"].as_array().unwrap();
+        assert_eq!(steps[0]["label"], "1 Nephi 1");
+        assert_eq!(steps.len(), 22 + 16);
+        assert_eq!(args["chaptersPerDay"], 2);
+
+        // Back to the Latter-day Saint tradition, everything is offered again.
+        let _ = app.update_plans(PlansMsg::CloseBuilder);
+        let _ = app.update(Message::SetFaith(faith::LATTER_DAY_SAINT));
+        let _ = app.update_plans(PlansMsg::New);
+        assert!(count(&app, "Book of Mormon") >= 2);
+        assert_eq!(count(&app, "Book of Mormon in 30 days"), 1);
+        drop(app);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
