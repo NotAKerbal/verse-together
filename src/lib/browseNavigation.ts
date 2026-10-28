@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsContentPath } from "@/lib/faithTradition";
+
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { readStorageValue, writeStorageValue } from "@/lib/clientStorage";
@@ -12,6 +15,7 @@ function buildBrowseLocation(pathname: string, searchParams: URLSearchParams) {
 }
 
 export function useBrowseNavHref() {
+  const { showLdsContent } = useFaithTradition();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [lastBrowseHref, setLastBrowseHref] = useState("/browse");
@@ -37,5 +41,5 @@ export function useBrowseNavHref() {
     return "/browse";
   }
 
-  return lastBrowseHref;
+  return !showLdsContent && isLdsContentPath(lastBrowseHref) ? "/browse" : lastBrowseHref;
 }

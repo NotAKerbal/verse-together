@@ -1,109 +1,176 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useId, useReducer, useRef, type FormEvent } from "react";
+import styles from "@/app/account/page.module.css";
+import { FormMessage, INPUT_CLASS, SECONDARY_BUTTON_CLASS } from "@/features/auth/AuthUi";
+import {
+  canSendFeedback,
+  feedbackFieldErrors,
+  feedbackFormReducer,
+  INITIAL_FEEDBACK_FORM,
+  visibleFeedbackErrors,
+} from "@/features/feedback/feedbackForm";
 import { submitFeedback } from "@/lib/appData";
 import { useAuth } from "@/lib/auth";
+import { FEEDBACK_CONTACT_MAX, FEEDBACK_MESSAGE_MAX, FEEDBACK_MESSAGE_MIN } from "../../convex/feedbackRules";
 
-type FeedbackState = {
-  message: string;
-  contact: string;
-};
+const describedBy = (...ids: (string | false | null | undefined)[]) => ids.filter(Boolean).join(" ") || undefined;
 
+/**
+ * Settings → Feedback: a message and an optional way to reply. Anyone can send it; when signed in, the backend
+ * links it to the verified account. Only the page's path goes with it, never its query string or hash.
+ */
 export default function FeedbackForm() {
-  const { getToken } = useAuth();
-  const [form, setForm] = useState<FeedbackState>({ message: "", contact: "" });
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user, loading, getToken } = useAuth();
+  const [state, dispatch] = useReducer(feedbackFormReducer, INITIAL_FEEDBACK_FORM);
+  // A second submit before React re-renders (a double click, Enter held down) still finds the first in flight.
+  const sendingRef = useRef(false);
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const contactRef = useRef<HTMLInputElement>(null);
+  const id = useId();
+  const ids = {
+    message: `${id}-message`,
+    messageHint: `${id}-message-hint`,
+    messageError: `${id}-message-error`,
+    contact: `${id}-contact`,
+    contactHint: `${id}-contact-hint`,
+    contactError: `${id}-contact-error`,
+  };
 
-  const path = useMemo(() => {
-    if (typeof window === "undefined") return "/";
-    return window.location.pathname;
-  }, []);
+  const pending = state.status === "pending";
+  const errors = visibleFeedbackErrors(state);
 
-  useEffect(() => {
-    if (success) {
-      const id = setTimeout(() => setSuccess(false), 4000);
-      return () => clearTimeout(id);
-    }
-  }, [success]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const message = form.message.trim();
-    const contact = form.contact.trim();
-    if (message.length < 5) {
-      setError("Please write at least 5 characters.");
-      return;
-    }
-    if (message.length > 2000) {
-      setError("Please keep feedback under 2000 characters.");
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (sendingRef.current || pending) return;
+    dispatch({ type: "submit" });
+    if (!canSendFeedback(state.draft)) {
+      // The field's error is linked to it, so moving focus there reads it out.
+      (feedbackFieldErrors(state.draft).message ? messageRef : contactRef).current?.focus();
       return;
     }
 
-    setSubmitting(true);
+    sendingRef.current = true;
     try {
       const token = await getToken({ template: "convex" });
-      await submitFeedback({ message, contact: contact || null, path }, token);
-      setSuccess(true);
-      setForm({ message: "", contact: "" });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
+      await submitFeedback(
+        {
+          message: state.draft.message.trim(),
+          contact: state.draft.contact.trim() || null,
+          path: window.location.pathname,
+        },
+        token
+      );
+      dispatch({ type: "succeeded" });
+    } catch {
+      dispatch({ type: "failed" });
     } finally {
-      setSubmitting(false);
+      sendingRef.current = false;
     }
   }
 
   return (
-    <div className="rounded-lg border border-[color:var(--surface-border)] p-5">
-      <h2 className="text-xl font-semibold">Have feedback or ideas?</h2>
-      <p className="mt-1 text-sm text-foreground/80">
-        Share suggestions, feature requests, or improvements. I read every submission.
-      </p>
-      <form onSubmit={handleSubmit} className="mt-4 space-y-3">
-        <div>
-          <label className="block text-sm font-medium">Your feedback</label>
-          <textarea
-            value={form.message}
-            onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-            className="mt-1 w-full min-h-[96px] rounded-md border border-[color:var(--surface-border)] bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            placeholder="What would make Verse Together better?"
-            maxLength={2000}
-            required
-          />
-          <div className="mt-1 text-xs text-foreground/60">{form.message.length}/2000</div>
+    <section className={`${styles.settingsCard} ${styles.feedbackCard}`} aria-labelledby={`${id}-title`}>
+      <div className={styles.preferences}>
+        <div className={styles.cardHeader}>
+          <div>
+            <h3 id={`${id}-title`} className={styles.settingTitle}>
+              Send feedback
+            </h3>
+            <p>
+              {loading
+                ? "Ideas, problems, or anything that would help."
+                : user
+                  ? "Linked to your account when you send it."
+                  : "Sent anonymously. You don't need to sign in."}
+            </p>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium">Contact (optional)</label>
-          <input
-            type="text"
-            value={form.contact}
-            onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))}
-            className="mt-1 w-full rounded-md border border-[color:var(--surface-border)] bg-transparent p-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            placeholder="Email, X/Twitter, or leave blank"
-          />
-        </div>
-        {error && (
-          <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
-        )}
-        {success && (
-          <div className="text-sm text-green-700 dark:text-green-400">Thanks! Your feedback was sent.</div>
-        )}
-        <div className="pt-1">
+
+        <form onSubmit={handleSubmit} className={styles.feedbackForm} aria-busy={pending || undefined} noValidate>
+          <div>
+            <label htmlFor={ids.message} className="block text-sm font-semibold">
+              Your feedback
+            </label>
+            <textarea
+              ref={messageRef}
+              id={ids.message}
+              name="message"
+              rows={6}
+              required
+              maxLength={FEEDBACK_MESSAGE_MAX}
+              readOnly={pending}
+              value={state.draft.message}
+              onChange={(event) => dispatch({ type: "edit", field: "message", value: event.target.value })}
+              placeholder="What would make Verse Together better?"
+              className={`${INPUT_CLASS} ${styles.feedbackMessage}`}
+              aria-invalid={errors.message ? true : undefined}
+              aria-describedby={describedBy(ids.messageHint, errors.message && ids.messageError)}
+            />
+            <div className={styles.fieldMeta}>
+              <p id={ids.messageHint}>
+                {FEEDBACK_MESSAGE_MIN} to {FEEDBACK_MESSAGE_MAX} characters. Please leave out passwords and private
+                details.
+              </p>
+              <span aria-hidden="true">
+                {state.draft.message.length}/{FEEDBACK_MESSAGE_MAX}
+              </span>
+            </div>
+            {errors.message ? (
+              <p id={ids.messageError} className={styles.fieldError}>
+                {errors.message}
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <label htmlFor={ids.contact} className="block text-sm font-semibold">
+              How to reach you <span className="font-normal text-[color:var(--foreground-muted)]">(optional)</span>
+            </label>
+            <input
+              ref={contactRef}
+              id={ids.contact}
+              name="contact"
+              type="text"
+              autoComplete="email"
+              maxLength={FEEDBACK_CONTACT_MAX}
+              readOnly={pending}
+              value={state.draft.contact}
+              onChange={(event) => dispatch({ type: "edit", field: "contact", value: event.target.value })}
+              className={INPUT_CLASS}
+              aria-invalid={errors.contact ? true : undefined}
+              aria-describedby={describedBy(ids.contactHint, errors.contact && ids.contactError)}
+            />
+            <p id={ids.contactHint} className={styles.fieldMeta}>
+              An email or handle, if you&apos;d like a reply. Only the developer sees it.
+            </p>
+            {errors.contact ? (
+              <p id={ids.contactError} className={styles.fieldError}>
+                {errors.contact}
+              </p>
+            ) : null}
+          </div>
+
+          {state.status === "failed" ? (
+            <FormMessage tone="error">
+              Your feedback couldn&apos;t be sent. It&apos;s still here, so you can try again.
+            </FormMessage>
+          ) : null}
+          {/* Always in the page, so screen readers announce the confirmation when it appears. */}
+          <p role="status" className={state.status === "sent" ? styles.feedbackSent : "sr-only"}>
+            {state.status === "sent" ? "Thanks! Your feedback was sent." : pending ? "Sending feedback…" : ""}
+          </p>
+
           <button
             type="submit"
-            className="inline-flex items-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium disabled:opacity-50"
-            disabled={submitting}
-            data-tap
+            className={`${SECONDARY_BUTTON_CLASS} aria-disabled:cursor-wait aria-disabled:opacity-60`}
+            // aria-disabled, not disabled, so the button keeps keyboard focus while it sends.
+            aria-disabled={pending || undefined}
           >
-            {submitting ? "Sending..." : "Send feedback"}
+            {pending ? "Sending…" : "Send feedback"}
           </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </section>
   );
 }
-
-

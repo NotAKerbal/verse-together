@@ -1,5 +1,7 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+
 import { faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -78,7 +80,7 @@ import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 /** A chapter's text, as the server reads it (streamed to the reader after its page). */
-export type ChapterContent = { reference: string; translation?: string; verses: Verse[] };
+export type ChapterContent = { reference: string; translation?: string; translationNotice?: string; verses: Verse[] };
 const NO_OVERLAYS: string[] = [];
 const NO_VERSES: Verse[] = [];
 type SelectedVerse = { verse: number; text: string };
@@ -564,7 +566,9 @@ export default function ChapterReader({
     textReady ? overlayTranslations : NO_OVERLAYS
   );
   const overlayList = overlayTranslations.join(",");
-  const [jstEnabled] = useJstPreference();
+  const { showLdsContent } = useFaithTradition();
+  const [savedJstEnabled] = useJstPreference();
+  const jstEnabled = savedJstEnabled && showLdsContent;
   // Bible chapters only (the hook checks), and like comparisons, only once the primary text is on screen. The
   // appendix compares the JST with the KJV, so it is read in place of the KJV text and nothing else.
   const jst = useJstExcerpts(volume, book, chapter, jstEnabled && textReady && primaryTranslation === "lds");
@@ -644,8 +648,8 @@ export default function ChapterReader({
   const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
   const studyPathsByVerse = useMemo(
-    () => groupChapterStudyPathsByVerse(chapterStudyPaths),
-    [chapterStudyPaths]
+    () => groupChapterStudyPathsByVerse(showLdsContent ? chapterStudyPaths : []),
+    [chapterStudyPaths, showLdsContent]
   );
   const openStudyPaths = useMemo(
     () => (openInsightVerse === null ? [] : studyPathsByVerse.get(openInsightVerse) ?? []),
@@ -706,8 +710,8 @@ export default function ChapterReader({
   }, [textReady]);
 
   useEffect(() => {
-    // After the text, like the other extras, so it never competes with it.
-    if (!textReady) return;
+    // The current study paths are written from a Latter-day Saint perspective.
+    if (!textReady || !showLdsContent) return;
     const controller = new AbortController();
     setChapterStudyPaths([]);
     setOpenInsightVerse(null);
@@ -734,7 +738,7 @@ export default function ChapterReader({
       });
 
     return () => controller.abort();
-  }, [textReady, volume, book, chapter, user?.id]);
+  }, [textReady, volume, book, chapter, user?.id, showLdsContent]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -930,7 +934,8 @@ export default function ChapterReader({
     });
     return nextMap;
   }, [compareChapters]);
-  const primaryTranslationLabel = formatTranslationShortLabel(primaryTranslation);
+  const primaryTranslationLabel = !showLdsContent && primaryTranslation?.toLowerCase() === "lds"
+    ? "KJV" : formatTranslationShortLabel(primaryTranslation);
   const compareColorClasses = [
     "text-sky-700 dark:text-sky-300",
     "text-emerald-700 dark:text-emerald-300",
@@ -941,13 +946,13 @@ export default function ChapterReader({
   ];
   const translationNameById = useMemo(() => {
     const next = new Map<string, string>();
-    next.set("lds", "King James Bible (LDS edition)");
+    next.set("lds", showLdsContent ? "King James Bible (LDS edition)" : "King James Bible");
     FEATURED_BIBLES.forEach((option) => next.set(option.id, option.label));
     BIBLE_TRANSLATION_OPTIONS.forEach((option) => {
       next.set(option.id, option.label);
     });
     return next;
-  }, []);
+  }, [showLdsContent]);
   const compareLegend = useMemo(
     () =>
       Array.from(compareByTranslation.keys()).map((translationId, index) => ({
@@ -1573,7 +1578,7 @@ export default function ChapterReader({
                 : "max-h-[calc(100dvh-var(--header-height)-1rem)] overflow-y-auto pr-1 space-y-3"
           }`}
         >
-          {openResources && hasSelection ? (
+          {showLdsContent && openResources && hasSelection ? (
             <VerseResourcesPanel
               key={`${volume}:${book}:${chapter}:${selectedVerses.map((verse) => verse.verse).join(",")}`}
               volume={volume}
@@ -1668,6 +1673,11 @@ export default function ChapterReader({
               <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
                 Loading {pendingTranslations.map((id) => id.toUpperCase()).join(", ")} for comparison…
               </div>
+            ) : null}
+            {content?.translationNotice ? (
+              <p role="status" className="reader-header-notice text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+                {showLdsContent ? content.translationNotice : content.translationNotice.replace("King James Bible (LDS edition)", "King James Bible")}
+              </p>
             ) : null}
             {translationNotices.length > 0 ? (
               <div className="reader-header-notice text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
@@ -2105,7 +2115,7 @@ export default function ChapterReader({
           void onNewNoteFromActions();
         }}
         onAnnotation={onOpenAnnotation}
-        onResources={() => { setOpenExplorer(false); setOpenResources(true); }}
+        onResources={showLdsContent ? () => { setOpenExplorer(false); setOpenResources(true); } : undefined}
         onExplore={onOpenExplore}
         shareHref={shareHref}
       />

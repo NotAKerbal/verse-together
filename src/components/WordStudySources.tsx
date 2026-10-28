@@ -1,5 +1,7 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   STUDY_HELP_GUIDES,
@@ -54,7 +56,7 @@ export function loadStudyHelpsIndex(): Promise<StudyHelpsIndex> {
 
 type IndexState = { status: "loading" } | { status: "ready"; index: StudyHelpsIndex } | { status: "unavailable" };
 
-function useStudyHelpsIndex(): [IndexState, () => void] {
+function useStudyHelpsIndex(enabled = true): [IndexState, () => void] {
   const [state, setState] = useState<IndexState>(() =>
     studyHelpsIndex ? { status: "ready", index: studyHelpsIndex } : { status: "loading" }
   );
@@ -62,7 +64,7 @@ function useStudyHelpsIndex(): [IndexState, () => void] {
   const loaded = state.status === "ready";
 
   useEffect(() => {
-    if (loaded) return;
+    if (loaded || !enabled) return;
     let active = true;
     loadStudyHelpsIndex().then(
       (index) => {
@@ -75,7 +77,7 @@ function useStudyHelpsIndex(): [IndexState, () => void] {
     return () => {
       active = false;
     };
-  }, [loaded, attempt]);
+  }, [loaded, attempt, enabled]);
 
   const retry = useCallback(() => {
     setState({ status: "loading" });
@@ -197,14 +199,15 @@ export type ScriptureHelps = { guides: StudyHelpGuideResult[]; status: SourceSta
 
 /** Which study-help guides have topics for the word, once the topic list has loaded. */
 export function useScriptureHelps(word: string): ScriptureHelps {
-  const [indexState, retry] = useStudyHelpsIndex();
-  const guides = useMemo(() => STUDY_HELP_GUIDES.map((guide): StudyHelpGuideResult => {
+  const { showLdsContent } = useFaithTradition();
+  const [indexState, retry] = useStudyHelpsIndex(showLdsContent);
+  const guides = useMemo(() => (showLdsContent ? STUDY_HELP_GUIDES : []).map((guide): StudyHelpGuideResult => {
     if (indexState.status !== "ready") {
       return { guide, status: indexState.status === "loading" ? "loading" : "error", matches: null };
     }
     const matches = findStudyHelpMatches(indexState.index.guides[guide.id].entries, word);
     return { guide, status: matches.entries.length || matches.related.length ? "found" : "empty", matches };
-  }), [indexState, word]);
+  }), [indexState, word, showLdsContent]);
   return { guides, status: sectionStatus(guides.map((result) => result.status)), retry };
 }
 
