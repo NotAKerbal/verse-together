@@ -61,9 +61,15 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "improved", text: "Adding a Bible on desktop now opens in a centered panel with search and language controls beside the results, plus a language grid for easier browsing." },
+    {
+      kind: "new",
+      text: "A privacy policy at versetogether.org/privacy explains what the website and the app keep, what they send to other services, and how to delete your data. It's linked from Settings and the sign-in page.",
+    },
     {
       kind: "new",
       text: "Delete your account and all the study saved in it from Settings → Account, or at versetogether.org/delete-account. You confirm before anything is deleted, and a deletion that stops partway can be finished later.",
+
     },
   ],
 };

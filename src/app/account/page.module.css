@@ -1066,3 +1066,20 @@
     font-size: .75rem;
   }
 }
+
+/* Below every section: a quiet link to the privacy policy. */
+.policyLink {
+  margin-top: 2rem;
+  font-size: .8rem;
+  color: var(--foreground-soft);
+}
+
+.policyLink a {
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+
+.policyLink a:hover {
+  color: var(--foreground);
+}
