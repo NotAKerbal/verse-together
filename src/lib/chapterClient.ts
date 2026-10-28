@@ -24,6 +24,13 @@ function canonicalRequest(request: ChapterRequest): ChapterRequest {
 
 async function readLocalChapter(request: ChapterRequest): Promise<ChapterResponse | null> {
   try {
+    const { readDesktopChapter } = await import("@/lib/desktop");
+    const native = await readDesktopChapter(request.volume, request.book, request.chapter);
+    if (native) return native;
+  } catch {
+    // Keep the existing browser/server fallback if the native layer is unavailable.
+  }
+  try {
     const { readBrowserScriptureChapter } = await import("@/lib/browserScriptureStorage");
     const local = await readBrowserScriptureChapter(request.volume, request.book, request.chapter);
     if (!local || local.verses.length === 0) return null;

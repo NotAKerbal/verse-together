@@ -57,3 +57,12 @@ data/dictionary/
 
 # auth migration mapping files and reports (contain email addresses)
 /.auth-migration/
+
+# Desktop build artifacts
+/.desktop/
+/src-tauri/target/
+/src-tauri/gen/
+
+# Fully native Rust desktop artifacts
+/native/target/
+/native/dist/

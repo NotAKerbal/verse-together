@@ -1,0 +1,1372 @@
+use crate::design::{self, icon, sans, serif};
+use crate::header::{self, CONTENT_TOP, PILL_HEIGHT, TOP, shell_inset};
+use crate::icons;
+use crate::selectable;
+use crate::store::{self, Location, TextWidth};
+use crate::{App, Message, Popover, Screen, guides};
+use iced::alignment::{Horizontal, Vertical};
+use iced::widget::text::{LineHeight, Wrapping};
+use iced::widget::text_editor::Binding;
+use iced::widget::{
+    button, column, container, markdown, mouse_area, opaque, row, scrollable, slider, space, stack,
+    text, text_editor, text_input,
+};
+use iced::{Alignment::Center, Border, Color, Element, Fill, Font, Length, Padding, font};
+
+/// The study panel beside the reader, and the gap before it.
+const PANEL_WIDTH: f32 = 300.0;
+const PANEL_GAP: f32 = 12.0;
+/// The book and chapter picker's scrolling area, and one book row in it (13px label, 7px padding, 1px gap).
+const LIBRARY_HEIGHT: f32 = 416.0;
+const BOOK_ROW: f32 = 32.0;
+/// `.verse-badge`: 0.72rem DM Sans 600, in a 1.1rem slot with a 0.4rem margin, raised 0.35em.
+const BADGE_SIZE: f32 = 11.52;
+const BADGE_SLOT: f32 = 17.6;
+const BADGE_MARGIN: f32 = 6.4;
+const BADGE_RAISE: f32 = 0.35 * BADGE_SIZE;
+/// Characters the verse number indent is made of; they are never copied with the words.
+pub const INDENT_CHARS: &[char] = &['\u{2002}', '\u{2009}', '\u{200A}', ' '];
+/// En, thin and hair spaces, widest first, so the indent comes within a hair of the slot width.
+const INDENT_FILL: &[char] = &['\u{2002}', '\u{2009}', '\u{200A}'];
+
+fn badge_font() -> Font {
+    sans(font::Weight::Semibold)
+}
+/// Spaces as wide as the website's verse number slot, so the first line starts after the number and wrapped lines
+/// return to the left edge, as with the website's inline `.verse-badge`.
+pub fn verse_indent(number: &str, font: Font, size: f32) -> String {
+    let target = design::measure(number, BADGE_SIZE, badge_font()).max(BADGE_SLOT) + BADGE_MARGIN;
+    let base = design::measure("x", size, font);
+    let width = |c: char| design::measure(&format!("{c}x"), size, font) - base;
+    let mut indent = String::new();
+    let mut remaining = target;
+    for (i, c) in INDENT_FILL.iter().copied().enumerate() {
+        let w = width(c);
+        if w <= 0.05 {
+            continue;
+        }
+        let last = i == INDENT_FILL.len() - 1;
+        let count = if last {
+            (remaining / w).ceil()
+        } else {
+            (remaining / w).floor()
+        }
+        .max(0.0) as usize;
+        indent.extend(std::iter::repeat_n(c, count));
+        remaining -= count as f32 * w;
+        if remaining <= 0.01 {
+            break;
+        }
+    }
+    if remaining > 0.01 {
+        // The finest space this font has, once more, so the slot is never narrower than the number.
+        indent.push(' ');
+    }
+    indent
+}
+/// The website's `leading-7` remains 28px throughout its 85–130% text-size range.
+fn line_height(_size: f32) -> f32 {
+    28.0
+}
+/// Places the badge so its baseline sits 0.35em above the first line's baseline.
+fn badge_top(size: f32, line: f32) -> f32 {
+    let text_baseline = (line - 1.15 * size) / 2.0 + 0.9 * size;
+    let badge_baseline = (12.0 - 1.302 * BADGE_SIZE) / 2.0 + 0.992 * BADGE_SIZE;
+    (text_baseline - BADGE_RAISE - badge_baseline).max(0.0)
+}
+
+impl App {
+    /// The reader column's width including the verses' 8px outer margins, or `None` for full width.
+    fn column_width(&self) -> Option<f32> {
+        let simple = self.focus;
+        match self.preferences.text_width {
+            TextWidth::Comfortable => Some(if simple { 672.0 } else { 896.0 } + 16.0),
+            TextWidth::Wide => Some(if simple { 1024.0 } else { 1408.0 } + 16.0),
+            TextWidth::Full => None,
+        }
+    }
+    /// Whether opening the study panel narrows the text enough to re-wrap it.
+    pub(crate) fn panel_reflows(&self) -> bool {
+        self.column_width()
+            .is_none_or(|w| self.reader_width(true) - self.reader_side() < w)
+    }
+    /// Horizontal padding around the reader column; the verses' 8px outer margins sit inside it.
+    fn reader_side(&self) -> f32 {
+        if self.preferences.text_width == TextWidth::Full {
+            24.0 - 8.0
+        } else {
+            (self.window_width * 0.026).clamp(16.0, 32.0) - 8.0
+        }
+    }
+    fn panel_inset(&self) -> f32 {
+        shell_inset(self.window_width).min(32.0)
+    }
+    /// The width the reader's scroll area gets, with or without the study panel beside it.
+    fn reader_width(&self, panel: bool) -> f32 {
+        if panel {
+            self.window_width - PANEL_WIDTH - PANEL_GAP - self.panel_inset()
+        } else {
+            self.window_width
+        }
+    }
+
+    pub(crate) fn view(&self) -> Element<'_, Message> {
+        let p = self.p();
+        if self.store.is_none() {
+            return container(
+                column![
+                    header::wordmark(p, 38.),
+                    text("Your study data could not be opened.").size(18),
+                    text(self.error.as_deref().unwrap_or("Unknown storage error")).color(p.accent),
+                    button("Try again").on_press(Message::Retry)
+                ]
+                .spacing(20)
+                .max_width(660),
+            )
+            .center_x(Fill)
+            .center_y(Fill)
+            .into();
+        }
+        let content = match self.screen {
+            Screen::Reader => self.reader(),
+            Screen::Journal => self.journal_view(),
+            Screen::Guides => self.guides_view(),
+        };
+        // Stable layers, so opening a panel or animating the header never resets the reader's scroll position:
+        // the page, a click-away layer under the header, the header, then panels and notices.
+        let shade: Element<'_, Message> = if self.popover.is_some() {
+            mouse_area(container(space()).width(Fill).height(Fill))
+                .on_press(Message::ClosePopover)
+                .into()
+        } else {
+            space().into()
+        };
+        let header: Element<'_, Message> = if self.focus && self.screen == Screen::Reader {
+            space().into()
+        } else {
+            self.header()
+        };
+        stack![content, shade, header, self.overlay()]
+            .width(Fill)
+            .height(Fill)
+            .into()
+    }
+
+    fn overlay(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let mut layers = stack![].width(Fill).height(Fill);
+        if let Some(popover) = self.popover {
+            let (panel, width, right) = match popover {
+                Popover::Search => (self.search_view(), 352.0, true),
+                Popover::Library | Popover::Chapters => (self.library_view(), 600.0, true),
+                Popover::ReaderSettings => (self.reader_settings(), 384.0, true),
+                Popover::AppSettings => (self.app_settings(), 280.0, false),
+            };
+            let inset = shell_inset(self.window_width);
+            layers = layers.push(
+                container(container(opaque(panel)).width(width))
+                    .padding(Padding {
+                        top: TOP + PILL_HEIGHT + 8.0,
+                        right: inset,
+                        bottom: 24.0,
+                        left: inset,
+                    })
+                    .width(Fill)
+                    .height(Fill)
+                    .align_x(if right {
+                        Horizontal::Right
+                    } else {
+                        Horizontal::Left
+                    }),
+            );
+        }
+        if self.focus && self.screen == Screen::Reader {
+            let exit = button(
+                row![
+                    icon(&icons::EYE_SLASH, p.ink, 14.),
+                    text("Exit simple mode")
+                        .size(13.6)
+                        .font(sans(font::Weight::Semibold))
+                ]
+                .spacing(8)
+                .align_y(Center),
+            )
+            .padding([0, 16])
+            .height(44)
+            .on_press(Message::ToggleFocus)
+            .style(move |_, status| button::Style {
+                background: Some(
+                    if matches!(status, button::Status::Hovered) {
+                        p.hover
+                    } else {
+                        p.card
+                    }
+                    .into(),
+                ),
+                text_color: p.ink,
+                border: Border {
+                    color: p.rule,
+                    width: 1.,
+                    radius: 999.0.into(),
+                },
+                shadow: design::soft_shadow(p),
+                ..Default::default()
+            });
+            layers = layers.push(
+                container(exit)
+                    .padding(16)
+                    .width(Fill)
+                    .height(Fill)
+                    .align_x(Horizontal::Right)
+                    .align_y(Vertical::Bottom),
+            );
+        }
+        if let Some(error) = &self.error {
+            layers = layers.push(
+                container(opaque(
+                    container(
+                        row![
+                            text(error.as_str()).size(13).color(p.accent).width(Fill),
+                            button(text("Dismiss").size(13))
+                                .padding([6, 10])
+                                .on_press(Message::DismissError)
+                                .style(design::quiet(p))
+                        ]
+                        .spacing(12)
+                        .align_y(Center),
+                    )
+                    .padding([8, 14])
+                    .max_width(640)
+                    .style(design::popover(p)),
+                ))
+                .padding(24)
+                .width(Fill)
+                .height(Fill)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Bottom),
+            );
+        }
+        layers.into()
+    }
+
+    fn scroll<'a>(
+        &self,
+        content: impl Into<Element<'a, Message>>,
+    ) -> iced::widget::Scrollable<'a, Message> {
+        let p = self.p();
+        // A slim scrollbar drawn over the page edge, so it never shifts the centered column.
+        scrollable(content)
+            .direction(scrollable::Direction::Vertical(
+                scrollable::Scrollbar::new()
+                    .width(6)
+                    .scroller_width(6)
+                    .margin(2),
+            ))
+            .style(move |theme, status| {
+                let mut style = scrollable::default(theme, status);
+                style.vertical_rail.background = None;
+                style.vertical_rail.border = Border::default();
+                style.vertical_rail.scroller.background = p.rule.into();
+                style.vertical_rail.scroller.border = Border {
+                    radius: 3.0.into(),
+                    ..Default::default()
+                };
+                style
+            })
+    }
+
+    fn reader(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let font = self.reading_font();
+        let size = self.preferences.font_size;
+        let line = line_height(size);
+        let mut passage = column![].spacing(12);
+        if self.focus {
+            passage = passage.push(
+                container(
+                    text(self.reference())
+                        .font(serif())
+                        .size(20)
+                        .color(p.faint)
+                        .center()
+                        .width(Fill),
+                )
+                .padding(Padding::ZERO.bottom(12)),
+            );
+        }
+        for (index, verse) in self.verses.iter().enumerate() {
+            passage = passage.push(self.verse_row(index, verse.number, font, size, line));
+        }
+        if self.focus {
+            passage = passage.push(self.chapter_links());
+        }
+        let passage = match self.column_width() {
+            Some(width) => container(passage).max_width(width),
+            None => container(passage).width(Fill),
+        };
+        let gutter = (self.window_width * 0.026).clamp(16.0, 32.0);
+        let side = self.reader_side();
+        let panel_open = (!self.selected.is_empty() || self.log_open) && !self.focus;
+        let mut page = column![];
+        let top = if self.focus {
+            // Simple mode: the wordmark alone, scrolling with the page, as on the website.
+            page = page.push(
+                container(
+                    container(header::wordmark(p, 24.))
+                        .padding([8.8, 16.8])
+                        .height(44)
+                        .center_y(44)
+                        .style(design::pill(p)),
+                )
+                .padding(Padding::ZERO.left(gutter).top(20.)),
+            );
+            40.0
+        } else {
+            CONTENT_TOP
+        };
+        page = page.push(container(passage).center_x(Fill).padding(Padding {
+            top,
+            // Beside the study panel, the panel's gap stands in for the right gutter.
+            right: if panel_open { 0.0 } else { side },
+            bottom: 96.0,
+            left: side,
+        }));
+        let reader = self.scroll(page).id("reader").width(Fill).height(Fill);
+        // Both slots are always present so opening study tools never discards the reader's scroll state.
+        let panel: Element<'_, Message> = if panel_open {
+            container(self.study_panel())
+                .padding(Padding {
+                    top: CONTENT_TOP,
+                    right: self.panel_inset(),
+                    bottom: 16.0,
+                    left: PANEL_GAP,
+                })
+                .height(Fill)
+                .into()
+        } else {
+            container(space()).width(0).height(Fill).into()
+        };
+        row![reader, panel].spacing(0).height(Fill).into()
+    }
+
+    fn verse_row(
+        &self,
+        index: usize,
+        number: u32,
+        font: Font,
+        size: f32,
+        line: f32,
+    ) -> Element<'_, Message> {
+        let p = self.p();
+        let selected = self.selected.contains(&number);
+        let annotation = self.annotations.iter().find(|a| a.verse == number);
+        let highlighted = annotation.is_some_and(|a| a.highlighted);
+        let bookmarked = annotation.is_some_and(|a| a.bookmarked);
+        let has_note = annotation.is_some_and(|a| !a.note.trim().is_empty());
+        let words = selectable::paragraph(
+            text_editor(&self.verse_content[index])
+                .font(font)
+                .size(size)
+                .line_height(LineHeight::Absolute(line.into()))
+                .padding(0)
+                .on_action(move |action| Message::SelectText(index, action))
+                // Scripture is read-only: copying strips the number indent, and nothing edits the text.
+                .key_binding(move |press| match Binding::from_key_press(press) {
+                    Some(Binding::Copy | Binding::Cut) => {
+                        Some(Binding::Custom(Message::CopyWords(index)))
+                    }
+                    Some(
+                        Binding::Paste
+                        | Binding::Enter
+                        | Binding::Backspace
+                        | Binding::Delete
+                        | Binding::Insert(_),
+                    ) => None,
+                    other => other,
+                })
+                .style(move |_, _| text_editor::Style {
+                    background: Color::TRANSPARENT.into(),
+                    border: Border::default(),
+                    placeholder: p.muted,
+                    value: p.ink,
+                    selection: Color { a: 0.55, ..p.gold },
+                })
+                .into(),
+        );
+        let label = number.to_string();
+        let digits_width = design::measure(&label, BADGE_SIZE, badge_font());
+        let mut badge = column![
+            text(label)
+                .size(BADGE_SIZE)
+                .font(badge_font())
+                .line_height(LineHeight::Absolute(12.0.into()))
+                .color(if selected { p.ink } else { p.accent })
+                .wrapping(Wrapping::None)
+        ]
+        .spacing(2.3);
+        if selected {
+            badge = badge.push(
+                container(space())
+                    .width(digits_width)
+                    .height(2)
+                    .style(move |_| container::Style {
+                        background: Some(p.accent.into()),
+                        ..Default::default()
+                    }),
+            );
+        }
+        let slot = (digits_width.max(BADGE_SLOT) + BADGE_MARGIN).round();
+        let number_button =
+            button(container(badge).padding(Padding::ZERO.top(badge_top(size, line))))
+                .padding(0)
+                .width(slot)
+                .height(line)
+                .on_press(Message::SelectVerse(number))
+                .style(|_, _| button::Style::default());
+        let mut markers = column![].spacing(6).align_x(Center);
+        if bookmarked {
+            markers = markers.push(icon(&icons::BOOKMARK, p.accent, 12.));
+        }
+        if has_note {
+            markers = markers.push(icon(&icons::NOTE_STICKY, p.muted, 12.));
+        }
+        let marker_slot = if bookmarked || has_note {
+            container(markers).padding(Padding::ZERO.left(8).top((line - 12.0) / 2.0))
+        } else {
+            container(space()).width(0)
+        };
+        container(row![stack![words, number_button], marker_slot].align_y(iced::Alignment::Start))
+            .id(format!("verse-{number}"))
+            .padding([8, 12])
+            .width(Fill)
+            .style(move |_| container::Style {
+                background: if highlighted {
+                    Some(p.gold.into())
+                } else if selected {
+                    Some(p.hover.into())
+                } else {
+                    None
+                },
+                border: Border {
+                    radius: 6.0.into(),
+                    color: if selected { p.rule } else { Color::TRANSPARENT },
+                    width: if selected { 2.0 } else { 0. },
+                },
+                ..Default::default()
+            })
+            .into()
+    }
+
+    /// Previous and next at the end of the chapter, in the website's simple-mode chapter link style.
+    fn chapter_links(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let link = |label: &'static str, message: Option<Message>| -> Element<'_, Message> {
+            match message {
+                Some(message) => button(text(label).size(14.4).font(sans(font::Weight::Semibold)))
+                    .padding([0, 4])
+                    .height(44)
+                    .on_press(message)
+                    .style(move |_, status| button::Style {
+                        background: None,
+                        text_color: if matches!(status, button::Status::Hovered) {
+                            p.ink
+                        } else {
+                            p.muted
+                        },
+                        ..Default::default()
+                    })
+                    .into(),
+                None => space().into(),
+            }
+        };
+        let previous =
+            store::adjacent(&self.books, &self.preferences.last, -1).map(|_| Message::Adjacent(-1));
+        let next =
+            store::adjacent(&self.books, &self.preferences.last, 1).map(|_| Message::Adjacent(1));
+        container(
+            row![
+                link("← Previous", previous),
+                space::horizontal(),
+                link("Next →", next)
+            ]
+            .align_y(Center),
+        )
+        .padding(Padding::ZERO.top(36).left(4).right(4))
+        .into()
+    }
+
+    fn study_panel(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let close = button(
+            container(icon(&icons::XMARK, p.ink, 14.))
+                .center_x(32)
+                .center_y(32),
+        )
+        .padding(0)
+        .on_press(Message::ToggleLog)
+        .style(design::circle(p));
+        let mut panel = column![].spacing(14);
+        if self.selected.is_empty() {
+            panel = panel.push(
+                row![
+                    column![
+                        text("Log").size(15).font(sans(font::Weight::Semibold)),
+                        text(self.reference()).size(13).color(p.muted)
+                    ]
+                    .spacing(2),
+                    space::horizontal(),
+                    close
+                ]
+                .align_y(Center),
+            );
+            let read = self.read;
+            panel = panel.push(
+                button(
+                    row![
+                        icon(&icons::CHECK, if read { p.paper } else { p.read }, 13.),
+                        text(if read {
+                            "Chapter read"
+                        } else {
+                            "Mark chapter read"
+                        })
+                        .size(13)
+                        .font(sans(font::Weight::Semibold))
+                    ]
+                    .spacing(8)
+                    .align_y(Center),
+                )
+                .padding([9, 12])
+                .width(Fill)
+                .on_press(Message::MarkRead)
+                .style(move |_, status| button::Style {
+                    background: Some(
+                        if read {
+                            p.read
+                        } else if matches!(status, button::Status::Hovered) {
+                            p.hover
+                        } else {
+                            p.soft
+                        }
+                        .into(),
+                    ),
+                    text_color: if read { p.paper } else { p.ink },
+                    border: Border {
+                        radius: 11.2.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+            );
+            let marked: Vec<_> = self
+                .annotations
+                .iter()
+                .filter(|a| a.highlighted || a.bookmarked || !a.note.trim().is_empty())
+                .collect();
+            if marked.is_empty() {
+                panel = panel.push(
+                    text("No notes or marks in this chapter.")
+                        .size(13)
+                        .color(p.muted),
+                );
+            } else {
+                let mut list = column![].spacing(2);
+                for a in marked {
+                    let mut title = row![
+                        text(format!("Verse {}", a.verse))
+                            .size(13)
+                            .font(sans(font::Weight::Semibold)),
+                        space::horizontal()
+                    ]
+                    .spacing(6)
+                    .align_y(Center);
+                    if a.highlighted {
+                        title = title.push(icon(&icons::HIGHLIGHTER, p.accent, 12.));
+                    }
+                    if a.bookmarked {
+                        title = title.push(icon(&icons::BOOKMARK, p.accent, 12.));
+                    }
+                    let mut item = column![title].spacing(4);
+                    let note = a.note.trim();
+                    if !note.is_empty() {
+                        let preview = if note.chars().count() > 140 {
+                            format!("{}…", note.chars().take(140).collect::<String>())
+                        } else {
+                            note.to_string()
+                        };
+                        item = item.push(text(preview).size(13).color(p.muted));
+                    }
+                    list = list.push(
+                        button(item)
+                            .padding([8, 10])
+                            .width(Fill)
+                            .style(design::quiet(p))
+                            .on_press(Message::Navigate(
+                                self.preferences.last.clone(),
+                                Some(a.verse),
+                            )),
+                    );
+                }
+                panel = panel.push(list);
+            }
+        } else {
+            let selected_text = self
+                .verses
+                .iter()
+                .filter(|v| self.selected.contains(&v.number))
+                .map(|v| v.text.as_str())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            panel = panel
+                .push(
+                    row![
+                        text(self.selected_reference())
+                            .font(serif())
+                            .size(20)
+                            .width(Fill),
+                        close
+                    ]
+                    .align_y(Center),
+                )
+                .push(
+                    self.scroll(
+                        text(selected_text)
+                            .font(serif())
+                            .size(15)
+                            .line_height(1.6)
+                            .color(p.muted),
+                    )
+                    .height(Length::Fixed(140.)),
+                );
+            let action = |glyph: &icons::Icon, label: &'static str, message: Message| {
+                button(
+                    row![icon(glyph, p.accent, 14.), text(label).size(13)]
+                        .spacing(12)
+                        .align_y(Center),
+                )
+                .padding([9, 10])
+                .width(Fill)
+                .style(design::quiet(p))
+                .on_press(message)
+            };
+            panel = panel.push(
+                column![
+                    action(
+                        if self.copied {
+                            &icons::CHECK
+                        } else {
+                            &icons::COPY
+                        },
+                        if self.copied {
+                            "Copied"
+                        } else {
+                            "Copy passage"
+                        },
+                        Message::Copy
+                    ),
+                    action(
+                        &icons::HIGHLIGHTER,
+                        if self.selection_marked(false) {
+                            "Remove highlight"
+                        } else {
+                            "Highlight"
+                        },
+                        Message::Highlight
+                    ),
+                    action(
+                        &icons::BOOKMARK,
+                        if self.selection_marked(true) {
+                            "Remove bookmark"
+                        } else {
+                            "Bookmark"
+                        },
+                        Message::Bookmark
+                    ),
+                ]
+                .spacing(2),
+            );
+            let first = self.selected.first().copied().unwrap_or(1);
+            panel = panel.push(
+                text(if self.selected.len() > 1 {
+                    format!("Note · verse {first}")
+                } else {
+                    "Note".into()
+                })
+                .size(12)
+                .font(sans(font::Weight::Medium))
+                .color(p.muted),
+            );
+            panel = panel.push(
+                text_editor(&self.note)
+                    .placeholder("What stands out to you?")
+                    .on_action(Message::EditNote)
+                    .size(15)
+                    .height(170)
+                    .padding(12)
+                    .style(move |_, _| text_editor::Style {
+                        background: p.card_strong.into(),
+                        border: Border {
+                            radius: 8.0.into(),
+                            width: 1.,
+                            color: p.rule,
+                        },
+                        placeholder: p.faint,
+                        value: p.ink,
+                        selection: p.gold,
+                    }),
+            );
+            if self.note_dirty {
+                panel = panel.push(
+                    button(
+                        text("Save note")
+                            .size(13)
+                            .font(sans(font::Weight::Semibold))
+                            .center()
+                            .width(Fill),
+                    )
+                    .padding([9, 12])
+                    .width(Fill)
+                    .on_press(Message::SaveNote)
+                    .style(design::active(p)),
+                );
+            } else if !self.note.text().trim().is_empty() {
+                panel = panel.push(
+                    row![
+                        icon(&icons::CHECK, p.faint, 12.),
+                        text("Saved").size(12).color(p.faint)
+                    ]
+                    .spacing(6)
+                    .align_y(Center),
+                );
+            }
+        }
+        container(self.scroll(panel))
+            .width(PANEL_WIDTH)
+            .height(Fill)
+            .padding(18)
+            .style(move |_| container::Style {
+                background: Some(p.card.into()),
+                text_color: Some(p.ink),
+                border: Border {
+                    color: p.rule,
+                    width: 1.0,
+                    radius: 16.0.into(),
+                },
+                shadow: design::soft_shadow(p),
+                ..Default::default()
+            })
+            .into()
+    }
+
+    fn library_view(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let mut volumes = column![].spacing(2);
+        let mut seen: Vec<(&str, &str)> = Vec::new();
+        for b in &self.books {
+            if !seen.iter().any(|(id, _)| *id == b.volume) {
+                seen.push((b.volume.as_str(), b.volume_title.as_str()));
+            }
+        }
+        for (id, title) in seen {
+            let chosen = self.library_volume == id;
+            let b = button(text(title).size(13))
+                .padding([8, 12])
+                .width(Fill)
+                .on_press(Message::LibraryVolume(id.to_string()));
+            volumes = volumes.push(if chosen {
+                b.style(design::active(p))
+            } else {
+                b.style(design::quiet(p))
+            });
+        }
+        let detail: Element<'_, Message> = match self.library_book.as_ref().and_then(|id| {
+            self.books
+                .iter()
+                .find(|b| b.volume == self.library_volume && &b.id == id)
+        }) {
+            Some(book) => {
+                let mut grid = column![].spacing(6);
+                let mut line = row![].spacing(6);
+                for n in 1..=book.chapters {
+                    let current = book.volume == self.preferences.last.volume
+                        && book.id == self.preferences.last.book
+                        && n == self.preferences.last.chapter;
+                    let b = button(text(n.to_string()).size(13).center().width(Fill))
+                        .width(42)
+                        .padding([9, 0])
+                        .on_press(Message::Navigate(
+                            Location {
+                                volume: book.volume.clone(),
+                                book: book.id.clone(),
+                                chapter: n,
+                            },
+                            None,
+                        ));
+                    line = line.push(if current {
+                        b.style(design::active(p))
+                    } else {
+                        b.style(move |_, status| button::Style {
+                            background: Some(
+                                if matches!(status, button::Status::Hovered) {
+                                    p.hover
+                                } else {
+                                    p.card
+                                }
+                                .into(),
+                            ),
+                            text_color: p.ink,
+                            border: Border {
+                                color: p.rule,
+                                width: 1.0,
+                                radius: 8.0.into(),
+                            },
+                            ..Default::default()
+                        })
+                    });
+                    if n % 8 == 0 {
+                        grid = grid.push(line);
+                        line = row![].spacing(6);
+                    }
+                }
+                if book.chapters % 8 != 0 {
+                    grid = grid.push(line);
+                }
+                column![
+                    row![
+                        button(
+                            container(icon(&icons::CHEVRON_LEFT, p.ink, 12.))
+                                .center_x(28)
+                                .center_y(28)
+                        )
+                        .padding(0)
+                        .on_press(Message::LibraryBook(None))
+                        .style(design::circle(p)),
+                        text(&book.label).font(serif()).size(20)
+                    ]
+                    .spacing(8)
+                    .align_y(Center),
+                    // Scrolls once the grid is taller than the panel allows (Psalms has 150 chapters).
+                    self.scroll(grid).height(
+                        (book.chapters.div_ceil(8) as f32 * 42.0 - 6.0).min(LIBRARY_HEIGHT - 52.0)
+                    )
+                ]
+                .spacing(12)
+                .into()
+            }
+            None => {
+                let mut list = column![].spacing(1);
+                for book in self
+                    .books
+                    .iter()
+                    .filter(|b| b.volume == self.library_volume)
+                {
+                    let current = book.volume == self.preferences.last.volume
+                        && book.id == self.preferences.last.book;
+                    list = list.push(
+                        button(
+                            row![
+                                text(&book.label)
+                                    .size(13)
+                                    .font(sans(if current {
+                                        font::Weight::Semibold
+                                    } else {
+                                        font::Weight::Normal
+                                    }))
+                                    .width(Fill),
+                                text(book.chapters.to_string()).size(11).color(p.faint)
+                            ]
+                            .align_y(Center),
+                        )
+                        .padding([7, 10])
+                        .width(Fill)
+                        .style(design::quiet(p))
+                        .on_press(Message::LibraryBook(Some(book.id.clone()))),
+                    );
+                }
+                let count = self
+                    .books
+                    .iter()
+                    .filter(|b| b.volume == self.library_volume)
+                    .count();
+                self.scroll(list)
+                    .height((count as f32 * BOOK_ROW).min(LIBRARY_HEIGHT))
+                    .into()
+            }
+        };
+        container(
+            row![
+                container(volumes).width(180),
+                container(space())
+                    .width(1)
+                    .height(Fill)
+                    .style(move |_| container::Style {
+                        background: Some(p.rule.into()),
+                        ..Default::default()
+                    }),
+                container(detail).width(Fill)
+            ]
+            .spacing(12)
+            .height(Length::Shrink),
+        )
+        .padding(12)
+        .max_height(LIBRARY_HEIGHT + 24.0)
+        .style(design::popover(p))
+        .into()
+    }
+
+    fn search_view(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let input = text_input("Search scriptures or a reference", &self.query)
+            .id("search")
+            .on_input(Message::SearchInput)
+            .on_submit(Message::SubmitSearch)
+            .size(15)
+            .padding([10, 4])
+            .style(move |_, _| text_input::Style {
+                background: Color::TRANSPARENT.into(),
+                border: Border::default(),
+                icon: p.muted,
+                placeholder: p.faint,
+                value: p.ink,
+                selection: p.gold,
+            });
+        let mut scopes = row![].spacing(4).align_y(Center);
+        for (scope, label) in [
+            (None, "All"),
+            (Some("oldtestament"), "OT"),
+            (Some("newtestament"), "NT"),
+            (Some("bookofmormon"), "BoM"),
+            (Some("doctrineandcovenants"), "D&C"),
+            (Some("pearl"), "PGP"),
+        ] {
+            let chosen = self.scope.as_deref() == scope;
+            let b = button(text(label).size(12))
+                .padding([5, 9])
+                .on_press(Message::SearchScope(scope.map(String::from)));
+            scopes = scopes.push(if chosen {
+                b.style(design::active(p))
+            } else {
+                b.style(design::quiet(p))
+            });
+        }
+        let mut contents = column![
+            container(
+                row![icon(&icons::MAGNIFYING_GLASS, p.muted, 14.), input]
+                    .spacing(8)
+                    .align_y(Center)
+            )
+            .padding([0, 12])
+            .style(move |_| container::Style {
+                background: Some(p.card_strong.into()),
+                border: Border {
+                    color: p.rule,
+                    width: 1.,
+                    radius: 999.0.into(),
+                },
+                ..Default::default()
+            }),
+            scopes
+        ]
+        .spacing(10);
+        if !self.query.trim().is_empty() {
+            let mut results = column![].spacing(2);
+            if self.searching && self.results.hits.is_empty() {
+                results = results.push(text("Searching…").size(13).color(p.muted));
+            } else if self.results.hits.is_empty() {
+                results = results.push(text("No passages found").size(13).color(p.muted));
+            } else {
+                results = results.push(
+                    container(
+                        text(format!(
+                            "{}{} passages",
+                            self.results.hits.len(),
+                            if self.results.more { "+" } else { "" }
+                        ))
+                        .size(11)
+                        .color(p.faint),
+                    )
+                    .padding([2, 10]),
+                );
+                for hit in &self.results.hits {
+                    let preview = if hit.text.chars().count() > 160 {
+                        format!("{}…", hit.text.chars().take(160).collect::<String>())
+                    } else {
+                        hit.text.clone()
+                    };
+                    results = results.push(
+                        button(
+                            column![
+                                text(&hit.reference)
+                                    .size(13)
+                                    .font(sans(font::Weight::Semibold)),
+                                text(preview)
+                                    .font(serif())
+                                    .size(14)
+                                    .line_height(1.5)
+                                    .color(p.muted)
+                            ]
+                            .spacing(3),
+                        )
+                        .padding([8, 10])
+                        .width(Fill)
+                        .style(design::quiet(p))
+                        .on_press(Message::Navigate(hit.location.clone(), Some(hit.verse))),
+                    );
+                }
+            }
+            contents = contents.push(self.scroll(results).height(Length::Shrink));
+        }
+        container(contents)
+            .padding(12)
+            .max_height(520)
+            .style(design::popover(p))
+            .into()
+    }
+
+    fn setting_label<'a>(&self, label: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+        text(label)
+            .size(12)
+            .font(sans(font::Weight::Medium))
+            .color(self.p().muted)
+            .into()
+    }
+
+    fn segmented<'a, T: Copy + PartialEq + 'a>(
+        &self,
+        options: &[(T, &'static str)],
+        current: T,
+        message: impl Fn(T) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let p = self.p();
+        let mut line = row![];
+        for (i, (value, label)) in options.iter().copied().enumerate() {
+            if i > 0 {
+                line = line.push(container(space()).width(1).height(32).style(move |_| {
+                    container::Style {
+                        background: Some(p.rule.into()),
+                        ..Default::default()
+                    }
+                }));
+            }
+            line = line.push(
+                button(text(label).size(13).center().width(Fill))
+                    .padding([7, 12])
+                    .height(32)
+                    .width(Fill)
+                    .on_press(message(value))
+                    .style(design::segment(p, value == current)),
+            );
+        }
+        container(line)
+            .clip(true)
+            .style(move |_| container::Style {
+                border: Border {
+                    color: p.rule,
+                    width: 1.,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            })
+            .into()
+    }
+
+    fn reader_settings(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let on = self.focus;
+        // The website's marker switch: 48 × 27, gold when on.
+        let switch = button(
+            container(container(space()).width(17.6).height(17.6).style(move |_| {
+                container::Style {
+                    background: Some(if on { p.ink } else { p.card }.into()),
+                    border: Border {
+                        color: p.rule,
+                        width: 1.,
+                        radius: 999.0.into(),
+                    },
+                    ..Default::default()
+                }
+            }))
+            .padding(Padding::ZERO.left(if on { 24.8 } else { 3.2 }))
+            .center_y(27.2),
+        )
+        .width(48)
+        .height(27.2)
+        .padding(0)
+        .on_press(Message::ToggleFocus)
+        .style(move |_, _| button::Style {
+            background: Some(if on { p.gold } else { p.card }.into()),
+            border: Border {
+                color: p.rule,
+                width: 1.,
+                radius: 999.0.into(),
+            },
+            ..Default::default()
+        });
+        let size = self.preferences.font_size;
+        let percent = (size / store::DEFAULT_FONT_SIZE * 100.0).round();
+        let rule = || {
+            container(space())
+                .height(1)
+                .width(Fill)
+                .style(move |_| container::Style {
+                    background: Some(p.rule.into()),
+                    ..Default::default()
+                })
+        };
+        container(
+            column![
+                row![
+                    column![
+                        self.setting_label("Simple mode"),
+                        text("Hide study tools and navigation. Just the text.")
+                            .size(11)
+                            .color(p.faint)
+                    ]
+                    .spacing(2)
+                    .width(Fill),
+                    switch
+                ]
+                .spacing(12)
+                .align_y(Center),
+                rule(),
+                column![
+                    self.setting_label(format!("Text size - {percent}%")),
+                    slider(
+                        store::MIN_FONT_SIZE..=store::MAX_FONT_SIZE,
+                        size,
+                        Message::FontSize
+                    )
+                    .step(store::DEFAULT_FONT_SIZE * 0.01)
+                ]
+                .spacing(8),
+                column![
+                    self.setting_label("Typeface"),
+                    self.segmented(
+                        &[(true, "Serif"), (false, "Sans")],
+                        self.preferences.serif,
+                        Message::SetSerif
+                    )
+                ]
+                .spacing(8),
+                column![
+                    self.setting_label("Text width"),
+                    self.segmented(
+                        &[
+                            (TextWidth::Comfortable, "Comfortable"),
+                            (TextWidth::Wide, "Wide"),
+                            (TextWidth::Full, "Full")
+                        ],
+                        self.preferences.text_width,
+                        Message::SetTextWidth
+                    )
+                ]
+                .spacing(8),
+            ]
+            .spacing(16),
+        )
+        .padding(14)
+        .style(design::popover(p))
+        .into()
+    }
+
+    fn app_settings(&self) -> Element<'_, Message> {
+        let p = self.p();
+        container(
+            column![
+                self.setting_label("Appearance"),
+                self.segmented(
+                    &[(false, "Light"), (true, "Dark")],
+                    self.preferences.dark,
+                    Message::SetDark
+                )
+            ]
+            .spacing(8),
+        )
+        .padding(14)
+        .style(design::popover(p))
+        .into()
+    }
+
+    fn journal_view(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let mut contents = column![
+            text("Journal").font(serif()).size(40),
+            text("Thoughts, passages, and things worth remembering.")
+                .font(serif())
+                .size(19)
+                .color(p.muted),
+            space::vertical().height(12),
+            container(space())
+                .height(1)
+                .width(Fill)
+                .style(move |_| container::Style {
+                    background: Some(p.rule.into()),
+                    ..Default::default()
+                })
+        ]
+        .spacing(10);
+        if self.journal.is_empty() {
+            contents = contents
+                .push(space::vertical().height(28))
+                .push(text("Make room for a thought.").font(serif()).size(26))
+                .push(
+                    text("Select a verse number in the reader to add a note, highlight, or bookmark.")
+                        .size(15)
+                        .color(p.muted),
+                )
+                .push(
+                    button(text("Open the reader").size(13))
+                        .padding([10, 16])
+                        .style(design::active(p))
+                        .on_press(Message::SetScreen(Screen::Reader)),
+                );
+        }
+        for entry in &self.journal {
+            let mut marks = row![
+                text(&entry.reference)
+                    .font(serif())
+                    .size(22)
+                    .color(p.accent),
+                space::horizontal()
+            ]
+            .spacing(10)
+            .align_y(Center);
+            if entry.bookmarked {
+                marks = marks.push(icon(&icons::BOOKMARK, p.accent, 14.));
+            }
+            if entry.highlighted {
+                marks = marks.push(icon(&icons::HIGHLIGHTER, p.accent, 14.));
+            }
+            let mut item = column![
+                marks,
+                text(&entry.text)
+                    .font(serif())
+                    .size(17)
+                    .line_height(1.6)
+                    .color(p.muted)
+            ]
+            .spacing(10);
+            if !entry.note.trim().is_empty() {
+                item = item.push(text(&entry.note).size(15).line_height(1.5));
+            }
+            contents = contents.push(
+                button(item)
+                    .padding(18)
+                    .width(Fill)
+                    .style(design::quiet(p))
+                    .on_press(Message::Navigate(entry.location.clone(), Some(entry.verse))),
+            );
+        }
+        self.scroll(
+            container(contents.max_width(820))
+                .padding(Padding {
+                    top: CONTENT_TOP + 12.0,
+                    right: 24.0,
+                    bottom: 64.0,
+                    left: 24.0,
+                })
+                .center_x(Fill),
+        )
+        .id("journal")
+        .height(Fill)
+        .into()
+    }
+
+    fn guides_view(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let mut sidebar = column![
+            text("Come, Follow Me")
+                .size(12)
+                .font(sans(font::Weight::Medium))
+                .color(p.muted),
+            space::vertical().height(4)
+        ]
+        .spacing(6);
+        for (i, guide) in guides::GUIDES.iter().enumerate() {
+            let chosen = i == self.guide;
+            let b = button(
+                column![
+                    text(guide.title).size(13),
+                    text(guide.date)
+                        .size(11)
+                        .color(if chosen { p.paper } else { p.muted })
+                ]
+                .spacing(4),
+            )
+            .padding([9, 12])
+            .width(Fill)
+            .on_press(Message::Guide(i));
+            sidebar = sidebar.push(if chosen {
+                b.style(design::active(p))
+            } else {
+                b.style(design::quiet(p))
+            });
+        }
+        sidebar = sidebar.push(space::vertical().height(12)).push(
+            text("In this guide")
+                .size(12)
+                .font(sans(font::Weight::Medium))
+                .color(p.muted),
+        );
+        for (i, (title, _)) in self.guide_sections.iter().enumerate() {
+            sidebar = sidebar.push(
+                button(text(title).size(13).color(if i == self.section {
+                    p.accent
+                } else {
+                    p.ink
+                }))
+                .padding([7, 10])
+                .width(Fill)
+                .style(design::quiet(p))
+                .on_press(Message::Section(i)),
+            );
+        }
+        let mut style = markdown::Style::from(self.theme());
+        style.font = serif();
+        style.link_color = p.accent;
+        let mut guide_settings = markdown::Settings::with_text_size(18, style);
+        guide_settings.h1_size = 32.into();
+        guide_settings.h2_size = 26.into();
+        let guide = markdown::view(&self.markdown, guide_settings)
+            .map(|uri| Message::OpenLink(uri.to_string()));
+        let document = column![
+            text(guides::GUIDES[self.guide].date)
+                .size(12)
+                .color(p.accent),
+            guide,
+            space::vertical().height(30)
+        ]
+        .spacing(18)
+        .max_width(860);
+        let inset = shell_inset(self.window_width);
+        container(
+            row![
+                container(self.scroll(sidebar)).width(250).height(Fill),
+                self.scroll(container(document).center_x(Fill).padding([0, 24]))
+                    .id("guide")
+                    .height(Fill)
+            ]
+            .spacing(20)
+            .height(Fill),
+        )
+        .padding(Padding {
+            top: CONTENT_TOP,
+            right: inset,
+            bottom: 0.0,
+            left: inset,
+        })
+        .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn badge_sits_above_the_first_lines_baseline() {
+        // At the website's 16px / 28px the badge box starts a few pixels into the first line, never above it.
+        let top = badge_top(16.0, 28.0);
+        assert!((3.0..8.0).contains(&top), "{top}");
+        assert!(badge_top(24.0, line_height(24.0)) > top);
+        assert_eq!(line_height(16.0), 28.0);
+    }
+}

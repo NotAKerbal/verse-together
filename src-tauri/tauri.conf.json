@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Verse Together",
+  "version": "0.1.0",
+  "identifier": "app.versetogether.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev:local -- --hostname 127.0.0.1 --port 47831",
+    "devUrl": "http://127.0.0.1:47831",
+    "beforeBuildCommand": "npm run desktop:prepare",
+    "frontendDist": "../desktop"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": true,
+    "security": { "capabilities": [] }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["../public/brand/icons/light/icon-192.png"],
+    "resources": { "../.desktop/server/": "server/", "../.desktop/runtime/": "runtime/" }
+  }
+}

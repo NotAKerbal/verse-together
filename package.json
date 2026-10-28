@@ -34,7 +34,15 @@
     "convex:deploy": "convex deploy",
     "deploy:notes:development": "node scripts/deploy-notes-development.mjs",
     "test:notes": "vitest run",
-    "qa:notes": "vite --config vite.qa.config.mjs --open /qa/notes/index.html"
+    "qa:notes": "vite --config vite.qa.config.mjs --open /qa/notes/index.html",
+    "desktop:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "desktop:prepare": "node scripts/desktop/prepare.mjs",
+    "desktop:build": "tauri build",
+    "test:desktop": "node --experimental-strip-types --test scripts/desktop/*.test.mjs src/lib/desktop.test.mjs",
+    "native:dev": "cargo run --manifest-path native/Cargo.toml",
+    "native:test": "cargo test --manifest-path native/Cargo.toml",
+    "native:build": "cargo build --manifest-path native/Cargo.toml --release --locked",
+    "native:package": "bash native/package-linux.sh"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -68,6 +76,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^7.3.7",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "@tauri-apps/cli": "^2.12.0"
   }
 }

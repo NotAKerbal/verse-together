@@ -145,3 +145,17 @@ npm run batch:insights:submit -- .batch-output/chapter-insights-v4/canary.jsonl 
 ```
 
 After validating the canary output, replace `canary.jsonl` with `requests.jsonl` to submit the full set. The submit command writes a local `.submitted.json` receipt beside the request file and never prints the API key.
+
+## Native Rust desktop app
+
+The fully native edition lives in [native/](native/README.md). It uses Rust, Iced and SQLite for offline scripture
+reading, search, notes, highlights, bookmarks and bundled study guides, with the web app's visual language.
+Run `npm run native:dev` with Rust installed, or use the packaged Linux executable. No webview or Node runtime is
+used by the native edition. Build and verification details are in the native README.
+
+## Tauri desktop target (earlier implementation)
+
+A Tauri desktop target reuses the existing web interface and adds Rust window/process management and native
+bundled chapter reads. See [desktop setup, packaging and current limitations](docs/desktop.md). Start with
+`npm run desktop:dev`; build host-platform bundles with `npm run desktop:build` after installing the native
+prerequisites. Desktop Google sign-in and release verification are still pending.
