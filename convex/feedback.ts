@@ -1,6 +1,6 @@
-// @ts-nocheck
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
+import { cleanFeedback } from "./feedbackRules";
 import { getViewerClerkId } from "./utils";
 
 export const submitFeedback = mutation({
@@ -10,17 +10,14 @@ export const submitFeedback = mutation({
     path: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Validate before the auth lookup so oversized input is rejected without touching the session tables.
+    const feedback = cleanFeedback(args);
     // Anonymous feedback is allowed; attribute it only to a verified, linked app user.
     const clerkId = await getViewerClerkId(ctx);
-    const message = args.message.trim();
-    if (message.length < 5) throw new Error("Feedback message is too short");
-    if (message.length > 2000) throw new Error("Feedback message is too long");
 
     await ctx.db.insert("feedback", {
       clerkId: clerkId ?? undefined,
-      message,
-      contact: args.contact?.trim() || undefined,
-      path: args.path?.trim() || undefined,
+      ...feedback,
       createdAt: Date.now(),
     });
     return { ok: true };

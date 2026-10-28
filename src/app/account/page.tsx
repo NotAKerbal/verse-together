@@ -3,8 +3,9 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBookOpen, faClockRotateLeft, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
+import { faBookOpen, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
 import { AppHeaderPortal, useAppHeaderSlot } from "@/components/AppHeaderSlot";
+import FeedbackForm from "@/components/FeedbackForm";
 import AccountManager from "@/features/auth/AccountManager";
 import QuickMarkSettings from "@/features/annotations/QuickMarkSettings";
 import ReadingSettings from "@/features/settings/ReadingSettings";
@@ -39,6 +40,12 @@ const TABS: Record<SettingsTabId, { label: string; icon: IconDefinition; title: 
     icon: faClockRotateLeft,
     title: "Release notes",
     lead: "What has changed in Verse Together, release by release.",
+  },
+  feedback: {
+    label: "Feedback",
+    icon: faCommentDots,
+    title: "Feedback",
+    lead: "Ideas, problems, or requests for Verse Together. Every message is read.",
   },
 };
 
@@ -183,6 +190,10 @@ export default function AccountPage() {
 
         <SettingsPanel tab="release-notes" selected={selected === "release-notes"}>
           <ReleaseNotes />
+        </SettingsPanel>
+
+        <SettingsPanel tab="feedback" selected={selected === "feedback"}>
+          <FeedbackForm />
         </SettingsPanel>
       </div>
     </div>

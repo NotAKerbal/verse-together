@@ -84,6 +84,26 @@
   min-width: max-content;
 }
 
+/* The narrowest phones (320px): all five tabs fit when they sit closer and the open one shows only its name. */
+@media (max-width: 359px) {
+  .tabList[data-placement="page"] {
+    gap: .125rem;
+  }
+
+  .tabList[data-placement="page"] .tab {
+    min-width: 2.5rem;
+    padding-inline: .5rem;
+  }
+
+  .tabList[data-placement="page"] .tab[aria-selected="true"] .tabIcon {
+    display: none;
+  }
+
+  .tabList[data-placement="page"] .tab[aria-selected="true"] .tabLabel {
+    margin-left: 0;
+  }
+}
+
 /*
   The server-rendered page has only this copy; until the header's takes over (on wide screens outside simple mode)
   it stays hidden, so the tabs never flash in the page and then jump.
@@ -876,6 +896,58 @@
   display: grid;
   gap: .75rem;
   padding: 1rem;
+}
+
+/* Feedback: one readable column, its button at the start like the profile form's. */
+.feedbackCard {
+  width: min(100%, 42rem);
+}
+
+.feedbackForm {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: .5rem;
+}
+
+.feedbackForm > button {
+  justify-self: start;
+}
+
+.feedbackMessage {
+  min-height: 9rem;
+  resize: vertical;
+}
+
+.feedbackForm :is(textarea, input):read-only {
+  opacity: .7;
+}
+
+.fieldMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: .3rem;
+  font-size: .72rem;
+  color: var(--foreground-muted);
+}
+
+.fieldMeta > span {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fieldError {
+  margin-top: .3rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--accent-secondary);
+}
+
+.feedbackSent {
+  padding: .5rem .75rem;
+  border: 2px solid var(--surface-border);
+  border-radius: .75rem;
+  font-size: .875rem;
 }
 
 .shell :is(a, button):focus-visible {
