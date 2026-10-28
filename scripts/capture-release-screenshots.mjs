@@ -98,6 +98,29 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.16.0-lesson-explore",
+    viewport: { width: 1440, height: 1000 },
+    async run(page, viewport) {
+      await open(page, "/come-follow-me/2026-10-19");
+      const title = page.getByRole("heading", { level: 1 }).first();
+      await title.scrollIntoViewIfNeeded();
+      const point = await wordPoint(page, title, "Knew");
+      await page.mouse.dblclick(point.x, point.y);
+      await page.getByRole("button", { name: /^Explore/ }).first().click();
+      const panel = page.getByRole("complementary", { name: /^Explore / });
+      await panel.waitFor();
+      await page.waitForTimeout(6000);
+      const scripture = page.locator('[aria-label="Scripture with expandable context"]');
+      await scripture.evaluate((element) => window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 100));
+      await page.waitForTimeout(600);
+      const column = await scripture.boundingBox();
+      const sidebar = await panel.boundingBox();
+      const gap = column.x - sidebar.x - sidebar.width;
+      if (Math.abs(gap - 24) > 2) throw new Error(`Explore is ${gap}px from scripture; expected 24px`);
+      return { x: sidebar.x - 8, y: 80, width: column.x + column.width - sidebar.x + 16, height: viewport.height - 96 };
+    },
+  },
+  {
     name: "2.15.0-journal",
     viewport: { width: 1440, height: 900 },
     async run(page, viewport) {

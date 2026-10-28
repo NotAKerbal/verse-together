@@ -73,7 +73,34 @@ function PageSelection({ root, open }: { root: RefObject<HTMLDivElement | null>;
   );
 }
 
-function ExploreSidebar({ word, context, onClose }: { word: string; context?: WordStudyContext | null; onClose: () => void }) {
+function ExploreSidebar({ word, context, onClose, root }: { word: string; context?: WordStudyContext | null; onClose: () => void; root: RefObject<HTMLDivElement | null> }) {
+  const sidebar = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const panel = sidebar.current;
+    const page = root.current;
+    if (!panel || !page) return;
+    const column = page.querySelector<HTMLElement>('[aria-label="Scripture with expandable context"]')
+      ?? page.querySelector<HTMLElement>('[data-lesson-page] > header')
+      ?? page;
+    const position = () => {
+      if (window.innerWidth < 1024) {
+        panel.style.removeProperty("left");
+        return;
+      }
+      // Follow the reading measure, including when Log changes the available space.
+      const gap = 24;
+      panel.style.left = `${Math.max(16, column.getBoundingClientRect().left - panel.getBoundingClientRect().width - gap)}px`;
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(page);
+    observer.observe(column);
+    window.addEventListener("resize", position);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", position);
+    };
+  }, [root]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // An open scripture preview owns Escape; disclosures handle it before it reaches the window.
@@ -83,7 +110,7 @@ function ExploreSidebar({ word, context, onClose }: { word: string; context?: Wo
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
   return createPortal(
-    <aside className={styles.sidebar} aria-label={`Explore ${word}`}>
+    <aside ref={sidebar} className={styles.sidebar} aria-label={`Explore ${word}`}>
       <WordStudyPanel word={word} title="Explore" context={context} onClose={onClose} />
     </aside>, document.body,
   );
@@ -97,7 +124,7 @@ function ExplorePage({ children }: { children: ReactNode }) {
   return (
     <ExploreContext.Provider value={open}>
       <div ref={root} className={styles.root} data-exploring={active ? "true" : undefined}>{children}</div>
-      {active ? <ExploreSidebar word={active.word} context={active.context} onClose={close} /> : null}
+      {active ? <ExploreSidebar word={active.word} context={active.context} onClose={close} root={root} /> : null}
       <PageSelection root={root} open={open} />
     </ExploreContext.Provider>
   );
