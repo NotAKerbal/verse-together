@@ -169,3 +169,7 @@ The pinned Tiny Skia renderer has small local corrections for shadow clipping, d
 image corner radii, found during real native testing. Its source and pixel-level regression tests
 are checked in under `vendor/iced_tiny_skia`; see its `PATCH.md`. Run those tests with
 `cargo test --manifest-path native/Cargo.toml -p iced_tiny_skia shadow_`.
+
+Open verse-note and Journal drafts autosave approximately every 750 ms while changed. An idle editor does no
+autosave work. Failed writes retain the draft and show the error, retrying every 10 seconds; Ctrl+S and saving
+on navigation or close remain available. A force quit can still lose typing since the last successful save.

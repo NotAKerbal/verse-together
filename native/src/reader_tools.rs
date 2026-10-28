@@ -237,10 +237,20 @@ pub struct JstExcerpt {
     pub compare_reference: String,
     #[serde(default)]
     pub anchor_verse: Option<u32>,
+    /// The KJV verses in this chapter the excerpt compares to.
+    #[serde(default)]
+    pub compared_spans: Vec<JstSpan>,
     #[serde(default)]
     pub verses: Vec<JstVerse>,
     #[serde(default)]
     pub note: Option<String>,
+}
+/// A KJV verse span inside the chapter; `end: None` runs to the end of the chapter.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct JstSpan {
+    pub start: u32,
+    #[serde(default)]
+    pub end: Option<u32>,
 }
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct JstVerse {
@@ -728,28 +738,55 @@ pub fn fetch_jst(site: &str, l: &Location) -> Result<Vec<JstExcerpt>, String> {
 
 // ---------- Word differences for comparisons (`computeInlineDiffSegments`) ----------
 
+/// One piece of a verse read against another Bible (`computeInlineDiffSegments` + `renderInlineDiff`): a byte
+/// range of the base text, exactly as written (its own spacing and punctuation), and for a change the other
+/// Bible's differing words.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Diff {
-    Same(String),
-    /// The base text's words that differ, then the other Bible's.
-    Changed(String, String),
+    Same(std::ops::Range<usize>),
+    Changed(std::ops::Range<usize>, String),
 }
+/// `normalizeWord`: lowercase letters and digits only.
 fn word_key(w: &str) -> String {
-    w.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase)
+    w.to_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         .collect()
 }
+/// The website's `normalizeCompareText`: a Bible's wording only counts as different past case and punctuation.
+pub fn normalize_compare(value: &str) -> String {
+    value
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_lowercase() || c.is_ascii_digit() || c.is_whitespace() {
+                c
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The website's inline comparison of `primary` with `other`, word by word (longest common subsequence on
+/// normalized words), with each piece's base text cut from `primary` as `renderInlineDiff` cuts it.
 pub fn diff_words(primary: &str, other: &str) -> Vec<Diff> {
-    let a: Vec<&str> = primary.split_whitespace().collect();
+    let tokens: Vec<(usize, &str)> = primary
+        .split_whitespace()
+        .map(|w| (w.as_ptr() as usize - primary.as_ptr() as usize, w))
+        .collect();
     let b: Vec<&str> = other.split_whitespace().collect();
     let (ka, kb): (Vec<String>, Vec<String>) = (
-        a.iter().map(|w| word_key(w)).collect(),
+        tokens.iter().map(|(_, w)| word_key(w)).collect(),
         b.iter().map(|w| word_key(w)).collect(),
     );
-    let mut table = vec![vec![0u16; b.len() + 1]; a.len() + 1];
-    for i in (0..a.len()).rev() {
-        for j in (0..b.len()).rev() {
+    let (n, m) = (tokens.len(), b.len());
+    let mut table = vec![vec![0u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
             table[i][j] = if ka[i] == kb[j] {
                 table[i + 1][j + 1] + 1
             } else {
@@ -757,37 +794,58 @@ pub fn diff_words(primary: &str, other: &str) -> Vec<Diff> {
             };
         }
     }
-    let mut out: Vec<Diff> = Vec::new();
+    // Segments as counts of base words, with the other Bible's changed words.
+    let mut segments: Vec<(bool, usize, Vec<&str>)> = vec![];
+    let (mut pending_a, mut pending_b): (usize, Vec<&str>) = (0, vec![]);
     let (mut i, mut j) = (0, 0);
-    let (mut pa, mut pb): (Vec<&str>, Vec<&str>) = (vec![], vec![]);
-    let flush = |out: &mut Vec<Diff>, pa: &mut Vec<&str>, pb: &mut Vec<&str>| {
-        if !pa.is_empty() || !pb.is_empty() {
-            out.push(Diff::Changed(pa.join(" "), pb.join(" ")));
-            pa.clear();
-            pb.clear();
+    fn flush<'a>(
+        segments: &mut Vec<(bool, usize, Vec<&'a str>)>,
+        a: &mut usize,
+        b: &mut Vec<&'a str>,
+    ) {
+        if *a > 0 || !b.is_empty() {
+            segments.push((false, *a, std::mem::take(b)));
+            *a = 0;
         }
-    };
-    while i < a.len() || j < b.len() {
-        if i < a.len() && j < b.len() && ka[i] == kb[j] {
-            flush(&mut out, &mut pa, &mut pb);
-            match out.last_mut() {
-                Some(Diff::Same(s)) => {
-                    s.push(' ');
-                    s.push_str(b[j]);
-                }
-                _ => out.push(Diff::Same(b[j].to_string())),
+    }
+    while i < n || j < m {
+        if i < n && j < m && ka[i] == kb[j] {
+            flush(&mut segments, &mut pending_a, &mut pending_b);
+            match segments.last_mut() {
+                Some((true, count, _)) => *count += 1,
+                _ => segments.push((true, 1, vec![])),
             }
             i += 1;
             j += 1;
-        } else if j >= b.len() || (i < a.len() && table[i + 1][j] >= table[i][j + 1]) {
-            pa.push(a[i]);
+        } else if i < n && (j >= m || table[i + 1][j] >= table[i][j + 1]) {
+            pending_a += 1;
             i += 1;
-        } else {
-            pb.push(b[j]);
+        } else if j < m {
+            pending_b.push(b[j]);
             j += 1;
         }
     }
-    flush(&mut out, &mut pa, &mut pb);
+    flush(&mut segments, &mut pending_a, &mut pending_b);
+    let mut out = vec![];
+    let (mut token_index, mut source_offset) = (0, 0);
+    for (equal, count, changed) in segments {
+        token_index += count;
+        let end = if token_index == tokens.len() {
+            primary.len()
+        } else if count > 0 {
+            let (at, word) = tokens[token_index - 1];
+            at + word.len()
+        } else {
+            source_offset
+        };
+        let range = source_offset..end;
+        source_offset = end;
+        out.push(if equal {
+            Diff::Same(range)
+        } else {
+            Diff::Changed(range, changed.join(" "))
+        });
+    }
     out
 }
 
@@ -838,6 +896,10 @@ pub struct ToolsState {
     /// Translation id → its verses for this chapter.
     pub compare: Vec<(String, Load<Vec<Verse>>)>,
     pub jst: Option<Load<Vec<JstExcerpt>>>,
+    /// The chapter as read with the JST (`readJstChapter`), from `jst` and the chapter's KJV text.
+    pub jst_reading: crate::jst::Reading,
+    /// "Show omitted KJV words".
+    pub jst_omitted: bool,
     pub bibles_view: BiblesView,
     pub catalog: Option<Load<Vec<Translation>>>,
     pub catalog_query: String,
@@ -855,6 +917,8 @@ impl ToolsState {
             resources: None,
             compare: vec![],
             jst: None,
+            jst_reading: Default::default(),
+            jst_omitted: false,
             bibles_view: BiblesView::List,
             catalog: None,
             catalog_query: String::new(),
@@ -898,6 +962,9 @@ pub enum ToolsMsg {
     Catalog(Result<Vec<Translation>, String>),
     CatalogQuery(String),
     ToggleJst,
+    /// "Show omitted KJV words" / "Hide omitted KJV words".
+    ToggleJstOmitted,
+    RetryJst,
     Jst(Location, Result<Vec<JstExcerpt>, String>),
     /// A link in a tool: the reader's own scripture opens here, anything else in the browser.
     Link(String),
@@ -931,6 +998,7 @@ impl App {
         }];
         self.tools.compare.clear();
         self.tools.jst = None;
+        self.tools.jst_reading = Default::default();
         if is_bible(&l.volume) {
             for id in self.preferences.compare_bibles.clone() {
                 tasks.push(self.load_compare(&id));
@@ -1234,6 +1302,7 @@ impl App {
             ToolsMsg::ToggleJst => {
                 self.preferences.jst = !self.preferences.jst;
                 self.persist();
+                self.tools.jst_reading = Default::default();
                 if self.preferences.jst && is_bible(&here.volume) {
                     return self.load_jst();
                 }
@@ -1241,11 +1310,31 @@ impl App {
             }
             ToolsMsg::Jst(l, r) => {
                 if l == here && self.preferences.jst {
+                    self.tools.jst_reading = match &r {
+                        Ok(excerpts) => {
+                            let verses: Vec<crate::jst::Kjv> = self
+                                .verses
+                                .iter()
+                                .map(|v| crate::jst::Kjv {
+                                    verse: v.number,
+                                    text: &v.text,
+                                })
+                                .collect();
+                            crate::jst::read_chapter(excerpts, &verses)
+                        }
+                        Err(_) => Default::default(),
+                    };
                     self.tools.jst = Some(match r {
                         Ok(x) => Load::Ready(x),
                         Err(e) => Load::Failed(e),
                     });
                     return self.keep_jump();
+                }
+            }
+            ToolsMsg::ToggleJstOmitted => self.tools.jst_omitted = !self.tools.jst_omitted,
+            ToolsMsg::RetryJst => {
+                if self.preferences.jst && is_bible(&here.volume) {
+                    return self.load_jst();
                 }
             }
             ToolsMsg::Link(href) => {
@@ -1284,9 +1373,95 @@ pub fn app_scripture_href(href: &str) -> Option<(Location, Option<u32>)> {
     ))
 }
 
+/// The path of a link to the website ("https://www.versetogether.org/share/…", or "/share/…" as written in a note).
+pub fn site_path<'a>(href: &'a str, site: &str) -> Option<&'a str> {
+    if href.starts_with('/') && !href.starts_with("//") {
+        return Some(href);
+    }
+    let host = |url: &str| {
+        url.split_once("://").map(|(_, rest)| {
+            rest.split('/')
+                .next()
+                .unwrap_or("")
+                .trim_start_matches("www.")
+                .to_string()
+        })
+    };
+    let (site_host, link_host) = (host(site)?, host(href)?);
+    if site_host != link_host && link_host != "versetogether.org" {
+        return None;
+    }
+    let rest = href.split_once("://")?.1;
+    rest.find('/').map(|at| &rest[at..])
+}
+/// A passage share link (`buildShareUrl`: `/share/<volume>/<book>/<chapter>/<verses>`): the chapter and the
+/// verses it shares (`parseVerseSpec`, verses past the chapter's end dropped later).
+pub fn share_href(path: &str) -> Option<(Location, Vec<u32>)> {
+    let path = path.split(['?', '#']).next()?;
+    let mut parts = path.trim_start_matches('/').split('/');
+    if parts.next()? != "share" {
+        return None;
+    }
+    let volume = crate::store::volume_from_url_slug(parts.next()?).to_string();
+    let book = parts.next()?.to_string();
+    let chapter: u32 = parts.next()?.parse().ok()?;
+    let spec = parts.next()?.replace("%2C", ",").replace("%E2%80%93", "–");
+    let mut verses = std::collections::BTreeSet::new();
+    for part in spec
+        .split([',', ';'])
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
+        let ends: Vec<&str> = part.split(['-', '–', '—']).map(str::trim).collect();
+        if ends.len() > 2
+            || !ends
+                .iter()
+                .all(|e| !e.is_empty() && e.bytes().all(|b| b.is_ascii_digit()))
+        {
+            return None;
+        }
+        let a: u32 = ends[0].parse().ok()?;
+        let b: u32 = ends.last()?.parse().ok()?;
+        verses.extend(a.min(b).max(1)..=a.max(b).min(a.min(b).max(1) + 500));
+    }
+    (!verses.is_empty()).then(|| {
+        (
+            Location {
+                volume,
+                book,
+                chapter,
+            },
+            verses.into_iter().collect(),
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn share_links_open_their_passage() {
+        let site = "https://www.versetogether.org";
+        let path = site_path(
+            "https://versetogether.org/share/bookofmormon/alma/32/21-23,27",
+            site,
+        )
+        .unwrap();
+        assert_eq!(path, "/share/bookofmormon/alma/32/21-23,27");
+        let (l, verses) = share_href(path).unwrap();
+        assert_eq!(
+            (l.volume.as_str(), l.book.as_str(), l.chapter),
+            ("bookofmormon", "alma", 32)
+        );
+        assert_eq!(verses, [21, 22, 23, 27]);
+        assert_eq!(share_href("/share/newtestament/john/3/16").unwrap().1, [16]);
+        assert!(share_href("/share/newtestament/john/3/x").is_none());
+        assert!(site_path("https://example.com/share/newtestament/john/3/16", site).is_none());
+        assert_eq!(
+            site_path("/browse/nt/john/3", site),
+            Some("/browse/nt/john/3")
+        );
+    }
     #[test]
     fn study_helps_match_like_the_website() {
         let faith = study_help_matches(Guide::Bd, "Faith");
@@ -1350,20 +1525,36 @@ mod tests {
     }
     #[test]
     fn comparisons_mark_only_the_changed_words() {
+        let kjv = "For God so loved the world, that he gave his only begotten Son";
         let d = diff_words(
-            "For God so loved the world, that he gave his only begotten Son",
+            kjv,
             "For God so loved the world that He gave His one and only Son",
         );
-        // Shared words (case and punctuation aside) stay plain; only what differs is marked, on each side.
+        let show: Vec<String> = d
+            .iter()
+            .map(|piece| match piece {
+                Diff::Same(r) => format!("={}", &kjv[r.clone()]),
+                Diff::Changed(r, other) => format!("[{}/{}]", &kjv[r.clone()], other),
+            })
+            .collect();
+        // Shared words (case and punctuation aside) keep the base text as written; changes pair each side.
         assert_eq!(
-            d,
+            show,
             [
-                Diff::Same("For God so loved the world that He gave His".into()),
-                Diff::Changed(String::new(), "one and".into()),
-                Diff::Same("only".into()),
-                Diff::Changed("begotten".into(), String::new()),
-                Diff::Same("Son".into()),
+                "=For God so loved the world, that he gave his",
+                "[/one and]",
+                "= only",
+                "[ begotten/]",
+                "= Son",
             ]
         );
+        // The pieces cover the base text exactly, in order.
+        let joined: String = d
+            .iter()
+            .map(|piece| match piece {
+                Diff::Same(r) | Diff::Changed(r, _) => &kjv[r.clone()],
+            })
+            .collect();
+        assert_eq!(joined, kjv);
     }
 }

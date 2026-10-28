@@ -363,6 +363,8 @@ pub struct Preferences {
     pub compare_bibles: Vec<String>,
     /// Joseph Smith Translation passages shown with Bible chapters.
     pub jst: bool,
+    /// Reader settings' Comparison view: other Bibles side by side rather than inline (`comparisonView`).
+    pub side_by_side: bool,
 }
 pub const PREFERENCES_VERSION: u32 = 2;
 /// The website's 1rem reading size; its Reader settings scale it from 85% to 130%.
@@ -383,6 +385,7 @@ impl Default for Preferences {
             bibles: Vec::new(),
             compare_bibles: Vec::new(),
             jst: false,
+            side_by_side: false,
         }
     }
 }

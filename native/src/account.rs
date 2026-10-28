@@ -255,6 +255,9 @@ impl App {
         }
         if self.lessons.open.is_some() {
             self.load_lesson_log();
+            if self.lessons.selected.is_empty() {
+                self.reload_lesson_scripture();
+            }
             self.lessons.guide.selection = None;
             self.load_guide_marks();
         }
@@ -295,6 +298,14 @@ impl App {
             && dock.location != self.preferences.last
         {
             chapters.push(dock.location.clone());
+        }
+        // The open lesson's chapters, whose marks show on its page.
+        if let Some(open) = &self.lessons.open {
+            for chapter in &open.companion.chapters {
+                if !chapters.contains(&chapter.location) {
+                    chapters.push(chapter.location.clone());
+                }
+            }
         }
         let job = sync::Job {
             directory,
@@ -838,6 +849,9 @@ impl App {
         }
         if self.lessons.open.is_some() {
             self.load_lesson_log();
+            if self.lessons.selected.is_empty() {
+                self.reload_lesson_scripture();
+            }
             if self.lessons.guide.selection.is_none() {
                 self.load_guide_marks();
             }

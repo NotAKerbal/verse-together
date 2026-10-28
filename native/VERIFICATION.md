@@ -1,3 +1,86 @@
+# Independent review and draft autosave — October 28, 2026
+
+Codex reviewed the third Claude pass on top of `98e4df9`. Independent checks: **Passed** 117 native tests
+(1 optional snapshot exporter ignored), 5 renderer tests, 47 real Convex/Better Auth contract tests, strict
+clippy, formatting and whitespace. The initial full native run exposed a wall-clock-sensitive undo test under
+parallel machine load; its uninterrupted-typing sequence now controls the grouping clock between edits, and
+the full suite passes. Production undo behavior still uses real input timing.
+
+Codex added dirty-only draft autosaving at approximately 750ms for verse notes and Journal entries. Failed
+writes keep the editor and error intact and retry every 10 seconds; idle editors have no autosave timer.
+Two new tests verify open-draft persistence and write-failure recovery. A force quit may lose only text entered
+since the last successful save, rather than the entire unsaved editing session.
+
+Reviewed release SHA-256: `f17890bb2b833b68498bd550b3190079d157a4ef26db0e70cc9c0a238de539c1`.
+Native GUI QA for autosave uses `/tmp/verse-autosave-gui-review --no-account`, separate from personal study data.
+**Passed:** typed a new title and body through the real release editor without Save/navigation, confirmed both
+in SQLite, sent SIGTERM only to that QA process, then confirmed the complete note survived termination.
+Live account operation remains **Blocked** on server/page deployment and Google sign-in verification; macOS and
+Windows execution are **Not run**. Current consumer gaps are documented in `PARITY.md` and remain active work.
+
+Earlier implementation and review evidence follows.
+
+# Remaining consumer parity — October 27–28, 2026 (third Claude pass)
+
+Base `98e4df9` (`t3/rust-desktop-app`), uncommitted working tree in the shared checkout. Rust 1.99.1
+(`/tmp/verse-native-tools/env.sh`), Ubuntu GNOME Wayland 1280×800. Not yet independently reviewed. No commit, push,
+PR, merge or deployment was made. Release SHA-256 of the final build:
+`4dda74e8a30de4966f65a99693854a83265e07be85926b361dd809412d0ed2ac`.
+
+## What changed
+
+- **JST read in place** (`jst.rs`, `jst_text.rs`): port of the website's `readJstChapter` alignment, rendered as
+  `JstVerseText`, with the status line and "Show/Hide omitted KJV words".
+- **Comparison view** (Reader settings "Inline / Side by side"): the website's inline diff (`renderInlineDiff`
+  offsets) and side-by-side boxes replace the earlier under-verse rows.
+- **Come, Follow Me lesson page, scripture-first** (`lessons.rs` `companion`, `lesson_page.rs`). The live website
+  replaced the guide-plus-scripture-dock layout with this one on October 26 (`StudyCompanion`, confirmed on
+  www.versetogether.org), so the brief's "dock scroll-following" has no website counterpart any more; the native page
+  now matches the live one instead.
+- **Plans** (`plan_model.rs`, `plans.rs`): plan list, plan page and the full builder/editor as on the website;
+  Monday-first reading days (an earlier Sunday-first reading was wrong); exact `createPlan`/`updatePlan` arguments.
+- **Journal editor**: live Markdown styling (`md_highlight.rs`) and undo/redo.
+- **Share links**: website `/share/…` and `/browse/…` links opened from notes open the passage natively.
+
+## Automated checks (final tree)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --manifest-path native/Cargo.toml` | **Passed**: 115, 1 ignored (snapshot exporter). New: JST golden comparison with the website's own output, JST text runs, comparison diff offsets, lesson pairing/reading groups on the real October 26 guide and every guide, plan model (Monday-first days, pace, schedule, builder resolution), builder → exact Convex arguments, Markdown styling, undo/redo, share links |
+| Renderer tests | `cargo test -p iced_tiny_skia` | **Passed**: 5 |
+| Clippy / format / whitespace | `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check` | **Passed** |
+| Backend contracts (real Convex + Better Auth test runtime) | `npx vitest run tests/convex/nativeSync.test.ts tests/convex/nativeAuthHttp.test.ts tests/nativeAuth.test.ts tests/journalEntry.test.ts` | **Passed**: 47 (new: the builder's plan created and edited with selections, pace and reading days; other accounts refused; delete) |
+| Typecheck / lint | `npx tsc --noEmit -p .`, `npx eslint tests/convex/nativeSync.test.ts native/scripts/generate-jst-golden.mjs` | **Passed** |
+| Release build | `cargo build --release --locked` | **Passed** |
+
+## Real desktop checks (final-pass release builds, Linux Computer Use, `--no-account --data-dir /tmp/verse-claude3-qa`, session bus disabled)
+
+Screenshots: `/tmp/verse-claude3-evidence/` (headless renders in `headless/`).
+
+- **Passed:** Mark 9 with the JST on: 9:3 read at verse 4 with its addition underlined; JST 9:40–48 across 43–48 with
+  raised JST numbers; status line; omitted KJV words struck through after "Show omitted KJV words".
+- **Passed:** Berean Standard Bible added from the catalog; Mark 9 inline ("KJV / BSB" changes) and side by side; the
+  choice persisted across a restart; the JST verse shows BSB's plain wording beneath.
+- **Passed:** October 26 lesson: Contents → Jeremiah 31 heading; "Context for verses 1–3" opens with its rubric
+  reference, title and first paragraph; "Read full commentary" shows the rest; verses 1–2 selected and marked green
+  (drawn under exactly the words; stored in SQLite for Jeremiah 31:1–2). Compared with the live page screenshot.
+- **Found and fixed:** the first opening of the lesson made the window unresponsive for several seconds once; after
+  removing duplicate anchors and repeated measuring, reopening and scrolling were responsive. Cold layout of the
+  page measured headlessly at ~200 ms (release); not profiled further.
+- **Passed:** Journal: a reflection with a heading, bold, italic, list, link and quote shows live styling (bold/italic
+  fixed during the check: the text engine picks a word's font from its first character); Ctrl+Z undid the last word;
+  Ctrl+S stored the Markdown exactly.
+- **Observed (not changed):** an unsaved note is lost if the process is terminated (SIGTERM) rather than closed; the
+  native editor saves on leave/close/Ctrl+S, while the website saves continuously.
+
+## Signed-in pages
+
+Plans (list, plan page, builder, editor) were rendered headlessly through the real view with a test session and plan
+data shaped as `readingPlans:getPlan` returns it (`headless/plans-*.png`); the arguments the builder sends were
+checked in Rust and accepted by the real functions in the Convex test runtime. They were **not** exercised against a
+live account: sign-in and sync still need `convex/nativeAuth.ts`, `convex/nativeSync.ts` and `/native/authorize`
+deployed, then live Google QA.
+
 # Independent review of the repaired native expansion
 
 Codex reviewed the final implementation on top of `756dfec` and independently passed 104 native tests

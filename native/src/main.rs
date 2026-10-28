@@ -14,11 +14,16 @@ mod header;
 mod icons;
 mod journal;
 mod journal_ui;
+mod jst;
+mod jst_text;
 mod jump;
+mod lesson_page;
 mod lessons;
 mod lessons_ui;
 mod mark_layer;
 mod marks;
+mod md_highlight;
+mod plan_model;
 mod plans;
 mod reader_tools;
 mod reader_tools_ui;
@@ -169,6 +174,7 @@ enum Message {
     Bookmark,
     EditNote(text_editor::Action),
     SaveNote,
+    Autosave,
     OpenSearch,
     SearchInput(String),
     SubmitSearch,
@@ -180,6 +186,7 @@ enum Message {
     FontSize(f32),
     SetSerif(bool),
     SetTextWidth(TextWidth),
+    SetSideBySide(bool),
     MarkRead,
     Lesson(lessons_ui::LessonMsg),
     JumpTo(Option<u32>),
@@ -223,6 +230,7 @@ struct App {
     anchor: Option<u32>,
     note: text_editor::Content,
     note_dirty: bool,
+    autosave_failed: bool,
     copied: bool,
     copied_link: bool,
     log_open: bool,
@@ -312,6 +320,7 @@ impl App {
             anchor: None,
             note: text_editor::Content::new(),
             note_dirty: false,
+            autosave_failed: false,
             copied: false,
             copied_link: false,
             log_open: false,
@@ -402,11 +411,25 @@ impl App {
         });
         // Frames are requested only while a header transition runs; an idle window does no animation work.
         let account = self.account_subscription();
-        if self.motion.is_animating(self.now) || self.journal.motion.is_animating(self.now) {
-            Subscription::batch([events, account, window::frames().map(Message::Frame)])
+        let autosave = if self.has_unsaved_notes() {
+            let delay = if self.autosave_failed { 10_000 } else { 750 };
+            iced::time::every(std::time::Duration::from_millis(delay)).map(|_| Message::Autosave)
         } else {
-            Subscription::batch([events, account])
+            Subscription::none()
+        };
+        if self.motion.is_animating(self.now) || self.journal.motion.is_animating(self.now) {
+            Subscription::batch([
+                events,
+                account,
+                autosave,
+                window::frames().map(Message::Frame),
+            ])
+        } else {
+            Subscription::batch([events, account, autosave])
         }
+    }
+    fn has_unsaved_notes(&self) -> bool {
+        self.note_dirty || self.journal.open.as_ref().is_some_and(|note| note.dirty)
     }
     fn report<T>(&mut self, result: Result<T, String>) -> Option<T> {
         match result {
@@ -1074,6 +1097,13 @@ impl App {
                     return iced::clipboard::write(self.share_link());
                 }
             }
+            Message::Autosave => {
+                // Persist drafts while the editor remains open. Failures keep the draft and its visible error;
+                // retry slowly until saving works again. Idle windows have no autosave timer.
+                let verse_saved = self.save_note();
+                let journal_saved = self.save_journal_note();
+                self.autosave_failed = !verse_saved || !journal_saved;
+            }
             Message::EditNote(action) => {
                 self.note_dirty |= action.is_edit();
                 self.note.perform(action);
@@ -1136,7 +1166,7 @@ impl App {
                 }
                 if screen == Screen::Plans {
                     self.popover = None;
-                    return self.update_plans(plans::PlansMsg::Load);
+                    return self.update_plans(plans::PlansMsg::Home);
                 }
             }
             Message::SetDark(dark) => {
@@ -1166,6 +1196,10 @@ impl App {
                 self.preferences.text_width = width;
                 self.persist();
             }
+            Message::SetSideBySide(side_by_side) => {
+                self.preferences.side_by_side = side_by_side;
+                self.persist();
+            }
             Message::MarkRead => {
                 let source = self.chapter_source(None);
                 if let Some(s) = &mut self.store {
@@ -1187,6 +1221,22 @@ impl App {
             Message::OpenLink(url) => {
                 if let Some((l, v)) = self.scripture_link(&url) {
                     return self.navigate(l, v);
+                }
+                // The website's own links open here: a shared passage with its verses selected, or a chapter.
+                if let Some(path) = reader_tools::site_path(&url, &self.tools.site) {
+                    if let Some((l, verses)) = reader_tools::share_href(path) {
+                        let task = self.navigate(l.clone(), verses.first().copied());
+                        if self.preferences.last == l {
+                            let count = self.verses.len() as u32;
+                            self.selected = verses.into_iter().filter(|v| *v <= count).collect();
+                            self.anchor = self.selected.first().copied();
+                            self.load_note();
+                        }
+                        return task;
+                    }
+                    if let Some((l, v)) = reader_tools::app_scripture_href(path) {
+                        return self.navigate(l, v);
+                    }
                 }
                 if (url.starts_with("https://") || url.starts_with("http://"))
                     && let Err(e) = webbrowser::open(&url)
@@ -1658,6 +1708,67 @@ mod interaction_tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
+    fn a_shared_passage_opens_with_its_verses_selected() {
+        let (mut app, dir) = app();
+        let _ = app.update(Message::OpenLink(
+            "https://www.versetogether.org/share/bookofmormon/alma/32/21-23,27".into(),
+        ));
+        assert_eq!(app.reference(), "Alma 32");
+        assert_eq!(
+            app.selected.iter().copied().collect::<Vec<_>>(),
+            [21, 22, 23, 27]
+        );
+        // A note's own link to a chapter opens it too.
+        let _ = app.update(Message::OpenLink("/browse/newtestament/john/3#v-16".into()));
+        assert_eq!(app.reference(), "John 3");
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn the_journal_editor_undoes_and_redoes_like_the_websites() {
+        use journal_ui::JournalMsg;
+        use text_editor::{Action, Edit};
+        let (mut app, dir) = app();
+        let _ = app.update(Message::Journal(JournalMsg::New(None)));
+        let typed = |app: &mut App, text: &str| {
+            for c in text.chars() {
+                let edit = if c == '\n' {
+                    Edit::Enter
+                } else {
+                    Edit::Insert(c)
+                };
+                // This sequence represents uninterrupted typing. Don't let unrelated parallel test work
+                // turn a scheduler pause into a user pause and split the expected undo group.
+                if let Some((_, at)) = &mut app.journal.open.as_mut().unwrap().last_edit {
+                    *at = Instant::now();
+                }
+                let _ = app.update(Message::Journal(JournalMsg::Body(Action::Edit(edit))));
+            }
+        };
+        typed(&mut app, "Seeds");
+        typed(&mut app, " ");
+        typed(&mut app, "of faith");
+        let body = |app: &App| app.journal.open.as_ref().unwrap().body.text();
+        assert_eq!(body(&app), "Seeds of faith");
+        // A word typed is one step; the spaces between words are steps of their own.
+        let _ = app.update(Message::Journal(JournalMsg::Undo));
+        assert_eq!(body(&app), "Seeds of ");
+        let _ = app.update(Message::Journal(JournalMsg::Undo));
+        assert_eq!(body(&app), "Seeds of");
+        let _ = app.update(Message::Journal(JournalMsg::Redo));
+        assert_eq!(body(&app), "Seeds of ");
+        // Typing after an undo starts a new history: there is nothing to redo.
+        typed(&mut app, "x");
+        let _ = app.update(Message::Journal(JournalMsg::Redo));
+        assert_eq!(body(&app), "Seeds of x");
+        for _ in 0..10 {
+            let _ = app.update(Message::Journal(JournalMsg::Undo));
+        }
+        assert_eq!(body(&app), "");
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
     fn all_guides_are_available_and_scripture_links_stay_native() {
         let (mut app, dir) = app();
         for guide in lessons::guides() {
@@ -1666,7 +1777,18 @@ mod interaction_tests {
             )));
             let open = app.lessons.open.as_ref().unwrap();
             assert!(open.sections.len() > 3, "{}", guide.slug);
-            assert!(open.markdown.iter().all(|items| !items.is_empty()));
+            // Every guide reads its week's chapters in full, each paired with the guide's chapter section.
+            assert!(!open.companion.chapters.is_empty(), "{}", guide.slug);
+            assert!(
+                open.scripture.iter().all(|s| !s.verses.is_empty()),
+                "{}",
+                guide.slug
+            );
+            assert!(
+                open.companion.chapters.iter().any(|c| c.heading.is_some()),
+                "{}",
+                guide.slug
+            );
         }
         assert_eq!(app.screen, Screen::Guides);
         let (l, _) = app
@@ -1759,5 +1881,60 @@ mod interaction_tests {
         );
         drop(app);
         let _ = std::fs::remove_dir_all(dir);
+    }
+    #[test]
+    fn autosave_persists_open_verse_and_journal_drafts_without_leaving() {
+        let (mut app, dir) = app();
+        let location = app.preferences.last.clone();
+        let _ = app.update(Message::SelectVerse(1));
+        let _ = app.update(Message::EditNote(text_editor::Action::Edit(
+            text_editor::Edit::Paste(std::sync::Arc::new(
+                "Verse draft survives a forced quit".into(),
+            )),
+        )));
+        assert!(app.has_unsaved_notes());
+        let _ = app.update(Message::Autosave);
+        assert!(!app.note_dirty);
+        assert_eq!(
+            app.store.as_ref().unwrap().annotations(&location).unwrap()[0].note,
+            "Verse draft survives a forced quit"
+        );
+        let _ = app.update(Message::Journal(journal_ui::JournalMsg::New(None)));
+        let _ = app.update(Message::Journal(journal_ui::JournalMsg::Title(
+            "Autosaved reflection".into(),
+        )));
+        let _ = app.update(Message::Autosave);
+        assert!(app.journal.open.is_some());
+        assert!(!app.has_unsaved_notes());
+        let id = app.journal.open.as_ref().unwrap().note.id.clone();
+        let saved = Store::open(&dir).unwrap().note(&id).unwrap().unwrap();
+        assert_eq!(saved.title, "Autosaved reflection");
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn failed_autosave_keeps_the_draft_and_retries_without_losing_text() {
+        let (mut app, dir) = app();
+        let _ = app.update(Message::Journal(journal_ui::JournalMsg::New(None)));
+        let _ = app.update(Message::Journal(journal_ui::JournalMsg::Title(
+            "Keep this draft".into(),
+        )));
+        let db = rusqlite::Connection::open(dir.join("study.sqlite")).unwrap();
+        db.execute_batch("CREATE TRIGGER reject_autosave BEFORE INSERT ON notes BEGIN SELECT RAISE(ABORT,'test write failure'); END;").unwrap();
+        let _ = app.update(Message::Autosave);
+        assert!(app.has_unsaved_notes());
+        assert!(app.autosave_failed);
+        assert!(app.error.as_ref().unwrap().contains("test write failure"));
+        assert_eq!(
+            app.journal.open.as_ref().unwrap().note.title,
+            "Keep this draft"
+        );
+        db.execute_batch("DROP TRIGGER reject_autosave;").unwrap();
+        let _ = app.update(Message::Autosave);
+        assert!(!app.has_unsaved_notes());
+        assert!(!app.autosave_failed);
+        drop(app);
+        drop(db);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

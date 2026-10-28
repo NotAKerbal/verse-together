@@ -100,6 +100,16 @@ pub struct Colors {
     pub note: Color,
     /// `--accent-primary`: the calendar's entry dots.
     pub primary: Color,
+    /// `--accent-mint`: read chapters, finished plans.
+    pub mint: Color,
+    /// `--accent-coral`: problems to fix.
+    pub coral: Color,
+    /// `--accent-sky-soft`
+    pub sky_soft: Color,
+    /// `--accent-rubric-line`: the `pill-tag` outline.
+    pub rubric_line: Color,
+    /// `--input-surface`
+    pub input: Color,
 }
 impl Colors {
     pub fn new(dark: bool) -> Self {
@@ -122,6 +132,11 @@ impl Colors {
                 goal: color!(0xc9ad6a),
                 note: color!(0x2c281d),
                 primary: color!(0xc9ad6a),
+                mint: color!(0x2a2e25),
+                coral: color!(0x4a2c24),
+                sky_soft: color!(0x26241f),
+                rubric_line: Color::from_rgba8(227, 144, 122, 0.45),
+                input: color!(0x201f1c),
             }
         } else {
             let ink = color!(0x1f1d1a);
@@ -142,6 +157,11 @@ impl Colors {
                 goal: color!(0x947026),
                 note: color!(0xf2ead6),
                 primary: color!(0xecdcae),
+                mint: color!(0xe4e8d9),
+                coral: color!(0xe8c6bb),
+                sky_soft: color!(0xefe9dc),
+                rubric_line: Color::from_rgba8(154, 48, 32, 0.4),
+                input: color!(0xfffdf9),
             }
         }
     }
@@ -167,6 +187,11 @@ impl Colors {
             goal: f(self.goal),
             note: f(self.note),
             primary: f(self.primary),
+            mint: f(self.mint),
+            coral: f(self.coral),
+            sky_soft: f(self.sky_soft),
+            rubric_line: f(self.rubric_line),
+            input: f(self.input),
         }
     }
 }

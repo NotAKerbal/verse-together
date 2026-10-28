@@ -239,4 +239,47 @@ describe("desktop reading plans", () => {
     expect(plan!.steps[1].readAt).not.toBeNull();
     expect(await alice.query(api.readingPlans.listMyPlans, {})).toHaveLength(1);
   });
+
+  test("the builder's plan is created and edited with its selections, pace and reading days", async () => {
+    const { alice, bob } = await setup();
+    // Exactly what native/src/plans.rs `plan_call` sends for "Pearl of Great Price + Mark 2–5", weekdays, 5 a day.
+    const pearl = [
+      ...Array.from({ length: 8 }, (_, i) => ["moses", "Moses", i + 1] as const),
+      ...Array.from({ length: 5 }, (_, i) => ["abraham", "Abraham", i + 1] as const),
+      ["josephsmithmatthew", "Joseph Smith-Matthew", 1] as const,
+      ["josephsmithhistory", "Joseph Smith-History", 1] as const,
+      ["articlesoffaith", "Articles of Faith", 1] as const,
+    ].map(([book, label, chapter]) => ({ volume: "pearl", book, chapter, label: `${label} ${chapter}` }));
+    const mark = [2, 3, 4, 5].map((chapter) => ({ volume: "newtestament", book: "mark", chapter, label: `Mark ${chapter}` }));
+    const selections = [
+      { kind: "volume" as const, volume: "pearl" },
+      { kind: "range" as const, volume: "newtestament", book: "mark", from: 2, to: 5 },
+    ];
+    const weekdays = [true, true, true, true, true, false, false];
+    const { id } = await alice.mutation(api.readingPlans.createPlan, {
+      title: "Pearl of Great Price + Mark 2–5", template: "custom", steps: [...pearl, ...mark], selections,
+      startDate: "2026-11-02", chaptersPerDay: 5, readingDays: weekdays,
+    });
+    await alice.mutation(api.readingProgress.markChapterRead, { volume: "newtestament", book: "mark", chapter: 3 });
+    const plan = await alice.query(api.readingPlans.getPlan, { planId: id });
+    expect(plan).toMatchObject({ stepCount: 20, readCount: 1, chaptersPerDay: 5, readingDays: weekdays, selections, template: "custom" });
+
+    // Editing: Mark alone, two a day, every day. Read chapters stay read; every day is stored as the default.
+    await alice.mutation(api.readingPlans.updatePlan, {
+      planId: id, title: "Mark", steps: Array.from({ length: 16 }, (_, i) => ({ volume: "newtestament", book: "mark", chapter: i + 1, label: `Mark ${i + 1}` })),
+      selections: [{ kind: "book", volume: "newtestament", book: "mark" }], startDate: "2026-11-02", chaptersPerDay: 2,
+      readingDays: [true, true, true, true, true, true, true],
+    });
+    const edited = await alice.query(api.readingPlans.getPlan, { planId: id });
+    expect(edited).toMatchObject({ title: "Mark", stepCount: 16, readCount: 1, chaptersPerDay: 2, readingDays: null });
+    expect(edited!.steps[2].readAt).not.toBeNull();
+
+    // Another account can neither read nor edit it.
+    expect(await bob.query(api.readingPlans.getPlan, { planId: id })).toBeNull();
+    await expect(
+      bob.mutation(api.readingPlans.updatePlan, { planId: id, title: "Mine", steps: mark, chaptersPerDay: 1 })
+    ).rejects.toThrow(/Plan not found/);
+    await alice.mutation(api.readingPlans.deletePlan, { planId: id });
+    expect(await alice.query(api.readingPlans.listMyPlans, {})).toEqual([]);
+  });
 });

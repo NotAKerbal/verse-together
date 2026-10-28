@@ -40,7 +40,21 @@ pub struct OpenNote {
     pub confirm_delete: bool,
     /// The reflection prompt the note was started from, shown until something is written.
     pub prompt: Option<String>,
+    /// Earlier versions of the body for Ctrl+Z, and undone ones for Ctrl+Shift+Z / Ctrl+Y (the website's editor
+    /// history).
+    pub undo: Vec<String>,
+    pub redo: Vec<String>,
+    /// The last edit's kind and time: typing within a word groups into one undo step.
+    pub last_edit: Option<(EditKind, std::time::Instant)>,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditKind {
+    Typing,
+    Break,
+    Delete,
+    Paste,
+}
+const UNDO_LIMIT: usize = 200;
 pub struct JournalState {
     pub month: String,
     pub day: String,
@@ -88,6 +102,8 @@ pub enum JournalMsg {
     Close,
     Title(String),
     Body(text_editor::Action),
+    Undo,
+    Redo,
     Save,
     Preview(bool),
     ToggleReading,
@@ -212,6 +228,9 @@ impl App {
             markdown,
             confirm_delete: false,
             prompt,
+            undo: vec![],
+            redo: vec![],
+            last_edit: None,
         }));
     }
     /// Starts a note (saved once something is written), optionally quoting scripture from a source.
@@ -286,8 +305,50 @@ impl App {
             }
             JournalMsg::Body(action) => {
                 if let Some(open) = &mut self.journal.open {
+                    if let text_editor::Action::Edit(edit) = &action {
+                        let kind = match edit {
+                            text_editor::Edit::Insert(c) if !c.is_whitespace() => EditKind::Typing,
+                            text_editor::Edit::Insert(_) | text_editor::Edit::Enter => {
+                                EditKind::Break
+                            }
+                            text_editor::Edit::Paste(_) => EditKind::Paste,
+                            _ => EditKind::Delete,
+                        };
+                        let now = std::time::Instant::now();
+                        let grouped = open.last_edit.is_some_and(|(last, at)| {
+                            last == kind
+                                && kind != EditKind::Paste
+                                && now.duration_since(at) < std::time::Duration::from_secs(1)
+                        });
+                        if !grouped {
+                            open.undo.push(open.body.text());
+                            if open.undo.len() > UNDO_LIMIT {
+                                open.undo.remove(0);
+                            }
+                        }
+                        open.redo.clear();
+                        open.last_edit = Some((kind, now));
+                    }
                     open.dirty |= action.is_edit();
                     open.body.perform(action);
+                }
+            }
+            JournalMsg::Undo | JournalMsg::Redo => {
+                if let Some(open) = &mut self.journal.open {
+                    let undo = matches!(message, JournalMsg::Undo);
+                    let (from, to) = if undo {
+                        (&mut open.undo, &mut open.redo)
+                    } else {
+                        (&mut open.redo, &mut open.undo)
+                    };
+                    if let Some(text) = from.pop() {
+                        to.push(open.body.text());
+                        open.body = text_editor::Content::with_text(&text);
+                        open.body
+                            .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+                        open.dirty = true;
+                        open.last_edit = None;
+                    }
                 }
             }
             JournalMsg::Save => {
@@ -1314,6 +1375,41 @@ impl App {
                         .unwrap_or("Write in Markdown: # headings, **bold**, > quotes, - lists"),
                 )
                 .on_action(|a| Message::Journal(JournalMsg::Body(a)))
+                .key_binding(|press| {
+                    use iced::keyboard::Key;
+                    if press.modifiers.command()
+                        && let Key::Character(c) = &press.key
+                    {
+                        match c.as_str() {
+                            "z" if press.modifiers.shift() => {
+                                return Some(text_editor::Binding::Custom(Message::Journal(
+                                    JournalMsg::Redo,
+                                )));
+                            }
+                            "z" => {
+                                return Some(text_editor::Binding::Custom(Message::Journal(
+                                    JournalMsg::Undo,
+                                )));
+                            }
+                            "y" => {
+                                return Some(text_editor::Binding::Custom(Message::Journal(
+                                    JournalMsg::Redo,
+                                )));
+                            }
+                            _ => {}
+                        }
+                    }
+                    text_editor::Binding::from_key_press(press)
+                })
+                .highlight_with::<crate::md_highlight::Markdown>(
+                    crate::md_highlight::Settings {
+                        ink: p.ink,
+                        muted: p.muted,
+                        faint: p.faint,
+                        rubric: p.accent,
+                    },
+                    crate::md_highlight::format,
+                )
                 .font(serif())
                 .size(17)
                 .line_height(iced::widget::text::LineHeight::Relative(1.65))

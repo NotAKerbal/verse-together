@@ -7,7 +7,7 @@ use crate::reader_tools::{
 };
 use crate::{App, Message};
 use iced::widget::{
-    button, column, container, markdown, rich_text, row, space, span, text, text_input,
+    button, column, container, markdown, rich_text, row, space, span, stack, text, text_input,
 };
 use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, font};
 
@@ -99,81 +99,418 @@ impl App {
         )
     }
 
-    /// Other Bibles' wording of a verse, and any JST passage placed at it.
-    pub(crate) fn verse_extras(&self, number: u32, kjv: &str) -> Option<Element<'_, Message>> {
-        let p = self.p();
-        let mut extras = column![].spacing(6);
-        let mut any = false;
-        let palette = [
-            Color::from_rgb8(0x03, 0x69, 0xa1),
-            Color::from_rgb8(0x04, 0x78, 0x57),
-            Color::from_rgb8(0x4d, 0x7c, 0x0f),
-            Color::from_rgb8(0xbe, 0x12, 0x3c),
-            Color::from_rgb8(0x0e, 0x74, 0x90),
-            Color::from_rgb8(0xa2, 0x1c, 0xaf),
-        ];
-        let size = (self.preferences.font_size * 0.9).round();
-        for (i, (id, state)) in self.tools.compare.iter().enumerate() {
-            let color = palette[i % palette.len()];
-            let label = self
-                .preferences
-                .bibles
-                .iter()
-                .find(|b| b.id.eq_ignore_ascii_case(id))
-                .and_then(|b| b.abbreviation.clone())
-                .unwrap_or_else(|| id.clone());
-            let body: Element<'_, Message> = match state {
-                Load::Ready(verses) => match verses.iter().find(|v| v.number == number) {
-                    Some(v) => {
-                        let mut spans: Vec<iced::widget::text::Span<'_, ()>> = Vec::new();
-                        for piece in reader_tools::diff_words(kjv, &v.text) {
-                            match piece {
-                                Diff::Same(s) => spans.push(span(format!("{s} ")).color(p.muted)),
-                                Diff::Changed(_, other) if !other.is_empty() => spans.push(
-                                    span(format!("{other} "))
-                                        .color(color)
-                                        .font(sans(font::Weight::Semibold)),
-                                ),
-                                Diff::Changed(..) => {}
-                            }
-                        }
-                        rich_text(spans).size(size).line_height(1.55).into()
-                    }
-                    None => continue,
-                },
-                Load::Loading if number == 1 => muted(p, format!("Loading {label}…")),
-                Load::Failed(e) if number == 1 => text(format!("{label} couldn't be loaded: {e}"))
-                    .size(12)
-                    .color(p.accent)
-                    .into(),
-                _ => continue,
-            };
-            any = true;
-            extras = extras.push(
-                row![
-                    text(label)
-                        .size(11)
-                        .font(sans(font::Weight::Bold))
-                        .color(color)
-                        .width(44),
-                    container(body).width(Fill),
-                ]
-                .spacing(8),
-            );
+    /// The other Bibles whose wording of this verse differs from the KJV's (`verseComparisons`): label, color and
+    /// text, in the order they are shown.
+    pub(crate) fn verse_comparisons(&self, number: u32, kjv: &str) -> Vec<(String, Color, &str)> {
+        let base = reader_tools::normalize_compare(kjv);
+        self.tools
+            .compare
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (id, state))| {
+                let Load::Ready(verses) = state else {
+                    return None;
+                };
+                let v = verses.iter().find(|v| v.number == number)?;
+                (reader_tools::normalize_compare(&v.text) != base).then(|| {
+                    (
+                        self.compare_label(id),
+                        self.compare_color(i),
+                        v.text.as_str(),
+                    )
+                })
+            })
+            .collect()
+    }
+    /// Bibles that couldn't be loaded for this chapter (`translationNotices`).
+    pub(crate) fn comparison_notices(&self) -> Option<Element<'_, Message>> {
+        let failed: Vec<String> = self
+            .tools
+            .compare
+            .iter()
+            .filter(|(_, state)| matches!(state, Load::Failed(_)))
+            .map(|(id, _)| {
+                format!(
+                    "Could not load overlay translation \"{}\".",
+                    id.to_uppercase()
+                )
+            })
+            .collect();
+        if failed.is_empty() {
+            return None;
         }
-        if let Some(Load::Ready(excerpts)) = &self.tools.jst {
-            for excerpt in excerpts.iter().filter(|e| {
-                e.anchor_verse == Some(number) || (number == 1 && e.anchor_verse.is_none())
-            }) {
-                any = true;
-                extras = extras.push(self.jst_card(excerpt));
+        let color = if self.preferences.dark {
+            Color::from_rgb8(0xfd, 0xe6, 0x8a)
+        } else {
+            Color::from_rgb8(0x78, 0x35, 0x0f)
+        };
+        let mut c = column![].spacing(2);
+        for notice in failed {
+            c = c.push(text(notice).size(12).color(color));
+        }
+        Some(container(c).padding([0, 12]).into())
+    }
+    /// The base text's label (`primaryTranslationLabel`) and its amber.
+    fn primary_label(&self) -> (&'static str, Color) {
+        (
+            "LDS",
+            if self.preferences.dark {
+                Color::from_rgb8(0xfc, 0xd3, 0x4d)
+            } else {
+                Color::from_rgb8(0xb4, 0x53, 0x09)
+            },
+        )
+    }
+    /// Spans of `kjv[range]` with the reader's highlights drawn on its words.
+    fn marked_spans<'a>(
+        &self,
+        kjv: &str,
+        range: std::ops::Range<usize>,
+        marks: &[(std::ops::Range<usize>, Option<Color>, Option<Color>)],
+        color: Option<Color>,
+    ) -> Vec<iced::widget::text::Span<'a, ()>> {
+        let mut cuts = vec![range.start, range.end];
+        for (r, ..) in marks {
+            for c in [r.start, r.end] {
+                if c > range.start && c < range.end {
+                    cuts.push(c);
+                }
             }
         }
-        any.then(|| {
-            container(extras)
-                .padding(Padding::ZERO.left(28).top(4))
-                .into()
-        })
+        cuts.sort_unstable();
+        cuts.dedup();
+        cuts.windows(2)
+            .map(|w| {
+                let mut sp = span(kjv[w[0]..w[1]].to_string());
+                if let Some(c) = color {
+                    sp = sp.color(c);
+                }
+                if let Some((_, highlight, underline)) = marks
+                    .iter()
+                    .find(|(r, ..)| r.start <= w[0] && r.end >= w[1])
+                {
+                    if let Some(h) = highlight {
+                        sp = sp.background(*h);
+                    }
+                    if let Some(u) = underline {
+                        sp = sp.underline(true).color(*u);
+                    }
+                }
+                sp
+            })
+            .collect()
+    }
+    /// A verse read against other Bibles, in the reader's Comparison view: inline (the KJV with each change shown
+    /// as "KJV / other") or side by side (`ChapterReader`'s comparison rows).
+    pub(crate) fn comparison_text<'a>(
+        &'a self,
+        prefix: &str,
+        kjv: &'a str,
+        comparisons: Vec<(String, Color, &'a str)>,
+        marks: Vec<(std::ops::Range<usize>, Option<Color>, Option<Color>)>,
+        font: iced::Font,
+    ) -> Element<'a, Message> {
+        let p = self.p();
+        let (primary, amber) = self.primary_label();
+        let faint = Color { a: 0.35, ..p.ink };
+        let line = iced::widget::text::LineHeight::Absolute(24.0.into());
+        if !self.preferences.side_by_side {
+            let mut spans: Vec<iced::widget::text::Span<'_, ()>> = vec![span(prefix.to_string())];
+            for (i, (_, color, other)) in comparisons.iter().enumerate() {
+                if i > 0 {
+                    spans.push(span("  |  ").color(faint));
+                }
+                for piece in reader_tools::diff_words(kjv, other) {
+                    match piece {
+                        Diff::Same(r) => spans.extend(self.marked_spans(kjv, r, &marks, None)),
+                        Diff::Changed(r, changed) => {
+                            let lead = kjv[r.clone()].len() - kjv[r.clone()].trim_start().len();
+                            let start = r.start + lead;
+                            spans.push(span(" "));
+                            if start < r.end {
+                                spans.extend(self.marked_spans(
+                                    kjv,
+                                    start..r.end,
+                                    &marks,
+                                    Some(amber),
+                                ));
+                            } else {
+                                spans.push(span("-").color(faint));
+                            }
+                            spans.push(span(" / ").color(Color { a: 0.4, ..p.ink }));
+                            spans.push(if changed.is_empty() {
+                                span("-").color(faint)
+                            } else {
+                                span(changed).color(*color)
+                            });
+                            spans.push(span(" "));
+                        }
+                    }
+                }
+            }
+            return rich_text(spans)
+                .size(14)
+                .font(font)
+                .line_height(line)
+                .width(Fill)
+                .into();
+        }
+        let wide = self.window_width >= 768.0;
+        let shade = if self.preferences.dark {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.05)
+        } else {
+            Color::from_rgba(0.0, 0.0, 0.0, 0.03)
+        };
+        let cell = move |label: String, color: Color, body: Element<'a, Message>| {
+            container(column![text(label.to_uppercase()).size(10).color(color), body,].spacing(2))
+                .padding([6, 8])
+                .width(Fill)
+                .style(move |_| container::Style {
+                    background: Some(shade.into()),
+                    border: Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+        };
+        let mut boxes = column![].spacing(8);
+        for (label, color, other) in comparisons {
+            let base = cell(
+                primary.to_string(),
+                amber,
+                rich_text(self.marked_spans(kjv, 0..kjv.len(), &marks, None))
+                    .size(14)
+                    .font(font)
+                    .line_height(line)
+                    .into(),
+            );
+            let them = cell(
+                label,
+                color,
+                text(other).size(14).font(font).line_height(line).into(),
+            );
+            let pair: Element<'_, Message> = if wide {
+                row![base, them].spacing(8).into()
+            } else {
+                column![base, them].spacing(8).into()
+            };
+            boxes = boxes.push(container(pair).padding(8).width(Fill).style(move |_| {
+                container::Style {
+                    border: Border {
+                        color: p.rule,
+                        width: 1.0,
+                        radius: 6.0.into(),
+                    },
+                    ..Default::default()
+                }
+            }));
+        }
+        column![text(prefix.to_string()).size(14).line_height(line), boxes]
+            .spacing(4)
+            .into()
+    }
+    /// The website's `compareColorClasses`, by the Bible's place among those shown.
+    pub(crate) fn compare_color(&self, index: usize) -> Color {
+        const LIGHT: [u32; 6] = [0x0369a1, 0x047857, 0x4d7c0f, 0xbe123c, 0x0e7490, 0xa21caf];
+        const DARK: [u32; 6] = [0x7dd3fc, 0x6ee7b7, 0xbef264, 0xfda4af, 0x67e8f9, 0xf0abfc];
+        let hex = if self.preferences.dark { DARK } else { LIGHT }[index % 6];
+        Color::from_rgb8((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+    }
+    /// A Bible's short label (`formatTranslationShortLabel`).
+    pub(crate) fn compare_label(&self, id: &str) -> String {
+        self.preferences
+            .bibles
+            .iter()
+            .find(|b| b.id.eq_ignore_ascii_case(id))
+            .and_then(|b| b.abbreviation.clone())
+            .unwrap_or_else(|| id.to_uppercase())
+    }
+    /// The JST row standing in for a KJV verse, when the chapter is read with the JST.
+    pub(crate) fn jst_row(&self, verse: u32) -> Option<&crate::jst::Row> {
+        match &self.tools.jst {
+            Some(Load::Ready(_)) if self.preferences.jst => self.tools.jst_reading.rows.get(&verse),
+            _ => None,
+        }
+    }
+    /// The excerpts shown whole before the text (`jstReading.leading`).
+    pub(crate) fn jst_leading_cards(&self) -> Vec<Element<'_, Message>> {
+        match &self.tools.jst {
+            Some(Load::Ready(excerpts)) if self.preferences.jst => self
+                .tools
+                .jst_reading
+                .leading
+                .iter()
+                .filter_map(|&i| excerpts.get(i))
+                .map(|e| container(self.jst_card(e)).padding([0, 12]).into())
+                .collect(),
+            _ => vec![],
+        }
+    }
+    /// The line under the reader's header while the JST is on (`ChapterReader`'s JST status).
+    pub(crate) fn jst_status(&self) -> Option<Element<'_, Message>> {
+        if !self.preferences.jst || !reader_tools::is_bible(&self.preferences.last.volume) {
+            return None;
+        }
+        let p = self.p();
+        let small = |s: String| text(s).size(12).color(Color { a: 0.55, ..p.ink });
+        let link = |label: &'static str, m: ToolsMsg| {
+            button(
+                rich_text::<(), _, _, _>([span(label).underline(true)])
+                    .size(12)
+                    .color(Color { a: 0.55, ..p.ink }),
+            )
+            .padding(0)
+            .on_press(msg(m))
+            .style(|_, _| button::Style::default())
+        };
+        let line: Element<'_, Message> = match &self.tools.jst {
+            None | Some(Load::Loading) => {
+                small("Loading Joseph Smith Translation excerpts…".into()).into()
+            }
+            Some(Load::Ready(excerpts)) if excerpts.is_empty() => {
+                small("The JST appendix has no excerpts for this chapter.".into()).into()
+            }
+            Some(Load::Ready(_)) => {
+                let reading = &self.tools.jst_reading;
+                let count = reading.integrated.len();
+                let mut spans: Vec<iced::widget::text::Span<'_, ToolsMsg>> = if count > 0 {
+                    vec![
+                        span(format!(
+                            "{} read in place of the KJV; ",
+                            if count == 1 {
+                                "1 JST passage".to_string()
+                            } else {
+                                format!("{count} JST passages")
+                            }
+                        )),
+                        span("JST wording").underline(true),
+                        span(" is underlined. Turn off the JST to highlight or note those verses."),
+                    ]
+                } else {
+                    vec![span("The JST appendix has a note for this chapter.")]
+                };
+                if reading.omits_wording() {
+                    spans.push(span(" "));
+                    spans.push(
+                        span(if self.tools.jst_omitted {
+                            "Hide omitted KJV words"
+                        } else {
+                            "Show omitted KJV words"
+                        })
+                        .underline(true)
+                        .link(ToolsMsg::ToggleJstOmitted),
+                    );
+                }
+                rich_text(spans)
+                    .size(12)
+                    .color(Color { a: 0.55, ..p.ink })
+                    .on_link_click(msg)
+                    .into()
+            }
+            Some(Load::Failed(e)) => row![
+                text(format!(
+                    "Couldn't load Joseph Smith Translation excerpts. {e}"
+                ))
+                .size(12)
+                .color(p.accent),
+                link("Retry", ToolsMsg::RetryJst),
+            ]
+            .spacing(8)
+            .wrap()
+            .into(),
+        };
+        Some(container(line).padding([0, 12]).into())
+    }
+    /// A verse read with the JST (`data-jst` rows): the KJV number, the JST's wording in place of the KJV's, other
+    /// Bibles' plain wording beneath, and a note when the reader's marks are on the hidden KJV wording.
+    pub(crate) fn jst_verse_row<'a>(
+        &'a self,
+        index: usize,
+        number: u32,
+        row: &'a crate::jst::Row,
+        font: iced::Font,
+        size: f32,
+        line: f32,
+    ) -> Element<'a, Message> {
+        let p = self.p();
+        let prefix = self
+            .verse_prefix
+            .get(index)
+            .map(String::as_str)
+            .unwrap_or("");
+        let words = crate::jst_text::view(
+            row,
+            self.tools.jst_omitted,
+            prefix,
+            font,
+            size,
+            line,
+            (p.ink, p.muted),
+        );
+        let badge = container(
+            text(number.to_string())
+                .size(crate::view::BADGE_SIZE)
+                .font(sans(font::Weight::Semibold))
+                .line_height(iced::widget::text::LineHeight::Absolute(12.0.into()))
+                .color(p.accent)
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .padding(Padding::ZERO.top(crate::view::badge_top(size, line)));
+        let mut first_line = row![stack![words, badge]].align_y(iced::Alignment::Start);
+        if let Some(marker) = self.path_marker(number) {
+            first_line = first_line.push(
+                container(marker).padding(
+                    Padding::ZERO
+                        .left(8)
+                        .top(((line - 12.0) / 2.0 - 8.0).max(0.0)),
+                ),
+            );
+        }
+        let mut body = column![first_line].spacing(4);
+        for (i, (id, state)) in self.tools.compare.iter().enumerate() {
+            let Load::Ready(verses) = state else { continue };
+            let Some(v) = verses.iter().find(|v| v.number == number) else {
+                continue;
+            };
+            let kjv = self
+                .verses
+                .get(index)
+                .map(|v| v.text.as_str())
+                .unwrap_or("");
+            if reader_tools::normalize_compare(&v.text) == reader_tools::normalize_compare(kjv) {
+                continue;
+            }
+            body = body.push(
+                rich_text::<(), _, _, _>([
+                    span(format!("{}  ", self.compare_label(id).to_uppercase()))
+                        .size(10)
+                        .color(self.compare_color(i)),
+                    span(v.text.clone()).size(14).font(font),
+                ])
+                .line_height(iced::widget::text::LineHeight::Absolute(24.0.into())),
+            );
+        }
+        if self
+            .annotations
+            .iter()
+            .any(|a| a.verse == number && a.is_marked())
+        {
+            body = body.push(
+                text("Your marks on this verse are on its KJV wording. Turn off the JST to see them.")
+                    .size(12)
+                    .font(iced::Font {
+                        style: font::Style::Italic,
+                        ..sans(font::Weight::Normal)
+                    })
+                    .color(p.muted),
+            );
+        }
+        container(body)
+            .id(format!("verse-{number}"))
+            .padding([8, 12])
+            .width(Fill)
+            .into()
     }
     /// `JstExcerptCard`.
     fn jst_card<'a>(&self, excerpt: &'a reader_tools::JstExcerpt) -> Element<'a, Message> {
@@ -1063,7 +1400,7 @@ impl App {
                     text("Joseph Smith Translation")
                         .size(13)
                         .font(sans(font::Weight::Medium)),
-                    text("Show the JST passages that revise this chapter's verses beside them.")
+                    text("Show selected JST passages in place of the KJV verses they revise, with the JST's own wording underlined.")
                         .size(11)
                         .color(p.faint),
                 ]

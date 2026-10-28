@@ -1,7 +1,7 @@
 // Come, Follow Me lessons as the website shows them (src/lib/comeFollowMe.ts, src/features/comeFollowMe/lessons.ts
 // and lessonCovers.ts): the 2026 schedule, the published study guides, their covers, and which lesson is this week.
 // The schedule is read from the website's own source file, and the guides from its catalog, at build time.
-use crate::store::{Book, Location};
+use crate::store::{Book, Location, Verse};
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -535,7 +535,7 @@ pub fn sections(content: &str, books: &[Book]) -> Vec<Section> {
 /// The scripture a heading names, when it starts with one ("Lamentations 3:22–24 — …", "Jeremiah 32: …").
 pub fn passage(title: &str, books: &[Book]) -> Option<(Location, Option<(u32, u32)>)> {
     let pattern = regex::Regex::new(
-        r"^((?:[1-4] )?[A-Z][A-Za-z ]*?) (\d+)(?::(\d+)(?:\s*[–-]\s*(\d+))?)?(?:\s|:|$)",
+        r"^((?:[1-4] )?[A-Z][A-Za-z ]*?) (\d+)(?::(\d+)[ab]?(?:\s*[–-]\s*(\d+)[ab]?)?)?(?:\s|:|$)",
     )
     .ok()?;
     let c = pattern.captures(title)?;
@@ -557,6 +557,220 @@ pub fn passage(title: &str, books: &[Book]) -> Option<(Location, Option<(u32, u3
         },
         verses,
     ))
+}
+
+/// One piece of a chapter's commentary in the scripture-first lesson (`GuideContextBlock`): a section's prose,
+/// discussing a passage when its heading names one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContextBlock {
+    /// The section it comes from (index into `sections`).
+    pub section: usize,
+    /// A chapter section's own prose after its heading: "Chapter context".
+    pub after_heading: bool,
+    /// The verses it discusses, first to last, and the heading's reference ("Jeremiah 31:1–3").
+    pub passage: Option<(u32, u32, String)>,
+}
+/// A chapter of the week, read in full with its commentary beside the verses it discusses (`StudyCompanion`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompanionChapter {
+    pub location: Location,
+    pub label: String,
+    /// The guide's `##` section for this chapter, when it has one.
+    pub heading: Option<usize>,
+    pub blocks: Vec<ContextBlock>,
+    /// Sections the guide places after this chapter's and before the next chapter's: heading and blocks.
+    pub following: Vec<(usize, Vec<ContextBlock>)>,
+}
+/// The lesson page's parts (`readGuide`'s introduction, reader sections and closing).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Companion {
+    /// Sections shown before the scripture.
+    pub introduction: Vec<usize>,
+    pub chapters: Vec<CompanionChapter>,
+    /// Sections shown after the scripture.
+    pub closing: Vec<usize>,
+}
+/// A run of verses and the commentary that follows them (`readingGroups`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReadingGroup {
+    pub verses: std::ops::Range<usize>,
+    pub context: Option<ContextBlock>,
+}
+
+/// Pairs the guide with the week's chapters, as the website's lesson page does: a `##` section naming one of the
+/// chapters is that chapter's commentary; sections before the first such section are the introduction, sections
+/// after the last are the closing, and sections between follow the chapter before them.
+pub fn companion(sections: &[Section], chapters: &[Location], books: &[Book]) -> Companion {
+    let label_of = |l: &Location| {
+        books
+            .iter()
+            .find(|b| b.volume == l.volume && b.id == l.book)
+            .map(|b| format!("{} {}", b.label, l.chapter))
+            .unwrap_or_default()
+    };
+    // Top-level groups: the introduction (level 1) and each `##` section with its `###` sections.
+    let mut groups: Vec<Vec<usize>> = vec![];
+    for (i, section) in sections.iter().enumerate() {
+        if section.level <= 2 || groups.is_empty() {
+            groups.push(vec![i]);
+        } else if let Some(last) = groups.last_mut() {
+            last.push(i);
+        }
+    }
+    let paired = |group: &[usize]| -> Option<Location> {
+        let head = &sections[group[0]];
+        if head.level != 2 {
+            return None;
+        }
+        match &head.passage {
+            Some((l, None)) if chapters.contains(l) => Some(l.clone()),
+            _ => None,
+        }
+    };
+    let blocks_of = |group: &[usize]| -> Vec<ContextBlock> {
+        let mut out = vec![];
+        for (n, &i) in group.iter().enumerate() {
+            let section = &sections[i];
+            if n == 0 {
+                // The chapter's own prose after its heading, when there is any.
+                let rest = section.body.lines().skip(1).any(|l| !l.trim().is_empty());
+                if section.level == 2 && rest {
+                    out.push(ContextBlock {
+                        section: i,
+                        after_heading: true,
+                        passage: None,
+                    });
+                }
+                continue;
+            }
+            let passage = section.passage.as_ref().and_then(|(_, verses)| {
+                let (a, b) = (*verses)?;
+                let reference = section.title.split(" — ").next().unwrap_or(&section.title);
+                Some((a, b, reference.trim().to_string()))
+            });
+            out.push(ContextBlock {
+                section: i,
+                after_heading: false,
+                passage,
+            });
+        }
+        out
+    };
+    let first = groups.iter().position(|g| paired(g).is_some());
+    let last = groups.iter().rposition(|g| paired(g).is_some());
+    let (Some(first), Some(last)) = (first, last) else {
+        // Nothing to pair with: the guide reads as one document, before the scripture.
+        return Companion {
+            introduction: (0..sections.len()).collect(),
+            chapters: chapters
+                .iter()
+                .map(|l| CompanionChapter {
+                    location: l.clone(),
+                    label: label_of(l),
+                    heading: None,
+                    blocks: vec![],
+                    following: vec![],
+                })
+                .collect(),
+            closing: vec![],
+        };
+    };
+    let flatten = |range: std::ops::Range<usize>| -> Vec<usize> {
+        groups[range].iter().flatten().copied().collect()
+    };
+    let out_chapters = chapters
+        .iter()
+        .map(|l| {
+            let index = (first..=last).find(|&g| paired(&groups[g]).as_ref() == Some(l));
+            let mut following = vec![];
+            if let Some(index) = index {
+                for group in &groups[index + 1..=last] {
+                    if paired(group).is_some() {
+                        break;
+                    }
+                    following.push((group[0], blocks_of(group)));
+                }
+            }
+            CompanionChapter {
+                location: l.clone(),
+                label: label_of(l),
+                heading: index.map(|g| groups[g][0]),
+                blocks: index.map(|g| blocks_of(&groups[g])).unwrap_or_default(),
+                following,
+            }
+        })
+        .collect();
+    Companion {
+        introduction: flatten(0..first),
+        chapters: out_chapters,
+        closing: flatten(last + 1..groups.len()),
+    }
+}
+/// `readingGroups`: complete scripture interleaved with the commentary, each verse once, even when two comments
+/// overlap; commentary without a passage stays in source order.
+pub fn reading_groups(verses: &[Verse], blocks: &[ContextBlock]) -> Vec<ReadingGroup> {
+    let mut groups = vec![];
+    let mut cursor = 0;
+    let take_through = |cursor: &mut usize, last: u32| {
+        let start = *cursor;
+        while *cursor < verses.len() && verses[*cursor].number <= last {
+            *cursor += 1;
+        }
+        start..*cursor
+    };
+    for block in blocks {
+        let Some((first, last, _)) = &block.passage else {
+            groups.push(ReadingGroup {
+                verses: cursor..cursor,
+                context: Some(block.clone()),
+            });
+            continue;
+        };
+        let gap = take_through(&mut cursor, first.saturating_sub(1));
+        if !gap.is_empty() {
+            groups.push(ReadingGroup {
+                verses: gap,
+                context: None,
+            });
+        }
+        let own = take_through(&mut cursor, *last);
+        groups.push(ReadingGroup {
+            verses: own,
+            context: Some(block.clone()),
+        });
+    }
+    if cursor < verses.len() {
+        groups.push(ReadingGroup {
+            verses: cursor..verses.len(),
+            context: None,
+        });
+    }
+    groups
+}
+/// `verseRangeLabel`.
+pub fn verse_range_label(first: u32, last: u32) -> String {
+    if first == last {
+        format!("Verse {first}")
+    } else {
+        format!("Verses {first}–{last}")
+    }
+}
+/// The disclosure's label (`contextLabel`): "Chapter context", "Context for verse 4", "Context for verses 1–3".
+pub fn context_label(block: &ContextBlock) -> String {
+    match &block.passage {
+        None => "Chapter context".into(),
+        Some((first, last, reference)) => {
+            let verses = reference
+                .split_once(':')
+                .map(|(_, v)| v)
+                .unwrap_or(reference);
+            let single = first == last && !verses.contains(['–', '-']);
+            format!(
+                "Context for {} {verses}",
+                if single { "verse" } else { "verses" }
+            )
+        }
+    }
 }
 
 #[cfg(test)]
@@ -689,5 +903,80 @@ mod tests {
                 .is_some_and(|(l, _)| l.book == "lamentations")
         }));
         assert!(passage("Historical and Literary Context", &books).is_none());
+    }
+
+    #[test]
+    fn the_lesson_reads_scripture_first_like_the_website() {
+        let books = books();
+        let weeks = weeks(&books);
+        let lesson = lesson_for_week("2026-10-26", guides(), &weeks).unwrap();
+        let content = guide_content(&lesson.guide.as_ref().unwrap().slug).unwrap();
+        let sections = sections(content, &books);
+        let chapters: Vec<Location> = lesson
+            .week
+            .as_ref()
+            .unwrap()
+            .reading()
+            .iter()
+            .flat_map(|r| {
+                (r.from..=r.to).map(move |c| Location {
+                    chapter: c,
+                    ..r.first()
+                })
+            })
+            .collect();
+        let c = companion(&sections, &chapters, &books);
+        // The website's nine chapter sections, in order.
+        let labels: Vec<&str> = c.chapters.iter().map(|ch| ch.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Jeremiah 31",
+                "Jeremiah 32",
+                "Jeremiah 33",
+                "Jeremiah 36",
+                "Jeremiah 37",
+                "Jeremiah 38",
+                "Jeremiah 39",
+                "Lamentations 1",
+                "Lamentations 3"
+            ]
+        );
+        assert!(c.chapters.iter().all(|ch| ch.heading.is_some()));
+        // The introduction and the historical context come first; the weekly plan and sources after.
+        assert!(
+            c.introduction
+                .iter()
+                .any(|&i| sections[i].title == "Historical and Literary Context")
+        );
+        assert!(c.closing.iter().any(|&i| {
+            sections[i]
+                .title
+                .starts_with("Weekly Study and Discussion Plan")
+        }));
+        let jer31 = &c.chapters[0];
+        assert!(jer31.blocks[0].after_heading);
+        assert_eq!(context_label(&jer31.blocks[0]), "Chapter context");
+        assert_eq!(context_label(&jer31.blocks[1]), "Context for verses 1–3");
+        // Every verse is read exactly once, in order.
+        let verses: Vec<Verse> = (1..=40)
+            .map(|n| Verse {
+                number: n,
+                text: String::new(),
+            })
+            .collect();
+        let groups = reading_groups(&verses, &jer31.blocks);
+        let read: Vec<usize> = groups.iter().flat_map(|g| g.verses.clone()).collect();
+        assert_eq!(read, (0..40).collect::<Vec<_>>());
+        assert_eq!(groups[0].verses, 0..0);
+        assert_eq!(groups[1].verses, 0..3);
+        assert_eq!(verse_range_label(1, 3), "Verses 1–3");
+        // Half verses ("13b") still name their passage.
+        assert_eq!(
+            passage("Isaiah 57:13b–14 — The path made level", &books)
+                .unwrap()
+                .1,
+            Some((13, 14))
+        );
     }
 }

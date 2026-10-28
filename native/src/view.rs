@@ -22,7 +22,7 @@ const PANEL_GAP: f32 = 12.0;
 const LIBRARY_HEIGHT: f32 = 416.0;
 const BOOK_ROW: f32 = 32.0;
 /// `.verse-badge`: 0.72rem DM Sans 600, in a 1.1rem slot with a 0.4rem margin, raised 0.35em.
-const BADGE_SIZE: f32 = 11.52;
+pub(crate) const BADGE_SIZE: f32 = 11.52;
 const BADGE_SLOT: f32 = 17.6;
 const BADGE_MARGIN: f32 = 6.4;
 const BADGE_RAISE: f32 = 0.35 * BADGE_SIZE;
@@ -38,6 +38,23 @@ fn badge_font() -> Font {
 /// return to the left edge, as with the website's inline `.verse-badge`.
 pub fn verse_indent(number: &str, font: Font, size: f32) -> String {
     let target = design::measure(number, BADGE_SIZE, badge_font()).max(BADGE_SLOT) + BADGE_MARGIN;
+    indent_to(target, font, size)
+}
+/// Spaces as wide as a verse number at `number_size` and its right margin, in the text's own font.
+pub fn verse_indent_for(
+    number: &str,
+    number_size: f32,
+    font: Font,
+    size: f32,
+    margin: f32,
+) -> String {
+    indent_to(
+        design::measure(number, number_size, badge_font()) + margin,
+        font,
+        size,
+    )
+}
+fn indent_to(target: f32, font: Font, size: f32) -> String {
     let base = design::measure("x", size, font);
     let width = |c: char| design::measure(&format!("{c}x"), size, font) - base;
     let mut indent = String::new();
@@ -71,7 +88,7 @@ fn line_height(_size: f32) -> f32 {
     28.0
 }
 /// Places the badge so its baseline sits 0.35em above the first line's baseline.
-fn badge_top(size: f32, line: f32) -> f32 {
+pub(crate) fn badge_top(size: f32, line: f32) -> f32 {
     let text_baseline = (line - 1.15 * size) / 2.0 + 0.9 * size;
     let badge_baseline = (12.0 - 1.302 * BADGE_SIZE) / 2.0 + 0.992 * BADGE_SIZE;
     (text_baseline - BADGE_RAISE - badge_baseline).max(0.0)
@@ -333,6 +350,15 @@ impl App {
                 .padding(Padding::ZERO.bottom(12)),
             );
         }
+        if let Some(notices) = self.comparison_notices() {
+            passage = passage.push(notices);
+        }
+        if let Some(status) = self.jst_status() {
+            passage = passage.push(status);
+        }
+        for card in self.jst_leading_cards() {
+            passage = passage.push(card);
+        }
         for (index, verse) in self.verses.iter().enumerate() {
             passage = passage.push(self.verse_row(index, verse.number, font, size, line));
         }
@@ -398,6 +424,9 @@ impl App {
         line: f32,
     ) -> Element<'_, Message> {
         let p = self.p();
+        if let Some(row) = self.jst_row(number) {
+            return self.jst_verse_row(index, number, row, font, size, line);
+        }
         let selected = self.selected.contains(&number);
         let annotation = self.annotations.iter().find(|a| a.verse == number);
         let dark = self.preferences.dark;
@@ -425,40 +454,68 @@ impl App {
         };
         let bookmarked = annotation.is_some_and(|a| a.bookmarked);
         let has_note = annotation.is_some_and(|a| !a.note.trim().is_empty());
-        let words = selectable::paragraph(mark_layer::marks(
-            text_editor(&self.verse_content[index])
-                .font(font)
-                .size(size)
-                .line_height(LineHeight::Absolute(line.into()))
-                .padding(0)
-                .on_action(move |action| Message::SelectText(index, action))
-                // Scripture is read-only: copying strips the number indent, and nothing edits the text.
-                .key_binding(move |press| match Binding::from_key_press(press) {
-                    Some(Binding::Copy | Binding::Cut) => {
-                        Some(Binding::Custom(Message::CopyWords(index)))
-                    }
-                    Some(
-                        Binding::Paste
-                        | Binding::Enter
-                        | Binding::Backspace
-                        | Binding::Delete
-                        | Binding::Insert(_),
-                    ) => None,
-                    other => other,
+        let verse_text = &self.verses[index].text;
+        // Read against other Bibles, the verse shows the Comparison view instead of its plain text.
+        let comparisons = self.verse_comparisons(number, verse_text);
+        let (size, line) = if comparisons.is_empty() {
+            (size, line)
+        } else {
+            (14.0, 24.0)
+        };
+        let words: Element<'_, Message> = if !comparisons.is_empty() {
+            let marks = annotation
+                .filter(|a| a.is_marked())
+                .map(|a| {
+                    marks::segments(&a.marks, verse_text)
+                        .into_iter()
+                        .map(|s| {
+                            (
+                                s.start..s.end,
+                                s.highlight.map(|c| c.highlight(dark)),
+                                s.underline.map(|c| c.underline(dark)),
+                            )
+                        })
+                        .collect()
                 })
-                .style(move |_, _| text_editor::Style {
-                    background: Color::TRANSPARENT.into(),
-                    border: Border::default(),
-                    placeholder: p.muted,
-                    value: p.ink,
-                    selection: Color { a: 0.55, ..p.gold },
-                })
-                .into(),
-            runs,
-            font,
-            size,
-            line,
-        ));
+                .unwrap_or_default();
+            let prefix = verse_indent(&number.to_string(), font, size);
+            self.comparison_text(&prefix, verse_text, comparisons, marks, font)
+        } else {
+            selectable::paragraph(mark_layer::marks(
+                text_editor(&self.verse_content[index])
+                    .font(font)
+                    .size(size)
+                    .line_height(LineHeight::Absolute(line.into()))
+                    .padding(0)
+                    .on_action(move |action| Message::SelectText(index, action))
+                    // Scripture is read-only: copying strips the number indent, and nothing edits the text.
+                    .key_binding(move |press| match Binding::from_key_press(press) {
+                        Some(Binding::Copy | Binding::Cut) => {
+                            Some(Binding::Custom(Message::CopyWords(index)))
+                        }
+                        Some(
+                            Binding::Paste
+                            | Binding::Enter
+                            | Binding::Backspace
+                            | Binding::Delete
+                            | Binding::Insert(_),
+                        ) => None,
+                        other => other,
+                    })
+                    .style(move |_, _| text_editor::Style {
+                        background: Color::TRANSPARENT.into(),
+                        border: Border::default(),
+                        placeholder: p.muted,
+                        value: p.ink,
+                        selection: Color { a: 0.55, ..p.gold },
+                    })
+                    .into(),
+                runs,
+                font,
+                size,
+                line,
+            ))
+        };
         let label = number.to_string();
         let digits_width = design::measure(&label, BADGE_SIZE, badge_font());
         let mut badge = column![
@@ -512,11 +569,7 @@ impl App {
         };
         let verse_line =
             row![stack![words, number_button], marker_slot].align_y(iced::Alignment::Start);
-        let body: Element<'_, Message> = match self.verse_extras(number, &self.verses[index].text) {
-            Some(extras) => column![verse_line, extras].spacing(6).into(),
-            None => verse_line.into(),
-        };
-        container(body)
+        container(verse_line)
             .id(format!("verse-{number}"))
             .padding([8, 12])
             .width(Fill)
@@ -1259,6 +1312,15 @@ impl App {
                         ],
                         self.preferences.text_width,
                         Message::SetTextWidth
+                    )
+                ]
+                .spacing(8),
+                column![
+                    self.setting_label("Comparison view"),
+                    self.segmented(
+                        &[(false, "Inline"), (true, "Side by side")],
+                        self.preferences.side_by_side,
+                        Message::SetSideBySide
                     )
                 ]
                 .spacing(8),

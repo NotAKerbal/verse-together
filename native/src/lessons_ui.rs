@@ -9,16 +9,15 @@ use crate::marks::{self, MarksPatch};
 use crate::store::{self, Annotation, Location, Note, NoteSource, Verse};
 use crate::{App, Message, Popover, Screen};
 use iced::widget::{
-    button, column, container, image, markdown, operation, row, scrollable, space, stack, text,
+    button, column, container, image, operation, row, scrollable, space, stack, text,
 };
 use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, Task, font};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, OnceLock};
 
-const ARTICLE: f32 = 736.0;
 const DOCK: f32 = 400.0;
 
-fn cover_image(
+pub(crate) fn cover_image(
     cover: &'static lessons::Cover,
     width: f32,
     height: f32,
@@ -43,9 +42,17 @@ fn cover_image(
 pub struct OpenGuide {
     pub lesson: Lesson,
     pub sections: Vec<Section>,
-    pub markdown: Vec<Vec<markdown::Item>>,
     /// The sections' prose as selectable, markable blocks.
     pub prose: crate::guide_marks::GuideProse,
+    /// The guide paired with the week's chapters (`StudyCompanion`).
+    pub companion: lessons::Companion,
+    /// Each companion chapter's verses, this reader's marks on them, and how they interleave with the commentary.
+    pub scripture: Vec<LessonChapter>,
+}
+pub struct LessonChapter {
+    pub verses: Vec<Verse>,
+    pub annotations: Vec<Annotation>,
+    pub groups: Vec<lessons::ReadingGroup>,
 }
 pub struct Dock {
     pub location: Location,
@@ -65,6 +72,12 @@ pub struct LessonsState {
     pub logged: bool,
     /// Marks and notes on the open guide's prose, and the current selection in it.
     pub guide: crate::guide_marks::GuideMarksState,
+    /// Open context disclosures, by their section.
+    pub open_context: std::collections::HashSet<usize>,
+    /// Context disclosures showing their full commentary.
+    pub full: std::collections::HashSet<usize>,
+    /// Selected verses: (companion chapter, verse).
+    pub selected: BTreeSet<(usize, u32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -73,13 +86,21 @@ pub enum LessonMsg {
     Back,
     Jump(usize),
     Link(String),
-    Dock(Location, Option<(u32, u32)>),
     CloseDock,
     DockScroll(Option<u32>),
     DockVerse(u32),
     DockMark(usize),
     LogReading,
     WriteNote,
+    /// Open or close a context disclosure.
+    Context(usize),
+    /// "Read full commentary" / "Show less commentary".
+    Full(usize),
+    SelectVerse(usize, u32),
+    Scroll(usize),
+    MarkVerses(usize),
+    ClearVerses,
+    OpenChapter(usize),
     OpenNote(String),
     Credit(String),
 }
@@ -111,19 +132,37 @@ impl App {
             .and_then(|g| lessons::guide_content(&g.slug))
             .map(|c| lessons::sections(c, &self.books))
             .unwrap_or_default();
-        let markdown = sections
-            .iter()
-            .map(|s| markdown::parse(&s.body).collect())
-            .collect();
         let prose = crate::guide_marks::GuideProse::new(&sections);
+        // Only the week's own chapters are read in full on the page, as on the website.
+        let chapters: Vec<Location> = if lesson.guide.is_some() {
+            lesson
+                .week
+                .iter()
+                .flat_map(|w| w.reading())
+                .flat_map(|r| {
+                    (r.from..=r.to).map(move |chapter| Location {
+                        chapter,
+                        ..r.first()
+                    })
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+        let companion = lessons::companion(&sections, &chapters, &self.books);
         self.lessons.open = Some(OpenGuide {
             lesson,
             sections,
-            markdown,
             prose,
+            companion,
+            scripture: vec![],
         });
+        self.reload_lesson_scripture();
         self.lessons.dock = None;
         self.lessons.guide = Default::default();
+        self.lessons.open_context.clear();
+        self.lessons.full.clear();
+        self.lessons.selected.clear();
         self.load_lesson_log();
         self.load_guide_marks();
         // Signed in, the guide's marks are refreshed from the account.
@@ -142,6 +181,44 @@ impl App {
             None => open.lesson.title.clone(),
         };
         Some(NoteSource::lesson(&open.lesson.start, &label))
+    }
+    /// Reads the lesson's chapters and this reader's marks on them from this computer's study.
+    pub(crate) fn reload_lesson_scripture(&mut self) {
+        let Some(open) = &self.lessons.open else {
+            return;
+        };
+        let Some(store) = &self.store else { return };
+        let mut scripture = vec![];
+        let mut problem = None;
+        for chapter in &open.companion.chapters {
+            match (
+                store.chapter(&chapter.location),
+                store.annotations(&chapter.location),
+            ) {
+                (Ok(verses), Ok(annotations)) => {
+                    let groups = lessons::reading_groups(&verses, &chapter.blocks);
+                    scripture.push(LessonChapter {
+                        verses,
+                        annotations,
+                        groups,
+                    });
+                }
+                (Err(e), _) | (_, Err(e)) => {
+                    problem = Some(e);
+                    scripture.push(LessonChapter {
+                        verses: vec![],
+                        annotations: vec![],
+                        groups: vec![],
+                    });
+                }
+            }
+        }
+        if let Some(open) = &mut self.lessons.open {
+            open.scripture = scripture;
+        }
+        if let Some(e) = problem {
+            self.report::<()>(Err(e));
+        }
     }
     pub(crate) fn load_lesson_log(&mut self) {
         let Some(source) = self.lesson_source() else {
@@ -196,6 +273,23 @@ impl App {
             }
             LessonMsg::Jump(i) => {
                 self.popover = None;
+                if let Some(open) = &self.lessons.open
+                    && let Some(block) = open
+                        .companion
+                        .chapters
+                        .iter()
+                        .flat_map(|c| {
+                            c.blocks
+                                .iter()
+                                .chain(c.following.iter().flat_map(|f| f.1.iter()))
+                        })
+                        .find(|b| b.section == i && !b.after_heading)
+                {
+                    self.lessons.open_context.insert(block.section);
+                    self.lessons.full.insert(block.section);
+                    // Scrolled once the opened disclosure is laid out.
+                    return Task::done(Message::Lesson(LessonMsg::Scroll(i)));
+                }
                 let mut task = crate::presented(crate::jump::to_verse_in(
                     "guide",
                     &format!("guide-sec-{i}"),
@@ -213,11 +307,27 @@ impl App {
             LessonMsg::Link(url) => {
                 if let Some((location, verse)) = self.scripture_link(&url) {
                     let verse = verse.or_else(|| verse_in_url(&url));
+                    // The week's own chapters are on this page: go to the passage beside the guide.
+                    if let Some(index) = self.lessons.open.as_ref().and_then(|o| {
+                        o.companion
+                            .chapters
+                            .iter()
+                            .position(|c| c.location == location)
+                    }) {
+                        let id = match verse {
+                            Some(v) => format!("lv-{index}-{v}"),
+                            None => format!("lc-{index}"),
+                        };
+                        return crate::presented(crate::jump::to_verse_in(
+                            "guide",
+                            &id,
+                            CONTENT_TOP + 20.0,
+                        ));
+                    }
                     return self.load_dock(location, verse.map(|v| (v, v)));
                 }
                 return self.update(Message::OpenLink(url));
             }
-            LessonMsg::Dock(location, verses) => return self.load_dock(location, verses),
             LessonMsg::CloseDock => self.lessons.dock = None,
             LessonMsg::DockScroll(Some(first)) => {
                 return crate::presented(crate::jump::to_verse_in(
@@ -331,6 +441,41 @@ impl App {
                 return self.update_journal(crate::journal_ui::JournalMsg::Open(id));
             }
             LessonMsg::Credit(url) => return self.update(Message::OpenLink(url)),
+            LessonMsg::Scroll(i) => {
+                return crate::presented(crate::jump::to_verse_in(
+                    "guide",
+                    &format!("guide-sec-{i}"),
+                    CONTENT_TOP,
+                ));
+            }
+            LessonMsg::Context(i) => {
+                if !self.lessons.open_context.remove(&i) {
+                    self.lessons.open_context.insert(i);
+                }
+            }
+            LessonMsg::Full(i) => {
+                if !self.lessons.full.remove(&i) {
+                    self.lessons.full.insert(i);
+                }
+            }
+            LessonMsg::SelectVerse(chapter, verse) => {
+                if !self.lessons.selected.remove(&(chapter, verse)) {
+                    self.lessons.selected.insert((chapter, verse));
+                }
+            }
+            LessonMsg::ClearVerses => self.lessons.selected.clear(),
+            LessonMsg::OpenChapter(index) => {
+                if let Some(chapter) = self
+                    .lessons
+                    .open
+                    .as_ref()
+                    .and_then(|o| o.companion.chapters.get(index))
+                {
+                    let location = chapter.location.clone();
+                    return self.navigate(location, None);
+                }
+            }
+            LessonMsg::MarkVerses(preset) => return self.mark_lesson_verses(preset),
         }
         Task::none()
     }
@@ -605,7 +750,7 @@ impl App {
         .into()
     }
 
-    fn credit_line<'a>(
+    pub(crate) fn credit_line<'a>(
         &self,
         credit: &'static lessons::Credit,
         color: Color,
@@ -719,157 +864,10 @@ impl App {
     }
 
     fn guide_page<'a>(&'a self, open: &'a OpenGuide) -> Element<'a, Message> {
-        let p = self.p();
-        let lesson = &open.lesson;
-        let cover = lessons::cover(&lesson.start);
-        let dock_w = if self.lessons.dock.is_some() {
-            DOCK + 24.0
-        } else {
-            0.0
-        };
-        let page_w = self.window_width - dock_w;
-        let hero_h = 570.0;
-        let paper = p.paper;
-        let hero = stack![
-            cover_image(cover, page_w.max(1.0), hero_h, 0.0.into()).opacity(0.92_f32),
-            container(space())
-                .width(Fill)
-                .height(Fill)
-                .style(move |_| container::Style {
-                    background: Some(
-                        iced::gradient::Linear::new(iced::Degrees(180.0))
-                            .add_stop(0.0, Color { a: 0.0, ..paper })
-                            .add_stop(0.55, Color { a: 0.0, ..paper })
-                            .add_stop(1.0, paper)
-                            .into(),
-                    ),
-                    ..Default::default()
-                }),
-        ]
-        .width(Fill)
-        .height(hero_h);
-        let rubric = row![
-            text(lesson.scripture.to_uppercase())
-                .size(12.5)
-                .font(sans(font::Weight::Bold))
-                .color(p.accent),
-            text("·").size(12).color(p.faint),
-            text(lesson.date_label.to_uppercase())
-                .size(12.5)
-                .font(sans(font::Weight::Semibold))
-                .color(p.faint),
-        ]
-        .spacing(10)
-        .wrap();
-        let mut article = column![
-            button(
-                row![text("←").size(13), text("All lessons").size(13)]
-                    .spacing(4)
-                    .align_y(Center)
-            )
-            .padding(0)
-            .on_press(Message::Lesson(LessonMsg::Back))
-            .style(design::link(p.muted)),
-            space().height(12),
-            rubric,
-            space().height(10),
-            text(&lesson.title).font(serif()).size(48).line_height(1.12),
-        ]
-        .spacing(0);
-        if let Some(guide) = &lesson.guide {
-            article = article.push(space().height(16)).push(
-                text(&guide.summary)
-                    .font(serif())
-                    .size(19)
-                    .line_height(1.5)
-                    .color(p.muted),
-            );
-        }
-        if let Some(credit) = &cover.credit {
-            article = article
-                .push(space().height(14))
-                .push(self.credit_line(credit, p.faint));
-        }
-        if let Some(week) = &lesson.week {
-            article = article
-                .push(space().height(24))
-                .push(
-                    text("READ THE CHAPTERS")
-                        .size(11)
-                        .font(sans(font::Weight::Semibold))
-                        .color(p.faint),
-                )
-                .push(space().height(10))
-                .push(self.chapter_chips(week, p));
-        }
-        if open.sections.is_empty() {
-            article = article.push(space().height(32)).push(
-                text("There is no study guide for this week yet. You can still read the assigned scripture.")
-                    .font(serif())
-                    .size(17)
-                    .color(p.muted),
-            );
-        }
-        let mut style = markdown::Style::from(self.theme());
-        style.font = serif();
-        style.link_color = p.accent;
-        for (i, (section, items)) in open.sections.iter().zip(&open.markdown).enumerate() {
-            let mut settings = markdown::Settings::with_text_size(18, style);
-            settings.h2_size = 30.into();
-            settings.h3_size = 22.into();
-            let mut block = column![].spacing(10);
-            if let Some((location, verses)) = &section.passage {
-                block = block.push(
-                    button(
-                        row![
-                            icon(&crate::icons::BOOK_OPEN, p.accent, 12.),
-                            text(format!("Read {}", passage_label(section)))
-                                .size(12.5)
-                                .font(sans(font::Weight::Semibold))
-                        ]
-                        .spacing(8)
-                        .align_y(Center),
-                    )
-                    .padding([6, 12])
-                    .on_press(Message::Lesson(LessonMsg::Dock(location.clone(), *verses)))
-                    .style(design::outlined(p, 999.0)),
-                );
-            }
-            let _ = (items, settings);
-            let mut prose = column![].spacing(14);
-            for (j, b) in open.prose.blocks[i].iter().enumerate() {
-                prose = prose.push(self.guide_block(i, j, b, 18.0));
-            }
-            block = block.push(prose);
-            article = article.push(
-                container(block)
-                    .id(format!("guide-sec-{i}"))
-                    .padding(Padding::ZERO.top(if section.level == 3 { 14.0 } else { 28.0 })),
-            );
-        }
-        let body = column![
-            hero,
-            container(article.max_width(ARTICLE).padding(Padding::ZERO.bottom(96)))
-                .padding(Padding::ZERO.top(-0.0).left(24).right(24))
-                .center_x(Fill)
-        ];
-        let guide = self.scroll(body).id("guide").width(Fill).height(Fill);
-        // The same structure with or without the dock, so the guide keeps its scroll position.
-        let dock: Element<'_, Message> = match &self.lessons.dock {
-            Some(dock) => container(self.dock_view(dock))
-                .padding(Padding {
-                    top: CONTENT_TOP,
-                    right: shell_inset(self.window_width).min(32.0),
-                    bottom: 16.0,
-                    left: 12.0,
-                })
-                .into(),
-            None => space().width(0).into(),
-        };
-        row![guide, dock].height(Fill).into()
+        self.lesson_page(open)
     }
 
-    fn dock_view<'a>(&'a self, dock: &'a Dock) -> Element<'a, Message> {
+    pub(crate) fn dock_view<'a>(&'a self, dock: &'a Dock) -> Element<'a, Message> {
         let p = self.p();
         let dark = self.preferences.dark;
         let font = self.reading_font();
@@ -1189,31 +1187,6 @@ impl App {
     }
 }
 
-fn passage_label(section: &Section) -> String {
-    section
-        .title
-        .split(['—', ':'])
-        .next()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            // "Jeremiah 31:1–3 — …" keeps its verses; "Jeremiah 32: …" is the chapter.
-            match section.title.split('—').next() {
-                Some(head)
-                    if head.contains(':')
-                        && head
-                            .trim()
-                            .chars()
-                            .last()
-                            .is_some_and(|c| c.is_ascii_digit()) =>
-                {
-                    head.trim().to_string()
-                }
-                _ => s,
-            }
-        })
-        .unwrap_or_default()
-}
 /// The verse a churchofjesuschrist.org link points at (`id=p13` or `#p13`).
 fn verse_in_url(url: &str) -> Option<u32> {
     let marker = url
@@ -1241,17 +1214,5 @@ mod tests {
             verse_in_url("https://www.churchofjesuschrist.org/study/scriptures/ot/jer/43?lang=eng"),
             None
         );
-        let section = Section {
-            level: 3,
-            title: "Jeremiah 31:1–3 — Everlasting Love".into(),
-            body: String::new(),
-            passage: None,
-        };
-        assert_eq!(passage_label(&section), "Jeremiah 31:1–3");
-        let chapter = Section {
-            title: "Jeremiah 32: A Field Bought in a Falling Land".into(),
-            ..section
-        };
-        assert_eq!(passage_label(&chapter), "Jeremiah 32");
     }
 }

@@ -246,7 +246,8 @@ fn snapshots() {
     let app = &mut f.app;
     let shot = |app: &App, name: &str| {
         let path = out.join(format!("{name}.png"));
-        let _ = std::fs::remove_file(&path);
+        // The snapshot is written beside `path` with the renderer's name, and only when it doesn't exist yet.
+        let _ = std::fs::remove_file(out.join(format!("{name}-tiny-skia.png")));
         let mut ui = simulator(app);
         ui.snapshot(&app.theme())
             .unwrap()
@@ -311,14 +312,11 @@ fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     use crate::marks::{MarkColor, MarkKind};
     let _ = app.update(Message::Lesson(LessonMsg::Open("2026-10-26".into())));
     shot(app, "lesson");
-    let jer = Location {
-        volume: "oldtestament".into(),
-        book: "jeremiah".into(),
-        chapter: 31,
-    };
-    let _ = app.update(Message::Lesson(LessonMsg::Dock(jer, Some((1, 3)))));
-    let _ = app.update(Message::Lesson(LessonMsg::DockMark(1)));
-    shot(app, "lesson-dock");
+    for verse in 1..=3 {
+        let _ = app.update(Message::Lesson(LessonMsg::SelectVerse(0, verse)));
+    }
+    let _ = app.update(Message::Lesson(LessonMsg::MarkVerses(1)));
+    shot(app, "lesson-marks");
     let _ = app.update(Message::TogglePopover(Popover::Contents));
     shot(app, "lesson-contents");
     let _ = app.update(Message::ClosePopover);
@@ -345,6 +343,17 @@ fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     let _ = app.update(Message::Journal(JournalMsg::Title("Seeds of faith".into())));
     let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
     shot(app, "journal-note");
+    for c in "## A mighty change\n\nFaith is **not** a perfect knowledge, but *hope* for things.\n- Read [Alma 32](/browse/bookofmormon/alma/32)\n> Ye must nourish it".chars() {
+        let edit = if c == '\n' {
+            iced::widget::text_editor::Edit::Enter
+        } else {
+            iced::widget::text_editor::Edit::Insert(c)
+        };
+        let _ = app.update(Message::Journal(JournalMsg::Body(
+            iced::widget::text_editor::Action::Edit(edit),
+        )));
+    }
+    shot(app, "journal-markdown");
     let _ = app.update(Message::Journal(JournalMsg::Close));
     let _ = app.update(Message::Journal(JournalMsg::EditGoals));
     let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
@@ -352,6 +361,80 @@ fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     let _ = app.update(Message::Journal(JournalMsg::CancelGoals));
     let _ = app.update(Message::TogglePopover(Popover::AppSettings));
     shot(app, "settings-account");
+    let _ = app.update(Message::ClosePopover);
+    plan_snapshots(app, shot);
+}
+
+/// The plan pages signed in, with a plan as `readingPlans:getPlan` returns it (no server is called here).
+fn plan_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
+    use crate::plans::{BuilderMsg, Page, Plan, PlanStep, PlanSummary, PlansLoad, PlansMsg};
+    app.account.session = Some(crate::cloud::Session::for_test(
+        crate::cloud::AccountUser {
+            id: "reader".into(),
+            name: "Reader".into(),
+            email: "reader@example.com".into(),
+        },
+        "token",
+    ));
+    let _ = app.update(Message::SetScreen(Screen::Plans));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
+    let start = (chrono::Local::now().date_naive() - chrono::Duration::days(2))
+        .format("%Y-%m-%d")
+        .to_string();
+    let summary = PlanSummary {
+        id: "plan-1".into(),
+        title: "Mark".into(),
+        template: "custom".into(),
+        step_count: 16,
+        read_count: 3,
+        start_date: Some(start),
+        chapters_per_day: Some(2),
+        reading_days: Some(vec![true, true, true, true, true, false, false]),
+        selections: None,
+    };
+    let done = PlanSummary {
+        id: "plan-2".into(),
+        title: "Gospels only".into(),
+        step_count: 4,
+        read_count: 4,
+        chapters_per_day: None,
+        reading_days: None,
+        start_date: None,
+        ..summary.clone()
+    };
+    app.plans.list = Some(PlansLoad::Ready(vec![summary.clone(), done]));
+    shot(app, "plans-list");
+    app.plans.open = Some(PlansLoad::Ready(Plan {
+        summary,
+        steps: (1..=16)
+            .map(|c| PlanStep {
+                volume: "newtestament".into(),
+                book: "mark".into(),
+                chapter: c,
+                label: format!("Mark {c}"),
+                index: c as usize - 1,
+                read_at: (c <= 3).then_some(1.0),
+            })
+            .collect(),
+    }));
+    app.plans.page = Page::Detail;
+    shot(app, "plans-detail");
+    let _ = app.update(Message::Plans(PlansMsg::New));
+    for m in [
+        BuilderMsg::ToggleVolume("pearl"),
+        BuilderMsg::Tab("newtestament"),
+        BuilderMsg::TapBook("newtestament".into(), "mark".into()),
+        BuilderMsg::TapBook("newtestament".into(), "mark".into()),
+        BuilderMsg::Stepper(crate::plans::Field::From, 2),
+        BuilderMsg::Stepper(crate::plans::Field::To, 5),
+    ] {
+        let _ = app.update(Message::Plans(PlansMsg::Builder(m)));
+    }
+    shot(app, "plans-builder");
+    let _ = app.update(Message::Plans(PlansMsg::Edit("plan-1".into())));
+    shot(app, "plans-edit");
+    app.account.session = None;
+    app.plans = Default::default();
 }
 
 #[test]
