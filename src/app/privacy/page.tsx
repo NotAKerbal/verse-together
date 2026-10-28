@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   The public privacy policy for the website and the Android and iOS app, linked from Google Play. Keep it true to
   the code: when what the site or app collects, stores or sends changes, update this page and LAST_UPDATED.
 */
-const LAST_UPDATED = { iso: "2026-10-27", label: "October 27, 2026" };
+const LAST_UPDATED = { iso: "2026-10-28", label: "October 28, 2026" };
 const CONTACT_EMAIL = "isaachcochran@gmail.com";
 
 function ContactLink() {
@@ -48,7 +48,10 @@ export default function PrivacyPage() {
               On the website an account is optional. If you sign in with Google, the study you save (notes, journal,
               highlights, reading plans) is kept with your account so it&apos;s there on any device.
             </li>
-            <li>The app has no account. Your study is saved on your device and the app doesn&apos;t send it to us.</li>
+            <li>
+              Your study in the app stays on your device. Starting with Android version 1.0.4, Google sign-in is
+              optional; study is uploaded only when you choose Copy to my account. Earlier app versions have no sign-in.
+            </li>
             <li>
               Some study tools look up a word, topic or chapter for you. They send what you looked up, never your
               notes or journal.
@@ -182,7 +185,7 @@ export default function PrivacyPage() {
         <section className={styles.section} aria-labelledby="app">
           <h2 id="app">The app for Android and iOS</h2>
           <p>
-            The app has no account or sign-in, no ads, and no analytics, crash-reporting or tracking services. It
+            The app has no ads, analytics, crash-reporting or tracking services. It
             asks for no access to your contacts, photos, files, microphone, camera or location, and it doesn&apos;t
             read advertising or device identifiers.
           </p>
@@ -190,9 +193,23 @@ export default function PrivacyPage() {
           <h3>What stays on your device</h3>
           <p>
             Your study (journal entries, highlights and underlines, notes, reading log, weekly goals, quick-mark
-            presets and reader settings) is saved in the app&apos;s private storage on your device. The app doesn&apos;t
-            send it to us or anyone else. The scriptures and Come, Follow Me guides are included in the app, so
+            presets and reader settings) is saved in the app&apos;s private storage on your device. Signing in does
+            not upload it automatically. The scriptures and Come, Follow Me guides are included in the app, so
             reading them sends nothing over the internet.
+          </p>
+          <h3>Optional Google sign-in and copying study</h3>
+          <p>
+            Starting with Android version 1.0.4, you can use the same Google account as on the website. Google opens
+            in a browser tab, and the account information and sessions described above are stored with Convex.
+            Short-lived sign-in records connect that browser request to the app and are removed after they expire.
+            The app keeps its session in the system&apos;s secure storage; Android backups exclude that session.
+            Earlier app versions have no account or sign-in.
+          </p>
+          <p>
+            Only when you choose Copy to my account are journal entries, verse notes and marks, and guide notes and
+            marks sent to your private account. They stay on the device too. This is a copy, not continuous sync:
+            later changes in the app stay on the device, and account study is viewed on the website. Signing out
+            removes the app&apos;s session while keeping local study.
           </p>
           <p>
             <strong>Device backups.</strong> On Android, if backup is turned on for your device, Android may include
@@ -264,10 +281,12 @@ export default function PrivacyPage() {
           <h3>Website</h3>
           <p>
             Your account and the study saved in it are kept until you delete them. You can delete notes and journal
-            entries, highlights and other marks, folders and reading plans in the site at any time. The site
-            doesn&apos;t yet have a button to delete your whole account: to delete it, email <ContactLink /> from the
-            address you sign in with, and we&apos;ll delete your account and the study saved in it. You can also ask us
-            to delete feedback you&apos;ve sent.
+            entries, highlights and other marks, folders and reading plans in the site at any time. To permanently
+            delete your whole account and the study saved in it, sign in at <Link href="/delete-account">Delete your
+            account</Link> and confirm, or use Settings &gt; Account &gt; Delete my account in app versions with sign-in.
+            This also ends your sessions and unlinks Google. Study saved only on your device stays there. If a deletion
+            is interrupted, the same page or app screen lets you finish it. You can also email <ContactLink /> for help
+            or to ask us to delete feedback you&apos;ve sent.
           </p>
           <p>
             Signing out removes the sign-in cookies from your browser, and Settings &gt; Account &gt; Sign out other

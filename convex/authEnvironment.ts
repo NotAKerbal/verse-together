@@ -59,6 +59,28 @@ export function isEmailPasswordEndpoint(path: string | null | undefined): boolea
   return !!path && (EMAIL_PASSWORD_ENDPOINTS as readonly string[]).includes(path);
 }
 
+/**
+ * The native app's deep-link scheme (mobile/app.json `scheme`), trusted as an origin so the app can sign in.
+ * Better Auth matches a non-HTTP trusted origin by prefix, so this admits `versetogether://…` return URLs (and the
+ * `expo-origin` header the native client sends) and nothing else. A browser can never send it as its Origin.
+ * Fixed in code rather than read from AUTH_TRUSTED_ORIGINS, which accepts only http(s) origins.
+ */
+export const NATIVE_APP_ORIGIN = "versetogether://";
+
+/**
+ * Where the Expo plugin's /expo-authorization-proxy may send the browser: Google's authorization endpoint only.
+ * The plugin itself accepts any other https URL, which would make that route an open redirect on this site.
+ */
+export function isAllowedNativeAuthorizationURL(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.origin === "https://accounts.google.com" && url.pathname === "/o/oauth2/v2/auth" && !url.hash && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 type Env = Record<string, string | undefined>;
 
 function clean(value: string | undefined): string | null {

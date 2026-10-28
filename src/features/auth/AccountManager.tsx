@@ -102,6 +102,19 @@ export default function AccountManager() {
       <FormMessage tone="info">Accounts aren&apos;t available on this copy of Verse Together.</FormMessage>
     );
   }
+  if (auth.pendingDeletion && auth.authUser) {
+    return (
+      <div className="space-y-3">
+        <FormMessage tone="error">Deleting this account started but didn&apos;t finish.</FormMessage>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/delete-account" className={SECONDARY_BUTTON_CLASS}>
+            Finish deleting my account
+          </Link>
+          <SignOutButton label="Sign out" />
+        </div>
+      </div>
+    );
+  }
   if (auth.loading) {
     return (
       <div role="status" aria-busy="true" className="panel-card rounded-[1.35rem] p-4 text-sm text-[color:var(--foreground-muted)]">
@@ -248,6 +261,15 @@ function AccountDetails() {
 
           <Section title="Sessions" summary={sessions === null ? (listError ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
             <SessionsPanel sessions={sessions} failed={!!listError} onChanged={loadLists} />
+          </Section>
+
+          <Section title="Delete account">
+            <p className="text-sm">
+              Permanently deletes your account and all the study saved in it, on the website and in the app.{" "}
+              <Link href="/delete-account" className="font-semibold underline underline-offset-2">
+                Delete my account
+              </Link>
+            </p>
           </Section>
 
         </div>

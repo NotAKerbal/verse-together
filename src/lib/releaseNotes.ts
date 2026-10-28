@@ -66,6 +66,11 @@ export const UNRELEASED: UnreleasedNotes = {
       kind: "new",
       text: "A privacy policy at versetogether.org/privacy explains what the website and the app keep, what they send to other services, and how to delete your data. It's linked from Settings and the sign-in page.",
     },
+    {
+      kind: "new",
+      text: "Delete your account and all the study saved in it from Settings → Account, or at versetogether.org/delete-account. You confirm before anything is deleted, and a deletion that stops partway can be finished later.",
+
+    },
   ],
 };
 
