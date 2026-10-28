@@ -17,6 +17,13 @@ export type ReaderPreferences = {
 
 export type ReaderTextWidth = "comfortable" | "wide" | "full";
 
+/** The text size range the reader offers (a multiple of the base size). */
+export const FONT_SCALE_MIN = 0.85;
+export const FONT_SCALE_MAX = 1.3;
+
+/** The settings that change how scripture text looks, shared by Reader settings and the Settings page. */
+export type ReaderAppearance = Pick<ReaderPreferences, "fontScale" | "fontFamily" | "textWidth" | "comparisonView">;
+
 const TEXT_WIDTHS: readonly ReaderTextWidth[] = ["comfortable", "wide", "full"];
 
 export function normalizeTextWidth(value: unknown): ReaderTextWidth {
@@ -35,6 +42,21 @@ export function getDefaultPreferences(): ReaderPreferences {
     textWidth: "comfortable",
     markPresets: DEFAULT_MARK_PRESETS.map((preset) => ({ ...preset })),
   };
+}
+
+export function getDefaultAppearance(): ReaderAppearance {
+  const { fontScale, fontFamily, textWidth, comparisonView } = getDefaultPreferences();
+  return { fontScale, fontFamily, textWidth, comparisonView };
+}
+
+export function isDefaultAppearance(prefs: ReaderAppearance): boolean {
+  const base = getDefaultAppearance();
+  return (
+    Math.abs(prefs.fontScale - base.fontScale) < 0.005 &&
+    prefs.fontFamily === base.fontFamily &&
+    prefs.textWidth === base.textWidth &&
+    prefs.comparisonView === base.comparisonView
+  );
 }
 
 export function readLocalPreferences(): ReaderPreferences | null {
@@ -114,7 +136,7 @@ export function normalizePreferences(
   const base = getDefaultPreferences();
   const showFootnotes = typeof input?.showFootnotes === "boolean" ? input!.showFootnotes : base.showFootnotes;
   const fontScaleRaw = typeof input?.fontScale === "number" ? input!.fontScale : base.fontScale;
-  const fontScale = Math.min(1.3, Math.max(0.85, Number.isFinite(fontScaleRaw) ? fontScaleRaw : 1));
+  const fontScale = Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, Number.isFinite(fontScaleRaw) ? fontScaleRaw : 1));
   const fontFamily = input?.fontFamily === "sans" || input?.fontFamily === "serif" ? input.fontFamily : base.fontFamily;
   const comparisonView =
     input?.comparisonView === "inline" || input?.comparisonView === "sideBySide"
@@ -125,12 +147,18 @@ export function normalizePreferences(
   return { showFootnotes, fontScale, fontFamily, comparisonView, textWidth, markPresets };
 }
 
+// Remote saves go one at a time, newest wins: a slider drag sends many, and they must not land out of order.
+let remoteSaveChain: Promise<void> = Promise.resolve();
+let latestRemoteSave = 0;
+
 export async function loadPreferences(
   userId: string | null | undefined,
   token?: string | null
 ): Promise<ReaderPreferences> {
   // Prefer Convex for signed-in users; fall back to localStorage, then defaults
   if (userId && token) {
+    // A change made just before (in Settings, say) is read back, not the account's older copy.
+    await remoteSaveChain;
     try {
       const data = await getReaderPreferences(token);
       if (data) {
@@ -163,22 +191,31 @@ export function writeLocalMarkPresets(markPresets: MarkPreset[]): boolean {
 export async function savePreferences(
   userId: string | null | undefined,
   prefs: ReaderPreferences,
-  token?: string | null
+  token?: string | null | Promise<string | null>
 ): Promise<void> {
   // A reader-settings save never changes the mark presets: keep this device's copy of the account's choice.
   writeLocalPreferences({ ...prefs, markPresets: readLocalPreferences()?.markPresets ?? prefs.markPresets });
   if (!userId || !token) return;
-  try {
-    await saveReaderPreferencesRemote(token, {
-      showFootnotes: prefs.showFootnotes,
-      fontScale: prefs.fontScale,
-      fontFamily: prefs.fontFamily,
-      comparisonView: prefs.comparisonView,
-      textWidth: prefs.textWidth,
-    });
-  } catch {
-    // ignore
-  }
+  const ticket = ++latestRemoteSave;
+  const run = remoteSaveChain.then(async () => {
+    // A newer save is queued behind this one and carries the latest values.
+    if (ticket !== latestRemoteSave) return;
+    try {
+      const resolvedToken = await token;
+      if (!resolvedToken || ticket !== latestRemoteSave) return;
+      await saveReaderPreferencesRemote(resolvedToken, {
+        showFootnotes: prefs.showFootnotes,
+        fontScale: prefs.fontScale,
+        fontFamily: prefs.fontFamily,
+        comparisonView: prefs.comparisonView,
+        textWidth: prefs.textWidth,
+      });
+    } catch {
+      // ignore
+    }
+  });
+  remoteSaveChain = run;
+  await run;
 }
 
 // One-time onboarding flags (local-only)
