@@ -665,7 +665,7 @@ export default function ChapterReader({
       // Device notes use the same current backlinks as account notes.
       if (!user) for (const draft of notes.values()) {
         if (draft.status === "archived") continue;
-        for (const ref of scriptureLinksForChapter(draft.markdown_body ?? "", draft.source, { volume, book, chapter })) {
+        for (const ref of scriptureLinksForChapter(draft.markdown_body ?? "", { volume, book, chapter })) {
           refs.push({ draftId: draft.id, draftTitle: draft.title, ...ref, status: draft.status });
         }
       }

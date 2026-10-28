@@ -38,11 +38,11 @@ describe("journal persistence and authorization", () => {
     for(const journalDate of ["2026-02-30","2026-13-01","October 21"]) await expect(alice.mutation(api.insights.createJournalNote,{journalDate})).rejects.toThrow();
     for(const href of ["//evil.example","javascript:alert(1)","/\\evil.example","/notes\nheader"]) await expect(alice.mutation(api.insights.createJournalNote,{journalDate:"2026-10-21",source:{...source,href}})).rejects.toThrow();
   });
-  test("new Markdown notes expose real verse markers and summaries omit full bodies",async()=>{
+  test("source metadata alone does not attach a note to verses and summaries omit full bodies",async()=>{
     const {alice}=await setup();
-    const {id}=await alice.mutation(api.insights.createJournalNote,{journalDate:"2026-10-21",source:{...source,verseStart:3,verseEnd:5}});
+    await alice.mutation(api.insights.createJournalNote,{journalDate:"2026-10-21",source:{...source,verseStart:3,verseEnd:5}});
     const markers=await alice.query(api.insights.listMyScriptureRefsForChapter,{volume:"bookofmormon",book:"1-nephi",chapter:2});
-    expect(markers).toEqual([expect.objectContaining({draftId:id,verseStart:3,verseEnd:5})]);
+    expect(markers).toEqual([]);
     expect((await alice.query(api.insights.listMyDrafts,{}))[0]).not.toHaveProperty("markdown_body");
   });
   test("verse markers follow saved backlinks rather than retained scripture blocks", async () => {
