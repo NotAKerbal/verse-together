@@ -1,0 +1,58 @@
+.root {
+  display: contents;
+}
+
+.selection {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: var(--surface-card);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
+}
+
+.selection button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.selection button:hover {
+  background: var(--surface-button-hover);
+}
+
+.selection button:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: -3px;
+}
+
+.sidebar {
+  position: fixed;
+  z-index: 40;
+  top: calc(var(--header-height) + 0.5rem);
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 1rem;
+  width: 24rem;
+  max-width: calc(100vw - 2rem);
+  min-height: 0;
+  color: var(--foreground);
+}
+
+@media (min-width: 1024px) {
+  .root[data-exploring="true"] {
+    display: block;
+    --cfm-sidebar-offset: 25rem;
+    margin-left: var(--cfm-sidebar-offset);
+  }
+}
+
+@media (max-width: 1023px) {
+  .sidebar {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
+    border-radius: 12px;
+  }
+}

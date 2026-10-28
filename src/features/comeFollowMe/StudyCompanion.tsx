@@ -210,11 +210,11 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
     <details key={block.id} className={styles.contextDisclosure} data-context={block.id}>
       <summary><Chevron /><span>{contextLabel(block)}</span></summary>
       <div className={`${styles.guide} ${styles.contextBody}`}>
-        <div ref={guideRoots.get(block.id)} className={styles.contextFragment} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: block.previewEnd ? block.html.slice(0, block.previewEnd) : block.html }} />
+        <div ref={guideRoots.get(block.id)} data-cfm-selection="guide" className={styles.contextFragment} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: block.previewEnd ? block.html.slice(0, block.previewEnd) : block.html }} />
         {block.previewEnd ? (
           <details className={styles.fullCommentary}>
             <summary><span className={styles.moreCollapsed}>Read full commentary</span><span className={styles.moreExpanded}>Show less commentary</span></summary>
-            <div ref={guideRoots.get(`${block.id}-more`)} className={styles.contextFragment} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: block.html.slice(block.previewEnd) }} />
+            <div ref={guideRoots.get(`${block.id}-more`)} data-cfm-selection="guide" className={styles.contextFragment} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: block.html.slice(block.previewEnd) }} />
           </details>
         ) : null}
       </div>
@@ -231,7 +231,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
     }
     return (
       <section key={chapter.key} id={scriptureAnchor(chapter.slug, chapter.chapter)} data-chapter={chapter.key} className={styles.readingChapter} aria-label={`${chapter.book} ${chapter.chapter}`}>
-        {section ? <div ref={guideRoots.get(section.id)} className={`${styles.guide} ${styles.readingChapterHead}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: section.headingHtml }} /> : <h2 className={styles.plainChapterTitle}>{chapter.book} {chapter.chapter}</h2>}
+        {section ? <div ref={guideRoots.get(section.id)} data-cfm-selection="guide" className={`${styles.guide} ${styles.readingChapterHead}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: section.headingHtml }} /> : <h2 className={styles.plainChapterTitle}>{chapter.book} {chapter.chapter}</h2>}
         {groups.map((group) => (
           <div key={group.id} className={group.verses.length ? styles.readingPassage : styles.contextOnly}>
             {group.verses.length ? (
@@ -239,7 +239,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
                 <p className={styles.passageEyebrow}>{verseRangeLabel(group.verses[0].verse, group.verses[group.verses.length - 1].verse)}</p>
                 <ol className={`${styles.verses} ${styles.readingVerses}`} start={group.verses[0].verse}>
                   {group.verses.map((verse) => (
-                    <li key={verse.verse} id={scriptureVerseId(chapter.slug, chapter.chapter, verse.verse)} value={verse.verse} {...annotations.verseAttributes(chapter.chapter, verse.verse)}>
+                    <li key={verse.verse} id={scriptureVerseId(chapter.slug, chapter.chapter, verse.verse)} value={verse.verse} data-cfm-selection="scripture" {...annotations.verseAttributes(chapter.chapter, verse.verse)}>
                       <span className={styles.verseNumber} {...annotations.verseNumberProps(chapter.chapter, verse.verse, verse.verse === chapter.verses[0].verse)}>{verse.verse}</span>
                       <span className={styles.srOnly}>Verse {verse.verse}: </span>
                       {annotations.verseText(chapter.chapter, verse.verse, verse.text, typesetDashes)}
@@ -252,7 +252,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
           </div>
         ))}
         <p className={styles.fullChapterLink}><Link href={getChapterHref({ volume: chapter.volume, book: chapter.slug, chapter: chapter.chapter })}>Open {chapter.book} {chapter.chapter} in the reader</Link></p>
-        {following.map((extra) => <div key={extra.id} className={styles.interChapter}><div ref={guideRoots.get(extra.id)} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: extra.headingHtml }} />{extra.blocks.map(context)}</div>)}
+        {following.map((extra) => <div key={extra.id} className={styles.interChapter}><div ref={guideRoots.get(extra.id)} data-cfm-selection="guide" className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: extra.headingHtml }} />{extra.blocks.map(context)}</div>)}
       </section>
     );
   });
@@ -273,19 +273,19 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
       {/* The introduction and closing sections remain visible and share the scripture's reading width. */}
       {introductionHtml ? (
         <div className={styles.introduction}>
-          <div ref={introRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: introductionHtml }} />
+          <div ref={introRef} data-cfm-selection="guide" className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: introductionHtml }} />
         </div>
       ) : null}
       <div ref={scriptureDocRef} className={styles.scriptureFirst} aria-label="Scripture with expandable context">
         <p className={styles.readerInvitation}>Read the scriptures. Open the context as you go.</p>
-        {readerSections.length === 0 ? <div ref={fallbackRef} className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: readerHtml }} /> : null}
+        {readerSections.length === 0 ? <div ref={fallbackRef} data-cfm-selection="guide" className={styles.guide} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: readerHtml }} /> : null}
         {mixed ? <div ref={firstBookRef}>{renderChapters(scriptureBooks[0], annotations)}</div> : renderChapters(scriptureBooks[0], annotations)}
         {scriptureBooks.slice(1).map((group) => <LaterBookScripture key={group[0].slug} chapters={group} layerHost={layerHost} render={renderChapters} />)}
       </div>
       <div className={styles.afterReader}>
         {closingHtml ? (
           <div className={styles.closing}>
-            <div ref={closingRef} className={`${styles.guide} ${styles.closingGuide}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: closingHtml }} />
+            <div ref={closingRef} data-cfm-selection="guide" className={`${styles.guide} ${styles.closingGuide}`} onClick={onGuideClick} dangerouslySetInnerHTML={{ __html: closingHtml }} />
           </div>
         ) : null}
         {footer}
