@@ -5,6 +5,7 @@ import TranslationCatalogPicker, { useTranslationCatalog } from "@/components/Tr
 import { BIBLE_TRANSLATION_OPTIONS, type BibleTranslationId } from "@/lib/bibleCanon";
 import { FEATURED_BIBLES, translationLanguage, translationTitle } from "@/lib/translationCatalog";
 import { JST_SOURCE_DOCS_URL } from "@/lib/jst";
+import { useFaithTradition } from "@/lib/useFaithTradition";
 import { useDefaultBible } from "@/lib/useDefaultBible";
 import { useJstPreference } from "@/lib/jstPreference";
 import {
@@ -43,13 +44,15 @@ function BibleList({ rows, onShow, onRemove, onSave, onAdd, defaultBible, onDefa
   onSave: (row: ListRow) => void;
   onAdd: () => void;
 }) {
+  const { showLdsContent } = useFaithTradition();
+  const baseBibleLabel = showLdsContent ? "King James Bible (LDS edition)" : "King James Bible";
   return <div data-bible-list className="space-y-3">
     <ul aria-label="Your Bibles" className="divide-y divide-[color:var(--surface-border)] rounded-xl border border-[color:var(--surface-border)]">
       <li className="flex items-center gap-2 px-3 py-2.5">
-        <div className="min-w-0 flex-1"><p className="text-sm font-medium">King James Bible (LDS edition)</p>
+        <div className="min-w-0 flex-1"><p className="text-sm font-medium">{baseBibleLabel}</p>
         <p className="mt-0.5 text-xs text-foreground/60">English · Available offline</p></div>
         <button type="button" aria-pressed={defaultBible === "lds"} disabled={savingDefault}
-          onClick={() => onDefault("lds")} aria-label="Use King James Bible (LDS edition) as default"
+          onClick={() => onDefault("lds")} aria-label={`Use ${baseBibleLabel} as default`}
           className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium underline underline-offset-2 disabled:opacity-50">
           {defaultBible === "lds" ? "Default" : "Make default"}
         </button>
@@ -84,6 +87,7 @@ function BibleList({ rows, onShow, onRemove, onSave, onAdd, defaultBible, onDefa
 }
 
 export default function BibleTranslationControls({ shown = NO_COMPARISONS, onShownChange }: Props) {
+  const { showLdsContent } = useFaithTradition();
   const editorTitleId = useId();
   const jstDescriptionId = useId();
   const favorites = useFavoriteTranslations();
@@ -198,7 +202,7 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
         </svg>
       </button>
     </div>
-    <p className="text-xs text-foreground/60">Your default Bible is the main text when you open Bible chapters. Removing it restores the LDS edition.</p>
+    <p className="text-xs text-foreground/60">Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.</p>
     {defaultError ? <p role="alert" className="text-xs text-red-700 dark:text-red-300">{defaultError}</p> : null}
     <BibleList {...listProps} />
     <dialog ref={dialogRef} aria-labelledby={editorTitleId} onClose={() => setView(null)}
@@ -222,13 +226,13 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
         </div>
       </div> : null}
     </dialog>
-    <details className="text-xs">
+    {showLdsContent ? <details className="text-xs">
       <summary className="cursor-pointer py-2 text-foreground/70">Joseph Smith Translation</summary>
       <div className="mt-1 flex items-start justify-between gap-3">
         <p id={jstDescriptionId} className="text-[11px] leading-relaxed text-foreground/60">When the LDS edition is the main text, show selected JST passages in place of the KJV verses they revise, with the JST&apos;s own wording underlined. <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline">Source</a></p>
         <button type="button" role="switch" aria-checked={jstEnabled} aria-label="Joseph Smith Translation (JST)" aria-describedby={jstDescriptionId}
           className="marker-switch mt-0.5 shrink-0" onClick={() => setJstEnabled(!jstEnabled)}><span className="marker-switch-knob" aria-hidden="true" /></button>
       </div>
-    </details>
+    </details> : null}
   </div>;
 }

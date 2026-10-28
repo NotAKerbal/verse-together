@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsContentPath } from "@/lib/faithTradition";
+
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
@@ -14,11 +17,12 @@ import { useBrowseNavHref } from "@/lib/browseNavigation";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
 export default function Navbar() {
+  const { showLdsContent } = useFaithTradition();
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
   const [collapsed, setCollapsed] = useState(false);
   const navRef = useRef<HTMLElement>(null);
-  const navItems = primaryNavItems;
+  const navItems = primaryNavItems.filter((item) => showLdsContent || !isLdsContentPath(item.href));
   const activeIndex = navItems.findIndex((item) => isPathActive(pathname, item.href));
   // The Library's search, and any page's header controls (AppHeaderPortal), sit at the header's right,
   // outside the collapsible (clipped, inert) nav.

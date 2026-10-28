@@ -4,6 +4,12 @@ import { describe, expect, test, vi } from "vitest";
 import type { ExploreDisclosure } from "../src/components/ExploreSection";
 import type { WordStudyContext } from "../src/lib/wordStudySources";
 
+// These fixtures exercise Latter-day Saint study helps. The server snapshot now hides those
+// until the device preference is known, so select the tradition this suite is testing explicitly.
+vi.mock("@/lib/useFaithTradition", () => ({
+  useFaithTradition: () => ({ tradition: "latter-day-saint", showLdsContent: true, setTradition: () => true }),
+}));
+
 vi.mock("@/components/DictionaryEntryCard", () => ({
   default: ({ entry, variant }: { entry: { word: string }; variant?: string }) => createElement("article", null, `definition(${variant}):${entry.word}`),
 }));

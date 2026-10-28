@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsContentPath } from "@/lib/faithTradition";
+
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useChapterNavigation } from "@/components/ChapterNavigation";
 import { getQuickNavSuggestions, parseScriptureReferenceQuery } from "@/lib/scriptureQuickNav";
@@ -65,6 +68,7 @@ export default function LibrarySearch({
   /** Called once the search is done with: after it navigates, or on Escape with no suggestions showing. */
   onClose?: () => void;
 }) {
+  const { showLdsContent } = useFaithTradition();
   const header = variant === "header";
   // A jump to a chapter shows its page at once; /search and other hrefs go through the router as usual.
   const navigate = useChapterNavigation();
@@ -76,7 +80,7 @@ export default function LibrarySearch({
   const options = useMemo<Option[]>(() => {
     const trimmed = query.trim();
     if (!trimmed) return [];
-    const jumps: Option[] = getQuickNavSuggestions(trimmed, 6).map((item) => ({
+    const jumps: Option[] = getQuickNavSuggestions(trimmed, 30).filter((item) => showLdsContent || !isLdsContentPath(item.href)).slice(0, 6).map((item) => ({
       key: item.key,
       label: item.label,
       href: item.href,
@@ -90,7 +94,7 @@ export default function LibrarySearch({
     };
     // Only a valid parsed reference makes Enter jump; invalid refs and plain words search first.
     return parseScriptureReferenceQuery(trimmed, 1).length > 0 ? [...jumps, search] : [search, ...jumps];
-  }, [query]);
+  }, [query, showLdsContent]);
 
   const expanded = open && options.length > 0;
   const activeOption = expanded ? options[Math.min(active, options.length - 1)] : undefined;
@@ -147,7 +151,7 @@ export default function LibrarySearch({
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
           autoFocus={autoFocus}
-          placeholder="Search or jump to 1 Ne 3:7"
+          placeholder={showLdsContent ? "Search or jump to 1 Ne 3:7" : "Search or jump to John 3:16"}
           aria-label="Search scriptures or jump to a reference"
           role="combobox"
           aria-autocomplete="list"

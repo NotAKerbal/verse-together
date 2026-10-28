@@ -60,7 +60,20 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    {
+      kind: "new",
+      text: "Manage saved Bibles in Settings → Translations and make any saved translation your default Bible for chapter reading. Your choice is saved on this device; removing the default restores the King James Bible.",
+    },
+    {
+      kind: "new",
+      text: "Send suggestions, report problems or request features in Settings → Feedback, with no sign-in required. Leave optional contact details if you would like a reply. If sending fails, your message stays in the form so you can try again.",
+    },
+    {
+      kind: "new",
+      text: "Choose your faith tradition in Settings → Reading. Other denominations keeps Bible reading and your journal while hiding Latter-day Saint scriptures, Come Follow Me, Joseph Smith Translation and study resources. Your choice is saved on this device.",
+    },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [

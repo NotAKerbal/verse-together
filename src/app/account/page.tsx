@@ -3,8 +3,9 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBookBible, faBookOpen, faClockRotateLeft, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
+import { faBookBible, faBookOpen, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
 import { AppHeaderPortal, useAppHeaderSlot } from "@/components/AppHeaderSlot";
+import FeedbackForm from "@/components/FeedbackForm";
 import AccountManager from "@/features/auth/AccountManager";
 import QuickMarkSettings from "@/features/annotations/QuickMarkSettings";
 import BibleTranslationControls from "@/components/BibleTranslationControls";
@@ -33,7 +34,7 @@ const TABS: Record<SettingsTabId, { label: string; icon: IconDefinition; title: 
     label: "Translations",
     icon: faBookBible,
     title: "Bible translations",
-    lead: "Choose your default Bible, manage saved translations and control the Joseph Smith Translation. Saved on this device; also available in Reader settings.",
+    lead: "Choose your default Bible and manage saved translations. Saved on this device; also available in Reader settings.",
   },
   "study-tools": {
     label: "Study tools",
@@ -46,6 +47,12 @@ const TABS: Record<SettingsTabId, { label: string; icon: IconDefinition; title: 
     icon: faClockRotateLeft,
     title: "Release notes",
     lead: "What has changed in Verse Together, release by release.",
+  },
+  feedback: {
+    label: "Feedback",
+    icon: faCommentDots,
+    title: "Feedback",
+    lead: "Ideas, problems, or requests for Verse Together. Every message is read.",
   },
 };
 
@@ -201,6 +208,10 @@ export default function AccountPage() {
 
         <SettingsPanel tab="release-notes" selected={selected === "release-notes"}>
           <ReleaseNotes />
+        </SettingsPanel>
+
+        <SettingsPanel tab="feedback" selected={selected === "feedback"}>
+          <FeedbackForm />
         </SettingsPanel>
       </div>
     </div>

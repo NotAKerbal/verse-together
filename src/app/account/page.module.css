@@ -84,6 +84,26 @@
   min-width: max-content;
 }
 
+/* The narrowest phones (320px): all five tabs fit when they sit closer and the open one shows only its name. */
+@media (max-width: 359px) {
+  .tabList[data-placement="page"] {
+    gap: .125rem;
+  }
+
+  .tabList[data-placement="page"] .tab {
+    min-width: 2.5rem;
+    padding-inline: .5rem;
+  }
+
+  .tabList[data-placement="page"] .tab[aria-selected="true"] .tabIcon {
+    display: none;
+  }
+
+  .tabList[data-placement="page"] .tab[aria-selected="true"] .tabLabel {
+    margin-left: 0;
+  }
+}
+
 /*
   The server-rendered page has only this copy; until the header's takes over (on wide screens outside simple mode)
   it stays hidden, so the tabs never flash in the page and then jump.
@@ -364,7 +384,7 @@
   margin-top: .15rem;
 }
 
-/* Reading: the preview, then the appearance controls and simple mode. Side by side when there's room. */
+/* Reading: sample and faith tradition on the left, appearance and simple mode on the right. */
 .readingGrid {
   display: grid;
   gap: .75rem;
@@ -376,11 +396,16 @@
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   }
 
-  .readingGrid > .sample {
-    grid-row: span 2;
+  .readingPreviewColumn {
     position: sticky;
     top: calc(var(--header-height) + 1rem);
   }
+}
+
+.readingPreviewColumn {
+  display: grid;
+  gap: .75rem;
+  min-width: 0;
 }
 
 .sample {
@@ -878,6 +903,58 @@
   padding: 1rem;
 }
 
+/* Feedback: one readable column, its button at the start like the profile form's. */
+.feedbackCard {
+  width: min(100%, 42rem);
+}
+
+.feedbackForm {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: .5rem;
+}
+
+.feedbackForm > button {
+  justify-self: start;
+}
+
+.feedbackMessage {
+  min-height: 9rem;
+  resize: vertical;
+}
+
+.feedbackForm :is(textarea, input):read-only {
+  opacity: .7;
+}
+
+.fieldMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: .3rem;
+  font-size: .72rem;
+  color: var(--foreground-muted);
+}
+
+.fieldMeta > span {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fieldError {
+  margin-top: .3rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--accent-secondary);
+}
+
+.feedbackSent {
+  padding: .5rem .75rem;
+  border: 2px solid var(--surface-border);
+  border-radius: .75rem;
+  font-size: .875rem;
+}
+
 .shell :is(a, button):focus-visible {
   outline: 2px solid var(--accent-rubric);
   outline-offset: 3px;
@@ -921,18 +998,70 @@
   }
 }
 
+/* Tradition names can be long; wrap within the settings column on small screens. */
+.faithCard {
+  min-width: 0;
+}
+
+.faithFieldset {
+  min-width: 0;
+  margin-top: 1rem;
+}
+
+.faithChoices {
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.faithChoice {
+  display: flex;
+  align-items: center;
+  min-height: 3.25rem;
+  min-width: 0;
+  gap: .75rem;
+  padding: .875rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: .625rem;
+  background: var(--surface-card);
+  font-size: .875rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.faithChoice:hover {
+  background: var(--surface-button-hover);
+}
+
+.faithChoice[data-active="true"] {
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
+  border-color: currentColor;
+}
+
+.faithChoice:focus-within {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.faithChoice input {
+  flex-shrink: 0;
+}
+
 .translationsCard {
   width: min(100%, 40rem);
 }
 
-/* Keep all five sections within a narrow phone's settings pill. */
+/* Keep all six sections within a narrow phone's settings pill. */
 @media (max-width: 400px) {
   .tabList[data-placement="page"] {
     gap: .125rem;
   }
 
   .tabList[data-placement="page"] .tab {
-    min-width: 2.25rem;
+    min-width: 2rem;
     padding-inline: .25rem;
     font-size: .75rem;
   }
