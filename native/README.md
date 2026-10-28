@@ -128,9 +128,8 @@ localhost deployments retain the website proxy. Credentials remain scoped to the
   study** into the account (the website's idempotent import; copying again only adds what wasn't copied). Marks,
   verse notes, guide marks, journal notes, readings, read chapters and goals sync in the background — after
   changes, every minute while open, and with growing retry delays after failures. This computer's own study stays
-  separate and is never merged or overwritten. **This needs the matching server change (`convex/nativeAuth.ts`,
-  `convex/nativeSync.ts`, the `/native/authorize` page and the `createJournalEntry` revision field) deployed;
-  until then, signing in reports that the server doesn't offer desktop sign-in yet.**
+  separate and is never merged or overwritten. **Desktop accounts are deployed and checked on dev. The default production endpoint still needs a separately
+  authorized release of the matching server changes; use the dev configuration above for account testing.**
 
 ## Keyboard
 
@@ -210,9 +209,9 @@ The earlier Tauri target remains separate under `src-tauri`; it is not used by t
 ## Current scope
 
 See `PARITY.md` for the feature-by-feature inventory, including what is partial or not ported (for example the
-social feed and other pages the website no longer links). Account sign-in and sync are implemented and tested against the real Better Auth and
-Convex functions in the repository's test runtime, but need the server change deployed and have not been verified
-against live Google sign-in. Accessibility, IME composition, very long notes, macOS and Windows builds need
+social feed and other pages the website no longer links). Account approval using an existing Google-backed web session, keyring restore, two-way study sync and
+isolated sign-out were checked against the real dev deployment. A fresh Google OAuth round trip and production
+activation remain unverified. See `VERIFICATION.md` for the exact checks and source revisions. Accessibility, IME composition, very long notes, macOS and Windows builds need
 further verification before a broad release. Native rendering follows the same visual language but is
 not pixel-identical to browser rendering.
 

@@ -1,3 +1,69 @@
+# Dev account acceptance — October 28, 2026
+
+**Live account code tested:** `9fcee660ae146878600e7d6f13c8b0a6ba5d38d8` on `t3/rust-desktop-app`.
+**Final native source:** `ea6d869e61176e8ce0f4c5ffa6bd83315e0055e7`. This follow-up only closes the account
+popover after accepted sign-out; its existing lifecycle regression also checks that state.
+**Dev server:** `ab8b2b013dd258b497cc4eac0ea83b64df7046ea` (merged PR #70),
+`https://scripture-sharing-dev.vercel.app`, `dev:fabulous-dogfish-606`.
+**Production:** unchanged at `1647d51` (web 2.14.0); desktop production activation is still pending a separately
+authorized release. Mobile auth/deletion files and desktop backend match `origin/dev` exactly.
+
+## Repairs found by real account QA
+
+- Native account HTTP now uses the configured Convex deployment's matching `.convex.site` API. Approval remains
+  in the website browser. Vercel preview protection was refusing native requests to the website proxy; no
+  protection was disabled and no provider/environment setting changed. Custom and localhost endpoints retain
+  their proxy. Credentials are still scoped to website, deployment and profile.
+- Convex JSON writes integral JavaScript values as floats (`2.0`). Normalize safe exact integers at the client
+  boundary so revisions, verse numbers, word offsets, read chapters and typed plan/goal models are read correctly.
+  Earlier stand-in tests used integer JSON and missed this wire-format difference.
+- A clean open journal editor now reloads synced text and metadata, including its local revision. Previously a
+  subsequent edit could fork unnecessarily. Unsaved local writing remains intact and still forks for a real
+  concurrent change.
+- Loopback callbacks tolerate a TCP-fragmented request line with the existing timeout and size bound.
+- Accepted sign-out closes the account popover (it previously remained open with a stale Sign out action).
+- Embedded release notes now match the merged 2.14.0/dev source.
+
+## Checks
+
+| Check | Result |
+| --- | --- |
+| Native `cargo test --locked` | **Passed:** 178, 1 optional snapshot exporter ignored |
+| Patched renderer tests | **Passed:** 5 |
+| Strict all-target clippy; fmt; whitespace; release-history generation | **Passed** |
+| Locked release build | **Passed** |
+| Dev integration web/backend suite | **Passed:** 484 tests with two workers, including 77 focused desktop/mobile/deletion/sync contracts; root/Convex types, changed-file lint, release check and 53 deploy-guard tests also passed before the dev merge. Native-only repairs did not change that backend |
+
+Live-account-tested binary SHA-256: `baba80c6a38c054afebbfde7a65346c4ceeb586b443f5224e1b571625b751b4e`.
+Final release/package binary SHA-256 (including the popover fix):
+`cccaf1cec2aecd4bfe7b88c8b4fbcd7f18655465d14aac01ad96aaf0187672bf`.
+All 178 native tests and strict clippy passed again on final source `ea6d869`.
+Logs: `/tmp/verse-final-{native-tests,clippy,renderer,release}.log`; activation logs use
+`/tmp/verse-activation-*` and `/tmp/verse-dev-activation-*`.
+
+## Live dev acceptance
+
+Real Linux release window, GNOME Wayland, isolated `/tmp/verse-dev-acceptance`, explicit dev site and Convex
+overrides. Study writes were made only to dev. The user explicitly approved the desktop account grant.
+
+- **Passed:** browser approval using an existing Google-backed website session, one-time code exchange, account
+  profile/session loading, real OS-keyring storage and signed-in restore across app restart.
+- **Passed:** native exact-word blue highlight on 1 Nephi 1:2 appears on the web and comes back to native with its
+  UTF-16 range; a new native whole-verse green mark and verse note on 1:3 appear on the web and remain locally
+  acknowledged (`dirty=0`).
+- **Passed:** native journal excerpt reaches the web; web edits persist after reload and return with incremented
+  revisions; renaming that synced note in native updates the same web entry, with no new duplicate. An extra
+  earlier draft from the discovered defect is retained safely. The main test entry and verse annotation name desktop QA; the earlier untitled conflict copy is retained.
+- **Passed:** a web goal change (3 to 4 reflections) appears in the native journal; native changes it back to 3 and the web confirms it. Original goals restored (5 study days, 3 reflections).
+- **Passed:** a further web edit appears in the already-open, clean native journal editor without reopening it (remote revision 4, acknowledged locally). Screenshot: `/tmp/verse-dev-account-evidence/native-journal-live-sync.png`.
+- **Passed, read-only:** signed-in empty plan list and full new-plan builder open against dev. No live plan was saved; create/edit/delete remain covered by backend contracts.
+- **Passed:** desktop sign-out removes its cached account notes/marks (both counts zero); reloading the dev website still shows the signed-in account and its journal. The test app/window and browser tab were closed. The final release was reopened on the same profile and stayed signed out with an empty account cache, then was closed again. QA study entries remain on dev, while the original goals are restored.
+
+**Not run:** a fresh Google OAuth round trip (approval reused the existing Google-backed web login), published
+note/device-import acceptance, live account deletion, macOS/Windows, accessibility/IME. Historical entries below
+record earlier states; their blanket deployment blockers are superseded for dev by this entry. Production is
+still not activated. No credentials or study database belong in the distributed package.
+
 # Independent final-polish acceptance — October 28, 2026
 
 Codex reviewed the seventh Claude pass on base `cb9cf21`, including publication races and owner-scoped recovery,
