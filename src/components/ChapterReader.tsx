@@ -78,7 +78,7 @@ import { api } from "../../convex/_generated/api";
 
 type Verse = { verse: number; text: string; footnotes?: Footnote[] };
 /** A chapter's text, as the server reads it (streamed to the reader after its page). */
-export type ChapterContent = { reference: string; translation?: string; verses: Verse[] };
+export type ChapterContent = { reference: string; translation?: string; translationNotice?: string; verses: Verse[] };
 const NO_OVERLAYS: string[] = [];
 const NO_VERSES: Verse[] = [];
 type SelectedVerse = { verse: number; text: string };
@@ -1668,6 +1668,11 @@ export default function ChapterReader({
               <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
                 Loading {pendingTranslations.map((id) => id.toUpperCase()).join(", ")} for comparison…
               </div>
+            ) : null}
+            {content?.translationNotice ? (
+              <p role="status" className="reader-header-notice text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">
+                {content.translationNotice}
+              </p>
             ) : null}
             {translationNotices.length > 0 ? (
               <div className="reader-header-notice text-[11px] sm:text-xs text-amber-900 dark:text-amber-200">

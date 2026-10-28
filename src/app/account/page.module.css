@@ -920,3 +920,20 @@
     transition: none;
   }
 }
+
+.translationsCard {
+  width: min(100%, 40rem);
+}
+
+/* Keep all five sections within a narrow phone's settings pill. */
+@media (max-width: 400px) {
+  .tabList[data-placement="page"] {
+    gap: .125rem;
+  }
+
+  .tabList[data-placement="page"] .tab {
+    min-width: 2.25rem;
+    padding-inline: .25rem;
+    font-size: .75rem;
+  }
+}
