@@ -87,6 +87,9 @@ requests case by case and said in 2011 that it generally charges no fee. [Bible.
 KJV, for example, carries "Rights in the Authorized (King James) Version of the Bible are vested in the Crown"
 and "Published by permission of the Crown's patentee, Cambridge University Press."
 
+**Decision (2026-10-27):** the Google Play release leaves out the United Kingdom. Asking Cambridge University
+Press for permission is in the Housekeeping list in `FEATURE_IDEAS.md`.
+
 Translations other than the KJV, which the reader fetches at runtime from bible-api.com, aren't bundled. This
 record doesn't cover them.
 
