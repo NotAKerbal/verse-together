@@ -441,3 +441,156 @@ pub fn rotated_icon<'a>(glyph: &Icon, color: Color, size: f32, degrees: f32) -> 
         .height(size)
         .style(move |_, _| svg::Style { color: Some(color) })
 }
+
+/// `line-clamp`: `content` cut to at most `lines` lines at `width`, ending in "…" when it was cut.
+pub fn clamp_lines(
+    content: &str,
+    size: f32,
+    line_height: f32,
+    font: Font,
+    width: f32,
+    lines: usize,
+) -> String {
+    /// The text, its size, line height and width (as bits), the line count and font.
+    type Key = (String, u32, u32, u32, usize, Font);
+    thread_local! {
+        static CLAMPED: std::cell::RefCell<HashMap<Key, String>> = Default::default();
+    }
+    let width = width.max(1.0).floor();
+    let key = (
+        content.to_string(),
+        size.to_bits(),
+        line_height.to_bits(),
+        width.to_bits(),
+        lines,
+        font,
+    );
+    if let Some(found) = CLAMPED.with(|c| c.borrow().get(&key).cloned()) {
+        return found;
+    }
+    let fits = |text: &str| {
+        let paragraph =
+            <iced::Renderer as core_text::Renderer>::Paragraph::with_text(core_text::Text {
+                content: text,
+                bounds: Size::new(width, f32::INFINITY),
+                size: Pixels(size),
+                line_height: core_text::LineHeight::Absolute(Pixels(line_height)),
+                font,
+                align_x: core_text::Alignment::Left,
+                align_y: iced::alignment::Vertical::Top,
+                shaping: core_text::Shaping::Advanced,
+                wrapping: core_text::Wrapping::WordOrGlyph,
+            });
+        paragraph.min_bounds().height <= line_height * lines as f32 + 0.5
+    };
+    let out = if fits(content) {
+        content.to_string()
+    } else {
+        let chars: Vec<char> = content.chars().collect();
+        let (mut low, mut high) = (0, chars.len());
+        while low < high {
+            let mid = (low + high).div_ceil(2);
+            let candidate: String = chars[..mid].iter().collect::<String>();
+            if fits(&format!("{}…", candidate.trim_end())) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        format!("{}…", chars[..low].iter().collect::<String>().trim_end())
+    };
+    CLAMPED.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() > 2048 {
+            c.clear();
+        }
+        c.insert(key, out.clone());
+    });
+    out
+}
+
+/// A dashed 1px outline filling its space (`border-dashed`), drawn behind a control in a stack.
+pub fn dashed_outline<'a, Message: 'a>(color: Color, radius: f32) -> iced::Element<'a, Message> {
+    use iced::advanced::{Layout, Widget, layout, mouse, renderer, widget::Tree};
+    use iced::{Length, Point, Rectangle};
+    struct Dashed {
+        color: Color,
+        radius: f32,
+    }
+    impl<Message> Widget<Message, Theme, iced::Renderer> for Dashed {
+        fn size(&self) -> Size<Length> {
+            Size::new(Length::Fill, Length::Fill)
+        }
+        fn layout(
+            &mut self,
+            _: &mut Tree,
+            _: &iced::Renderer,
+            limits: &layout::Limits,
+        ) -> layout::Node {
+            layout::Node::new(limits.max())
+        }
+        fn draw(
+            &self,
+            _: &Tree,
+            renderer: &mut iced::Renderer,
+            _: &Theme,
+            _: &renderer::Style,
+            layout: Layout<'_>,
+            _: mouse::Cursor,
+            _: &Rectangle,
+        ) {
+            use iced::advanced::Renderer as _;
+            let b = layout.bounds();
+            let r = self.radius.min(b.height / 2.0).min(b.width / 2.0);
+            let (dash, gap, w) = (4.0_f32, 3.0_f32, 1.0_f32);
+            let mut quad = |x: f32, y: f32, width: f32, height: f32| {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: Rectangle::new(Point::new(x, y), Size::new(width, height)),
+                        ..Default::default()
+                    },
+                    self.color,
+                );
+            };
+            // The straight edges, dashed.
+            let mut x = b.x + r;
+            while x < b.x + b.width - r {
+                let len = dash.min(b.x + b.width - r - x);
+                quad(x, b.y, len, w);
+                quad(x, b.y + b.height - w, len, w);
+                x += dash + gap;
+            }
+            let mut y = b.y + r;
+            while y < b.y + b.height - r {
+                let len = dash.min(b.y + b.height - r - y);
+                quad(b.x, y, w, len);
+                quad(b.x + b.width - w, y, w, len);
+                y += dash + gap;
+            }
+            // The rounded corners, as short dashes along each quarter circle.
+            if r > 0.5 {
+                let corners = [
+                    (b.x + r, b.y + r, std::f32::consts::PI),
+                    (b.x + b.width - r, b.y + r, 1.5 * std::f32::consts::PI),
+                    (b.x + b.width - r, b.y + b.height - r, 0.0),
+                    (b.x + r, b.y + b.height - r, 0.5 * std::f32::consts::PI),
+                ];
+                let arc = std::f32::consts::FRAC_PI_2 * (r - w / 2.0);
+                let steps = (arc * 2.0).ceil().max(1.0) as usize;
+                for (cx, cy, start) in corners {
+                    for i in 0..steps {
+                        let along = arc * i as f32 / steps as f32;
+                        if along % (dash + gap) >= dash {
+                            continue;
+                        }
+                        let angle = start + std::f32::consts::FRAC_PI_2 * i as f32 / steps as f32;
+                        let px = cx + (r - w / 2.0) * angle.cos() - w / 2.0;
+                        let py = cy + (r - w / 2.0) * angle.sin() - w / 2.0;
+                        quad(px, py, w, w);
+                    }
+                }
+            }
+        }
+    }
+    iced::Element::new(Dashed { color, radius })
+}

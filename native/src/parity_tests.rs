@@ -716,6 +716,16 @@ fn a_bible_added_in_settings_is_saved_but_only_shown_when_added_in_the_reader() 
     assert_eq!(app.preferences.compare_bibles, [net.id]);
 }
 
+/// Replaces the open journal note's whole text, as selecting it all and pasting does.
+fn write_note(app: &mut App, markdown: &str) {
+    use crate::journal_ui::JournalMsg;
+    use crate::md_editor::{Action, Edit};
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::SelectAll)));
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Edit(
+        Edit::Paste(std::sync::Arc::new(markdown.into())),
+    ))));
+}
+
 fn remote_note(
     id: &str,
     title: &str,
@@ -737,7 +747,6 @@ fn remote_note(
 
 #[test]
 fn a_clean_open_draft_follows_sync_without_forking_the_next_edit() {
-    use crate::journal_ui::JournalMsg;
     let dir = profile();
     let mut app = App::from_directory(&dir.0);
     let store = app.store.as_mut().unwrap();
@@ -757,14 +766,15 @@ fn a_clean_open_draft_follows_sync_without_forking_the_next_edit() {
     app.refresh_open_note();
     let open = app.journal.open.as_ref().unwrap();
     assert_eq!(open.note.title, "From the web");
-    assert_eq!(open.body.text(), "Updated text");
-    let _ = app.update(Message::Journal(JournalMsg::Title("Edited here".into())));
+    // One editor, as on the website: the title is the note's leading heading.
+    assert_eq!(open.body.text(), "# From the web\n\nUpdated text");
+    write_note(&mut app, "# Edited here\n\nUpdated text");
     assert!(app.save_journal_note());
     assert_eq!(app.journal.open.as_ref().unwrap().note.id, note.id);
     assert_eq!(app.store.as_ref().unwrap().all_notes().unwrap().len(), 1);
 
     // A real concurrent edit still keeps the unsaved local draft and forks on save.
-    let _ = app.update(Message::Journal(JournalMsg::Title("Unsaved here".into())));
+    write_note(&mut app, "# Unsaved here\n\nUpdated text");
     remote.revision += 1;
     remote.text = Some(("Another web edit".into(), "Other text".into()));
     let store = app.store.as_mut().unwrap();
@@ -775,8 +785,8 @@ fn a_clean_open_draft_follows_sync_without_forking_the_next_edit() {
     store.apply_remote_note(&remote).unwrap();
     app.refresh_open_note();
     assert_eq!(
-        app.journal.open.as_ref().unwrap().note.title,
-        "Unsaved here"
+        app.journal.open.as_ref().unwrap().body.text(),
+        "# Unsaved here\n\nUpdated text"
     );
     assert!(app.save_journal_note());
     assert_ne!(app.journal.open.as_ref().unwrap().note.id, note.id);
@@ -833,7 +843,7 @@ fn published_notes_open_read_only_everywhere_and_text_typed_as_one_is_published_
     let mut ui = crate::ui_tests::simulator_for(&app);
     assert!(ui.find("Published · read-only").is_ok());
     assert!(ui.find("Shared covenant").is_ok());
-    assert!(ui.find("Reading logged").is_ok(), "its reading shows");
+    assert!(ui.find("Read Jeremiah 31:3").is_ok(), "its reading shows");
     assert!(
         ui.find("Saved").is_err() && ui.find("Save").is_err(),
         "no save state"
@@ -841,7 +851,7 @@ fn published_notes_open_read_only_everywhere_and_text_typed_as_one_is_published_
     drop(ui);
     // Every way of changing it does nothing: title, typing, pasting, undo, the reading, deleting.
     for m in [
-        JournalMsg::Title("Changed".into()),
+        JournalMsg::Body(Action::SelectAll),
         JournalMsg::Body(Action::Edit(Edit::Insert('x'))),
         JournalMsg::Body(Action::Edit(Edit::Paste(std::sync::Arc::new(
             "pasted".into(),
@@ -849,17 +859,18 @@ fn published_notes_open_read_only_everywhere_and_text_typed_as_one_is_published_
         JournalMsg::Body(Action::Edit(Edit::Backspace)),
         JournalMsg::Undo,
         JournalMsg::Redo,
-        JournalMsg::ToggleReading,
+        JournalMsg::Reading(crate::journal_ui::ReadingTarget::Note),
+        JournalMsg::ReadingRemove,
+        JournalMsg::ReadingSave,
         JournalMsg::Delete,
         JournalMsg::ConfirmDelete(true),
-        JournalMsg::Save,
     ] {
         let _ = app.update(Message::Journal(m));
     }
     let open = app.journal.open.as_ref().unwrap();
     assert!(!open.dirty && !open.confirm_delete);
     assert_eq!(open.note, published);
-    assert_eq!(open.body.text(), published.body);
+    assert_eq!(open.body.text(), published.markdown());
     // Its text can still be selected (and so copied).
     let _ = app.update(Message::Journal(JournalMsg::Body(Action::SelectAll)));
     assert_eq!(
@@ -870,7 +881,7 @@ fn published_notes_open_read_only_everywhere_and_text_typed_as_one_is_published_
             .body
             .selected_text()
             .as_deref(),
-        Some(published.body.as_str())
+        Some(published.markdown().as_str())
     );
     let _ = app.update(Message::Journal(JournalMsg::Close));
     assert_eq!(
@@ -1056,7 +1067,8 @@ fn the_reading_log_marks_read_passages_and_opens_their_entries_without_moving_th
     assert!(app.journal.open.is_none());
     assert_eq!(app.journal.day, "2026-10-20");
     let mut ui = crate::ui_tests::simulator_for(&app);
-    assert!(ui.find("Read Jeremiah 31:3-4").is_ok());
+    // The day's reading, as the website lists one: "Reading" and what was read.
+    assert!(ui.find("Reading").is_ok() && ui.find("Jeremiah 31:3-4").is_ok());
     drop(ui);
     let _ = app.update_journal(JournalMsg::Today);
 
@@ -1083,4 +1095,353 @@ fn the_reading_log_marks_read_passages_and_opens_their_entries_without_moving_th
         app.read_passages().keys().copied().collect::<Vec<_>>(),
         [20, 21]
     );
+}
+
+#[test]
+fn the_journals_one_editor_keeps_every_note_exactly_as_written_and_titles_it_like_the_website() {
+    // Whatever is written in the single Markdown editor comes back exactly: a leading `# ` line is kept as the title
+    // only when the two pieces rebuild the same text (and the title fits), otherwise the whole text is the body.
+    let cases = [
+        "# Morning study\n\nI noticed a little **light**.",
+        "# Title only",
+        "# Title\nno blank line",
+        "#  Two spaces\n\nbody",
+        "# Trailing space \n\nbody",
+        "\n\n# Leading blank lines\n\nbody",
+        "A plain first line becomes the title\nand this continues.",
+        "## A second-level heading\n\ntext",
+        "",
+        "> quoted\n- list",
+    ];
+    for markdown in cases {
+        let mut note = Note::new("2026-10-28", None);
+        note.set_markdown(markdown);
+        assert_eq!(note.markdown(), markdown, "kept exactly: {markdown:?}");
+        assert_eq!(crate::sync::note_markdown(&note), markdown);
+        // What the account receives splits back into the same pieces.
+        let (title, body) = crate::store::split_markdown(&note.markdown());
+        let mut pulled = Note::new("2026-10-28", None);
+        pulled.title = title;
+        pulled.body = body;
+        assert_eq!(pulled.markdown(), markdown, "sync preserves exact text");
+        assert_eq!(pulled.display_title(), note.display_title());
+    }
+    let long = format!("# {}\n\nbody", "x".repeat(130));
+    let mut note = Note::new("2026-10-28", None);
+    note.set_markdown(&long);
+    assert_eq!(note.markdown(), long);
+    assert!(
+        note.title.is_empty(),
+        "a title longer than 120 characters stays in the body"
+    );
+    assert_eq!(note.display_title(), format!("{}…", "x".repeat(120)));
+
+    // Notes saved with a separate title (older ones, and those pulled from the account) open unchanged.
+    let mut old = Note::new("2026-10-28", None);
+    old.title = "Faith".into();
+    old.body = "Seeds of faith.".into();
+    assert_eq!(old.markdown(), "# Faith\n\nSeeds of faith.");
+    let mut reopened = old.clone();
+    reopened.set_markdown(&old.markdown());
+    assert_eq!(
+        (reopened.title.as_str(), reopened.body.as_str()),
+        ("Faith", "Seeds of faith.")
+    );
+
+    // `deriveNoteTitle`: the first line with text, as plain text, thematic breaks skipped.
+    for (markdown, title) in [
+        ("A plain first line\nmore", "A plain first line"),
+        ("---\n\n**Bold** [link](/browse) start", "Bold link start"),
+        ("> Quoted thought", "Quoted thought"),
+        ("", "Untitled note"),
+        ("   \n\n", "Untitled note"),
+    ] {
+        let mut note = Note::new("2026-10-28", None);
+        note.set_markdown(markdown);
+        assert_eq!(note.display_title(), title, "{markdown:?}");
+    }
+}
+
+#[test]
+fn a_new_entry_is_written_in_the_days_composer_and_saved_only_when_asked() {
+    use crate::journal_ui::JournalMsg;
+    use crate::md_editor::{Action, Edit};
+    let dir = profile();
+    let mut app = App::from_directory(&dir.0);
+    app.window_width = 1280.0;
+    app.window_height = 800.0;
+    let _ = app.update(Message::SetScreen(Screen::Journal));
+    let today = crate::store::today();
+    let count = |app: &App| app.store.as_ref().unwrap().all_notes().unwrap().len();
+    let type_in = |app: &mut App, text: &str| {
+        for c in text.chars() {
+            let edit = if c == '\n' {
+                Edit::Enter
+            } else {
+                Edit::Insert(c)
+            };
+            let _ = app.update(Message::Journal(JournalMsg::ComposerBody(Action::Edit(
+                edit,
+            ))));
+        }
+    };
+    let prompt = "Where did you notice a little light in your day?";
+    let _ = app.update(Message::Journal(JournalMsg::New(Some(prompt.into()))));
+    // `Write a reflection` opens the day's new entry, not a note: nothing is stored yet.
+    assert!(app.journal.open.is_none());
+    let composer = app.journal.composer.as_ref().unwrap();
+    assert!(composer.shown);
+    assert_eq!(composer.draft.prompt.as_deref(), Some(prompt));
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("New entry").is_ok() && ui.find(prompt).is_ok());
+    assert!(ui.find("Save entry").is_ok());
+    drop(ui);
+
+    // Saving an empty entry says what's missing and keeps it open.
+    let _ = app.update(Message::Journal(JournalMsg::SaveEntry));
+    assert_eq!(
+        app.journal.composer.as_ref().unwrap().problem.as_deref(),
+        Some("Write a note or log your reading first.")
+    );
+    assert_eq!(count(&app), 0);
+
+    // An untouched entry follows the selected day; a written one keeps its own.
+    let _ = app.update(Message::Journal(JournalMsg::Day("2026-10-20".into())));
+    assert_eq!(app.journal.composer.as_ref().unwrap().day, "10/20/2026");
+    let _ = app.update(Message::Journal(JournalMsg::Today));
+    assert_eq!(
+        app.journal.composer.as_ref().unwrap().day,
+        crate::journal_ui::field_date(&today)
+    );
+    type_in(&mut app, "# Morning study\n\nA little **light**.");
+    // Closing keeps what was written until it is saved; writing again shows it as it was.
+    let _ = app.update(Message::Journal(JournalMsg::CloseComposer));
+    assert!(!app.journal.composer.as_ref().unwrap().shown);
+    let _ = app.update(Message::Journal(JournalMsg::Day("2026-10-20".into())));
+    let _ = app.update(Message::Journal(JournalMsg::New(None)));
+    let composer = app.journal.composer.as_ref().unwrap();
+    assert_eq!(
+        composer.draft.body.text(),
+        "# Morning study\n\nA little **light**."
+    );
+    assert_eq!(
+        composer.day,
+        crate::journal_ui::field_date(&today),
+        "its day is its own"
+    );
+    assert_eq!(count(&app), 0);
+
+    // A day typed that isn't one is refused.
+    let _ = app.update(Message::Journal(JournalMsg::ComposerDay(
+        "13/45/2026".into(),
+    )));
+    let _ = app.update(Message::Journal(JournalMsg::SaveEntry));
+    assert_eq!(
+        app.journal.composer.as_ref().unwrap().problem.as_deref(),
+        Some("Choose a day for this entry.")
+    );
+    let _ = app.update(Message::Journal(JournalMsg::ComposerDay(
+        crate::journal_ui::field_date(&today),
+    )));
+    // Save entry: one note of that day, titled by its first line, which then opens.
+    let _ = app.update(Message::Journal(JournalMsg::SaveEntry));
+    assert!(app.journal.composer.is_none());
+    let notes = app.store.as_ref().unwrap().all_notes().unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].journal_date, today);
+    assert_eq!(
+        notes[0].markdown(),
+        "# Morning study\n\nA little **light**."
+    );
+    assert_eq!(notes[0].display_title(), "Morning study");
+    let open = app.journal.open.as_ref().unwrap();
+    assert_eq!(open.note.id, notes[0].id);
+    assert_eq!(open.body.text(), "# Morning study\n\nA little **light**.");
+    assert_eq!(app.journal.day, today);
+
+    // The rail's New note starts another entry beside the open note, which stays open.
+    let _ = app.update(Message::Journal(JournalMsg::New(None)));
+    assert!(app.journal.open.is_some());
+    assert!(app.journal.composer.as_ref().unwrap().draft.body.is_empty());
+    // Typing in the open note continues to autosave it, as before.
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Move(
+        crate::md_editor::Motion::DocEnd,
+        false,
+    ))));
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Edit(
+        Edit::Paste(std::sync::Arc::new(" More.".into())),
+    ))));
+    let _ = app.update(Message::Autosave);
+    let open = app.journal.open.as_ref().unwrap();
+    assert!(!open.dirty && open.saved_at.is_some());
+    assert_eq!(
+        app.store
+            .as_ref()
+            .unwrap()
+            .note(&open.note.id)
+            .unwrap()
+            .unwrap()
+            .markdown(),
+        "# Morning study\n\nA little **light**. More."
+    );
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Delete note").is_ok());
+    assert!(ui.find("Personal note").is_ok());
+    drop(ui);
+
+    // Quitting with something written in a new entry keeps it as that day's entry; an empty one leaves nothing.
+    type_in(&mut app, "Written just before closing");
+    assert!(app.keep_entry_draft());
+    assert!(app.journal.composer.is_none());
+    let notes = app.store.as_ref().unwrap().all_notes().unwrap();
+    assert_eq!(notes.len(), 2);
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.markdown() == "Written just before closing")
+    );
+    let _ = app.update(Message::Journal(JournalMsg::New(None)));
+    assert!(app.keep_entry_draft());
+    assert_eq!(count(&app), 2);
+}
+
+#[test]
+fn narrow_windows_show_the_journals_stages_one_at_a_time_like_the_websites_phone_layout() {
+    use crate::journal_ui::JournalMsg;
+    let dir = profile();
+    let mut app = App::from_directory(&dir.0);
+    app.window_width = 960.0;
+    app.window_height = 760.0;
+    let _ = app.update(Message::SetScreen(Screen::Journal));
+    let today = crate::store::today();
+    let mut note = Note::new(&today, None);
+    note.set_markdown("# Narrow window\n\nStill the same journal.");
+    let saved = app.store.as_mut().unwrap().save_note(&note).unwrap();
+    app.reload_journal();
+    // The calendar first, with the invitation and goals; no day list yet.
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Make room for a little light.").is_ok());
+    assert!(ui.find("Weekly goals").is_ok());
+    assert!(ui.find("Today’s journal").is_err());
+    drop(ui);
+    // Choosing a day shows its entries under "Calendar".
+    let _ = app.update(Message::Journal(JournalMsg::Day(today.clone())));
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Calendar").is_ok() && ui.find("Today’s journal").is_ok());
+    assert!(ui.find("Narrow window").is_ok());
+    assert!(ui.find("Weekly goals").is_err());
+    drop(ui);
+    // The note on its own, under its day; Back goes to the day, then the calendar.
+    let _ = app.update(Message::Journal(JournalMsg::Open(saved.id.clone())));
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(
+        ui.find(crate::journal::day_heading(&today).as_str())
+            .is_ok()
+    );
+    assert!(ui.find("Delete note").is_ok());
+    assert!(ui.find("Today’s journal").is_err());
+    drop(ui);
+    let _ = app.update(Message::Journal(JournalMsg::Close));
+    assert!(app.journal.open.is_none() && app.journal.phone_day);
+    let _ = app.update(Message::Journal(JournalMsg::ShowCalendar));
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Weekly goals").is_ok());
+    drop(ui);
+}
+
+#[test]
+fn the_reading_chip_logs_edits_and_removes_an_entrys_reading_like_the_websites() {
+    use crate::journal_ui::{JournalMsg, ReadingTarget};
+    use crate::md_editor::{Action, Edit};
+    let dir = profile();
+    let mut app = App::from_directory(&dir.0);
+    app.window_width = 1280.0;
+    app.window_height = 800.0;
+    let alma = at("bookofmormon", "alma", 32);
+    let source = NoteSource::scripture("Alma", &alma, None);
+    let today = crate::store::today();
+    app.start_note(&today, Some(source.clone()), "", None);
+    let _ = app.update(Message::SetScreen(Screen::Journal));
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    // A note with a source and no reading: "Log reading" and "From Alma 32".
+    assert!(ui.find("Log reading").is_ok() && ui.find("From").is_ok());
+    drop(ui);
+    let _ = app.update(Message::Journal(JournalMsg::Reading(ReadingTarget::Note)));
+    let edit = app.journal.reading.as_ref().unwrap();
+    assert!(!edit.editing && !edit.part);
+    assert_eq!(edit.choices[0].label, "Alma 32");
+    // Some verses, in order and inside the chapter.
+    let _ = app.update(Message::Journal(JournalMsg::ReadingPart(true)));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingStart("27".into())));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingEnd("21".into())));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingSave));
+    let error = app.journal.reading.as_ref().unwrap().error.clone().unwrap();
+    assert!(error.starts_with("Choose verses between 1 and"), "{error}");
+    let _ = app.update(Message::Journal(JournalMsg::ReadingStart("21".into())));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingEnd("23".into())));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingDate(
+        "10/27/2026".into(),
+    )));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingSave));
+    assert!(app.journal.reading.is_none());
+    let open = app.journal.open.as_ref().unwrap();
+    let logged = open.note.source.clone().unwrap();
+    assert_eq!(logged.label, "Alma 32:21-23");
+    assert_eq!(logged.href, "/browse/bookofmormon/alma/32#v-21");
+    assert_eq!((logged.verse_start, logged.verse_end), (Some(21), Some(23)));
+    assert!(open.note.reading_at.is_some());
+    // The entry moved to the day it was read, and the journal followed it there; it is saved.
+    assert_eq!(open.note.journal_date, "2026-10-27");
+    assert_eq!(app.journal.day, "2026-10-27");
+    let stored = app
+        .store
+        .as_ref()
+        .unwrap()
+        .note(&open.note.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.source, Some(logged.clone()));
+    assert_eq!(stored.journal_date, "2026-10-27");
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("Read Alma 32:21-23").is_ok());
+    drop(ui);
+
+    // With no note text the reading can't be removed (the entry would be empty).
+    let _ = app.update(Message::Journal(JournalMsg::Reading(ReadingTarget::Note)));
+    assert!(app.journal.reading.as_ref().unwrap().editing);
+    let _ = app.update(Message::Journal(JournalMsg::ReadingRemove));
+    assert!(app.journal.open.as_ref().unwrap().note.reading_at.is_some());
+    // Escape closes the editor and leaves the note open.
+    let _ = app.update(Message::Event(iced::Event::Keyboard(
+        iced::keyboard::Event::KeyPressed {
+            key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+            modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+            physical_key: iced::keyboard::key::Physical::Unidentified(
+                iced::keyboard::key::NativeCode::Unidentified,
+            ),
+            location: iced::keyboard::Location::Standard,
+            modifiers: iced::keyboard::Modifiers::default(),
+            text: None,
+            repeat: false,
+        },
+    )));
+    assert!(app.journal.reading.is_none() && app.journal.open.is_some());
+    // Once something is written, Remove reading keeps the entry and its source.
+    let _ = app.update(Message::Journal(JournalMsg::Body(Action::Edit(
+        Edit::Paste(std::sync::Arc::new("Faith is like a seed.".into())),
+    ))));
+    let _ = app.update(Message::Journal(JournalMsg::Reading(ReadingTarget::Note)));
+    let _ = app.update(Message::Journal(JournalMsg::ReadingRemove));
+    let open = app.journal.open.as_ref().unwrap();
+    assert!(open.note.reading_at.is_none());
+    assert_eq!(open.note.source, Some(logged));
+    let stored = app
+        .store
+        .as_ref()
+        .unwrap()
+        .note(&open.note.id)
+        .unwrap()
+        .unwrap();
+    assert!(stored.reading_at.is_none());
+    assert_eq!(stored.markdown(), "Faith is like a seed.");
 }

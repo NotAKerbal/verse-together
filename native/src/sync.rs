@@ -148,26 +148,9 @@ pub fn remote_annotations(value: &Value) -> Vec<Annotation> {
 
 /// A note as the website stores it: one Markdown body whose first line is its title.
 pub fn note_markdown(note: &Note) -> String {
-    let title = note.title.trim();
-    if title.is_empty() {
-        note.body.clone()
-    } else {
-        format!("# {title}\n\n{}", note.body.trim_start_matches('\n'))
-    }
+    note.markdown()
 }
-/// The reverse: a leading `# ` heading becomes the title.
-pub fn split_markdown(markdown: &str) -> (String, String) {
-    let trimmed = markdown.trim_start_matches(['\n', '\r']);
-    if let Some(rest) = trimmed.strip_prefix("# ") {
-        let (title, body) = rest.split_once('\n').unwrap_or((rest, ""));
-        (
-            title.trim().to_string(),
-            body.trim_start_matches(['\n', '\r']).to_string(),
-        )
-    } else {
-        (String::new(), markdown.to_string())
-    }
-}
+pub use crate::store::split_markdown;
 fn iso_secs(value: &Value) -> Option<i64> {
     chrono::DateTime::parse_from_rfc3339(value.as_str()?)
         .ok()

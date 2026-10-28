@@ -177,9 +177,16 @@ impl App {
         if let Some(dialog) = self.bibles_dialog() {
             layers = layers.push(dialog);
         }
+        // So does the journal's goal editor (`showModal`).
+        if self.screen == Screen::Journal
+            && let Some(goals) = self.journal.goal_draft
+        {
+            layers = layers.push(self.goal_dialog(goals));
+        }
         // Frames keep coming while the header, journal or Settings tabs move, or a selection drags the page along.
         if self.motion.is_animating(self.now)
             || self.journal.motion.is_animating(self.now)
+            || self.journal.snap_list
             || self.settings_motion.is_animating(self.now)
             || (self.edge_scroll != 0.0 && self.drag.as_ref().is_some_and(|d| d.dragging))
         {

@@ -227,13 +227,60 @@ impl Note {
             rev: 0,
         }
     }
-    pub fn display_title(&self) -> &str {
+    /// The note as the website stores it: one Markdown body whose first line is its title (`# Title`, a blank line,
+    /// then the body). A note kept without a separate title is its body as it is.
+    pub fn markdown(&self) -> String {
         let title = self.title.trim();
         if title.is_empty() {
-            DEFAULT_NOTE_TITLE
+            self.body.clone()
         } else {
-            title
+            format!("# {title}\n\n{}", self.body.trim_start_matches('\n'))
         }
+    }
+    /// Keeps `markdown`, written in the journal's one editor, exactly: a leading `# ` heading is kept as the title
+    /// when the two pieces give back the same text (and the title fits), otherwise the whole text is the body. So
+    /// `markdown()` always returns what was written, and notes saved with a separate title open unchanged.
+    pub fn set_markdown(&mut self, markdown: &str) {
+        let (title, body) = split_markdown(markdown);
+        let split = Note {
+            title,
+            body,
+            ..self.clone()
+        };
+        if split.markdown() == markdown && split.title.chars().count() <= NOTE_TITLE_MAX {
+            self.title = split.title;
+            self.body = split.body;
+        } else {
+            self.title = String::new();
+            self.body = markdown.to_string();
+        }
+    }
+    /// The website's `deriveNoteTitle`: the note's first line with text, as plain text (a heading or not, skipping
+    /// thematic breaks), up to 120 characters; "Untitled note" when there is none.
+    pub fn display_title(&self) -> String {
+        static BREAK: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+        let rule = BREAK.get_or_init(|| regex::Regex::new(r"^\s*([-*_=]\s*){3,}$").unwrap());
+        for raw in self.markdown().lines() {
+            if rule.is_match(raw) {
+                continue;
+            }
+            let line = plain_line(raw);
+            if line.is_empty() {
+                continue;
+            }
+            return if line.chars().count() > NOTE_TITLE_MAX {
+                format!(
+                    "{}…",
+                    line.chars()
+                        .take(NOTE_TITLE_MAX)
+                        .collect::<String>()
+                        .trim_end()
+                )
+            } else {
+                line
+            };
+        }
+        DEFAULT_NOTE_TITLE.to_string()
     }
     /// Whether the entry holds an actual reflection (`hasReflection`), not just a named reading.
     pub fn has_reflection(&self) -> bool {
@@ -243,7 +290,8 @@ impl Note {
     /// The body as plain text for a preview (`markdownExcerpt`): after a heading that starts it, each line without
     /// its Markdown (heading marks, quote markers, list markers, link destinations, emphasis), joined.
     pub fn excerpt(&self, limit: usize) -> String {
-        let lines: Vec<&str> = self.body.lines().collect();
+        let markdown = self.markdown();
+        let lines: Vec<&str> = markdown.lines().collect();
         let title = lines.iter().position(|l| !plain_line(l).is_empty());
         let skip = match title {
             Some(i) if heading_line(lines[i]) => i + 1,
@@ -266,6 +314,25 @@ impl Note {
         } else {
             plain
         }
+    }
+}
+/// The reverse of `Note::markdown`: a leading `# ` heading becomes the title, the rest (after its blank lines) the
+/// body.
+pub fn split_markdown(markdown: &str) -> (String, String) {
+    let trimmed = markdown.trim_start_matches(['\n', '\r']);
+    if let Some(rest) = trimmed.strip_prefix("# ") {
+        let (title, body) = rest.split_once('\n').unwrap_or((rest, ""));
+        let title = title.trim().to_string();
+        let body = body.trim_start_matches(['\n', '\r']).to_string();
+        if title.chars().count() <= NOTE_TITLE_MAX
+            && format!("# {title}\n\n{}", body.trim_start_matches('\n')) == markdown
+        {
+            (title, body)
+        } else {
+            (String::new(), markdown.to_string())
+        }
+    } else {
+        (String::new(), markdown.to_string())
     }
 }
 fn heading_line(line: &str) -> bool {
@@ -2362,8 +2429,10 @@ mod tests {
         let notes = store.notes_between("2026-10-27", "2026-10-27").unwrap();
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].source, Some(source.clone()));
-        // As the website's `markdownExcerpt`: the heading that starts the note is its title, not its preview.
-        assert_eq!(notes[0].excerpt(40), "A particle of faith.");
+        // As the website's `markdownExcerpt` over the note's whole Markdown: the heading that starts it (its title,
+        // "Faith") is not its preview; a later heading is.
+        assert_eq!(notes[0].excerpt(40), "Seeds A particle of faith.");
+        assert_eq!(notes[0].display_title(), "Faith");
         let mut linked = notes[0].clone();
         linked.body =
             "He is **mighty**; read [Alma 32](/browse/bookofmormon/alma/32).\n> - Plant the seed"

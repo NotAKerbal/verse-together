@@ -542,6 +542,9 @@ pub struct MdEditor<'a, Message> {
     on_redo: Option<Message>,
     on_link: Option<Box<dyn Fn(String) -> Message + 'a>>,
     read_only: bool,
+    on_focus: Option<Box<dyn Fn(bool) -> Message + 'a>>,
+    /// Grow with the text from this height (`min-h-48` in a growing panel) instead of filling the space.
+    grow: Option<f32>,
 }
 pub fn md_editor<'a, Message>(
     content: &'a Content,
@@ -559,6 +562,8 @@ pub fn md_editor<'a, Message>(
         on_redo: None,
         on_link: None,
         read_only: false,
+        on_focus: None,
+        grow: None,
     }
 }
 impl<'a, Message> MdEditor<'a, Message> {
@@ -587,6 +592,16 @@ impl<'a, Message> MdEditor<'a, Message> {
     /// undone, and there is no caret or input method.
     pub fn read_only(mut self, read_only: bool) -> Self {
         self.read_only = read_only;
+        self
+    }
+    /// Told when the editor gains or loses focus (the website's `focus-within` styles).
+    pub fn on_focus(mut self, f: impl Fn(bool) -> Message + 'a) -> Self {
+        self.on_focus = Some(Box::new(f));
+        self
+    }
+    /// Sized to its text, at least `min` tall, rather than filling its container.
+    pub fn grow(mut self, min: f32) -> Self {
+        self.grow = Some(min);
         self
     }
 }
@@ -654,6 +669,10 @@ struct State {
     preferred_x: Option<f32>,
     preedit: Option<input_method::Preedit>,
     modifiers: keyboard::Modifiers,
+    /// The placeholder, shaped for its text and width (kept here: the renderer holds paragraphs only weakly).
+    placeholder: Option<(String, f32, GraphicsParagraph)>,
+    /// The focus last told to `on_focus`.
+    reported_focus: bool,
 }
 impl Default for State {
     fn default() -> Self {
@@ -671,6 +690,8 @@ impl Default for State {
             preferred_x: None,
             preedit: None,
             modifiers: keyboard::Modifiers::default(),
+            placeholder: None,
+            reported_focus: false,
         }
     }
 }
@@ -993,7 +1014,14 @@ impl<Message: Clone> MdEditor<'_, Message> {
 
 impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'_, Message> {
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fill)
+        Size::new(
+            Length::Fill,
+            if self.grow.is_some() {
+                Length::Shrink
+            } else {
+                Length::Fill
+            },
+        )
     }
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
@@ -1008,9 +1036,43 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
         limits: &layout::Limits,
     ) -> layout::Node {
         let state = tree.state.downcast_mut::<State>();
-        let size = limits.resolve(Length::Fill, Length::Fill, Size::new(400.0, 192.0));
+        let size = match self.grow {
+            Some(min) => {
+                let width = limits
+                    .resolve(Length::Fill, Length::Shrink, Size::ZERO)
+                    .width;
+                self.lay_out(state, width);
+                let height = state.content_height.max(min).min(limits.max().height);
+                Size::new(width, height)
+            }
+            None => limits.resolve(Length::Fill, Length::Fill, Size::new(400.0, 192.0)),
+        };
         state.height = size.height;
         self.lay_out(state, size.width);
+        state.placeholder = match &self.placeholder {
+            Some(text) if self.content.is_empty() => {
+                let width = (size.width - 2.0 * PAD_X).max(1.0);
+                match state.placeholder.take() {
+                    Some(kept) if kept.0 == *text && kept.1 == width => Some(kept),
+                    _ => Some((
+                        text.clone(),
+                        width,
+                        GraphicsParagraph::with_text(core_text::Text {
+                            content: text.as_str(),
+                            bounds: Size::new(width, f32::INFINITY),
+                            size: Pixels(self.size),
+                            line_height: LineHeight::Absolute(Pixels(self.size * 1.7)),
+                            font: Self::base_font(),
+                            align_x: core_text::Alignment::Left,
+                            align_y: iced::alignment::Vertical::Top,
+                            shaping: Shaping::Advanced,
+                            wrapping: Wrapping::Word,
+                        }),
+                    )),
+                }
+            }
+            _ => None,
+        };
         let now = (self.content.revision, self.content.cursor);
         if state.seen != now {
             if state.seen.0 != u64::MAX {
@@ -1045,6 +1107,12 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
     ) {
         let bounds = layout.bounds();
         let state = tree.state.downcast_mut::<State>();
+        if let Some(on_focus) = &self.on_focus
+            && state.reported_focus != state.focused
+        {
+            state.reported_focus = state.focused;
+            shell.publish(on_focus(state.focused));
+        }
         let to_content =
             |p: Point, scroll: f32| Point::new(p.x - bounds.x, p.y - bounds.y + scroll);
         match event {
@@ -1364,21 +1432,10 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for MdEditor<'
         renderer.with_layer(clip, |renderer| {
             let origin = Vector::new(bounds.x, bounds.y - state.scroll);
             if self.content.is_empty()
-                && let Some(placeholder) = &self.placeholder
+                && let Some((_, _, paragraph)) = &state.placeholder
             {
-                let paragraph = GraphicsParagraph::with_text(core_text::Text {
-                    content: placeholder.as_str(),
-                    bounds: Size::new((bounds.width - 2.0 * PAD_X).max(1.0), f32::INFINITY),
-                    size: Pixels(self.size),
-                    line_height: LineHeight::Absolute(Pixels(self.size * 1.7)),
-                    font: Self::base_font(),
-                    align_x: core_text::Alignment::Left,
-                    align_y: iced::alignment::Vertical::Top,
-                    shaping: Shaping::Advanced,
-                    wrapping: Wrapping::Word,
-                });
                 renderer.fill_paragraph(
-                    &paragraph,
+                    paragraph,
                     Point::new(bounds.x + PAD_X, bounds.y + PAD_TOP - state.scroll),
                     p.soft,
                     clip,

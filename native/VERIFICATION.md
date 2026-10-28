@@ -1,3 +1,119 @@
+# Independent Journal review — October 28, 2026
+
+Reviewed the Claude Journal pass on desktop base `8a9acc6`, including one-document editing, composer
+creation, reading metadata, published-note guards and responsive layouts. Inspected the paired reference/native
+captures and the current dev website in the existing Chrome session (read-only, no account or study changes).
+
+Review found and repaired two persistence issues:
+- Incoming synced Markdown now uses the same lossless split as the editor: leading blank lines, heading spacing,
+  a heading without a trailing body, and long title lines round-trip unchanged. The regression compares the
+  complete reassembled text, not just its displayed title.
+- An account switch first saves a written New entry under its original owner, then clears the composer and reading
+  dialog. Explicit sign-out saves it before counting unsent changes, preserving the confirmation. A regression
+  covers guest→account and expired account→guest; no draft is copied into another owner's study.
+
+**Passed independently:** 183 native tests (1 optional exporter ignored), strict all-target clippy. 5 renderer tests, formatting, whitespace, release-history check and locked release build also **Passed**.
+Final binary SHA-256: `c58271a8203b799fa1534bff568926b33ea05b05a655c7685faaaf2330ac0820`.
+
+**Passed independently in the final release window:** isolated `/tmp/verse-journal-root-qa-1028`,
+`--no-account`: Journal → Write a reflection → New entry; typed a heading, bold text and quote; SQLite confirmed
+zero notes before Save entry and one exact-text note afterwards. Appended a second paragraph and confirmed
+autosave in SQLite plus the Saved-at footer. Closed and restarted on the same profile and checked persistence.
+Screenshot: `/tmp/verse-journal-reviewed.png`. No keyring or account write. Remaining cosmetic/editor differences
+are listed in the Claude entry below; fresh account sync and platform/accessibility checks were not rerun. Logs `/tmp/verse-journal-root-{tests,clippy,release}.log`.
+The previous live account rehearsal remains historical evidence; no new native grant or production write was made.
+
+# Journal fidelity pass — October 28, 2026 (Claude, implementation)
+
+**Tree:** `t3/rust-desktop-app` at `8a9acc6` plus this pass's **uncommitted** native changes. There was no commit,
+push, PR, merge or deployment, no web/Convex/mobile/auth/env file changed, no release version, and no account,
+keyring or feedback use. Reference: production `1647d51` (2.14.0) at `https://www.versetogether.org/notes`, signed
+out in a throwaway headless Chrome. Its journal lives only in that browser's storage: there were no server writes and
+no production data. The dev site answers headless browsers with Vercel SSO, so it wasn't used; the Journal code is the
+same on dev. Environment: Ubuntu GNOME Wayland 1280×800 (window content 1214×734), Rust from
+`/tmp/verse-native-tools/env.sh`, `CARGO_BUILD_JOBS=4`, about 299 GiB and 88% of inodes free. Evidence:
+`/tmp/verse-journal-parity-1028/{ref,native-before,native-after,snapshots,logs}`.
+
+## Audit (screenshots at the same viewport and states, measured boxes and computed styles)
+
+The gaps found before editing, most visible first:
+
+1. The note had a separate 30px title field, a toolbar (← / trash / Save·Saved), a date line and a rule. The website
+   has one Markdown editor whose first line is the title, a rubric time line, the reading chip / "From …" /
+   "Personal note", an X at the corner, and a footer with the save state and Delete note.
+2. Write a reflection opened a note at once. The website opens the day's **New entry** composer and saves it only
+   on Save entry.
+3. The rail beside a note showed the full date, its cards were ruled rows with the time outside them, and New note
+   sat at the bottom. The website has ‹, the short date, New note at the top, and bordered cards with their source
+   line inside.
+4. The day-list rows had the source line set apart with the wrong wording ("Written 10:41 AM" against "You wrote a
+   personal note (no reading source) · 10:41 AM") and unclamped excerpts.
+5. The goals panel was 20–35px tighter than the website, and "This month" showed in the first screen.
+6. The goal dialog sat under the header (the header stayed bright), had no stepper dividers, was 26px shorter and
+   didn't close on Escape.
+7. There was no reading chip or reading editor: the native "Log reading" was a toggle.
+8. Below 1024px the website shows its calendar, a day and the note as separate screens; native kept two columns.
+9. The editor placeholder ("Write a note…" / the prompt) never drew.
+
+## What changed
+
+All of the above was fixed (details and remaining gaps in `PARITY.md` → Journal):
+
+- **One editor:** `store.rs` `Note::markdown` / `set_markdown`, a lossless title/body split, and `display_title` as
+  `deriveNoteTitle`. Excerpts now cover the whole Markdown (`markdownExcerpt`). Sync still sends `note_markdown`, and
+  `split_markdown` moved into `store.rs` and is re-exported. There is no schema or migration change.
+- **Composer:** `Composer` with its prompt, editor, Day, Save entry and Close. A written draft keeps its day, an
+  untouched one follows the selected day, and a draft is saved when the app is closed normally.
+- **Reading chip and editor:** a dashed outline widget, `popup` placement, verse checks and the move to the day
+  read. Remove keeps the editor open when the note has no text.
+- **Rail and rows:** `NoteSourceLine` with "You" or the account's name, and a `clamp_lines` helper. The list resets
+  to its top on open and close (`snap_list`). Found during QA: it inherited the main list's scroll.
+- **Goals:** goals spacing, and the goal dialog as a window-covering layer that Escape closes.
+- **Narrow layout:** `journal_stages_view`.
+- **Editor fixes (`md_editor.rs`):** the placeholder is a cached paragraph (it was never drawn); `grow` lets the
+  composer's editor size to its text; `on_focus` gives the composer its accent border.
+- **Icons:** `faFeather` and `faArrowRight` added through the icon generator.
+
+## Checks (final tree)
+
+| Check | Command / procedure | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --locked` | **Passed**: 182, 1 ignored (snapshot exporter). 4 new: one-editor round trip and titles, composer, reading chip, narrow stages. 4 existing assertions updated to the website's behaviour (title in the body, excerpt over the whole Markdown, reading row text) (`logs/final-tests.log`) |
+| Renderer tests | `cargo test --locked -p iced_tiny_skia` | **Passed**: 5 |
+| Clippy / format / whitespace | `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check` | **Passed** |
+| Release notes current | `node native/scripts/generate-release-notes.mjs --check` | **Passed** |
+| Release build | `cargo build --release --locked` | **Passed**; SHA-256 `ca661881d33221e481ce914ffbb07ec03591cd7eb222e530c92b737643f548ce` |
+| Headless snapshots (supporting only) | `VERSE_SNAPSHOTS=… cargo test snapshots -- --ignored` | See `logs/snapshots.log`; includes `journal-composer` |
+| Web / Convex tests | — | **Not run**: no web or Convex file changed |
+
+## Real desktop check (release builds, Linux Computer Use, `--no-account`, session bus disabled)
+
+Profiles `/tmp/verse-journal-parity-1028/profile-after{1..4}`. The last QA build differs from the final binary only by
+`cargo fmt` and a type alias. Shots are in `native-after/`, with the web's in `ref/` under the same names.
+
+**Passed:**
+
+- Empty day (01).
+- Write a reflection → New entry scrolled into view, prompt shown, Write a reflection dimmed (02).
+- Live Markdown typed (03); Save entry → the note opens with the rail (05).
+- Caret on the title shows "#" (07); typing → "Saved at 11:18 AM" after autosave (07b).
+- Delete confirmation (08); Escape and Cancel keep the note.
+- The rail's New note (09) and a second, plain-first-line note titled by that line, wrapping in two lines exactly
+  as on the website (10).
+- Close → populated day (12); goal dialog over the whole window with the stepper changing 5→6 and Escape discarding
+  it (14).
+- Reader 1 Nephi 1:2 → Add to a journal note → dashed Log reading and "From 1 Nephi 1:2" (20); the reading editor
+  (21); Log reading → "Read 1 Nephi 1:2 ⌄", the arrow, and "Reading logged" in the card (22).
+- Narrow 920px window: the note under its day (30), the calendar stage (31).
+- Window close → relaunch on the same profile: notes, reading and the verse's Note link and check were all kept (40).
+
+Measured against the website: calendar, goals, invitation, day rows, rail cards, note header and footer all within
+1–5px. Escape closes the reading editor first.
+
+**Not run:** published or archived notes live (covered by state tests), a signed-in account (no new grant made),
+dark mode, macOS/Windows, accessibility/IME. 280ms mid-glide frames aren't captured reliably by the desktop tool;
+the motion code is unchanged.
+
 # Dev account acceptance — October 28, 2026
 
 **Live account code tested:** `9fcee660ae146878600e7d6f13c8b0a6ba5d38d8` on `t3/rust-desktop-app`.

@@ -923,7 +923,7 @@ impl App {
         self.journal.day = today.clone();
         self.reload_journal();
         self.start_note(&today, Some(source), &quote, None);
-        presented(iced::widget::operation::focus("journal-title"))
+        presented(iced::widget::operation::focus("journal-body"))
     }
     /// The reader's Add to note (`onAddToNote`): each run of consecutive selected verses quoted under its own
     /// reference and verse link, its verses as separate paragraphs.
@@ -1035,6 +1035,14 @@ impl App {
             Message::Presented => {}
             Message::Frame(now) => {
                 self.now = now;
+                // A note opened or closed: the day's list starts at its top in its new place (the website resets the
+                // moved chooser's scroll before it paints).
+                if std::mem::take(&mut self.journal.snap_list) {
+                    return operation::snap_to(
+                        journal_ui::CHOOSER,
+                        scrollable::RelativeOffset::START,
+                    );
+                }
                 if self.edge_scroll != 0.0
                     && let Some(d) = self.drag.as_ref().filter(|d| d.dragging)
                 {
@@ -1567,7 +1575,21 @@ impl App {
                             return self.update(Message::SetScreen(Screen::Journal));
                         }
                         keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                            if self.release.viewing.is_some() {
+                            // The journal's goal editor and reading editor close first (`onCancel`, the chip's
+                            // Escape), leaving the note open.
+                            if self.screen == Screen::Journal && self.journal.goal_draft.is_some() {
+                                self.journal.goal_draft = None;
+                            } else if self.screen == Screen::Journal
+                                && self.journal.reading.is_some()
+                            {
+                                self.journal.reading = None;
+                            } else if self.screen == Screen::Journal
+                                && self.journal.open.as_ref().is_some_and(|o| o.confirm_delete)
+                            {
+                                // As the website's delete confirmation: Escape cancels it, the note stays open.
+                                return self
+                                    .update_journal(journal_ui::JournalMsg::ConfirmDelete(false));
+                            } else if self.release.viewing.is_some() {
                                 self.release.viewing = None;
                             } else if self.note_links.picker.is_some()
                                 || self.note_links.read_picker.is_some()
@@ -1658,7 +1680,7 @@ impl App {
                     self.window_height = size.height;
                 }
                 Event::Window(window::Event::CloseRequested)
-                    if self.save_note() && self.save_journal_note() =>
+                    if self.save_note() && self.save_journal_note() && self.keep_entry_draft() =>
                 {
                     self.persist();
                     return window::oldest().and_then(window::close);
@@ -2157,7 +2179,8 @@ mod interaction_tests {
         use journal_ui::JournalMsg;
         use md_editor::{Action, Edit};
         let (mut app, dir) = app();
-        let _ = app.update(Message::Journal(JournalMsg::New(None)));
+        let today = store::today();
+        app.start_note(&today, None, "", None);
         let typed = |app: &mut App, text: &str| {
             for c in text.chars() {
                 let edit = if c == '\n' {
@@ -2677,25 +2700,31 @@ mod interaction_tests {
             app.store.as_ref().unwrap().annotations(&location).unwrap()[0].note,
             "Verse draft survives a forced quit"
         );
-        let _ = app.update(Message::Journal(journal_ui::JournalMsg::New(None)));
-        let _ = app.update(Message::Journal(journal_ui::JournalMsg::Title(
-            "Autosaved reflection".into(),
+        app.start_note(&store::today(), None, "", None);
+        let _ = app.update(Message::Journal(journal_ui::JournalMsg::Body(
+            md_editor::Action::Edit(md_editor::Edit::Paste(std::sync::Arc::new(
+                "# Autosaved reflection".into(),
+            ))),
         )));
         let _ = app.update(Message::Autosave);
         assert!(app.journal.open.is_some());
         assert!(!app.has_unsaved_notes());
         let id = app.journal.open.as_ref().unwrap().note.id.clone();
         let saved = Store::open(&dir).unwrap().note(&id).unwrap().unwrap();
-        assert_eq!(saved.title, "Autosaved reflection");
+        // A heading alone is kept as the note's text exactly; the journal titles it from that line.
+        assert_eq!(saved.markdown(), "# Autosaved reflection");
+        assert_eq!(saved.display_title(), "Autosaved reflection");
         drop(app);
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn failed_autosave_keeps_the_draft_and_retries_without_losing_text() {
         let (mut app, dir) = app();
-        let _ = app.update(Message::Journal(journal_ui::JournalMsg::New(None)));
-        let _ = app.update(Message::Journal(journal_ui::JournalMsg::Title(
-            "Keep this draft".into(),
+        app.start_note(&store::today(), None, "", None);
+        let _ = app.update(Message::Journal(journal_ui::JournalMsg::Body(
+            md_editor::Action::Edit(md_editor::Edit::Paste(std::sync::Arc::new(
+                "# Keep this draft".into(),
+            ))),
         )));
         let db = rusqlite::Connection::open(dir.join("study.sqlite")).unwrap();
         db.execute_batch("CREATE TRIGGER reject_autosave BEFORE INSERT ON notes BEGIN SELECT RAISE(ABORT,'test write failure'); END;").unwrap();
@@ -2704,8 +2733,8 @@ mod interaction_tests {
         assert!(app.autosave_failed);
         assert!(app.error.as_ref().unwrap().contains("test write failure"));
         assert_eq!(
-            app.journal.open.as_ref().unwrap().note.title,
-            "Keep this draft"
+            app.journal.open.as_ref().unwrap().body.text(),
+            "# Keep this draft"
         );
         db.execute_batch("DROP TRIGGER reject_autosave;").unwrap();
         let _ = app.update(Message::Autosave);

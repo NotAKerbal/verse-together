@@ -59,10 +59,13 @@ localhost deployments retain the website proxy. Credentials remain scoped to the
 - **Journal**, as on the website: a month calendar with entry dots, weekly goals (study days and reflections,
   Monday–Sunday, editable), this month's study days, the reflection invitation with its prompts, the selected
   day's entries (Markdown notes, logged readings, and verse notes), and a reflection worth revisiting. Opening a
-  note glides the day's list into the rail. Notes have a title, a Markdown body written in the website's live
+  note glides the day's list into the rail. Write a reflection and New note open the day's New entry composer;
+  Save entry creates the note. Each note is one Markdown document written in the website's live
   editor (headings at their sizes, bold, italics, links, quotes, lists and code styled in place, syntax hidden
   off the caret's line, Ctrl/⌘-click to follow a safe link, list continuation on Enter, undo/redo), an optional
-  source (scripture or lesson) and reading log, and save automatically, on leaving, closing or Ctrl+S. A note the
+  source (scripture or lesson) and editable reading chip. Saved notes autosave, including on leaving, closing or Ctrl+S.
+  A New entry waits for Save entry; a normal app close keeps a written entry, but force-quit recovery of that
+  unsaved composer is not implemented. Below 1024px the calendar, day and note use separate stages. A note the
   account has published (or archived) opens read-only, as on the website ("Published · read-only"): its text can be
   selected, copied and its links followed, but nothing can be typed, undone, re-dated, logged or deleted (archived
   notes can still be deleted). If a note is published elsewhere while you are writing in it here, what you wrote is

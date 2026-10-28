@@ -442,7 +442,7 @@ impl App {
                     self.journal.day = today.clone();
                     self.reload_journal();
                     self.start_note(&today, Some(source), "", None);
-                    return crate::presented(operation::focus("journal-title"));
+                    return crate::presented(operation::focus("journal-body"));
                 }
             }
             LessonMsg::OpenNote(id) => {

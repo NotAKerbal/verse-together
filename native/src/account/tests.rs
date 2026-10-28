@@ -64,6 +64,34 @@ fn notes_of(f: &Fixture, owner: &str) -> Vec<String> {
 }
 
 #[test]
+fn composer_drafts_stay_with_the_owner_when_signing_in_or_the_session_ends() {
+    use crate::journal_ui::JournalMsg;
+    use crate::md_editor::{Action, Edit};
+    let mut f = fixture();
+    let compose = |f: &mut Fixture, text: &str| {
+        let _ = f.app.update_journal(JournalMsg::New(None));
+        let _ = f
+            .app
+            .update_journal(JournalMsg::ComposerBody(Action::Edit(Edit::Paste(
+                std::sync::Arc::new(text.into()),
+            ))));
+    };
+    compose(&mut f, "Guest entry draft");
+    sign_in(&mut f, "account-a");
+    assert!(f.app.journal.composer.is_none());
+    assert_eq!(notes_of(&f, ""), ["Guest entry draft"]);
+    assert!(notes_of(&f, "account-a").is_empty());
+    compose(&mut f, "Account entry draft");
+    let generation = f.app.account.generation;
+    let _ = f
+        .app
+        .update_account(AccountMsg::Synced(generation, Err(CallError::SignedOut)));
+    assert!(f.app.journal.composer.is_none());
+    assert_eq!(notes_of(&f, "account-a"), ["Account entry draft"]);
+    assert_eq!(notes_of(&f, ""), ["Guest entry draft"]);
+}
+
+#[test]
 fn an_ended_session_saves_writing_under_its_own_account_first() {
     let mut f = fixture();
     sign_in(&mut f, "account-a");

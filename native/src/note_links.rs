@@ -181,7 +181,7 @@ pub fn chapter_refs(notes: &[(Note, String)], chapter: &Location) -> BTreeMap<u3
         for (start, end) in scripture_links_for_chapter(&note.body, chapter) {
             refs.push(NoteRef {
                 note_id: note.id.clone(),
-                title: note.title.clone(),
+                title: note.display_title(),
                 start: start.min(end),
                 end: start.max(end),
                 published: status == "published",

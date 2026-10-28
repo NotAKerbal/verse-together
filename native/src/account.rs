@@ -238,7 +238,7 @@ impl App {
     /// Shows `owner`'s study ("" for this computer's own), after saving what is being written under the owner it
     /// was written for. Returns false, changing nothing, if that writing couldn't be saved.
     fn switch_owner(&mut self, owner: &str) -> bool {
-        if !self.save_note() || !self.save_journal_note() {
+        if !self.save_note() || !self.save_journal_note() || !self.keep_entry_draft() {
             return false;
         }
         if let Some(s) = &mut self.store {
@@ -250,6 +250,8 @@ impl App {
         self.load_chapter();
         self.load_note();
         self.journal.open = None;
+        self.journal.composer = None;
+        self.journal.reading = None;
         if self.screen == Screen::Journal {
             self.reload_journal();
         }
@@ -505,7 +507,7 @@ impl App {
                 let Some(session) = self.account.session.clone() else {
                     return Task::none();
                 };
-                if !self.save_note() || !self.save_journal_note() {
+                if !self.save_note() || !self.save_journal_note() || !self.keep_entry_draft() {
                     return Task::none();
                 }
                 let owner = session.user.id.clone();

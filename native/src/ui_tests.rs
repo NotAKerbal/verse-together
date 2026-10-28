@@ -367,12 +367,21 @@ fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
     let _ = app.update(Message::Journal(JournalMsg::New(Some(
         "What helped you feel closer to God?".into(),
     ))));
+    shot(app, "journal-composer");
+    for c in "# Seeds of faith".chars() {
+        let _ = app.update(Message::Journal(JournalMsg::ComposerBody(
+            crate::md_editor::Action::Edit(crate::md_editor::Edit::Insert(c)),
+        )));
+    }
+    let _ = app.update(Message::Journal(JournalMsg::SaveEntry));
     let _ = app.update(Message::Frame(app.now + Duration::from_millis(140)));
     shot(app, "journal-opening");
-    let _ = app.update(Message::Journal(JournalMsg::Title("Seeds of faith".into())));
     let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
     shot(app, "journal-note");
-    for c in "## A mighty change\n\nFaith is **not** a perfect knowledge, but *hope* for things.\n- Read [Alma 32](/browse/bookofmormon/alma/32)\n> Ye must nourish it".chars() {
+    let _ = app.update(Message::Journal(JournalMsg::Body(
+        crate::md_editor::Action::Move(crate::md_editor::Motion::DocEnd, false),
+    )));
+    for c in "\n\n## A mighty change\n\nFaith is **not** a perfect knowledge, but *hope* for things.\n- Read [Alma 32](/browse/bookofmormon/alma/32)\n> Ye must nourish it".chars() {
         let edit = if c == '\n' {
             crate::md_editor::Edit::Enter
         } else {
