@@ -60,7 +60,10 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [{ kind: "new", text: "Approve the native desktop app in your browser to connect your account and sync study data." }],
+  items: [
+    { kind: "new", text: "Approve the native desktop app in your browser to connect your account and sync study data." },
+    { kind: "improved", text: "On desktop, move between chapters with the Left and Right arrow keys, or use the next-chapter link below the verses." },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [
