@@ -1,6 +1,6 @@
 {
   "name": "verse-together",
-  "version": "0.1.0",
+  "version": "2.10.0",
   "private": true,
   "engines": {
     "node": ">=24.0.0"
@@ -11,6 +11,10 @@
     "build": "next build --turbopack",
     "build:vercel": "node scripts/vercel-build.mjs",
     "test:deploy": "node --test scripts/vercel-build.test.mjs",
+    "test:release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/release-version.test.mjs",
+    "release:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.mjs check",
+    "release:next": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.mjs next",
+    "release:status": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.mjs status",
     "start": "next start",
     "lint": "eslint",
     "test:cfm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/comeFollowMe.test.mjs src/lib/cfm/cfmGuide.test.mjs src/lib/cfm/verseResources.test.mjs src/features/comeFollowMe/scrollSync.test.mjs src/features/comeFollowMe/readerDock.test.mjs src/features/comeFollowMe/scriptureAnnotations.test.mjs src/features/annotations/verseAnnotations.test.mjs src/features/comeFollowMe/guideAnchors.test.mjs src/features/comeFollowMe/companionPanes.test.mjs src/features/comeFollowMe/passagePreview.test.mjs src/features/comeFollowMe/lessons.test.mjs src/features/comeFollowMe/scriptureFirst.test.mjs",

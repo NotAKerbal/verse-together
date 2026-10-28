@@ -33,15 +33,9 @@ import JstVerseText from "./JstVerseText";
 import { readJstChapter } from "@/lib/jst";
 import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
-import type { ReaderPreferences } from "@/lib/preferences";
 import { useSimpleMode } from "@/lib/simpleMode";
-import {
-  getDefaultPreferences,
-  loadPreferences,
-  savePreferences,
-  hasSeenTapToActionsHint,
-  setSeenTapToActionsHint,
-} from "@/lib/preferences";
+import { hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
+import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/plans/useReadingProgress";
@@ -581,7 +575,7 @@ export default function ChapterReader({
   );
   // KJV wording the JST leaves out is hidden by default so the passage reads cleanly; the reader can show it.
   const [showJstOmitted, setShowJstOmitted] = useState(false);
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
   const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
   const readingLog = useMyReadingLog();
@@ -607,7 +601,7 @@ export default function ChapterReader({
   useTrackLastPosition(volume, book, chapter);
   // The account's annotations when signed in, else this device's (guests study without an account).
   const chapterAnnotationData = useChapterAnnotations(volume, book, chapter);
-  const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences());
+  const { prefs, update: updatePrefs } = useReaderPreferences();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<ChapterSelectionState | null>(null);
   const router = useRouter();
@@ -702,19 +696,6 @@ export default function ChapterReader({
     if (prev) tasks.push(() => router.prefetch(prev));
     return runIdleQueue(tasks, scheduleIdleTask);
   }, [textReady, nextHref, prevHref, overlayList, router]);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const token = user ? await getToken({ template: "convex" }) : null;
-      const loaded = await loadPreferences(user?.id ?? null, token);
-      if (!alive) return;
-      setPrefs(loaded);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [user?.id, getToken]);
 
   useEffect(() => {
     // The offline install reads every volume; keep it out of the way of the chapter that is opening.
@@ -1660,13 +1641,7 @@ export default function ChapterReader({
                   prefs={prefs}
                   translationControls={translationControls}
                   anchorRef={settingsAnchorRef}
-                  onChange={(next) => {
-                    setPrefs(next);
-                    void (async () => {
-                      const token = user ? await getToken({ template: "convex" }) : null;
-                      await savePreferences(user?.id ?? null, next, token);
-                    })();
-                  }}
+                  onChange={updatePrefs}
                 />
               </div>
             }
