@@ -21,6 +21,7 @@ import {
   chapterLogOptions,
 } from "./ChapterReaderChrome";
 import WordStudyPanel from "./WordStudyPanel";
+import ChapterDesktopNav from "./ChapterDesktopNav";
 import { useAuth } from "@/lib/auth";
 import type { Footnote } from "@/lib/openscripture";
 import { loadChapter } from "@/lib/chapterClient";
@@ -1951,6 +1952,11 @@ export default function ChapterReader({
           {textReady && !pageCovered ? (
             <NoteSourceRegistrar kind="scripture" label={reference} volume={volume} book={book} chapter={chapter} />
           ) : null}
+          <ChapterDesktopNav
+            prevHref={prevHref}
+            nextHref={nextHref}
+            shortcutsBlocked={pageCovered || settingsOpen || overlayOpen || hasSelection || isPointerSelecting || annotationEditorVerse !== null || openInsightVerse !== null || isDragging || animTargetX !== null}
+          />
           <ChapterSimpleNav prevHref={prevHref} nextHref={nextHref} />
           </div>
         </div>
