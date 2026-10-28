@@ -19,6 +19,7 @@ import {
 } from "./authEnvironment";
 import { CLIENT_IP_HEADER } from "./authProxy";
 import { convexRateLimitStorage } from "./authRateLimit";
+import { nativeAppAuth } from "./nativeAuth";
 import { NATIVE_EXCHANGE_PATH, NATIVE_EXCHANGE_RATE_LIMIT, nativeSignIn } from "./nativeSignInPlugin";
 
 // The component client has the Convex adapter plus helpers such as safeGetAuthUser.
@@ -202,6 +203,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       // return to the app carries a one-time code redeemable only with the app's private verifier, never the session
       // (see convex/nativeSignInPlugin.ts). Web sign-in is unaffected.
       ...nativeSignIn(ctx),
+      // Browser-approved desktop session, separate from the mobile OAuth handoff.
+      nativeAppAuth(ctx),
     ],
   });
 };
