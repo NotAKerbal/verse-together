@@ -65,6 +65,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("desktop sign-in", () => {
+  test("deletion in progress refuses approval and exchanging an earlier grant", async () => {
+    const t = setup();
+    const cookie = await websiteCookie(t);
+    const code = await grant(t, cookie);
+    const session = await t.fetch("/api/auth/get-session", { headers: { cookie } });
+    const { user } = await session.json() as { user: { id: string } };
+    await t.run(async ctx => {
+      await ctx.db.insert("accountDeletions", { authUserId: user.id, clerkId: "deleting-owner", startedAt: Date.now() });
+    });
+    expect((await post(t, "/native/grant", { challenge: await sha256Base64Url(VERIFIER) }, { cookie })).status).toBe(403);
+    expect((await appPost(t, "/native/token", { code, verifier: VERIFIER })).status).toBe(403);
+    // Refused exchange still consumed the code; a later retry cannot revive it.
+    expect((await appPost(t, "/native/token", { code, verifier: VERIFIER })).status).toBe(401);
+  });
+
   test("an approved code becomes the app's own bearer session, once", async () => {
     const t = setup();
     const cookie = await websiteCookie(t);

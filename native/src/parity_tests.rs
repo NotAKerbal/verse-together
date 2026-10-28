@@ -624,14 +624,14 @@ fn release_notes_show_the_websites_history_and_open_a_screenshot() {
         assert!(ui.find(title).is_ok(), "{title}");
     }
     assert!(ui.find("Earlier releases").is_ok());
-    assert!(ui.find("2.0.0–2.10.0").is_ok());
+    assert!(ui.find("2.0.0–2.11.0").is_ok());
     assert!(
         ui.find("Version 2.0.0").is_err(),
         "earlier releases start closed"
     );
-    // Nothing upcoming, so no Unreleased entry.
-    assert!(notes.unreleased.items.is_empty());
-    assert!(ui.find("Unreleased").is_err());
+    // The dev integration announces desktop account approval as upcoming.
+    assert!(!notes.unreleased.items.is_empty());
+    assert!(ui.find("Unreleased").is_ok());
     drop(ui);
     // (Below the fold at this window size, so it is opened by its message.)
     let _ = app.update(Message::Release(release_notes::ReleaseMsg::ToggleEarlier));
@@ -733,6 +733,54 @@ fn remote_note(
         updated: 1_793_000_000,
         text: Some((title.into(), body.into())),
     }
+}
+
+#[test]
+fn a_clean_open_draft_follows_sync_without_forking_the_next_edit() {
+    use crate::journal_ui::JournalMsg;
+    let dir = profile();
+    let mut app = App::from_directory(&dir.0);
+    let store = app.store.as_mut().unwrap();
+    store.set_owner("account-1");
+    let mut remote = remote_note("r1", "Before", "Original text", None);
+    store.apply_remote_note(&remote).unwrap();
+    let note = store.all_notes().unwrap().remove(0);
+    app.open_note(note.clone(), None);
+
+    remote.text = Some(("From the web".into(), "Updated text".into()));
+    remote.revision += 1;
+    app.store
+        .as_mut()
+        .unwrap()
+        .apply_remote_note(&remote)
+        .unwrap();
+    app.refresh_open_note();
+    let open = app.journal.open.as_ref().unwrap();
+    assert_eq!(open.note.title, "From the web");
+    assert_eq!(open.body.text(), "Updated text");
+    let _ = app.update(Message::Journal(JournalMsg::Title("Edited here".into())));
+    assert!(app.save_journal_note());
+    assert_eq!(app.journal.open.as_ref().unwrap().note.id, note.id);
+    assert_eq!(app.store.as_ref().unwrap().all_notes().unwrap().len(), 1);
+
+    // A real concurrent edit still keeps the unsaved local draft and forks on save.
+    let _ = app.update(Message::Journal(JournalMsg::Title("Unsaved here".into())));
+    remote.revision += 1;
+    remote.text = Some(("Another web edit".into(), "Other text".into()));
+    let store = app.store.as_mut().unwrap();
+    let dirty = store.dirty_notes(10).unwrap().remove(0);
+    store
+        .note_synced(&note.id, dirty.note.rev, "r1", remote.revision - 1, None)
+        .unwrap();
+    store.apply_remote_note(&remote).unwrap();
+    app.refresh_open_note();
+    assert_eq!(
+        app.journal.open.as_ref().unwrap().note.title,
+        "Unsaved here"
+    );
+    assert!(app.save_journal_note());
+    assert_ne!(app.journal.open.as_ref().unwrap().note.id, note.id);
+    assert_eq!(app.store.as_ref().unwrap().all_notes().unwrap().len(), 2);
 }
 
 #[test]

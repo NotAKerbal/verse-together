@@ -20,6 +20,21 @@ Linux systems with Wayland or X11. No Rust or Node installation is needed. Run `
 the extracted package if you want a per-user application-menu entry and branded dock icon. It installs
 under your user data directory, needs no sudo, and creates no services or autostart entries.
 
+## Development account testing
+
+The desktop account endpoints are deployed on dev. Production activation is still a separate release decision.
+Use a separate study profile when testing dev:
+
+```sh
+VERSE_TOGETHER_SITE=https://scripture-sharing-dev.vercel.app \
+VERSE_TOGETHER_CONVEX_URL=https://fabulous-dogfish-606.convex.cloud \
+./verse-together --data-dir /tmp/verse-dev-acceptance
+```
+
+Browser approval uses the website. Native session, token and account requests use the configured Convex cloud
+deployment's matching `.convex.site` HTTP API, so Vercel browser-only preview protection stays intact. Custom and
+localhost deployments retain the website proxy. Credentials remain scoped to the site, deployment and profile.
+
 ## What works
 
 - All five scripture volumes: 87 books, 1,582 chapters, and 41,995 verses from the repository's existing dataset.

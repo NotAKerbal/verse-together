@@ -290,8 +290,11 @@ impl App {
             if open.read_only() {
                 // Back to a draft on the account: editable again, with its current text.
                 open.status = status;
-                self.reload_open_note();
             }
+            // A clean editor follows synced metadata and text too. Keeping its old local
+            // revision makes the next edit look like a concurrent change and forks it.
+            // reload_open_note preserves any writing that has not been saved yet.
+            self.reload_open_note();
             return;
         }
         if open.dirty {

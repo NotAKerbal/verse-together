@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as accountDeletion from "../accountDeletion.js";
 import type * as annotationRules from "../annotationRules.js";
 import type * as annotations from "../annotations.js";
 import type * as auth from "../auth.js";
@@ -28,6 +29,8 @@ import type * as markValidators from "../markValidators.js";
 import type * as nativeAuth from "../nativeAuth.js";
 import type * as nativeAuthRules from "../nativeAuthRules.js";
 import type * as nativeSync from "../nativeSync.js";
+import type * as nativeSignIn from "../nativeSignIn.js";
+import type * as nativeSignInPlugin from "../nativeSignInPlugin.js";
 import type * as noteFolders from "../noteFolders.js";
 import type * as noteJournal from "../noteJournal.js";
 import type * as ownership from "../ownership.js";
@@ -46,6 +49,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountDeletion: typeof accountDeletion;
   annotationRules: typeof annotationRules;
   annotations: typeof annotations;
   auth: typeof auth;
@@ -66,6 +70,8 @@ declare const fullApi: ApiFromModules<{
   nativeAuth: typeof nativeAuth;
   nativeAuthRules: typeof nativeAuthRules;
   nativeSync: typeof nativeSync;
+  nativeSignIn: typeof nativeSignIn;
+  nativeSignInPlugin: typeof nativeSignInPlugin;
   noteFolders: typeof noteFolders;
   noteJournal: typeof noteJournal;
   ownership: typeof ownership;

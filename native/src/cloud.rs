@@ -156,6 +156,21 @@ impl Endpoints {
             _ => Err("Set both VERSE_TOGETHER_SITE and VERSE_TOGETHER_CONVEX_URL to use another deployment. Account features are off until then.".into()),
         }
     }
+    /// Native auth uses the configured Convex deployment's public HTTP actions. Browser approval stays on the
+    /// website. This keeps Vercel preview protection intact without requiring its browser cookie in the app.
+    /// Custom/self-hosted and loopback deployments retain their website proxy.
+    pub fn auth_origin(&self) -> String {
+        if let Some(name) = self
+            .convex
+            .strip_prefix("https://")
+            .and_then(|s| s.strip_suffix(".convex.cloud"))
+            .filter(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+        {
+            format!("https://{name}.convex.site")
+        } else {
+            self.site.clone()
+        }
+    }
     /// The credential entry for this deployment and study profile: another deployment or profile never sees (or
     /// sends) this one's session.
     pub fn credential_scope(&self, profile: &Path) -> String {
@@ -430,7 +445,15 @@ fn wait_for_code(
                 let _ = stream.set_nonblocking(false);
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
                 let mut buffer = [0u8; 4096];
-                let read = stream.read(&mut buffer).unwrap_or(0);
+                // TCP may split the request line across reads. Do not reject a valid callback merely because
+                // its state or code arrived in the next packet; keep the line bounded and the read timeout.
+                let mut read = 0;
+                while read < buffer.len() && !buffer[..read].contains(&b'\n') {
+                    match stream.read(&mut buffer[read..]) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => read += n,
+                    }
+                }
                 let request = String::from_utf8_lossy(&buffer[..read]);
                 let line = request.lines().next().unwrap_or("");
                 match callback(line, state) {
@@ -524,7 +547,10 @@ pub fn sign_in(
     drop(listener);
     let reply: TokenReply = read_json(
         agent()
-            .post(&format!("{}/api/auth/native/token", endpoints.site))
+            .post(&format!(
+                "{}/api/auth/native/token",
+                endpoints.auth_origin()
+            ))
             .send_json(serde_json::json!({ "code": code, "verifier": pkce.verifier })),
         "the sign-in exchange",
     )
@@ -554,7 +580,10 @@ pub fn convex_token(endpoints: &Endpoints, session: &Session) -> Result<String, 
     }
     let reply: Reply = read_json(
         agent()
-            .get(&format!("{}/api/auth/convex/token", endpoints.site))
+            .get(&format!(
+                "{}/api/auth/convex/token",
+                endpoints.auth_origin()
+            ))
             .header("Authorization", &format!("Bearer {}", session.token))
             .call(),
         "the account token",
@@ -565,7 +594,7 @@ pub fn convex_token(endpoints: &Endpoints, session: &Session) -> Result<String, 
 /// Ends this app's session on the server (the website's own sessions are untouched).
 pub fn sign_out(endpoints: &Endpoints, session: &Session) -> Result<(), String> {
     let response = agent()
-        .post(&format!("{}/api/auth/sign-out", endpoints.site))
+        .post(&format!("{}/api/auth/sign-out", endpoints.auth_origin()))
         .header("Authorization", &format!("Bearer {}", session.token))
         .send_json(serde_json::json!({}))
         .map_err(|e| e.to_string())?;
@@ -639,7 +668,7 @@ fn bearer_get(
 ) -> Result<serde_json::Value, CallError> {
     read_json(
         agent()
-            .get(&format!("{}/api/auth/{path}", endpoints.site))
+            .get(&format!("{}/api/auth/{path}", endpoints.auth_origin()))
             .header("Authorization", &format!("Bearer {}", session.token))
             .call(),
         path,
@@ -653,7 +682,7 @@ fn bearer_post(
 ) -> Result<serde_json::Value, CallError> {
     read_json(
         agent()
-            .post(&format!("{}/api/auth/{path}", endpoints.site))
+            .post(&format!("{}/api/auth/{path}", endpoints.auth_origin()))
             .header("Authorization", &format!("Bearer {}", session.token))
             .send_json(body),
         path,
@@ -759,7 +788,11 @@ impl Convex {
             Err(e) => return Err(CallError::refused(format!("{path}: {e}"))),
         };
         match reply["status"].as_str() {
-            Some("success") => Ok(reply["value"].clone()),
+            Some("success") => {
+                let mut value = reply["value"].clone();
+                normalize_convex_numbers(&mut value);
+                Ok(value)
+            }
             Some("error") => {
                 let message = reply["errorMessage"].as_str().unwrap_or("").to_string();
                 let data = reply["errorData"].clone();
@@ -786,6 +819,26 @@ impl Convex {
         }
     }
 }
+
+/// Convex's JSON HTTP format writes JavaScript numbers as floats (for example
+/// `2.0`). Rust's integer accessors and typed models require integer JSON numbers.
+/// Normalize only exactly representable safe integers; fractions stay unchanged.
+fn normalize_convex_numbers(value: &mut serde_json::Value) {
+    use serde_json::Value;
+    match value {
+        Value::Number(number) if number.is_f64() => {
+            if let Some(n) = number.as_f64()
+                && n.fract() == 0.0
+                && n.abs() <= 9_007_199_254_740_991.0
+            {
+                *value = Value::from(n as i64);
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(normalize_convex_numbers),
+        Value::Object(values) => values.values_mut().for_each(normalize_convex_numbers),
+        _ => {}
+    }
+}
 impl Backend for Convex {
     fn query(&self, path: &str, args: serde_json::Value) -> Result<serde_json::Value, CallError> {
         self.call("query", path, args)
@@ -802,6 +855,51 @@ impl Backend for Convex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn convex_http_floats_are_read_as_integer_revisions_verses_and_models() {
+        let mut wire: serde_json::Value = serde_json::from_str(
+            r#"{"revision":2.0,"verses":[3.0],"mark":{"start":12.0,"end":19.0},"fraction":1.5,"tooLarge":1e20,"negative":-2.0}"#,
+        ).unwrap();
+        normalize_convex_numbers(&mut wire);
+        assert_eq!(wire["revision"].as_i64(), Some(2));
+        assert_eq!(wire["verses"][0].as_u64(), Some(3));
+        assert_eq!(wire["negative"].as_i64(), Some(-2));
+        #[derive(serde::Deserialize)]
+        struct Range {
+            start: usize,
+            end: usize,
+        }
+        let mark: Range = serde_json::from_value(wire["mark"].clone()).unwrap();
+        assert_eq!((mark.start, mark.end), (12, 19));
+        assert_eq!(wire["fraction"].as_f64(), Some(1.5));
+        assert!(wire["tooLarge"].is_f64());
+    }
+    #[test]
+    fn native_auth_uses_only_the_configured_deployments_http_actions() {
+        let production = Endpoints::production();
+        assert_eq!(
+            production.auth_origin(),
+            "https://lovable-seal-140.convex.site"
+        );
+        let dev = Endpoints::new(
+            "https://scripture-sharing-dev.vercel.app",
+            "https://fabulous-dogfish-606.convex.cloud",
+        )
+        .unwrap();
+        assert_eq!(
+            dev.auth_origin(),
+            "https://fabulous-dogfish-606.convex.site"
+        );
+        assert_eq!(dev.site, "https://scripture-sharing-dev.vercel.app");
+        for host in [
+            "https://example.com",
+            "https://sub.example.convex.cloud",
+            "http://127.0.0.1:3000",
+        ] {
+            let custom = Endpoints::new("http://localhost:3199", host).unwrap();
+            assert_eq!(custom.auth_origin(), "http://localhost:3199");
+        }
+    }
     #[test]
     fn pkce_matches_rfc_7636() {
         assert_eq!(
@@ -1060,11 +1158,11 @@ mod tests {
             let state = query_value(query, "state").unwrap();
             std::thread::spawn(move || {
                 let mut browser = TcpStream::connect(("127.0.0.1", port)).unwrap();
-                write!(
-                    browser,
-                    "GET /callback?error=access_denied&state={state} HTTP/1.1\r\n\r\n"
-                )
-                .unwrap();
+                browser
+                    .write_all(b"GET /callback?error=access_denied&state=")
+                    .unwrap();
+                std::thread::sleep(Duration::from_millis(30));
+                write!(browser, "{state} HTTP/1.1\r\n\r\n").unwrap();
                 let mut reply = String::new();
                 let _ = browser.read_to_string(&mut reply);
             });

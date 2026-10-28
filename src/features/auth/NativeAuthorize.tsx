@@ -16,7 +16,7 @@ import { AuthShell, FormMessage, PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } 
 export default function NativeAuthorize() {
   const params = useSearchParams();
   const request = parseNativeAuthorizeRequest(new URLSearchParams(params.toString()));
-  const { authUser, loading, promptSignIn, signingIn } = useAuth();
+  const { authUser, loading, pendingDeletion, promptSignIn, signingIn } = useAuth();
   const [status, setStatus] = useState<"idle" | "working" | "sent" | "declined">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +30,12 @@ export default function NativeAuthorize() {
 
   if (loading) {
     return <AuthShell title="Desktop sign-in" subtitle="Checking your account…" />;
+  }
+
+  if (pendingDeletion) {
+    return <AuthShell title="Account deletion in progress" subtitle="Finish deleting this account before approving the desktop app.">
+      <a href="/delete-account" className={PRIMARY_BUTTON_CLASS}>Continue account deletion</a>
+    </AuthShell>;
   }
 
   if (!authUser) {

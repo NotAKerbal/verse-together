@@ -1,6 +1,11 @@
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth";
 import * as z from "zod";
+import type { GenericCtx } from "@convex-dev/better-auth";
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { internalQuery } from "./_generated/server";
+import type { DataModel } from "./_generated/dataModel";
 import {
   NATIVE_GRANT_SECONDS,
   NATIVE_SESSION_USER_AGENT,
@@ -21,7 +26,19 @@ import {
  * The app then authenticates with that session token as a bearer token (the bearer request hook the Convex plugin
  * runs; see convex/auth.ts), to read its session, fetch Convex JWTs from /convex/token, and sign out.
  */
-export const nativeAppAuth = () =>
+export const deletionPending = internalQuery({
+  args: { authUserId: v.string() },
+  handler: async (ctx, { authUserId }) =>
+    (await ctx.db.query("accountDeletions").withIndex("by_auth_user_id", q => q.eq("authUserId", authUserId)).first()) !== null,
+});
+
+async function assertAccountAvailable(ctx: GenericCtx<DataModel>, authUserId: string) {
+  if (!("runQuery" in ctx) || await ctx.runQuery(internal.nativeAuth.deletionPending, { authUserId })) {
+    throw new APIError("FORBIDDEN", { message: "Finish deleting this account before approving a desktop app." });
+  }
+}
+
+export const nativeAppAuth = (convexCtx: GenericCtx<DataModel>) =>
   ({
     id: "native-app-auth",
     endpoints: {
@@ -41,6 +58,7 @@ export const nativeAppAuth = () =>
             throw new APIError("FORBIDDEN", { message: "Approve the desktop app from Verse Together itself." });
           }
           if (!isPkceChallenge(challenge)) throw new APIError("BAD_REQUEST", { message: "Invalid desktop sign-in request." });
+          await assertAccountAvailable(convexCtx, ctx.context.session.user.id);
           // The page names the account it showed the reader; if the browser's session changed since (signed out, or
           // into another account in another tab), nothing is approved for an account the reader didn't see.
           if (expectedUserId !== undefined && expectedUserId !== ctx.context.session.user.id) {
@@ -68,10 +86,18 @@ export const nativeAppAuth = () =>
           if (!grant || !(await pkceMatches(verifier, grant.challenge))) throw refused();
           const user = await ctx.context.internalAdapter.findUserById(grant.userId);
           if (!user) throw refused();
+          await assertAccountAvailable(convexCtx, user.id);
           const session = await ctx.context.internalAdapter.createSession(user.id, false, {
             userAgent: NATIVE_SESSION_USER_AGENT,
           });
           if (!session) throw new APIError("INTERNAL_SERVER_ERROR", { message: "Could not start a session." });
+          try {
+            await assertAccountAvailable(convexCtx, user.id);
+            if (!(await ctx.context.internalAdapter.findUserById(user.id))) throw refused();
+          } catch (error) {
+            await ctx.context.internalAdapter.deleteSession(session.token);
+            throw error;
+          }
           return ctx.json({
             token: session.token,
             expiresAt: new Date(session.expiresAt).toISOString(),

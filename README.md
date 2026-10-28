@@ -34,6 +34,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 The repo keeps a single retained scripture source artifact at `public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db`. That database is the regeneration input for the checked-in app-native dataset under `public/scripture-data/`.
 
+The database is release 2020.12.08 of [beandog/lds-scriptures](https://github.com/beandog/lds-scriptures) ([scriptures.nephi.org](https://scriptures.nephi.org/)), unmodified. Upstream states it is public domain. Its source, terms and what it omits are recorded in [`public/lds-scriptures-2020.12.08/README.md`](public/lds-scriptures-2020.12.08/README.md). Artwork provenance is recorded in [`public/art/README.md`](public/art/README.md).
+
 Generate the app-native scripture manifest and compact per-volume payloads with:
 
 ```bash

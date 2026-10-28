@@ -34,6 +34,11 @@ export function AuthShell({ title, subtitle, children }: PropsWithChildren<{ tit
           {subtitle ? <p className="page-subtitle mt-2 text-sm">{subtitle}</p> : null}
           <div className="mt-5">{children}</div>
         </div>
+        <p className="mt-4 text-center text-xs text-[color:var(--foreground-muted)]">
+          <Link href="/privacy" className="underline underline-offset-2">
+            Privacy policy
+          </Link>
+        </p>
       </div>
     </main>
   );

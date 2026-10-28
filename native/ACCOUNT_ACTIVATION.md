@@ -1,3 +1,11 @@
+# Current dev rollout
+
+Desktop approval and sync were deployed to dev at `ab8b2b013dd258b497cc4eac0ea83b64df7046ea` (PR #70), alongside
+mobile sign-in and deletion from web 2.14.0. Production remains `1647d51`; desktop production activation is not authorized.
+Live QA found that Vercel preview protection refuses native HTTP calls to the website. Native auth now uses the
+configured Convex deployment's matching `.convex.site` API; browser approval remains on the website. No protection
+was disabled. The earlier activation plan below is retained as historical preparation and production guidance.
+
 # Activating account sign-in and sync for the native app
 
 This document covers what production needs before the native app's account features (sign-in, sync, plans) work, and how to
@@ -50,7 +58,7 @@ The app calls these existing functions, unchanged on 2929d8a (checked: each expo
 `readingProgress:{getMyProgressForBook,listMyReadingLog,logReading,markChapterRead,unmarkChapterRead}`,
 `users:{ensureCurrentUser,getJournalGoals,saveJournalGoals}`. It also calls the Better Auth routes `get-session`,
 `convex/token`, `sign-out`, `list-sessions`, `list-accounts`, `update-user` and `revoke-other-sessions`, all
-through the website's existing `/api/auth/*` proxy with `Authorization: Bearer`.
+through the configured Convex deployment's public `/api/auth/*` HTTP API with `Authorization: Bearer`. Browser approval remains on the website; no Vercel protection setting changes. Custom/self-hosted deployments use the website proxy.
 
 ## Configuration checks before release (no new values)
 

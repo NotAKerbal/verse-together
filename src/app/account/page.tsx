@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -214,6 +215,10 @@ export default function AccountPage() {
           <FeedbackForm />
         </SettingsPanel>
       </div>
+
+      <p className={styles.policyLink}>
+        <Link href="/privacy">Privacy policy</Link>
+      </p>
     </div>
   );
 }
