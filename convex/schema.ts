@@ -16,6 +16,11 @@ const scriptureResourceCoverage = v.object({
 });
 
 export default defineSchema({
+  testerSignups: defineTable({
+    name: v.string(), email: v.string(), android: v.boolean(), ios: v.boolean(),
+    googlePlayEmail: v.string(), device: v.string(), consent: v.boolean(),
+    consentVersion: v.string(), signupKey: v.string(), createdAt: v.number(),
+  }).index("by_signup_key", ["signupKey"]).index("by_created_at", ["createdAt"]),
   // Durable receipts make device imports safe to retry, including after the imported record is deleted.
   deviceStudyImports: defineTable({ clerkId: v.string(), deviceId: v.string(), recordId: v.string() })
     .index("by_owner_device", ["clerkId", "deviceId"]),

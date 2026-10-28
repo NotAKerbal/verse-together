@@ -61,6 +61,7 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "new", text: "Volunteer for Android app testing or join the iOS waiting list through a shared signup link." },
     { kind: "improved", text: "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages." },
   ],
 };
