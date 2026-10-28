@@ -12,7 +12,7 @@ export function selectedVersePassages(ranges: readonly SelectedVerseTextRange[])
     const last = passages[passages.length - 1];
     if (last && range.chapter === previousChapter && range.verse === last.verseEnd + 1) {
       last.verseEnd = range.verse;
-      last.text += ` ${text}`;
+      last.text += `\n\n${text}`;
     } else {
       passages.push({ verseStart: range.verse, verseEnd: range.verse, text });
     }

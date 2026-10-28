@@ -340,7 +340,7 @@ export const listMyScriptureRefsForChapter = query({
       };
       // Recovery blocks stop supplying markers once the editable Markdown becomes canonical.
       const blocks = hasCanonicalMarkdown(draft) ? [] : await draftBlocks(ctx, draft._id);
-      for (const ref of scriptureLinksForChapter(noteMarkdown(draft, blocks), draft.source, args)) {
+      for (const ref of scriptureLinksForChapter(noteMarkdown(draft, blocks), args)) {
         push(ref.verseStart, ref.verseEnd);
       }
     }

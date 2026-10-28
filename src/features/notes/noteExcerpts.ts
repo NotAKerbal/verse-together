@@ -35,7 +35,7 @@ export function scriptureExcerpt(book: { volume: string; slug: string; label: st
     .map(({ chapter, verses, text }) =>
       blockToMarkdown({
         type: "scripture",
-        text: text.join(" "),
+        text: text.join("\n\n"),
         scriptureRef: {
           volume: book.volume,
           book: book.slug,
