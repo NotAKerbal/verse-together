@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsContentPath } from "@/lib/faithTradition";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition, useDeferredValue } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -159,6 +162,7 @@ function LoadingSkeleton() {
 }
 
 export default function ScriptureSearchExperience() {
+  const { showLdsContent } = useFaithTradition();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -166,7 +170,7 @@ export default function ScriptureSearchExperience() {
   const [query, setQuery] = useState(initialQuery);
   const deferredQuery = useDeferredValue(query);
   const [storeStatus, setStoreStatus] = useState<SearchStoreStatus>("idle");
-  const [results, setResults] = useState<LocalScriptureSearchResults>(EMPTY_RESULTS);
+  const [allResults, setResults] = useState<LocalScriptureSearchResults>(EMPTY_RESULTS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resultState, setResultState] = useState<"idle" | "searching" | "done">("idle");
   const [isOffline, setIsOffline] = useState(false);
@@ -242,7 +246,7 @@ export default function ScriptureSearchExperience() {
     let active = true;
     setResultState("searching");
     startSearchTransition(() => {
-      searchLocalScriptures(trimmed)
+      searchLocalScriptures(trimmed, { bibleOnly: !showLdsContent })
         .then((nextResults) => {
           if (!active) return;
           setResults(nextResults);
@@ -264,18 +268,22 @@ export default function ScriptureSearchExperience() {
     return () => {
       active = false;
     };
-  }, [deferredQuery, isOffline, storeStatus]);
+  }, [deferredQuery, isOffline, storeStatus, showLdsContent]);
 
+  const results = {
+    referenceResults: allResults.referenceResults.filter((item) => showLdsContent || !isLdsContentPath(item.href)),
+    verseResults: allResults.verseResults.filter((item) => showLdsContent || !isLdsContentPath(item.href)),
+  };
   const totalResults = results.referenceResults.length + results.verseResults.length;
 
   const helperText = useMemo(() => {
     const trimmed = query.trim();
     if (storeStatus === "loading") return "Loading the local scripture library for offline search.";
-    if (trimmed.length === 0) return "Search references like Alma 32 or D&C 4:3, or search verse text across the bundled store.";
+    if (trimmed.length === 0) return showLdsContent ? "Search references like Alma 32 or D&C 4:3, or search verse text across the bundled store." : "Search Bible references like John 3:16, or search Bible verse text.";
     if (trimmed.length < MIN_QUERY_LENGTH) return "Enter at least 2 characters to search.";
     if (totalResults === 0) return "No references or verses matched that search.";
     return null;
-  }, [query, storeStatus, totalResults]);
+  }, [query, storeStatus, totalResults, showLdsContent]);
 
   const showSkeleton = storeStatus === "loading" || (resultState === "searching" && totalResults === 0);
 
@@ -317,7 +325,7 @@ export default function ScriptureSearchExperience() {
                 inputRef.current?.blur();
               }
             }}
-            placeholder="Try faith, Alma 32, mercy, or Joseph Smith"
+            placeholder={showLdsContent ? "Try faith, Alma 32, mercy, or Joseph Smith" : "Try faith, John 3:16, mercy, or Jesus"}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[color:var(--foreground-soft)]"
             autoComplete="off"
             spellCheck={false}
@@ -371,7 +379,7 @@ export default function ScriptureSearchExperience() {
 
       {!showSkeleton && storeStatus === "ready" && totalResults === 0 && query.trim().length >= MIN_QUERY_LENGTH ? (
         <div className="panel-card rounded-[1.5rem] p-5 text-sm leading-7 text-[color:var(--foreground-muted)]">
-          No references or verses matched <span className="font-medium text-foreground">{query.trim()}</span>. Try a shorter phrase, a book name, or a reference like <span className="font-medium text-foreground">Alma 32</span> or <span className="font-medium text-foreground">D&C 4:3</span>.
+          No references or verses matched <span className="font-medium text-foreground">{query.trim()}</span>. Try a shorter phrase, a book name, or a reference like <span className="font-medium text-foreground">{showLdsContent ? "Alma 32" : "John 3:16"}</span> or <span className="font-medium text-foreground">{showLdsContent ? "D&C 4:3" : "Genesis 1"}</span>.
         </div>
       ) : null}
 
@@ -379,7 +387,7 @@ export default function ScriptureSearchExperience() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="panel-card rounded-[1.25rem] p-4">
             <div className="text-sm font-medium">Reference Search</div>
-            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">Find direct references like Alma 32, Genesis 1, or D&C 4:3.</p>
+            <p className="mt-1 text-sm text-[color:var(--foreground-muted)]">{showLdsContent ? "Find direct references like Alma 32, Genesis 1, or D&C 4:3." : "Find direct references like John 3:16, Genesis 1, or Psalm 23."}</p>
           </div>
           <div className="panel-card rounded-[1.25rem] p-4">
             <div className="text-sm font-medium">Phrase Search</div>

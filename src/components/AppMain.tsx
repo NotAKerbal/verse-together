@@ -1,10 +1,15 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsContentPath } from "@/lib/faithTradition";
+
+import Link from "next/link";
 import type { PropsWithChildren } from "react";
 import { usePathname } from "next/navigation";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 
 export default function AppMain({ children }: PropsWithChildren) {
+  const { showLdsContent } = useFaithTradition();
   const pathname = usePathname();
   const { canUseInsights, isPanelOpen } = useInsightBuilder();
   // Notes starts higher, and on desktop fits its calendar and note to the window, so entries show sooner.
@@ -22,7 +27,14 @@ export default function AppMain({ children }: PropsWithChildren) {
         hasDesktopInsightPanel ? "lg:pr-[472px] xl:pr-[512px]" : ""
       }`}
     >
-      {children}
+      {!showLdsContent && isLdsContentPath(pathname) ? (
+        <section className="page-shell panel-card rounded-xl p-6">
+          <h1 className="text-xl font-semibold">Content hidden by your faith tradition</h1>
+          <p className="mt-2">You can change your faith tradition in Settings → Reading.</p>
+          <div className="mt-4 flex gap-4"><Link href="/browse" className="underline">Browse the Bible</Link>
+            <Link href="/account#reading" className="underline">Settings</Link></div>
+        </section>
+      ) : children}
     </main>
   );
 }

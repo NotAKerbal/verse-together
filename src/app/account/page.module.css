@@ -384,7 +384,7 @@
   margin-top: .15rem;
 }
 
-/* Reading: the preview, then the appearance controls and simple mode. Side by side when there's room. */
+/* Reading: sample and faith tradition on the left, appearance and simple mode on the right. */
 .readingGrid {
   display: grid;
   gap: .75rem;
@@ -396,11 +396,16 @@
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   }
 
-  .readingGrid > .sample {
-    grid-row: span 2;
+  .readingPreviewColumn {
     position: sticky;
     top: calc(var(--header-height) + 1rem);
   }
+}
+
+.readingPreviewColumn {
+  display: grid;
+  gap: .75rem;
+  min-width: 0;
 }
 
 .sample {
@@ -991,4 +996,56 @@
   .shell *, .shell *::before, .tabList * {
     transition: none;
   }
+}
+
+/* Tradition names can be long; wrap within the settings column on small screens. */
+.faithCard {
+  min-width: 0;
+}
+
+.faithFieldset {
+  min-width: 0;
+  margin-top: 1rem;
+}
+
+.faithChoices {
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.faithChoice {
+  display: flex;
+  align-items: center;
+  min-height: 3.25rem;
+  min-width: 0;
+  gap: .75rem;
+  padding: .875rem 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: .625rem;
+  background: var(--surface-card);
+  font-size: .875rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.faithChoice:hover {
+  background: var(--surface-button-hover);
+}
+
+.faithChoice[data-active="true"] {
+  background: var(--surface-button-active);
+  color: var(--surface-button-active-text);
+  border-color: currentColor;
+}
+
+.faithChoice:focus-within {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.faithChoice input {
+  flex-shrink: 0;
 }

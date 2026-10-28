@@ -238,7 +238,7 @@ export async function loadLocalScriptureStore(): Promise<SearchStoreStatus> {
   return toSearchStoreStatus(status);
 }
 
-export async function searchLocalScriptures(query: string): Promise<LocalScriptureSearchResults> {
+export async function searchLocalScriptures(query: string, options: { bibleOnly?: boolean } = {}): Promise<LocalScriptureSearchResults> {
   const trimmed = query.trim();
   if (!trimmed) {
     return {
@@ -255,15 +255,16 @@ export async function searchLocalScriptures(query: string): Promise<LocalScriptu
     };
   }
 
-  const referenceResults = buildReferenceResults(trimmed);
-  const verseMatches = queryLooksLikeReference(trimmed)
-    ? await resolveBrowserScriptureReference(trimmed, { limit: MAX_VERSE_RESULTS })
-    : [];
-  const fallbackVerseMatches =
-    verseMatches.length > 0 ? verseMatches : await searchBrowserScriptures(trimmed, { limit: MAX_VERSE_RESULTS });
-
-  return {
-    referenceResults,
-    verseResults: groupVerseResults(fallbackVerseMatches, trimmed),
-  };
+  const volumes = options.bibleOnly ? ["oldtestament", "newtestament"] : [undefined];
+  const referenceResults = buildReferenceResults(trimmed).filter((item) =>
+    !options.bibleOnly || /^\/browse\/(oldtestament|newtestament)\//.test(item.href));
+  // Filter each corpus before its limit so excluded volumes cannot crowd Bible matches out.
+  const verseResults = await Promise.all(volumes.map(async (volume) => {
+    const verseMatches = queryLooksLikeReference(trimmed)
+      ? await resolveBrowserScriptureReference(trimmed, { limit: MAX_VERSE_RESULTS, volume })
+      : [];
+    const matches = verseMatches.length > 0 ? verseMatches : await searchBrowserScriptures(trimmed, { limit: MAX_VERSE_RESULTS, volume });
+    return groupVerseResults(matches, trimmed);
+  }));
+  return { referenceResults, verseResults: verseResults.flat().slice(0, MAX_VERSE_RESULTS) };
 }

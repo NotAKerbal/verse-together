@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsVolume } from "@/lib/faithTradition";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -324,7 +327,9 @@ function ScopeStep({
   selections: PlanSelection[];
   onChange: (next: PlanSelection[]) => void;
 }) {
-  const [activeVolume, setActiveVolume] = useState<PlanVolumeId>("bookofmormon");
+  const { showLdsContent } = useFaithTradition();
+  const [selectedVolume, setActiveVolume] = useState<PlanVolumeId>("bookofmormon");
+  const activeVolume = !showLdsContent && isLdsVolume(selectedVolume) ? "newtestament" : selectedVolume;
   const [narrowing, setNarrowing] = useState<{ volume: string; book: string } | null>(null);
 
   const volumeSelected = (volume: string) => selections.some((s) => s.kind === "volume" && normalizeScriptureVolume(s.volume) === volume);
@@ -389,7 +394,7 @@ function ScopeStep({
       <div className="flex flex-col gap-2">
         <SubLabel>Whole volume</SubLabel>
         <div className="flex flex-wrap gap-2">
-          {PLAN_VOLUME_IDS.map((volume) => {
+          {PLAN_VOLUME_IDS.filter((volume) => showLdsContent || !isLdsVolume(volume)).map((volume) => {
             const on = volumeSelected(volume);
             return (
               <button
@@ -412,7 +417,7 @@ function ScopeStep({
       <div className="flex flex-col gap-3">
         <SubLabel>Or pick books</SubLabel>
         <div className="segmented-control w-fit max-w-full flex-wrap" role="group" aria-label="Volume to pick books from">
-          {PLAN_VOLUME_IDS.map((volume) => (
+          {PLAN_VOLUME_IDS.filter((volume) => showLdsContent || !isLdsVolume(volume)).map((volume) => (
             <button
               key={volume}
               type="button"
@@ -799,13 +804,14 @@ function SummaryCard({
 }
 
 function QuickStarts({ onPick }: { onPick: (quickStart: QuickStart) => void }) {
+  const { showLdsContent } = useFaithTradition();
   return (
     <section className="panel-card flex flex-col gap-3 p-4" aria-labelledby="quick-starts-heading">
       <h2 id="quick-starts-heading" className="font-display text-[1.05rem] font-bold tracking-[-0.025em]">
         Quick starts
       </h2>
       <ul className="flex flex-col gap-2">
-        {QUICK_STARTS.map((quickStart) => (
+        {QUICK_STARTS.filter((quickStart) => showLdsContent || quickStart.id !== "bom-30").map((quickStart) => (
           <li key={quickStart.id}>
             <button
               type="button"
