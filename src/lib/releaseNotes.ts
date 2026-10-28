@@ -63,6 +63,7 @@ export const UNRELEASED: UnreleasedNotes = {
   items: [
     { kind: "new", text: "Approve the native desktop app in your browser to connect your account and sync study data." },
     { kind: "improved", text: "On desktop, move between chapters with the Left and Right arrow keys, or use the next-chapter link below the verses." },
+    { kind: "new", text: "Select a word anywhere in Come, Follow Me to explore study helps, biblical languages, definitions, and word history in a sidebar beside the lesson." },
   ],
 };
 
