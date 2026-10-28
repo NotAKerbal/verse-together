@@ -60,23 +60,51 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    {
-      kind: "new",
-      text: "Manage saved Bibles in Settings → Translations and make any saved translation your default Bible for chapter reading. Your choice is saved on this device; removing the default restores the King James Bible.",
-    },
-    {
-      kind: "new",
-      text: "Send suggestions, report problems or request features in Settings → Feedback, with no sign-in required. Leave optional contact details if you would like a reply. If sending fails, your message stays in the form so you can try again.",
-    },
-    {
-      kind: "new",
-      text: "Choose your faith tradition in Settings → Reading. Other denominations keeps Bible reading and your journal while hiding Latter-day Saint scriptures, Come Follow Me, Joseph Smith Translation and study resources. Your choice is saved on this device.",
-    },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.13.0",
+    date: "2026-10-27",
+    title: "Your Bibles, feedback and faith tradition",
+    items: [
+      {
+        kind: "new",
+        text: "Manage saved Bibles in Settings → Translations and make any saved translation your default Bible for chapter reading. Your choice is saved on this device; removing the default restores the King James Bible.",
+        screenshot: {
+          src: "/release-notes/2.13.0-translations.webp",
+          width: 1600,
+          height: 541,
+          alt: "Bible translations settings showing Your Bibles, the King James Bible marked Default, and the Add Bible button.",
+          caption: "Manage your Bibles and choose the default in Translations.",
+        },
+      },
+      {
+        kind: "new",
+        text: "Send suggestions, report problems or request features in Settings → Feedback, with no sign-in required. Leave optional contact details if you would like a reply. If sending fails, your message stays in the form so you can try again.",
+        screenshot: {
+          src: "/release-notes/2.13.0-feedback.webp",
+          width: 1600,
+          height: 743,
+          alt: "The signed-out Feedback section with an empty feedback message, optional contact field and Send feedback button.",
+          caption: "Send feedback without signing in, with optional contact details.",
+        },
+      },
+      {
+        kind: "new",
+        text: "Choose your faith tradition in Settings → Reading. Other denominations keeps Bible reading and your journal while hiding Latter-day Saint scriptures, Come Follow Me, Joseph Smith Translation and study resources. Your choice is saved on this device.",
+        screenshot: {
+          src: "/release-notes/2.13.0-faith-tradition.webp",
+          width: 1270,
+          height: 534,
+          alt: "Faith tradition settings with Church of Jesus Christ of Latter-day Saints selected and an Other denominations option.",
+          caption: "Choose which faith tradition’s content appears on this device.",
+        },
+      },
+    ],
+    commits: ["f7db30f", "04b2637", "9592336"],
+  },
   {
     version: "2.12.0",
     date: "2026-10-27",
@@ -106,6 +134,7 @@ export const RELEASES: readonly Release[] = [
       },
       { kind: "new", text: "Release notes show each release's version, with screenshots of what changed." },
     ],
+    masterCommit: "e643719",
     commits: ["848fb3d", "4f24599"],
   },
   {

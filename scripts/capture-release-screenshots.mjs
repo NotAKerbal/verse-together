@@ -98,6 +98,34 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.13.0-translations",
+    viewport: { width: 1280, height: 900 },
+    async run(page, viewport) {
+      await open(page, "/account#bible-translations");
+      const panel = page.getByRole("tabpanel", { name: "Translations" });
+      return pad(await panel.boundingBox(), 12, viewport);
+    },
+  },
+  {
+    name: "2.13.0-feedback",
+    viewport: { width: 1280, height: 1000 },
+    async run(page, viewport) {
+      await open(page, "/account#feedback");
+      const panel = page.getByRole("tabpanel", { name: "Feedback" });
+      return pad(await panel.boundingBox(), 12, viewport);
+    },
+  },
+  {
+    name: "2.13.0-faith-tradition",
+    viewport: { width: 1280, height: 1000 },
+    async run(page, viewport) {
+      await open(page, "/account#reading");
+      const section = page.locator("section[aria-labelledby='faith-tradition-title']");
+      await section.scrollIntoViewIfNeeded();
+      return pad(await section.boundingBox(), 12, viewport);
+    },
+  },
+  {
     name: "2.12.0-settings-header",
     viewport: { width: 1280, height: 920 },
     async run(page, viewport) {
