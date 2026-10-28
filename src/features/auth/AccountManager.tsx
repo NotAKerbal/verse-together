@@ -27,7 +27,7 @@ function Section({ title, summary, children }: { title: string; summary?: React.
   return (
     <details className={styles.accountSection}>
       <summary className={styles.sectionSummary}>
-        <h2 id={id}>{title}</h2>
+        <h3 id={id}>{title}</h3>
         {summary ? <span className={styles.sectionMeta}>{summary}</span> : null}
         <FontAwesomeIcon icon={faChevronDown} className={styles.chevron} aria-hidden="true" />
       </summary>
@@ -301,7 +301,7 @@ function ProfileSection() {
           <img className={styles.avatar} src={auth.user.imageUrl} alt="" referrerPolicy="no-referrer" />
         ) : <span className={styles.guestAvatar} aria-hidden="true">{(auth.authUser?.name || auth.authUser?.email || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase()}</span>}
         <div className={styles.identity}>
-          <h2>{auth.authUser?.name || "Your account"}</h2>
+          <h3>{auth.authUser?.name || "Your account"}</h3>
           <p>{auth.authUser?.email}</p>
         </div>
         <span className={styles.edit}>

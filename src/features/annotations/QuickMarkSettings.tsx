@@ -311,9 +311,9 @@ function QuickMarkSettingsEditor({ syncToAccount, sessionLoading }: { syncToAcco
     <div className={styles.quickMarkSetting} ref={listRef}>
       <div className={styles.quickMarkHeader}>
         <div>
-          <h2 className={styles.settingTitle} id="quick-mark-settings-title">
+          <h3 className={styles.settingTitle} id="quick-mark-settings-title">
             Quick marks
-          </h2>
+          </h3>
           <p aria-live="polite">{pending > 0 ? "Saving…" : summary}</p>
         </div>
         <button
