@@ -1,3 +1,16 @@
+# Independent production-integration review — October 28, 2026
+
+Codex reviewed the merge of production `2929d8a` into desktop `e36e8a2`, including the minimal account diff
+against production, bearer hooks in the installed Convex/Better Auth source, revised scripture excerpts and
+the single guide catalog. **Passed independently:** 140 native tests (1 optional exporter ignored), 50 real
+backend/auth contracts, strict clippy, formatting and whitespace. Evidence:
+`/tmp/verse-integration-review-{rust,backend,clippy}.log`.
+
+The Convex plugin includes the bearer request hook, while the removed full bearer plugin also added a
+script-readable session response header. The regression test confirms website sign-in has no such header
+and app requests without cookies or Origin still authenticate. Live Google/sign-in/sync remain **Blocked**
+on deployment. New web settings and per-verse Journal links remain active native implementation work.
+
 # Production integration and account activation prep — October 28, 2026 (fifth Claude pass)
 
 **Tree:** `t3/rust-desktop-app` HEAD `e36e8a2` with production `origin/master` **2929d8a** (release 2.13.0) merged
@@ -438,16 +451,3 @@ navigation coverage remains in the current test suite.
   The journal lists the 1,000 most recently updated annotated/marked verses.
 
 The Linux archive contains the application and bundled content, not the QA notes/database.
-# Independent production-integration review — October 28, 2026
-
-Codex reviewed the merge of production `2929d8a` into desktop `e36e8a2`, including the minimal account diff
-against production, bearer hooks in the installed Convex/Better Auth source, revised scripture excerpts and
-the single guide catalog. **Passed independently:** 140 native tests (1 optional exporter ignored), 50 real
-backend/auth contracts, strict clippy, formatting and whitespace. Evidence:
-`/tmp/verse-integration-review-{rust,backend,clippy}.log`.
-
-The Convex plugin includes the bearer request hook, while the removed full bearer plugin also added a
-script-readable session response header. The regression test confirms website sign-in has no such header
-and app requests without cookies or Origin still authenticate. Live Google/sign-in/sync remain **Blocked**
-on deployment. New web settings and per-verse Journal links remain active native implementation work.
-
