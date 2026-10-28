@@ -39,6 +39,8 @@ import type * as readingPlans from "../readingPlans.js";
 import type * as readingProgress from "../readingProgress.js";
 import type * as resources from "../resources.js";
 import type * as social from "../social.js";
+import type * as testerSignupRules from "../testerSignupRules.js";
+import type * as testerSignups from "../testerSignups.js";
 import type * as users from "../users.js";
 import type * as utils from "../utils.js";
 
@@ -80,6 +82,8 @@ declare const fullApi: ApiFromModules<{
   readingProgress: typeof readingProgress;
   resources: typeof resources;
   social: typeof social;
+  testerSignupRules: typeof testerSignupRules;
+  testerSignups: typeof testerSignups;
   users: typeof users;
   utils: typeof utils;
 }>;
