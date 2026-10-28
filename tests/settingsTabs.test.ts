@@ -11,6 +11,7 @@ import {
 describe("settings tabs", () => {
   test("the hash opens its tab, and anything else opens Account", () => {
     expect(tabFromHash("#reading")).toBe("reading");
+    expect(tabFromHash("#bible-translations")).toBe("bible-translations");
     expect(tabFromHash("#release-notes")).toBe("release-notes");
     expect(tabFromHash("#feedback")).toBe("feedback");
     expect(tabFromHash("study-tools")).toBe("study-tools");
@@ -22,6 +23,8 @@ describe("settings tabs", () => {
 
   test("Left and Right step along the row and wrap; Up and Down do nothing", () => {
     expect(tabForKey("ArrowRight", "account")).toBe("reading");
+    expect(tabForKey("ArrowRight", "reading")).toBe("bible-translations");
+    expect(tabForKey("ArrowLeft", "study-tools")).toBe("bible-translations");
     expect(tabForKey("ArrowRight", "study-tools")).toBe("release-notes");
     expect(tabForKey("ArrowRight", "release-notes")).toBe("feedback");
     expect(tabForKey("ArrowRight", "feedback")).toBe("account");

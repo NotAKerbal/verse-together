@@ -1049,3 +1049,20 @@
 .faithChoice input {
   flex-shrink: 0;
 }
+
+.translationsCard {
+  width: min(100%, 40rem);
+}
+
+/* Keep all six sections within a narrow phone's settings pill. */
+@media (max-width: 400px) {
+  .tabList[data-placement="page"] {
+    gap: .125rem;
+  }
+
+  .tabList[data-placement="page"] .tab {
+    min-width: 2rem;
+    padding-inline: .25rem;
+    font-size: .75rem;
+  }
+}

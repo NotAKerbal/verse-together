@@ -9,7 +9,7 @@ import { readSimpleModeFromDom } from "@/lib/simpleMode";
   hash.
 */
 
-export const SETTINGS_TABS = ["account", "reading", "study-tools", "release-notes", "feedback"] as const;
+export const SETTINGS_TABS = ["account", "reading", "bible-translations", "study-tools", "release-notes", "feedback"] as const;
 
 export type SettingsTabId = (typeof SETTINGS_TABS)[number];
 

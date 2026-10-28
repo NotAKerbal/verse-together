@@ -3,11 +3,12 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBookOpen, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
+import { faBookBible, faBookOpen, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
 import { AppHeaderPortal, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import FeedbackForm from "@/components/FeedbackForm";
 import AccountManager from "@/features/auth/AccountManager";
 import QuickMarkSettings from "@/features/annotations/QuickMarkSettings";
+import BibleTranslationControls from "@/components/BibleTranslationControls";
 import ReadingSettings from "@/features/settings/ReadingSettings";
 import ReleaseNotes from "@/features/settings/ReleaseNotes";
 import {
@@ -28,6 +29,12 @@ const TABS: Record<SettingsTabId, { label: string; icon: IconDefinition; title: 
     icon: faBookOpen,
     title: "Reading & appearance",
     lead: "How scripture chapters look in the reader. The reader's settings menu has the same choices.",
+  },
+  "bible-translations": {
+    label: "Translations",
+    icon: faBookBible,
+    title: "Bible translations",
+    lead: "Choose your default Bible and manage saved translations. Saved on this device; also available in Reader settings.",
   },
   "study-tools": {
     label: "Study tools",
@@ -178,6 +185,17 @@ export default function AccountPage() {
 
         <SettingsPanel tab="reading" selected={selected === "reading"}>
           <ReadingSettings />
+        </SettingsPanel>
+
+        <SettingsPanel tab="bible-translations" selected={selected === "bible-translations"}>
+          <section className={`${styles.settingsCard} ${styles.translationsCard}`} aria-label="Bible translations">
+            <div className={styles.preferences}>
+              <BibleTranslationControls />
+              <p className="text-xs leading-relaxed text-foreground/60">
+                Open a Bible chapter and use Reader settings to show saved translations beside your default Bible.
+              </p>
+            </div>
+          </section>
         </SettingsPanel>
 
         <SettingsPanel tab="study-tools" selected={selected === "study-tools"}>

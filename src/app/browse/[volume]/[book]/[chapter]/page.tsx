@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { DEFAULT_BIBLE_COOKIE, defaultBibleNotice, normalizeDefaultBible } from "@/lib/defaultBible";
 import { redirect } from "next/navigation";
 import ChapterReader from "@/components/ChapterReader";
 import BibleTranslationToolbar from "@/components/BibleTranslationToolbar";
@@ -34,13 +36,19 @@ export default async function ChapterPage({ params, searchParams }: Params) {
   }
 
   const bibleMode = isBibleVolume(canonicalVolume);
-  const overlayTranslations = chapterOverlayTranslations(canonicalVolume, query);
+  const defaultBible = bibleMode ? normalizeDefaultBible((await cookies()).get(DEFAULT_BIBLE_COOKIE)?.value) : "lds";
+  const overlayTranslations = chapterOverlayTranslations(canonicalVolume, query)
+    .filter((id) => id.toLowerCase() !== defaultBible.toLowerCase());
   const chrome = buildChapterChrome(scriptureCatalog, { volume: canonicalVolume, book, chapter: Number(chapter) }, overlayTranslations);
 
   // Nothing here waits for the text: the page (header, breadcrumbs, links) streams at once, so a navigation commits
   // as soon as the response starts, and the text follows as a promise the reader fades in when it resolves. Only
   // the primary text comes from here; comparison translations load in the reader after it.
-  const content = fetchChapterOnServer(canonicalVolume, book, chapter);
+  const content = fetchChapterOnServer(canonicalVolume, book, chapter, { translation: defaultBible })
+    .then((result) => ({
+      ...result,
+      translationNotice: bibleMode ? defaultBibleNotice(defaultBible, result.translation) : undefined,
+    }));
 
   return (
     <article className="page-shell">
@@ -57,7 +65,6 @@ export default async function ChapterPage({ params, searchParams }: Params) {
             />
           ) : undefined
         }
-        primaryTranslation={bibleMode ? "lds" : undefined}
         overlayTranslations={overlayTranslations}
       />
     </article>

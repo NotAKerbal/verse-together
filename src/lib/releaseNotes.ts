@@ -63,6 +63,10 @@ export const UNRELEASED: UnreleasedNotes = {
   items: [
     {
       kind: "new",
+      text: "Manage saved Bibles in Settings → Translations and make any saved translation your default Bible for chapter reading. Your choice is saved on this device; removing the default restores the King James Bible.",
+    },
+    {
+      kind: "new",
       text: "Send suggestions, report problems or request features in Settings → Feedback, with no sign-in required. Leave optional contact details if you would like a reply. If sending fails, your message stays in the form so you can try again.",
     },
     {
