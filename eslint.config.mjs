@@ -7,6 +7,8 @@ const eslintConfig = [
   {
     ignores: [
       "node_modules/**",
+      "mobile/**",
+      "native/**",
       ".next/**",
       "out/**",
       "build/**",
