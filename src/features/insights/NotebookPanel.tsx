@@ -12,7 +12,7 @@ export default function NotebookPanel() {
   const router = useRouter();
   const {
     canUseInsights, isMobileOpen, dismissMobile,
-    isPanelOpen, togglePanel, closeBuilder, activeDraftId, activeNote, drafts, isLoading, switchDraft,
+    isPanelOpen, togglePanel, closeBuilder, activeDraftId, activeNote, drafts, isLoading,
     panelView, setPanelView, isSheetOpen, setSheetOpen, readerChapter, startEntry,
     captureCurrentSource, currentSource,
   } = useInsightBuilder();
@@ -45,9 +45,7 @@ export default function NotebookPanel() {
     <NotesPanelContent
       activeNoteId={activeDraftId}
       activeNote={activeNote}
-      notes={drafts}
       isLoading={isLoading}
-      onSelect={switchDraft}
       view={panelView}
       onViewChange={setPanelView}
       // New note links to the page in view (with its live position), without logging reading of it.

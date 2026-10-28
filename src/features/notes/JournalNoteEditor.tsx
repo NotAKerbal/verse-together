@@ -212,6 +212,7 @@ export default function JournalNoteEditor({
   onDeleted,
   onDateChange,
   readingOptions = [],
+  readingFirst = false,
 }: {
   note: JournalNoteDocument;
   /** Who wrote it. The journal holds only the viewer's own notes, so the editor doesn't repeat it. */
@@ -229,6 +230,8 @@ export default function JournalNoteEditor({
   onDateChange?: (journalDate: string) => void;
   /** Other passages the reading chip can switch to (the page in view); the entry's own source is always offered. */
   readingOptions?: ReadingOption[];
+  /** Keep a reading-only entry compact until its note is activated. */
+  readingFirst?: boolean;
 }) {
   const { journalOutbox, deleteDraft } = useInsightBuilder();
   const { setEntryReading } = useJournalEntryActions();
@@ -236,6 +239,7 @@ export default function JournalNoteEditor({
   const readOnly = note.status !== "draft";
   // Published notes stay: they may be shared, and the server refuses to delete them.
   const canDelete = note.status !== "published";
+  const [noteStarted, setNoteStarted] = useState(false);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const noteId = note.id;
 
@@ -373,9 +377,19 @@ export default function JournalNoteEditor({
           ) : (
             <p className="text-sm text-[color:var(--foreground-muted)]">This note is empty.</p>
           )
+        ) : readingFirst && reading && !text && !noteStarted ? (
+          <button
+            type="button"
+            onClick={() => setNoteStarted(true)}
+            aria-label="Add a note"
+            className="min-h-16 w-full rounded-[1rem] border-2 border-[color:var(--surface-border)] px-3 py-3 text-left font-serif text-[1.0625rem] text-[color:var(--foreground-muted)] hover:border-[color:var(--accent-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-secondary)]"
+          >
+            Add a note…
+          </button>
         ) : (
           <LazyMarkdownEditor
             key={noteId}
+            autoFocus={noteStarted}
             value={text}
             onChange={onChange}
             ariaLabel={note.title || "Note"}
