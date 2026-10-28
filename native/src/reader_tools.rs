@@ -726,6 +726,40 @@ pub fn fetch_chapter(site: &str, l: &Location, translation: &str) -> Result<Vec<
         })
         .collect())
 }
+/// The chapter in the reader's default Bible (`fetchChapterOnServer(…, { translation: defaultBible })`): its verses and
+/// the translation that actually answered, which is the bundled LDS text ("lds") when the provider fell back to it.
+pub fn fetch_primary(
+    site: &str,
+    l: &Location,
+    translation: &str,
+) -> Result<(String, Vec<Verse>), String> {
+    let v = get_json(&format!(
+        "{site}/api/scriptures/chapter?volume={}&book={}&chapter={}&translation={}",
+        encode(&l.volume),
+        encode(&l.book),
+        l.chapter,
+        encode(translation)
+    ))?;
+    let actual = v["translation"]
+        .as_str()
+        .map(crate::faith::normalize_default_bible)
+        .unwrap_or_else(|| crate::faith::LDS_BIBLE_ID.into());
+    let verses: Vec<Verse> = v["verses"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|r| {
+            Some(Verse {
+                number: r["verse"].as_u64()? as u32,
+                text: r["text"].as_str()?.to_string(),
+            })
+        })
+        .collect();
+    if verses.is_empty() {
+        return Err(format!("{translation} has no text for this chapter."));
+    }
+    Ok((actual, verses))
+}
 pub fn fetch_jst(site: &str, l: &Location) -> Result<Vec<JstExcerpt>, String> {
     let v = get_json(&format!(
         "{site}/api/scriptures/jst?volume={}&book={}&chapter={}",
@@ -884,6 +918,30 @@ pub struct Explore {
     /// A study helps entry being read.
     pub entry: Option<(Guide, String, Load<HelpEntry>)>,
 }
+/// The reader's main text (`ChapterContent.translation`): the bundled LDS KJV, or the default Bible's chapter.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum Primary {
+    /// The bundled text, as asked for: not a Bible chapter, or the default Bible is the bundled one.
+    #[default]
+    Bundled,
+    /// The default Bible's chapter is on its way; the text area stays empty meanwhile, as on the website.
+    Loading { requested: String },
+    /// The chapter as shown: the default Bible asked for and the translation that answered ("lds" is the bundled
+    /// text, shown after a failure, with the website's notice).
+    Shown { requested: String, actual: String },
+}
+/// A default Bible's chapter as it was last loaded: its text (`None`: the bundled text was shown instead).
+#[derive(Debug, Clone)]
+pub struct CachedPrimary {
+    pub location: Location,
+    pub requested: String,
+    pub actual: String,
+    pub verses: Option<Vec<Verse>>,
+    pub at: std::time::Instant,
+}
+/// How many default-Bible chapters are kept in memory, and how long a failure is remembered before trying again.
+pub const PRIMARY_CACHE: usize = 48;
+pub const PRIMARY_RETRY: Duration = Duration::from_secs(120);
 pub struct ToolsState {
     pub site: String,
     /// The chapter the extras below belong to.
@@ -900,6 +958,8 @@ pub struct ToolsState {
     pub jst_reading: crate::jst::Reading,
     /// "Show omitted KJV words".
     pub jst_omitted: bool,
+    /// The Your Bibles "Joseph Smith Translation" disclosure is open.
+    pub jst_details: bool,
     pub bibles_view: BiblesView,
     pub catalog: Option<Load<Vec<Translation>>>,
     pub catalog_query: String,
@@ -911,6 +971,10 @@ pub struct ToolsState {
     pub choosing_language: bool,
     pub language_query: String,
     pub language_limit: usize,
+    /// The reader's main text, the default Bible's chapters already loaded, and those being fetched.
+    pub primary: Primary,
+    pub primary_cache: Vec<CachedPrimary>,
+    pub primary_in_flight: Vec<(Location, String)>,
 }
 impl ToolsState {
     pub fn new() -> Self {
@@ -927,6 +991,7 @@ impl ToolsState {
             jst: None,
             jst_reading: Default::default(),
             jst_omitted: false,
+            jst_details: false,
             bibles_view: BiblesView::List,
             catalog: None,
             catalog_query: String::new(),
@@ -936,7 +1001,25 @@ impl ToolsState {
             choosing_language: false,
             language_query: String::new(),
             language_limit: crate::bible_catalog::PAGE_SIZE,
+            primary: Primary::Bundled,
+            primary_cache: vec![],
+            primary_in_flight: vec![],
         }
+    }
+    /// The cached chapter for this default Bible, unless it is a failure old enough to try again.
+    pub fn cached_primary(&self, l: &Location, requested: &str) -> Option<&CachedPrimary> {
+        self.primary_cache.iter().find(|c| {
+            &c.location == l
+                && c.requested == requested
+                && (c.verses.is_some() || c.at.elapsed() < PRIMARY_RETRY)
+        })
+    }
+    /// Keeps a loaded chapter, newest first, within `PRIMARY_CACHE`.
+    pub fn remember_primary(&mut self, entry: CachedPrimary) {
+        self.primary_cache
+            .retain(|c| !(c.location == entry.location && c.requested == entry.requested));
+        self.primary_cache.insert(0, entry);
+        self.primary_cache.truncate(PRIMARY_CACHE);
     }
     /// The study paths that tag a verse.
     pub fn paths_for(&self, verse: u32) -> Vec<&StudyPath> {
@@ -969,6 +1052,10 @@ pub enum ToolsMsg {
     ResourcesLoaded(Location, Vec<u32>, Result<Vec<Resource>, String>),
     RetryResources,
     Compare(Location, String, Result<Vec<Verse>, String>),
+    /// The default Bible's chapter (`Primary`): asked for, then the translation that answered and its verses.
+    Primary(Location, String, Result<(String, Vec<Verse>), String>),
+    /// "Make default" (`useDefaultBible`): the Bible chapters open in.
+    SetDefault(String),
     ShowBible(String, bool),
     SaveBible(FavoriteBible),
     RemoveBible(String),
@@ -987,6 +1074,8 @@ pub enum ToolsMsg {
     ToggleJst,
     /// "Show omitted KJV words" / "Hide omitted KJV words".
     ToggleJstOmitted,
+    /// Open or close the "Joseph Smith Translation" disclosure under Your Bibles.
+    JstDetails,
     RetryJst,
     Jst(Location, Result<Vec<JstExcerpt>, String>),
     /// A link in a tool: the reader's own scripture opens here, anything else in the browser.
@@ -997,40 +1086,153 @@ fn msg(m: ToolsMsg) -> Message {
 }
 
 impl App {
-    /// Starts the chapter's extras after its text is on screen: study paths, other Bibles, JST.
+    /// The default Bible this chapter is read in, when it isn't the bundled text (`ChapterPage`: Bible chapters only).
+    pub(crate) fn primary_request(&self) -> Option<String> {
+        let id = &self.preferences.default_bible;
+        (is_bible(&self.preferences.last.volume) && id != crate::faith::LDS_BIBLE_ID)
+            .then(|| id.clone())
+    }
+    /// The translation the reader's text is in (`primaryTranslation`): "lds" for the bundled text.
+    pub(crate) fn primary_translation(&self) -> &str {
+        match &self.tools.primary {
+            Primary::Bundled => crate::faith::LDS_BIBLE_ID,
+            Primary::Loading { requested } => requested,
+            Primary::Shown { actual, .. } => actual,
+        }
+    }
+    /// Whether the reader shows the bundled LDS KJV, which the JST appendix revises.
+    pub(crate) fn primary_is_bundled(&self) -> bool {
+        self.primary_translation() == crate::faith::LDS_BIBLE_ID
+    }
+    /// The website's notice when the default Bible couldn't load this chapter (`defaultBibleNotice`).
+    pub(crate) fn primary_notice(&self) -> Option<String> {
+        match &self.tools.primary {
+            Primary::Shown { requested, actual } => {
+                crate::faith::default_bible_notice(requested, Some(actual), self.show_lds())
+            }
+            _ => None,
+        }
+    }
+    /// Puts the default Bible's text in place of the bundled verses just read, when this chapter has one: from memory,
+    /// or (until it arrives) none, as the website streams the text in. Marks stay on their verses; word marks are
+    /// only drawn where their words match (`matchingTextMarks`), so a translation never shows a mark on other words.
+    pub(crate) fn apply_primary(&mut self) {
+        let l = self.preferences.last.clone();
+        let Some(requested) = self.primary_request() else {
+            self.tools.primary = Primary::Bundled;
+            return;
+        };
+        // A chapter read again in place (another owner's marks, a sync) keeps the text it shows; a failure is only
+        // tried again on a new visit, when `load_chapter_tools` fetches.
+        let fresh_visit = self.tools.chapter.as_ref() != Some(&l);
+        let cached = if fresh_visit {
+            self.tools.cached_primary(&l, &requested)
+        } else {
+            self.tools
+                .primary_cache
+                .iter()
+                .find(|c| c.location == l && c.requested == requested)
+        };
+        match cached.cloned() {
+            Some(cached) => {
+                if let Some(verses) = cached.verses {
+                    self.verses = verses;
+                    self.build_verse_content();
+                }
+                self.tools.primary = Primary::Shown {
+                    requested,
+                    actual: cached.actual,
+                };
+            }
+            None => {
+                self.verses.clear();
+                self.build_verse_content();
+                self.tools.primary = Primary::Loading { requested };
+            }
+        }
+    }
+    /// Fetches the default Bible's chapter off the UI thread when the reader is waiting for it.
+    fn load_primary(&mut self) -> Task<Message> {
+        let Primary::Loading { requested } = &self.tools.primary else {
+            return Task::none();
+        };
+        let key = (self.preferences.last.clone(), requested.clone());
+        if self.tools.primary_in_flight.contains(&key) {
+            return Task::none();
+        }
+        self.tools.primary_in_flight.push(key.clone());
+        let site = self.tools.site.clone();
+        let (l, id) = key;
+        Task::perform(
+            background(move || {
+                let r = fetch_primary(&site, &l, &id);
+                (l, id, r)
+            }),
+            |(l, id, r)| msg(ToolsMsg::Primary(l, id, r)),
+        )
+    }
+    /// Whether JST passages are read with this chapter: chosen, shown to this tradition, on the bundled KJV.
+    pub(crate) fn jst_enabled(&self) -> bool {
+        self.preferences.jst
+            && self.show_lds()
+            && is_bible(&self.preferences.last.volume)
+            && self.primary_is_bundled()
+    }
+    /// Starts the chapter's extras after its text is on screen: the default Bible's text, study paths, other Bibles,
+    /// JST.
     pub(crate) fn load_chapter_tools(&mut self) -> Task<Message> {
+        let primary = self.load_primary();
         let l = self.preferences.last.clone();
         if self.tools.chapter.as_ref() == Some(&l) {
-            return Task::none();
+            return primary;
         }
         self.tools.chapter = Some(l.clone());
         self.tools.panel = None;
         self.tools.explore = None;
         self.tools.resources = None;
-        self.tools.paths = Load::Loading;
         let site = self.tools.site.clone();
-        let mut tasks = vec![{
+        let mut tasks = vec![primary];
+        // Study paths are Latter-day Saint study content (`ChapterReader`: none for other denominations).
+        if self.show_lds() {
+            self.tools.paths = Load::Loading;
             let (site, l) = (site.clone(), l.clone());
-            Task::perform(
+            tasks.push(Task::perform(
                 background(move || {
                     let r = fetch_study_paths(&site, &l);
                     (l, r)
                 }),
                 |(l, r)| msg(ToolsMsg::Paths(l, r)),
-            )
-        }];
+            ));
+        } else {
+            self.tools.paths = Load::Ready(vec![]);
+        }
         self.tools.compare.clear();
         self.tools.jst = None;
         self.tools.jst_reading = Default::default();
         if is_bible(&l.volume) {
+            // The default Bible is the text itself, so it is never also compared with (`overlayTranslations`).
+            let default = self.primary_request();
             for id in self.preferences.compare_bibles.clone() {
+                if default
+                    .as_ref()
+                    .is_some_and(|d| d.eq_ignore_ascii_case(&id))
+                {
+                    continue;
+                }
                 tasks.push(self.load_compare(&id));
             }
-            if self.preferences.jst {
+            if self.jst_enabled() {
                 tasks.push(self.load_jst());
             }
         }
         Task::batch(tasks)
+    }
+    /// Reads the chapter again with every extra, after the default Bible or the faith tradition changed.
+    pub(crate) fn reload_reader_text(&mut self) -> Task<Message> {
+        self.tools.chapter = None;
+        self.load_chapter();
+        self.load_note();
+        self.load_chapter_tools()
     }
     fn load_compare(&mut self, id: &str) -> Task<Message> {
         let l = self.preferences.last.clone();
@@ -1069,10 +1271,15 @@ impl App {
     }
     fn start_explore(&mut self, word: String) -> Task<Message> {
         let word = word.to_lowercase();
-        let helps = Guide::ALL
-            .iter()
-            .map(|g| (*g, study_help_matches(*g, &word)))
-            .collect();
+        // The study helps are Latter-day Saint guides (`useScriptureHelps`: none for other denominations).
+        let helps = if self.show_lds() {
+            Guide::ALL
+                .iter()
+                .map(|g| (*g, study_help_matches(*g, &word)))
+                .collect()
+        } else {
+            vec![]
+        };
         self.tools.explore = Some(Explore {
             word: word.clone(),
             dictionary: Load::Loading,
@@ -1267,6 +1474,49 @@ impl App {
                     return self.keep_jump();
                 }
             }
+            ToolsMsg::Primary(l, id, r) => {
+                self.tools
+                    .primary_in_flight
+                    .retain(|(at, t)| !(*at == l && *t == id));
+                // A failed chapter shows the bundled text (`fetchChapterUncached` falls back to it), with the notice.
+                let (actual, verses) = match r {
+                    Ok((actual, _)) if actual == crate::faith::LDS_BIBLE_ID => (actual, None),
+                    Ok((actual, verses)) => (actual, Some(verses)),
+                    Err(_) => (crate::faith::LDS_BIBLE_ID.to_string(), None),
+                };
+                self.tools.remember_primary(CachedPrimary {
+                    location: l.clone(),
+                    requested: id.clone(),
+                    actual,
+                    verses,
+                    at: std::time::Instant::now(),
+                });
+                if l == here
+                    && self.tools.primary
+                        == (Primary::Loading {
+                            requested: id.clone(),
+                        })
+                {
+                    self.load_chapter();
+                    let mut tasks = vec![self.keep_jump()];
+                    if self.jst_enabled() && self.tools.jst.is_none() {
+                        tasks.push(self.load_jst());
+                    }
+                    return Task::batch(tasks);
+                }
+            }
+            ToolsMsg::SetDefault(id) => {
+                let id = crate::faith::normalize_default_bible(&id);
+                if self.preferences.default_bible == id {
+                    return Task::none();
+                }
+                if !self.save_note() {
+                    return Task::none();
+                }
+                self.preferences.default_bible = id;
+                self.persist();
+                return self.reload_reader_text();
+            }
             ToolsMsg::ShowBible(id, show) => {
                 let shown = &mut self.preferences.compare_bibles;
                 shown.retain(|t| !t.eq_ignore_ascii_case(&id));
@@ -1274,7 +1524,10 @@ impl App {
                     shown.push(id.clone());
                 }
                 self.persist();
-                if show && is_bible(&here.volume) {
+                let is_default = self
+                    .primary_request()
+                    .is_some_and(|d| d.eq_ignore_ascii_case(&id));
+                if show && is_bible(&here.volume) && !is_default {
                     return self.load_compare(&id);
                 }
                 self.tools
@@ -1291,13 +1544,28 @@ impl App {
                 }
                 self.tools.bibles_view = BiblesView::List;
                 self.persist();
+                // Added in the reader it shows beside the text; in Settings it is only saved (`onShownChange`).
+                if self.screen == crate::Screen::Settings {
+                    return Task::none();
+                }
                 return self.update_tools(ToolsMsg::ShowBible(bible.id, true));
             }
             ToolsMsg::RemoveBible(id) => {
+                // Removing the default Bible restores the bundled one first (`removeBible`).
+                let reset = self.preferences.default_bible.eq_ignore_ascii_case(&id);
+                if reset && !self.save_note() {
+                    return Task::none();
+                }
                 self.preferences
                     .bibles
                     .retain(|b| !b.id.eq_ignore_ascii_case(&id));
-                return self.update_tools(ToolsMsg::ShowBible(id, false));
+                let hide = self.update_tools(ToolsMsg::ShowBible(id, false));
+                if reset {
+                    self.preferences.default_bible = crate::faith::LDS_BIBLE_ID.into();
+                    self.persist();
+                    return Task::batch([hide, self.reload_reader_text()]);
+                }
+                return hide;
             }
             ToolsMsg::BiblesView(view) => {
                 self.tools.bibles_view = view.clone();
@@ -1355,13 +1623,13 @@ impl App {
                 self.preferences.jst = !self.preferences.jst;
                 self.persist();
                 self.tools.jst_reading = Default::default();
-                if self.preferences.jst && is_bible(&here.volume) {
+                if self.jst_enabled() {
                     return self.load_jst();
                 }
                 self.tools.jst = None;
             }
             ToolsMsg::Jst(l, r) => {
-                if l == here && self.preferences.jst {
+                if l == here && self.jst_enabled() {
                     self.tools.jst_reading = match &r {
                         Ok(excerpts) => {
                             let verses: Vec<crate::jst::Kjv> = self
@@ -1384,8 +1652,9 @@ impl App {
                 }
             }
             ToolsMsg::ToggleJstOmitted => self.tools.jst_omitted = !self.tools.jst_omitted,
+            ToolsMsg::JstDetails => self.tools.jst_details = !self.tools.jst_details,
             ToolsMsg::RetryJst => {
-                if self.preferences.jst && is_bible(&here.volume) {
+                if self.jst_enabled() {
                     return self.load_jst();
                 }
             }

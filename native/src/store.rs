@@ -398,6 +398,11 @@ pub struct Preferences {
     pub jst: bool,
     /// Reader settings' Comparison view: other Bibles side by side rather than inline (`comparisonView`).
     pub side_by_side: bool,
+    /// Settings → Reading's faith tradition (`vt_faith_tradition_v1`): what content shows. A device preference,
+    /// never synced; hiding content never removes study data.
+    pub faith_tradition: String,
+    /// The default Bible (`vt-default-bible-v1`): the main text of Bible chapters on this device.
+    pub default_bible: String,
 }
 pub const PREFERENCES_VERSION: u32 = 2;
 /// The website's 1rem reading size; its Reader settings scale it from 85% to 130%.
@@ -419,6 +424,8 @@ impl Default for Preferences {
             compare_bibles: Vec::new(),
             jst: false,
             side_by_side: false,
+            faith_tradition: crate::faith::LATTER_DAY_SAINT.into(),
+            default_bible: crate::faith::LDS_BIBLE_ID.into(),
         }
     }
 }
@@ -431,6 +438,9 @@ impl Preferences {
         }
         self.font_size = self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE);
         self.version = PREFERENCES_VERSION;
+        self.faith_tradition =
+            crate::faith::normalize_faith_tradition(&self.faith_tradition).into();
+        self.default_bible = crate::faith::normalize_default_bible(&self.default_bible);
         self
     }
     pub fn presets(&self) -> Vec<MarkPreset> {
@@ -530,7 +540,7 @@ pub struct Store {
     owner: String,
 }
 /// The study database's layout version (`PRAGMA user_version`).
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 const SCHEMA_V2: &str = "
   CREATE TABLE IF NOT EXISTS preferences(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
   CREATE TABLE annotations_v2(owner TEXT NOT NULL DEFAULT '', volume TEXT NOT NULL, book TEXT NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL,
@@ -583,6 +593,12 @@ const SCHEMA_V4: &str = "
     body TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL, dirty INTEGER NOT NULL DEFAULT 0, rev INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY(owner, guide, part, start_block, start_offset, end_block, end_offset, exact));
 ";
+/// Version 5: each account note's status as the account lists it ("draft" or "published"), which the reader's note
+/// links show. Kept apart from the notes so the rows sync compares are untouched.
+const SCHEMA_V5: &str = "
+  CREATE TABLE IF NOT EXISTS note_status(owner TEXT NOT NULL DEFAULT '', remote_id TEXT NOT NULL, status TEXT NOT NULL,
+    PRIMARY KEY(owner, remote_id));
+";
 fn columns(connection: &Connection, table: &str) -> Result<Vec<String>> {
     let mut stmt = connection
         .prepare(&format!("PRAGMA table_info({table})"))
@@ -603,14 +619,22 @@ fn migrate(study: &mut Connection, directory: &Path) -> Result<()> {
     }
     let old_annotations = columns(study, "annotations")?;
     let old_reading = columns(study, "reading")?;
-    let has_data: bool = !old_annotations.is_empty()
-        && study
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM annotations) OR EXISTS(SELECT 1 FROM reading)",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap_or(true);
+    let mut has_data = false;
+    for table in [
+        "annotations",
+        "reading",
+        "notes",
+        "reading_log",
+        "guide_marks",
+    ] {
+        if !columns(study, table)?.is_empty() {
+            has_data |= study
+                .query_row(&format!("SELECT EXISTS(SELECT 1 FROM {table})"), [], |r| {
+                    r.get::<_, bool>(0)
+                })
+                .unwrap_or(true);
+        }
+    }
     let backup = directory.join(format!("study-before-v{SCHEMA_VERSION}.sqlite"));
     let earlier_backup = directory.join("study-before-v2.sqlite");
     if has_data && !backup.exists() && !(version < 2 && earlier_backup.exists()) {
@@ -659,6 +683,7 @@ fn migrate(study: &mut Connection, directory: &Path) -> Result<()> {
         tx.execute_batch(SCHEMA_V3).map_err(error)?;
     }
     tx.execute_batch(SCHEMA_V4).map_err(error)?;
+    tx.execute_batch(SCHEMA_V5).map_err(error)?;
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)
         .map_err(error)?;
     tx.commit().map_err(error)
@@ -1064,6 +1089,31 @@ impl Store {
     pub fn all_notes(&self) -> Result<Vec<Note>> {
         self.notes_between("0000-00-00", "9999-99-99")
     }
+    /// The journal notes whose body could link a verse (`#v-`), most recently changed first, each with the status
+    /// the account lists for it ("published", else "draft": this device's own notes are drafts, as on the website).
+    pub fn notes_linking_verses(&self) -> Result<Vec<(Note, String)>> {
+        let mut stmt = self.study.prepare_cached(&format!("SELECT {}, COALESCE(s.status,'draft') FROM notes n LEFT JOIN note_status s ON s.owner=n.owner AND s.remote_id=n.remote_id WHERE n.owner=?1 AND n.deleted=0 AND instr(n.body,'#v-')>0 ORDER BY n.updated DESC", NOTE_COLUMNS.split(',').map(|c| format!("n.{c}")).collect::<Vec<_>>().join(","))).map_err(error)?;
+        stmt.query_map(params![self.owner], |r| {
+            Ok((read_note(r)?, r.get::<_, String>(9)?))
+        })
+        .map_err(error)?
+        .collect::<std::result::Result<_, _>>()
+        .map_err(error)
+    }
+    /// Records the statuses the account lists for its notes (`listMyJournal`), forgetting those no longer listed.
+    pub fn set_note_statuses(&mut self, statuses: &[(String, String)]) -> Result<()> {
+        let tx = self.study.transaction().map_err(error)?;
+        tx.execute("DELETE FROM note_status WHERE owner=?1", [&self.owner])
+            .map_err(error)?;
+        for (remote_id, status) in statuses {
+            tx.execute(
+                "INSERT OR REPLACE INTO note_status(owner,remote_id,status) VALUES(?1,?2,?3)",
+                params![self.owner, remote_id, status],
+            )
+            .map_err(error)?;
+        }
+        tx.commit().map_err(error)
+    }
     pub fn note(&self, id: &str) -> Result<Option<Note>> {
         match self.study.query_row(
             &format!("SELECT {NOTE_COLUMNS} FROM notes WHERE owner=?1 AND id=?2 AND deleted=0"),
@@ -1219,6 +1269,7 @@ impl Store {
             "notes",
             "reading_log",
             "guide_marks",
+            "note_status",
         ] {
             tx.execute(&format!("DELETE FROM {table} WHERE owner=?1"), [owner])
                 .map_err(error)?;
@@ -1687,7 +1738,14 @@ impl Store {
         }
         Ok(total)
     }
-    pub fn search(path: &Path, query: &str, volume: Option<&str>) -> Result<SearchResults> {
+    /// Searches the scriptures: a reference ("Alma 32:21") or words. `bible_only` keeps to the Old and New
+    /// Testaments, as the website searches for other denominations (`searchLocalScriptures({ bibleOnly })`).
+    pub fn search(
+        path: &Path,
+        query: &str,
+        volume: Option<&str>,
+        bible_only: bool,
+    ) -> Result<SearchResults> {
         let conn =
             Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(error)?;
         let query = query.trim();
@@ -1707,6 +1765,7 @@ impl Store {
             let name = normalize(&captures[1]);
             if let Some(book) = Self::books_from(&conn)?.into_iter().find(|b| {
                 volume.is_none_or(|v| b.volume == v)
+                    && (!bible_only || crate::reader_tools::is_bible(&b.volume))
                     && [b.label.as_str(), b.short_title.as_str(), b.id.as_str()]
                         .iter()
                         .any(|s| normalize(s) == name)
@@ -1739,9 +1798,9 @@ impl Store {
                 .collect::<Vec<_>>();
             if !words.is_empty() {
                 let expression = words.join(" AND ");
-                let mut stmt=conn.prepare("SELECT v.volume,v.book,v.chapter,v.verse,v.text,v.reference FROM verse_search s JOIN verses v ON v.id=s.rowid WHERE verse_search MATCH ?1 AND (?2 IS NULL OR v.volume=?2) ORDER BY rank LIMIT 101").map_err(error)?;
+                let mut stmt=conn.prepare("SELECT v.volume,v.book,v.chapter,v.verse,v.text,v.reference FROM verse_search s JOIN verses v ON v.id=s.rowid WHERE verse_search MATCH ?1 AND (?2 IS NULL OR v.volume=?2) AND (?3=0 OR v.volume IN ('oldtestament','newtestament')) ORDER BY rank LIMIT 101").map_err(error)?;
                 hits = stmt
-                    .query_map(params![expression, volume], read_hit)
+                    .query_map(params![expression, volume, bible_only], read_hit)
                     .map_err(error)?
                     .collect::<std::result::Result<_, _>>()
                     .map_err(error)?;
@@ -1843,25 +1902,30 @@ mod tests {
     fn reference_search_fts_and_safe_input() {
         let dir = directory();
         let store = Store::open(&dir).unwrap();
-        let hits = Store::search(&store.scripture_path, "Alma 32:21", None).unwrap();
+        let hits = Store::search(&store.scripture_path, "Alma 32:21", None, false).unwrap();
         assert_eq!(hits.hits.len(), 1);
         assert!(hits.hits[0].text.contains("faith"));
         assert_eq!(
-            Store::search(&store.scripture_path, "John 3:16-17", None)
+            Store::search(&store.scripture_path, "John 3:16-17", None, false)
                 .unwrap()
                 .hits
                 .len(),
             2
         );
         assert_eq!(
-            Store::search(&store.scripture_path, "John 3:16", Some("bookofmormon"))
-                .unwrap()
-                .hits
-                .len(),
+            Store::search(
+                &store.scripture_path,
+                "John 3:16",
+                Some("bookofmormon"),
+                false
+            )
+            .unwrap()
+            .hits
+            .len(),
             0
         );
         assert!(
-            !Store::search(&store.scripture_path, "faith hope", None)
+            !Store::search(&store.scripture_path, "faith hope", None, false)
                 .unwrap()
                 .hits
                 .is_empty()
@@ -1873,7 +1937,7 @@ mod tests {
             "' OR 1=1; --",
             "John 999999999999999999999999999:1",
         ] {
-            Store::search(&store.scripture_path, input, None).unwrap();
+            Store::search(&store.scripture_path, input, None, false).unwrap();
         }
         drop(store);
         fs::remove_dir_all(dir).unwrap();
@@ -2040,6 +2104,37 @@ mod tests {
             "the original rows are still in their original table"
         );
         drop(c);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn a_journal_only_profile_is_backed_up_before_upgrade() {
+        let dir = directory();
+        let mut store = Store::open(&dir).unwrap();
+        let mut note = Note::new("2026-10-28", None);
+        note.body = "My only study data is this journal note.".into();
+        store.save_note(&note).unwrap();
+        store
+            .study
+            .execute_batch("DROP TABLE note_status; PRAGMA user_version=4;")
+            .unwrap();
+        drop(store);
+        let store = Store::open(&dir).unwrap();
+        assert_eq!(store.note(&note.id).unwrap().unwrap().body, note.body);
+        let backup = Connection::open(dir.join("study-before-v5.sqlite")).unwrap();
+        assert_eq!(
+            backup
+                .query_row("SELECT body FROM notes", [], |r| r.get::<_, String>(0))
+                .unwrap(),
+            note.body
+        );
+        assert_eq!(
+            backup
+                .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            4
+        );
+        drop(backup);
+        drop(store);
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]

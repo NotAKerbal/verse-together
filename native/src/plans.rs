@@ -1667,13 +1667,27 @@ impl App {
             })
             .into()
     }
+    /// The builder's volume tab shown: other denominations see the New Testament in place of a hidden volume.
+    fn builder_volume(&self, form: &BuilderForm) -> &'static str {
+        if !self.show_lds() && crate::faith::is_lds_volume(form.active_volume) {
+            "newtestament"
+        } else {
+            form.active_volume
+        }
+    }
+    /// The volumes the builder offers (`PLAN_VOLUME_IDS`, without Latter-day Saint ones when they're hidden).
+    fn builder_volumes(&self) -> impl Iterator<Item = &'static str> + '_ {
+        model::PLAN_VOLUMES
+            .into_iter()
+            .filter(|v| self.show_lds() || !crate::faith::is_lds_volume(v))
+    }
     /// `ScopeStep`.
     fn scope_step<'a>(&'a self, form: &'a BuilderForm) -> Element<'a, Message> {
         let p = self.p();
         let catalog = self.catalog();
         let state = &form.state;
         let mut whole = row![].spacing(8);
-        for volume in model::PLAN_VOLUMES {
+        for volume in self.builder_volumes() {
             let on = state.volume_selected(volume);
             let mut content = row![].spacing(6).align_y(Center);
             if on {
@@ -1700,8 +1714,8 @@ impl App {
         }
         // `segmented-control`
         let mut tabs = row![].spacing(4);
-        for volume in model::PLAN_VOLUMES {
-            let chosen = form.active_volume == volume;
+        for volume in self.builder_volumes() {
+            let chosen = self.builder_volume(form) == volume;
             tabs = tabs.push(
                 button(
                     container(
@@ -1742,7 +1756,7 @@ impl App {
                 },
                 ..Default::default()
             });
-        let active = form.active_volume;
+        let active = self.builder_volume(form);
         let active_selected = state.volume_selected(active);
         let mut books = row![].spacing(8);
         for entry in catalog.books(active) {
@@ -1832,7 +1846,7 @@ impl App {
         let p = self.p();
         let catalog = self.catalog();
         let (volume, book) = form.narrowing.as_ref()?;
-        if volume != form.active_volume {
+        if *volume != self.builder_volume(form) {
             return None;
         }
         let entry = catalog.find(volume, book)?;
@@ -2686,6 +2700,10 @@ impl App {
         let p = self.p();
         let mut list = column![].spacing(8);
         for (id, label, hint) in model::QUICK_STARTS {
+            // The Book of Mormon plan is Latter-day Saint content.
+            if id == "bom-30" && !self.show_lds() {
+                continue;
+            }
             list = list.push(
                 button(
                     column![

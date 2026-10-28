@@ -1,3 +1,101 @@
+# Independent settings acceptance — October 28, 2026
+
+Codex reviewed the sixth Claude pass on base `27c2908`, including asynchronous translation loading and stale-result
+checks, word-mark matching across translations, owner-scoped note statuses, draft-safe note opening, feedback
+transport and filtering. **Passed independently:** 165 native tests (1 optional exporter ignored), 5 renderer tests,
+strict clippy, formatting, whitespace and release-history generation check. Evidence is in
+`/tmp/verse-settings-review-{tests,renderer,clippy,build}.log`.
+
+Review found and fixed a migration-backup gap: journal-only profiles now get a backup before upgrading, as do
+profiles containing only reading logs or guide marks. A regression verifies the original note and v4 schema in
+the backup. The window title also stops naming hidden scripture when the faith-tradition notice is shown.
+
+**Passed, actual release window:** isolated `/tmp/verse-settings-root-qa`, `--no-account`, Linux GNOME Wayland.
+Opened Settings/Reading, changed faith tradition and confirmed the LDS navigation disappeared; opened the real
+release-notes viewer with its embedded screenshots. No feedback was submitted and no account/keyring was used.
+The QA window was closed. Those GUI checks preceded the backup/title corrections; their final build passed.
+
+Final release SHA-256: `c41d543e03b77c44319c7142e2e2073a9937d35374e8e98deeb063994962feab`.
+Account deployment/live Google QA remains **Blocked**. Remaining UI polish and published-note read-only handling
+are continuing work; this does not claim full parity. macOS/Windows and accessibility remain **Not run**.
+
+# Website 2.12–2.13 core features — October 28, 2026 (sixth Claude pass)
+
+**Tree:** `t3/rust-desktop-app` at `27c2908` plus this pass's **uncommitted** native changes (no commit, push, PR,
+merge or deployment; no web, Convex, provider or environment files changed; no release bump). Environment: Ubuntu
+GNOME Wayland 1280×800, Node 24, Rust from `/tmp/verse-native-tools/env.sh`, `CARGO_BUILD_JOBS=4`. Release binary
+SHA-256: `1e37e4da7543b9e4d04aa02bf91a23d36a1ecb5f69eb2a6c96806a65bcf8ba4a` (the package's own hash is in
+`dist/*.sha256`, written after this file).
+
+## What changed
+
+The six gaps the merge of production 2.13.0 listed are implemented against the website's source (details, tests and
+remaining gaps per feature in `PARITY.md`, "Website 2.12–2.13 additions"):
+
+1. **Settings tabs** (`settings_ui.rs`): Account, Reading, Translations, Study tools, Release notes, Feedback, in the
+   header from 900px or on the page in simple mode, with the website's keyboard rules; existing account/sync,
+   simple mode, appearance and quick-mark controls moved to their sections.
+2. **Faith tradition** (`faith.rs`): the website's rules and every filter it applies (navigation, Library, volume
+   picker, search, reader tools, JST, labels, plan builder, hidden-content notice, Browse return); a device
+   preference that never deletes study data.
+3. **Default Bible** (`reader_tools.rs` `Primary`): Make default in Settings and Reader settings; Bible chapters
+   read the default from the website off the UI thread, cached in memory, falling back to the bundled KJV with the
+   website's notice; marks follow `matchingTextMarks`; never compared with itself; JST on the bundled KJV only.
+4. **Feedback** (`feedback.rs`): the website's form rules, limits, states and `feedback:submitFeedback` request.
+5. **Release notes** (`release_notes.rs`, `assets/release-notes.json`, `scripts/generate-release-notes.mjs`,
+   `build.rs`): the website's history and screenshots embedded, without claiming a desktop history.
+6. **Note links beside verses** (`note_links.rs`, schema v5 `note_status`, `sync.rs` records listed statuses): the
+   website's body-link rule, grouping, picker and statuses; drafts saved before a note opens.
+
+Also: Font Awesome `comment-dots` and `rotate-left` icons; underlined controls draw their underline as a rule (the
+note marker's at 25%, as on the website); search takes a Bible-only flag.
+
+## Checks
+
+| Check | Command / procedure | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --locked` | **Passed**: 164, 1 ignored (snapshot exporter). 24 new: `faith::tests` (3), `feedback::tests` (5), `note_links::tests` (3), `release_notes::tests` (2), `settings_ui::tests` (2), `parity_tests` (8), `ui_tests::settings_has_the_websites_six_tabs_in_the_header_and_follows_the_keyboard` |
+| Renderer tests | `cargo test --locked -p iced_tiny_skia` | **Passed**: 5 |
+| Clippy / format / whitespace | `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check` | **Passed** |
+| Release notes current | `node native/scripts/generate-release-notes.mjs --check` | **Passed** |
+| Headless snapshots | `VERSE_SNAPSHOTS=/tmp/verse-snap-213 cargo test snapshots -- --ignored` | **Passed** (rendered and reviewed: every Settings section, simple-mode tabs, release viewer, note links, fallback notice, other-denomination Library and notice) |
+| Release build, package | `cargo build --release --locked`, `native/package-linux.sh` | **Passed** (binary hash above; package holds only the binary, docs, icon, installer and licenses) |
+| Web / Convex tests and typecheck | — | **Not run**: no web or Convex file changed in this pass (the previous pass's 50 backend contracts and typechecks stand) |
+
+## Real desktop check (release build, Linux Computer Use, `--no-account --data-dir /tmp/verse-qa-213/profile`)
+
+Screenshots: `/tmp/verse-qa-213/screens/01…15-*.png`. **Passed:**
+
+- Note links: Add to a journal note twice on 1 Nephi 1:2 → "2 notes" beside verse 2; the picker listed both as Draft;
+  a verse-note draft typed first was saved (SQLite `annotations` row "Draft verse thought") when Down + Enter opened
+  "Learning of my father" in the journal.
+- Settings: tabs at the header's right; Right/Left/End moved between sections, wrapping.
+- Faith tradition: "Other denominations" removed Come Follow Me from the navigation; Browse went to the Library
+  (Journal, Old and New Testaments only, "Search or jump to John 3:16"); the reader at 1 Nephi showed the website's
+  notice; its Settings link opened Reading; Translations named "King James Bible" with no JST section; search scopes
+  All/OT/NT; Resources absent for verses. Switching back restored the three links.
+- Default Bible: BSB added from the live catalog (saved, not shown for comparison), Make default; John 3:16 opened
+  in the BSB fetched live from `/api/scriptures/chapter` with the jump kept on verse 16; Reader settings showed BSB as
+  Default without a Show switch.
+- Release notes: the website's entries and thumbnails; a screenshot opened full size and Escape closed it.
+- Feedback and fallback, with `VERSE_TOGETHER_SITE`/`VERSE_TOGETHER_CONVEX_URL` set to a recording stand-in on
+  `127.0.0.1:47613` (`/tmp/verse-qa-tools/mock_convex.py`, log `/tmp/verse-qa-213/mock.log`): John 3 showed the
+  bundled KJV with "Your default Bible couldn't load this chapter. Showing King James Bible (LDS edition) instead.";
+  "hi" showed "Write at least 5 characters." and sent nothing; the first real send got the stand-in's 502 and kept the
+  draft with the website's failure message; the retry showed "Thanks! Your feedback was sent." and cleared the form.
+  The stand-in recorded exactly two `POST /api/mutation` bodies `{"path":"feedback:submitFeedback","args":{"message":…,
+  ["contact":"qa@example.invalid",] "path":"/native/account"},"format":"json"}` with no Authorization header.
+  **No feedback was sent to production.**
+
+The QA app and stand-in were stopped; no personal keyring, account or study data was used.
+
+## Not run / Blocked
+
+- **Blocked:** live sign-in/sync (deployment, `ACCOUNT_ACTIVATION.md`), so feedback linked to an account and the
+  account's Published statuses are verified by tests only.
+- **Not run:** feedback against the live deployment (not authorized); macOS/Windows; accessibility/IME; the plan
+  builder's faith-tradition filtering in a window (code review only; the builder needs sign-in).
+
 # Independent production-integration review — October 28, 2026
 
 Codex reviewed the merge of production `2929d8a` into desktop `e36e8a2`, including the minimal account diff

@@ -462,6 +462,20 @@ impl Sync<'_> {
     fn pull_notes(&mut self) -> Result<(), CallError> {
         let journal = self.query("insights:listMyJournal", json!({}))?;
         let known = self.write(|s| s.remote_notes())?;
+        // Each note's status as listed (the reader's note links show Draft or Published and skip archived notes).
+        let statuses: Vec<(String, String)> = journal
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|e| e["kind"] == "note")
+            .filter_map(|e| {
+                Some((
+                    e["id"].as_str()?.to_string(),
+                    e["status"].as_str()?.to_string(),
+                ))
+            })
+            .collect();
+        self.write(|s| s.set_note_statuses(&statuses))?;
         let mut listed = Vec::new();
         for entry in journal.as_array().into_iter().flatten() {
             if entry["kind"] != "note" {

@@ -196,8 +196,14 @@ impl App {
     pub(crate) fn header(&self) -> Element<'_, Message> {
         let inset = shell_inset(self.window_width);
         let mut line = row![self.nav_pill()].spacing(12).align_y(Center);
-        if self.screen == Screen::Reader {
+        if self.content_hidden() {
+            // Hidden content has no page controls (`AppMain` shows its notice in place of the page).
+        } else if self.screen == Screen::Reader {
             line = line.push(space::horizontal()).push(self.reader_pill());
+        } else if self.screen == Screen::Settings && self.settings_tabs_in_header() {
+            line = line
+                .push(space::horizontal())
+                .push(self.settings_tabs(true));
         } else if self.screen == Screen::Guides && self.lessons.open.is_some() {
             line = line.push(space::horizontal()).push(self.lesson_pill());
         } else if self.screen == Screen::Library {
@@ -227,7 +233,8 @@ impl App {
         let indicator_alpha = alpha * m.indicator_shown.value(now);
         let links_widths = m.link_widths(widths, now);
         let mut links = row![].spacing(LINK_GAP).align_y(Center);
-        for (i, (label, glyph, screen)) in NAV_ITEMS.iter().enumerate() {
+        let shown_links = self.nav_count();
+        for (i, (label, glyph, screen)) in NAV_ITEMS.iter().enumerate().take(shown_links) {
             let tint = m.tint[i].value(now);
             let color = fade(mix(p.ink, p.paper, tint), alpha);
             let shown = m.label[i].value(now);
@@ -274,7 +281,8 @@ impl App {
             };
             links = links.push(container(link).id(format!("nav-{i}")));
         }
-        let total: f32 = links_widths.iter().sum::<f32>() + LINK_GAP * 2.0;
+        let total: f32 = links_widths.iter().take(shown_links).sum::<f32>()
+            + LINK_GAP * (shown_links.saturating_sub(1)) as f32;
         let (x, w) = m.indicator(now);
         let indicator = container(container(space()).width(w).height(CONTROL).style(move |_| {
             container::Style {
@@ -410,10 +418,14 @@ impl App {
             container(
                 row![
                     icon(&icons::MAGNIFYING_GLASS, p.faint, 14.),
-                    text("Search or jump to 1 Ne 3:7")
-                        .size(14)
-                        .color(p.faint)
-                        .wrapping(iced::widget::text::Wrapping::None),
+                    text(if self.show_lds() {
+                        "Search or jump to 1 Ne 3:7"
+                    } else {
+                        "Search or jump to John 3:16"
+                    })
+                    .size(14)
+                    .color(p.faint)
+                    .wrapping(iced::widget::text::Wrapping::None),
                 ]
                 .spacing(10)
                 .align_y(Center),

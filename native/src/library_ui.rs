@@ -271,7 +271,22 @@ impl App {
                     self.library = LibraryPage::Home;
                     return self.show_library();
                 }
-                // Back to where browsing was left.
+                // Back to where browsing was left, unless that is content this faith tradition hides
+                // (`useBrowseNavHref`): then the Library itself.
+                let left = if self.browse_in_reader {
+                    let l = &self.preferences.last;
+                    format!("/browse/{}/{}/{}", l.volume, l.book, l.chapter)
+                } else {
+                    match &self.library {
+                        LibraryPage::Home => "/browse".to_string(),
+                        LibraryPage::Volume(v) => format!("/browse/{v}"),
+                        LibraryPage::Book(v, b) => format!("/browse/{v}/{b}"),
+                    }
+                };
+                if !self.show_lds() && crate::faith::is_lds_content_path(&left) {
+                    self.library = LibraryPage::Home;
+                    return self.show_library();
+                }
                 if self.browse_in_reader {
                     return self.update(Message::SetScreen(Screen::Reader));
                 }
@@ -527,7 +542,9 @@ impl App {
             .weeks
             .iter()
             .find(|w| w.start <= today && today <= w.end);
-        cards.push(match week {
+        // Come, Follow Me is Latter-day Saint content (`BrowseSelector`).
+        let show_lds = self.show_lds();
+        cards.extend(show_lds.then(|| match week {
             Some(w) => {
                 let guide = crate::lessons::guides()
                     .iter()
@@ -556,9 +573,12 @@ impl App {
                 None,
                 msg(LibraryMsg::ComeFollowMe),
             ),
-        });
-        // `ContinueReadingCard`: the chapter the reader had open.
-        if let Some(book) = self.book() {
+        }));
+        // `ContinueReadingCard`: the chapter the reader had open, unless its volume is hidden.
+        if let Some(book) = self
+            .book()
+            .filter(|b| show_lds || !crate::faith::is_lds_volume(&b.volume))
+        {
             let label = if book.id == "doctrineandcovenants" {
                 "D&C".to_string()
             } else {
@@ -588,6 +608,9 @@ impl App {
         ));
         let mut volumes: Vec<(String, String, u32, usize)> = vec![];
         for b in &self.books {
+            if !show_lds && crate::faith::is_lds_volume(&b.volume) {
+                continue;
+            }
             match volumes.iter_mut().find(|v| v.0 == b.volume) {
                 Some(v) => {
                     v.2 += b.chapters;

@@ -73,6 +73,59 @@ fn main() {
     conn.execute_batch("PRAGMA optimize; VACUUM;").unwrap();
     println!("cargo:rustc-env=VERSE_DATA_HASH={hash:x}");
     write_guides(&root);
+    write_release_images(&root);
+}
+
+/// Embeds the website's release-note screenshots that `assets/release-notes.json` (generated from
+/// `src/lib/releaseNotes.ts`) shows, by their `src`.
+fn write_release_images(root: &std::path::Path) {
+    // The website's version (package.json), which its newest release note must name.
+    let package = root.join("package.json");
+    println!("cargo:rerun-if-changed={}", package.display());
+    let package: Value = serde_json::from_slice(&fs::read(&package).unwrap()).unwrap();
+    println!(
+        "cargo:rustc-env=WEB_VERSION={}",
+        package["version"].as_str().unwrap()
+    );
+    let notes_path = root.join("native/assets/release-notes.json");
+    println!("cargo:rerun-if-changed={}", notes_path.display());
+    let notes: Value = serde_json::from_slice(&fs::read(&notes_path).unwrap()).unwrap();
+    let mut sources = std::collections::BTreeSet::new();
+    let releases = notes["releases"].as_array().unwrap().iter();
+    for items in releases
+        .map(|r| &r["items"])
+        .chain(std::iter::once(&notes["unreleased"]["items"]))
+    {
+        for item in items.as_array().unwrap() {
+            if let Some(src) = item["screenshot"]["src"].as_str() {
+                sources.insert(src.to_string());
+            }
+        }
+    }
+    let mut out = String::from("pub static RELEASE_IMAGES: &[(&str, &[u8])] = &[\n");
+    for src in sources {
+        assert!(
+            src.starts_with("/release-notes/") && !src.contains(".."),
+            "unexpected screenshot path {src}"
+        );
+        let path = root.join("public").join(src.trim_start_matches('/'));
+        assert!(
+            path.is_file(),
+            "missing release-note screenshot {}",
+            path.display()
+        );
+        println!("cargo:rerun-if-changed={}", path.display());
+        out.push_str(&format!(
+            "    ({src:?}, include_bytes!({:?})),\n",
+            path.display().to_string()
+        ));
+    }
+    out.push_str("];\n");
+    fs::write(
+        PathBuf::from(env::var("OUT_DIR").unwrap()).join("release_images.rs"),
+        out,
+    )
+    .unwrap();
 }
 
 /// Embeds every published Come, Follow Me guide in the repository's catalog (`content/cfm/guides.json`).

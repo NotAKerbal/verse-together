@@ -847,6 +847,10 @@ impl App {
         if self.screen == Screen::Journal && self.journal.open.is_none() {
             self.reload_journal();
         }
+        // Notes the sync brought may link verses of this chapter (the picker stays as it is).
+        let picker = self.note_links.picker;
+        self.refresh_note_links();
+        self.note_links.picker = picker.filter(|v| self.note_links.by_verse.contains_key(v));
         if self.lessons.open.is_some() {
             self.load_lesson_log();
             if self.lessons.selected.is_empty() {

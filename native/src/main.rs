@@ -8,6 +8,8 @@ mod anim;
 mod bible_catalog;
 mod cloud;
 mod design;
+mod faith;
+mod feedback;
 mod guide_marks;
 mod guide_text;
 mod header;
@@ -26,13 +28,18 @@ mod mark_layer;
 mod marks;
 mod md_editor;
 mod md_live;
+mod note_links;
+#[cfg(test)]
+mod parity_tests;
 mod plan_model;
 mod plans;
 mod popup;
 mod reader_tools;
 mod reader_tools_ui;
+mod release_notes;
 mod reveal;
 mod select_text;
+mod settings_ui;
 mod store;
 mod sync;
 mod text_selection;
@@ -68,7 +75,13 @@ fn main() -> iced::Result {
         return Ok(());
     }
     iced::application(App::new, App::update, App::view)
-        .title(|a: &App| format!("{} — Verse Together", a.reference()))
+        .title(|a: &App| {
+            if a.content_hidden() {
+                "Content hidden — Verse Together".to_string()
+            } else {
+                format!("{} — Verse Together", a.reference())
+            }
+        })
         .theme(App::theme)
         .subscription(App::subscription)
         .font(design::DM_SANS)
@@ -230,6 +243,16 @@ enum Message {
     VersesInJournal,
     /// Copy the website's share link for the selected verses (`/share/...`, its "Focus scripture" page).
     CopyShareLink,
+    /// Open a Settings section (`/account#reading`).
+    SettingsTab(settings_ui::SettingsTab),
+    /// Settings → Reading's faith tradition.
+    SetFaith(&'static str),
+    /// Scripture appearance's Reset (`getDefaultAppearance`).
+    ResetAppearance,
+    Feedback(feedback::FeedbackMsg),
+    Release(release_notes::ReleaseMsg),
+    /// The reader's links to journal notes beside verses.
+    NoteLinks(note_links::NoteLinkMsg),
     /// A programmatic scroll or focus finished. Iced applies widget operations without redrawing, so this
     /// (otherwise empty) message makes the window present the new position at once instead of at the next input.
     Presented,
@@ -293,6 +316,11 @@ struct App {
     now: Instant,
     motion: header::Motion,
     label_widths: [f32; 3],
+    /// The open Settings section, the feedback form, the release notes' images, and the chapter's note links.
+    settings_tab: settings_ui::SettingsTab,
+    feedback: feedback::FeedbackUi,
+    release: release_notes::ReleaseState,
+    note_links: note_links::NoteLinks,
 }
 impl App {
     fn new() -> (Self, Task<Message>) {
@@ -385,12 +413,20 @@ impl App {
             now,
             motion: header::Motion::new(0, label_widths, !anim::reduced_motion(), now),
             label_widths,
+            settings_tab: settings_ui::SettingsTab::default(),
+            feedback: Default::default(),
+            release: Default::default(),
+            note_links: Default::default(),
         };
         app.load_chapter();
         app
     }
     fn p(&self) -> Colors {
         Colors::new(self.preferences.dark)
+    }
+    /// `useFaithTradition().showLdsContent`: Latter-day Saint content shows for that tradition only.
+    pub(crate) fn show_lds(&self) -> bool {
+        self.preferences.faith_tradition == faith::LATTER_DAY_SAINT
     }
     fn reference(&self) -> String {
         let label = self
@@ -436,7 +472,14 @@ impl App {
                         keyboard::Key::Named(keyboard::key::Named::Escape) => true,
                         keyboard::Key::Named(
                             keyboard::key::Named::ArrowLeft | keyboard::key::Named::ArrowRight,
-                        ) => modifiers.alt(),
+                        ) => modifiers.alt() || status == iced::event::Status::Ignored,
+                        // Settings' tabs and the note picker; never while a field has the keyboard.
+                        keyboard::Key::Named(
+                            keyboard::key::Named::Home
+                            | keyboard::key::Named::End
+                            | keyboard::key::Named::ArrowUp
+                            | keyboard::key::Named::ArrowDown,
+                        ) => status == iced::event::Status::Ignored,
                         keyboard::Key::Named(keyboard::key::Named::Enter) => {
                             status == iced::event::Status::Ignored
                         }
@@ -531,6 +574,7 @@ impl App {
             if let Some(v) = self.report(verses) {
                 self.verses = v;
                 self.build_verse_content();
+                self.apply_primary();
             }
             if let Some(a) = self.report(annotations) {
                 self.annotations = a;
@@ -539,6 +583,7 @@ impl App {
                 self.read = r;
             }
         }
+        self.refresh_note_links();
     }
     fn save_note(&mut self) -> bool {
         if !self.note_dirty {
@@ -621,15 +666,44 @@ impl App {
             self.load_chapter_tools(),
         ])
     }
+    /// The navigation link a screen belongs to, among those this faith tradition shows.
+    pub(crate) fn nav_index(&self, screen: Screen) -> Option<usize> {
+        header::screen_index(screen).filter(|i| *i < self.nav_count())
+    }
+    /// How many of the navigation's links show (`primaryNavItems` without Latter-day Saint pages when hidden).
+    pub(crate) fn nav_count(&self) -> usize {
+        if self.show_lds() { 3 } else { 2 }
+    }
+    /// Whether the page shown is Latter-day Saint content this faith tradition hides (`AppMain`'s notice).
+    pub(crate) fn content_hidden(&self) -> bool {
+        if self.show_lds() {
+            return false;
+        }
+        match self.screen {
+            Screen::Guides => true,
+            Screen::Reader => faith::is_lds_volume(&self.preferences.last.volume),
+            Screen::Library => match &self.library {
+                library_ui::LibraryPage::Volume(v) | library_ui::LibraryPage::Book(v, _) => {
+                    faith::is_lds_volume(v)
+                }
+                library_ui::LibraryPage::Home => false,
+            },
+            _ => false,
+        }
+    }
     fn set_screen(&mut self, screen: Screen) {
         if self.screen != screen {
             self.now = Instant::now();
             self.motion
-                .set_active(header::screen_index(screen), self.label_widths, self.now);
+                .set_active(self.nav_index(screen), self.label_widths, self.now);
         }
         self.screen = screen;
         match screen {
-            Screen::Reader => self.browse_in_reader = true,
+            Screen::Reader => {
+                self.browse_in_reader = true;
+                // Notes written in the journal meanwhile may link this chapter's verses now.
+                self.refresh_note_links();
+            }
             // As the website's `browse:last-location`: the Library's own landing page isn't remembered.
             Screen::Library if self.library != library_ui::LibraryPage::Home => {
                 self.browse_in_reader = false
@@ -652,9 +726,10 @@ impl App {
         let path = store.scripture_path.clone();
         let query = self.query.clone();
         let scope = self.scope.clone();
+        let bible_only = !self.show_lds();
         self.searching = true;
         Task::perform(
-            async move { Store::search(&path, &query, scope.as_deref()) },
+            async move { Store::search(&path, &query, scope.as_deref(), bible_only) },
             move |r| Message::SearchDone(generation, r),
         )
     }
@@ -1198,6 +1273,7 @@ impl App {
                 if !self.save_note() || !self.save_journal_note() {
                     return Task::none();
                 }
+                let entering = self.screen != screen;
                 self.set_screen(screen);
                 self.focus = false;
                 if self.popover != Some(Popover::AppSettings) {
@@ -1208,6 +1284,10 @@ impl App {
                 }
                 if screen == Screen::Settings {
                     self.popover = None;
+                    // `/account` without a section opens Account.
+                    if entering {
+                        self.settings_tab = settings_ui::SettingsTab::Account;
+                    }
                     return self.update_account(account::AccountMsg::LoadDetails);
                 }
                 if screen == Screen::SignIn {
@@ -1218,6 +1298,66 @@ impl App {
                     return self.update_plans(plans::PlansMsg::Home);
                 }
             }
+            Message::SettingsTab(tab) => {
+                let mut tasks = vec![];
+                if self.screen != Screen::Settings {
+                    tasks.push(self.update(Message::SetScreen(Screen::Settings)));
+                    if self.screen != Screen::Settings {
+                        return Task::batch(tasks);
+                    }
+                }
+                self.settings_tab = tab;
+                // A new section starts at its heading even when the previous one was long.
+                tasks.push(presented(operation::scroll_to(
+                    "account",
+                    scrollable::AbsoluteOffset { x: 0.0, y: 0.0 },
+                )));
+                if tab == settings_ui::SettingsTab::ReleaseNotes {
+                    tasks.push(self.load_release_thumbs());
+                }
+                return Task::batch(tasks);
+            }
+            Message::SetFaith(id) => {
+                let id = faith::normalize_faith_tradition(id);
+                if self.preferences.faith_tradition == id || !self.save_note() {
+                    return Task::none();
+                }
+                self.preferences.faith_tradition = id.into();
+                self.persist();
+                // Only what shows changes; nothing hidden is removed from the study data.
+                if !self.show_lds() {
+                    self.selected.clear();
+                    self.anchor = None;
+                    self.clear_words();
+                    if self.scope.as_deref().is_some_and(faith::is_lds_volume) {
+                        self.scope = None;
+                    }
+                    if faith::is_lds_volume(&self.library_volume) {
+                        self.library_volume = "oldtestament".into();
+                        self.library_book = None;
+                    }
+                }
+                self.now = Instant::now();
+                self.motion
+                    .set_active(self.nav_index(self.screen), self.label_widths, self.now);
+                let search = if self.query.trim().is_empty() {
+                    Task::none()
+                } else {
+                    self.begin_search()
+                };
+                return Task::batch([self.reload_reader_text(), search]);
+            }
+            Message::ResetAppearance => {
+                self.preferences.font_size = store::DEFAULT_FONT_SIZE;
+                self.preferences.serif = true;
+                self.preferences.text_width = TextWidth::Comfortable;
+                self.preferences.side_by_side = false;
+                self.build_verse_content();
+                self.persist();
+            }
+            Message::Feedback(m) => return self.update_feedback(m),
+            Message::Release(m) => return self.update_release(m),
+            Message::NoteLinks(m) => return self.update_note_links(m),
             Message::SetDark(dark) => {
                 self.preferences.dark = dark;
                 self.persist();
@@ -1292,7 +1432,13 @@ impl App {
                     if let Some((l, verses)) = reader_tools::share_href(path) {
                         let task = self.navigate(l.clone(), verses.first().copied());
                         if self.preferences.last == l {
-                            let count = self.verses.len() as u32;
+                            // The chapter's own length (the default Bible's text may still be on its way).
+                            let count = self
+                                .store
+                                .as_ref()
+                                .and_then(|s| s.chapter(&l).ok())
+                                .map_or(self.verses.len(), |v| v.len().max(self.verses.len()))
+                                as u32;
                             self.selected = verses.into_iter().filter(|v| *v <= count).collect();
                             self.anchor = self.selected.first().copied();
                             self.load_note();
@@ -1337,7 +1483,11 @@ impl App {
                             return self.update(Message::SetScreen(Screen::Journal));
                         }
                         keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                            if self.popover.is_some() {
+                            if self.release.viewing.is_some() {
+                                self.release.viewing = None;
+                            } else if self.note_links.picker.is_some() {
+                                self.note_links.picker = None;
+                            } else if self.popover.is_some() {
                                 self.popover = None;
                             } else if self.screen == Screen::Journal && self.journal.open.is_some()
                             {
@@ -1377,6 +1527,36 @@ impl App {
                             if modifiers.alt() =>
                         {
                             return self.update(Message::Adjacent(-1));
+                        }
+                        keyboard::Key::Named(
+                            named @ (keyboard::key::Named::ArrowDown
+                            | keyboard::key::Named::ArrowUp
+                            | keyboard::key::Named::Enter),
+                        ) if self.note_links.picker.is_some() && modifiers.is_empty() => {
+                            return self.update_note_links(match named {
+                                keyboard::key::Named::ArrowDown => note_links::NoteLinkMsg::Step(1),
+                                keyboard::key::Named::ArrowUp => note_links::NoteLinkMsg::Step(-1),
+                                _ => note_links::NoteLinkMsg::Choose,
+                            });
+                        }
+                        keyboard::Key::Named(
+                            named @ (keyboard::key::Named::ArrowLeft
+                            | keyboard::key::Named::ArrowRight
+                            | keyboard::key::Named::Home
+                            | keyboard::key::Named::End),
+                        ) if self.screen == Screen::Settings
+                            && self.release.viewing.is_none()
+                            && modifiers.is_empty() =>
+                        {
+                            let key = match named {
+                                keyboard::key::Named::ArrowLeft => "ArrowLeft",
+                                keyboard::key::Named::ArrowRight => "ArrowRight",
+                                keyboard::key::Named::Home => "Home",
+                                _ => "End",
+                            };
+                            if let Some(tab) = settings_ui::tab_for_key(key, self.settings_tab) {
+                                return self.update(Message::SettingsTab(tab));
+                            }
                         }
                         _ => {}
                     }
@@ -1453,7 +1633,9 @@ fn benchmark() {
     );
     let started = Instant::now();
     for _ in 0..100 {
-        std::hint::black_box(Store::search(&store.scripture_path, "faith hope", None).unwrap());
+        std::hint::black_box(
+            Store::search(&store.scripture_path, "faith hope", None, false).unwrap(),
+        );
     }
     println!(
         "100 full-text searches: {:.2} ms",
@@ -1805,7 +1987,7 @@ mod interaction_tests {
         let (mut app, dir) = app();
         app.popover = Some(Popover::Search);
         let path = app.store.as_ref().unwrap().scripture_path.clone();
-        let old = Store::search(&path, "synagogues", None).unwrap();
+        let old = Store::search(&path, "synagogues", None, false).unwrap();
         app.results = old.clone();
         let _ = app.update(Message::SearchInput("Alma 32:21".into()));
         let generation = app.search_generation;
@@ -1816,7 +1998,7 @@ mod interaction_tests {
         let _ = app.update(Message::SubmitSearch);
         let _ = app.update(Message::SearchDone(generation - 1, Ok(old)));
         assert!(app.submit_search_when_ready);
-        let current = Store::search(&path, "Alma 32:21", None).unwrap();
+        let current = Store::search(&path, "Alma 32:21", None, false).unwrap();
         let _ = app.update(Message::SearchDone(generation, Ok(current)));
         assert_eq!(app.reference(), "Alma 32");
         assert!(app.selected.contains(&21));
@@ -1828,7 +2010,7 @@ mod interaction_tests {
         let _ = app.update(Message::SearchInput("John 3:16".into()));
         let _ = app.update(Message::SubmitSearch);
         app.popover = None;
-        let current = Store::search(&path, "John 3:16", None).unwrap();
+        let current = Store::search(&path, "John 3:16", None, false).unwrap();
         let _ = app.update(Message::SearchDone(app.search_generation, Ok(current)));
         assert_eq!(app.reference(), "Alma 32");
         drop(app);

@@ -82,8 +82,20 @@ under your user data directory, needs no sudo, and creates no services or autost
   the day-by-day schedule, marking chapters read, deleting a plan, the website's quick-start plans, and the plan
   builder and editor (dates typed as the browser shows them or chosen from a calendar).
 - **Copy share link** for selected verses: the website's `/share/...` passage link.
-- **Settings and sign-in**, as the website's `/account` and `/sign-in`: the navigation's gear opens Settings
-  (account, simple mode, appearance, quick marks); signed in, the avatar opens the account menu. "Continue with
+- **Settings**, as the website's `/account`: six sections in a pill of tabs at the header's right (at the top of the
+  page in simple mode), Left/Right/Home/End to move between them. **Account**; **Reading** (a preview, the faith
+  tradition, scripture appearance with Reset, simple mode, and this app's dark appearance); **Translations** (Your
+  Bibles and the default Bible); **Study tools** (quick marks); **Release notes** (the website's own release history
+  and screenshots, embedded); **Feedback** (the website's feedback form, anonymous unless signed in).
+- **Faith tradition** (Settings → Reading): "Other denominations" keeps Bible reading and the journal and hides Latter-day
+  Saint scriptures, Come Follow Me, the JST, study paths and study resources, as the website does. It is saved on this
+  computer only and never removes any notes or marks.
+- **Default Bible**: make any saved Bible the main text of Bible chapters (read from the website when you open a
+  chapter; if it can't load, the bundled King James Bible shows with a notice). Marks stay on their verses; marks on
+  particular words show only where those words are in the text you're reading.
+- **Note links beside verses**: "Note" (or "2 notes") beside the first verse of each passage a journal note links to;
+  it opens the note (or a list of them), saving anything you were writing first.
+- **Sign-in**, as the website's `/sign-in`: the navigation's gear opens Settings; signed in, the avatar opens the account menu. "Continue with
   Google" opens the website in your browser; after you approve there, the app receives its own session through a
   one-time, PKCE-protected code on `127.0.0.1` (Cancel on the website stops the app waiting). The session is kept
   in the system keyring, bound to the website, the Convex deployment and this study profile. Signed in: profile
@@ -106,6 +118,8 @@ under your user data directory, needs no sudo, and creates no services or autost
 | Ctrl/Cmd J | Journal |
 | Ctrl/Cmd S | Save the current note |
 | Ctrl/Cmd C | Copy selected words in a text field; otherwise copy selected verses |
+| Left / Right, Home / End in Settings | Previous / next section (wrapping), first / last section |
+| Down / Up, Enter in a verse's note list | Choose a note and open it |
 
 ## Data
 
@@ -157,7 +171,10 @@ The Linux package and `package-linux.sh` are for Linux only.
 The build script generates a SQLite database and FTS5 index from the existing scripture bundles and navigation
 catalog and embeds it into the executable. The fonts, the published study guides and the study helps topic index are also embedded. `src/icons.rs` is
 generated from the website's `@fortawesome/free-solid-svg-icons` package by `node native/scripts/generate-icons.mjs`
-(an asset step only; the generated file is checked in and the app has no Node or JavaScript at runtime). Font
+(an asset step only; the generated file is checked in and the app has no Node or JavaScript at runtime).
+Likewise `assets/release-notes.json` is the website's release history exported from `src/lib/releaseNotes.ts` by
+`node native/scripts/generate-release-notes.mjs` (`--check` confirms it is current); the build embeds it with the
+screenshots under `public/release-notes/`. Font
 Awesome Free icons are CC BY 4.0; the license ships in `licenses/`. The renderer uses
 Iced's native Tiny Skia backend. Linux packaging includes font and dependency notices; Python 3 is used only for
 collecting packaging notices. Cargo.lock is checked in for reproducibility.

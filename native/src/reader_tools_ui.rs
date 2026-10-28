@@ -65,6 +65,9 @@ fn boxed<'a>(p: Colors, content: impl Into<Element<'a, Message>>) -> Element<'a,
         .into()
 }
 
+/// `JST_SOURCE_DOCS_URL`.
+const JST_SOURCE_DOCS_URL: &str = "https://openscriptureapi.org/docs/study-helps";
+
 impl App {
     /// The verse's study path marker (`VerseStudyPathMarker`), when the chapter has a path tagging it.
     pub(crate) fn path_marker(&self, verse: u32) -> Option<Element<'_, Message>> {
@@ -124,19 +127,24 @@ impl App {
             })
             .collect()
     }
-    /// Bibles that couldn't be loaded for this chapter (`translationNotices`).
+    /// The default Bible's fallback notice (`translationNotice`), then Bibles that couldn't be loaded for this chapter
+    /// (`translationNotices`).
     pub(crate) fn comparison_notices(&self) -> Option<Element<'_, Message>> {
         let failed: Vec<String> = self
-            .tools
-            .compare
-            .iter()
-            .filter(|(_, state)| matches!(state, Load::Failed(_)))
-            .map(|(id, _)| {
-                format!(
-                    "Could not load overlay translation \"{}\".",
-                    id.to_uppercase()
-                )
-            })
+            .primary_notice()
+            .into_iter()
+            .chain(
+                self.tools
+                    .compare
+                    .iter()
+                    .filter(|(_, state)| matches!(state, Load::Failed(_)))
+                    .map(|(id, _)| {
+                        format!(
+                            "Could not load overlay translation \"{}\".",
+                            id.to_uppercase()
+                        )
+                    }),
+            )
             .collect();
         if failed.is_empty() {
             return None;
@@ -152,10 +160,21 @@ impl App {
         }
         Some(container(c).padding([0, 12]).into())
     }
-    /// The base text's label (`primaryTranslationLabel`) and its amber.
-    fn primary_label(&self) -> (&'static str, Color) {
+    /// The base text's label (`primaryTranslationLabel`: "KJV" for other denominations, a featured Bible's short
+    /// label, else its id in capitals) and its amber.
+    fn primary_label(&self) -> (String, Color) {
+        let id = self.primary_translation();
+        let label = if id == crate::faith::LDS_BIBLE_ID {
+            if self.show_lds() { "LDS" } else { "KJV" }.to_string()
+        } else {
+            reader_tools::featured_bibles()
+                .into_iter()
+                .find(|b| b.id.eq_ignore_ascii_case(id))
+                .and_then(|b| b.abbreviation)
+                .unwrap_or_else(|| id.to_uppercase())
+        };
         (
-            "LDS",
+            label,
             if self.preferences.dark {
                 Color::from_rgb8(0xfc, 0xd3, 0x4d)
             } else {
@@ -268,7 +287,7 @@ impl App {
         let mut boxes = column![].spacing(8);
         for (label, color, other) in comparisons {
             let base = cell(
-                primary.to_string(),
+                primary.clone(),
                 amber,
                 self.verse_words(index, shown.clone(), font, 14.0, line),
             );
@@ -325,14 +344,14 @@ impl App {
     /// The JST row standing in for a KJV verse, when the chapter is read with the JST.
     pub(crate) fn jst_row(&self, verse: u32) -> Option<&crate::jst::Row> {
         match &self.tools.jst {
-            Some(Load::Ready(_)) if self.preferences.jst => self.tools.jst_reading.rows.get(&verse),
+            Some(Load::Ready(_)) if self.jst_enabled() => self.tools.jst_reading.rows.get(&verse),
             _ => None,
         }
     }
     /// The excerpts shown whole before the text (`jstReading.leading`).
     pub(crate) fn jst_leading_cards(&self) -> Vec<Element<'_, Message>> {
         match &self.tools.jst {
-            Some(Load::Ready(excerpts)) if self.preferences.jst => self
+            Some(Load::Ready(excerpts)) if self.jst_enabled() => self
                 .tools
                 .jst_reading
                 .leading
@@ -345,7 +364,7 @@ impl App {
     }
     /// The line under the reader's header while the JST is on (`ChapterReader`'s JST status).
     pub(crate) fn jst_status(&self) -> Option<Element<'_, Message>> {
-        if !self.preferences.jst || !reader_tools::is_bible(&self.preferences.last.volume) {
+        if !self.jst_enabled() {
             return None;
         }
         let p = self.p();
@@ -463,7 +482,22 @@ impl App {
                 ),
             );
         }
+        if let Some(marker) = self.note_link_marker(number) {
+            first_line = first_line.push(
+                container(marker)
+                    .padding(Padding::ZERO.left(8).top(((line - 28.0) / 2.0).max(0.0))),
+            );
+        }
         let mut body = column![first_line].spacing(4);
+        if self.note_links.picker == Some(number)
+            && let Some(picker) = self.note_link_picker()
+        {
+            body = body.push(
+                container(picker)
+                    .width(Fill)
+                    .align_x(iced::alignment::Horizontal::Right),
+            );
+        }
         for (i, (id, state)) in self.tools.compare.iter().enumerate() {
             let Load::Ready(verses) = state else { continue };
             let Some(v) = verses.iter().find(|v| v.number == number) else {
@@ -1186,46 +1220,81 @@ impl App {
         panel.into()
     }
 
-    /// Your Bibles and the JST switch, in Reader settings for a Bible chapter (`BibleTranslationToolbar`).
-    pub(crate) fn bibles_settings(&self) -> Option<Element<'_, Message>> {
-        if !reader_tools::is_bible(&self.preferences.last.volume) {
+    /// Your Bibles and the JST switch (`BibleTranslationControls`): in Reader settings for a Bible chapter
+    /// (`in_reader`, with each Bible's Show switch), and in Settings → Translations, where the saved library is managed.
+    pub(crate) fn bibles_settings(&self, in_reader: bool) -> Option<Element<'_, Message>> {
+        if in_reader && !reader_tools::is_bible(&self.preferences.last.volume) {
             return None;
         }
         let p = self.p();
-        let mut c = column![].spacing(8);
+        let default = self.preferences.default_bible.clone();
+        let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
+        let mut c = column![].spacing(12);
         match self.tools.bibles_view {
             BiblesView::List => {
-                c = c.push(self.setting_label("Your Bibles"));
+                c = c.push(
+                    text("Your Bibles")
+                        .size(14)
+                        .font(sans(font::Weight::Medium)),
+                );
+                c = c.push(
+                    text("Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.")
+                        .size(12)
+                        .color(Color { a: 0.6, ..p.ink }),
+                );
+                let make_default = |id: &str| -> Element<'_, Message> {
+                    let current = same(&default, id);
+                    button(design::underlined(
+                        if current { "Default" } else { "Make default" },
+                        12.,
+                        p.ink,
+                        font::Weight::Medium,
+                    ))
+                    .padding([6, 8])
+                    .on_press(msg(ToolsMsg::SetDefault(id.to_string())))
+                    .style(design::underlined_link(p))
+                    .into()
+                };
+                let base = crate::faith::base_bible_label(self.show_lds());
                 let mut list = column![
-                    column![
-                        text("King James Bible (LDS edition)")
-                            .size(13)
-                            .font(sans(font::Weight::Medium)),
-                        text("English · Base text, always shown")
-                            .size(11)
-                            .color(p.faint),
-                    ]
-                    .spacing(1)
-                ]
-                .spacing(8);
+                    container(
+                        row![
+                            column![
+                                text(base).size(14).font(sans(font::Weight::Medium)),
+                                text("English · Available offline")
+                                    .size(12)
+                                    .color(Color { a: 0.6, ..p.ink }),
+                            ]
+                            .spacing(2)
+                            .width(Fill),
+                            make_default(crate::faith::LDS_BIBLE_ID),
+                        ]
+                        .spacing(8)
+                        .align_y(Center),
+                    )
+                    .padding([10, 12])
+                ];
+                // Saved Bibles, then (in the reader) any shown but not saved (`rows`).
                 let mut rows: Vec<(reader_tools::FavoriteBible, bool)> = self
                     .preferences
                     .bibles
                     .iter()
                     .map(|b| (b.clone(), true))
                     .collect();
-                for id in &self.preferences.compare_bibles {
-                    if !rows.iter().any(|(b, _)| b.id.eq_ignore_ascii_case(id)) {
-                        let known = reader_tools::featured_bibles()
-                            .into_iter()
-                            .find(|b| b.id.eq_ignore_ascii_case(id))
-                            .unwrap_or(reader_tools::FavoriteBible {
-                                id: id.clone(),
-                                label: id.clone(),
-                                language: None,
-                                abbreviation: None,
-                            });
-                        rows.push((known, false));
+                if in_reader {
+                    for id in &self.preferences.compare_bibles {
+                        if !rows.iter().any(|(b, _)| same(&b.id, id)) {
+                            let known = reader_tools::featured_bibles()
+                                .into_iter()
+                                .find(|b| same(&b.id, id))
+                                .unwrap_or(reader_tools::FavoriteBible {
+                                    id: id.clone(),
+                                    label: id.clone(),
+                                    language: None,
+                                    abbreviation: None,
+                                });
+                            rows.push((known, false));
+                        }
                     }
                 }
                 for (bible, saved) in rows {
@@ -1233,7 +1302,7 @@ impl App {
                         .preferences
                         .compare_bibles
                         .iter()
-                        .any(|t| t.eq_ignore_ascii_case(&bible.id));
+                        .any(|t| same(t, &bible.id));
                     let detail = [
                         bible.language.clone(),
                         bible.abbreviation.clone(),
@@ -1244,48 +1313,70 @@ impl App {
                     .collect::<Vec<_>>()
                     .join(" · ");
                     let id = bible.id.clone();
-                    list = list.push(
-                        row![
-                            column![
-                                text(bible.label.clone())
-                                    .size(13)
-                                    .font(sans(font::Weight::Medium)),
-                                text(detail).size(11).color(p.faint),
-                            ]
-                            .spacing(1)
-                            .width(Fill),
-                            self.switch(shown, msg(ToolsMsg::ShowBible(id.clone(), !shown))),
-                            if saved {
-                                Element::from(
-                                    button(icon(&icons::TRASH, p.faint, 12.))
-                                        .padding(6)
-                                        .on_press(msg(ToolsMsg::RemoveBible(id)))
-                                        .style(design::quiet(p)),
-                                )
-                            } else {
-                                link_button(p, "Save", msg(ToolsMsg::SaveBible(bible.clone())))
-                            },
+                    let mut line = row![
+                        column![
+                            text(bible.label.clone())
+                                .size(14)
+                                .font(sans(font::Weight::Medium)),
+                            text(detail).size(12).color(Color { a: 0.6, ..p.ink }),
                         ]
-                        .spacing(8)
-                        .align_y(Center),
-                    );
+                        .spacing(2)
+                        .width(Fill),
+                    ]
+                    .spacing(8)
+                    .align_y(Center);
+                    if saved {
+                        line = line.push(make_default(&id));
+                    }
+                    if in_reader && !same(&default, &id) {
+                        line = line
+                            .push(self.switch(shown, msg(ToolsMsg::ShowBible(id.clone(), !shown))));
+                    }
+                    line = line.push(if saved {
+                        Element::from(
+                            button(icon(&icons::TRASH, Color { a: 0.5, ..p.ink }, 13.))
+                                .padding(8)
+                                .on_press(msg(ToolsMsg::RemoveBible(id)))
+                                .style(design::quiet(p)),
+                        )
+                    } else {
+                        button(design::underlined("Save", 12., p.ink, font::Weight::Medium))
+                            .padding([6, 8])
+                            .on_press(msg(ToolsMsg::SaveBible(bible.clone())))
+                            .style(design::underlined_link(p))
+                            .into()
+                    });
+                    list = list.push(divider(p));
+                    list = list.push(container(line).padding([10, 12]));
                 }
-                c = c.push(list);
+                c = c.push(
+                    container(list)
+                        .width(Fill)
+                        .style(move |_| container::Style {
+                            border: Border {
+                                color: p.rule,
+                                width: 1.0,
+                                radius: 12.0.into(),
+                            },
+                            ..Default::default()
+                        }),
+                );
                 if self.preferences.bibles.is_empty() {
-                    c = c.push(muted(
-                        p,
-                        "Add a Bible to read it verse by verse beside the base text.",
-                    ));
+                    c = c.push(
+                        text("Add a Bible to read it verse by verse beside the base text.")
+                            .size(12)
+                            .color(Color { a: 0.6, ..p.ink }),
+                    );
                 }
                 c = c.push(
                     button(
                         text("+ Add Bible")
-                            .size(13)
+                            .size(14)
                             .font(sans(font::Weight::Medium))
                             .center()
                             .width(Fill),
                     )
-                    .padding([8, 12])
+                    .padding([10, 12])
                     .width(Fill)
                     .on_press(msg(ToolsMsg::BiblesView(BiblesView::Add)))
                     .style(design::outlined(p, 8.0)),
@@ -1321,29 +1412,61 @@ impl App {
                 });
             }
         }
-        c = c.push(
-            row![
-                column![
-                    text("Joseph Smith Translation")
-                        .size(13)
-                        .font(sans(font::Weight::Medium)),
-                    text("Show selected JST passages in place of the KJV verses they revise, with the JST's own wording underlined.")
-                        .size(11)
-                        .color(p.faint),
-                ]
-                .spacing(1)
-                .width(Fill),
-                self.switch(self.preferences.jst, msg(ToolsMsg::ToggleJst)),
-            ]
-            .spacing(8)
-            .align_y(Center),
-        );
-        if let Some(Load::Failed(e)) = &self.tools.jst {
+        // The JST is Latter-day Saint content: its switch shows only for that tradition, in a disclosure.
+        if self.show_lds() {
+            let open = self.tools.jst_details;
             c = c.push(
-                text(format!("JST passages couldn't be loaded: {e}"))
-                    .size(12)
-                    .color(p.accent),
+                button(
+                    row![
+                        design::rotated_icon(
+                            &icons::CHEVRON_DOWN,
+                            Color { a: 0.7, ..p.ink },
+                            9.,
+                            if open { 0.0 } else { -90.0 },
+                        ),
+                        text("Joseph Smith Translation")
+                            .size(12)
+                            .color(Color { a: 0.7, ..p.ink }),
+                    ]
+                    .spacing(6)
+                    .align_y(Center),
+                )
+                .padding([8, 0])
+                .on_press(msg(ToolsMsg::JstDetails))
+                .style(|_, _| button::Style::default()),
             );
+            if open {
+                c = c.push(
+                    row![
+                        column![
+                            text("When the LDS edition is the main text, show selected JST passages in place of the KJV verses they revise, with the JST's own wording underlined.")
+                                .size(11)
+                                .color(Color { a: 0.6, ..p.ink }),
+                            button(design::underlined(
+                                "Source",
+                                11.,
+                                Color { a: 0.6, ..p.ink },
+                                font::Weight::Normal,
+                            ))
+                            .padding(0)
+                            .on_press(Message::OpenLink(JST_SOURCE_DOCS_URL.into()))
+                            .style(design::underlined_link(p)),
+                        ]
+                        .spacing(2)
+                        .width(Fill),
+                        self.switch(self.preferences.jst, msg(ToolsMsg::ToggleJst)),
+                    ]
+                    .spacing(12)
+                    .align_y(iced::Alignment::Start),
+                );
+            }
+            if let Some(Load::Failed(e)) = &self.tools.jst {
+                c = c.push(
+                    text(format!("JST passages couldn't be loaded: {e}"))
+                        .size(12)
+                        .color(p.accent),
+                );
+            }
         }
         Some(c.into())
     }

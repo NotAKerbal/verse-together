@@ -126,23 +126,7 @@ fn form_message<'a>(p: Colors, error: bool, message: &str) -> Element<'a, Messag
         })
         .into()
 }
-/// `.settingsCard` / `.profileCard`: rounded card on the soft shadow, 8px inside.
-fn settings_card<'a>(p: Colors, content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    container(content)
-        .padding(8)
-        .width(Fill)
-        .style(move |_| container::Style {
-            background: Some(p.card.into()),
-            text_color: Some(p.ink),
-            border: Border {
-                radius: 14.4.into(),
-                ..Default::default()
-            },
-            shadow: design::soft_shadow(p),
-            ..Default::default()
-        })
-        .into()
-}
+use crate::settings_ui::settings_card;
 
 impl App {
     pub(crate) fn account_name(&self) -> Option<String> {
@@ -167,26 +151,6 @@ impl App {
                 .unwrap_or_else(|| "Not synced yet".into()),
         }
     }
-    fn page<'a>(
-        &self,
-        content: impl Into<Element<'a, Message>>,
-        width: f32,
-    ) -> Element<'a, Message> {
-        scrollable(
-            container(container(content).max_width(width))
-                .center_x(Fill)
-                .padding(Padding {
-                    top: CONTENT_TOP,
-                    right: 24.0,
-                    bottom: 48.0,
-                    left: 24.0,
-                }),
-        )
-        .id("account")
-        .height(Fill)
-        .into()
-    }
-
     /// `/sign-in` (`SignInForm` in Google-only mode, in `AuthShell`).
     pub(crate) fn sign_in_view(&self) -> Element<'_, Message> {
         let p = self.p();
@@ -294,56 +258,8 @@ impl App {
         .into()
     }
 
-    /// `/account`: account settings beside the general settings (two columns from 768px, as on the website).
-    pub(crate) fn settings_view(&self) -> Element<'_, Message> {
-        let p = self.p();
-        let account = column![
-            text("Account settings")
-                .size(13.1)
-                .font(sans(font::Weight::Medium)),
-            self.account_manager(),
-        ]
-        .spacing(12)
-        .width(Fill);
-        let general = column![
-            settings_card(
-                p,
-                container(
-                    column![
-                        self.toggle_setting(
-                            "Simple mode",
-                            if self.focus {
-                                "Study tools hidden · This device"
-                            } else {
-                                "Study tools visible · This device"
-                            },
-                            self.focus,
-                            Message::ToggleFocus,
-                        ),
-                        self.toggle_setting(
-                            "Dark appearance",
-                            "This device",
-                            self.preferences.dark,
-                            Message::SetDark(!self.preferences.dark),
-                        ),
-                    ]
-                    .spacing(4),
-                )
-                .padding([8, 12]),
-            ),
-            settings_card(p, container(self.preset_settings()).padding([8, 12])),
-        ]
-        .spacing(12)
-        .width(Fill);
-        let wide = self.window_width >= 768.0;
-        let layout: Element<'_, Message> = if wide {
-            row![account, general].spacing(24).into()
-        } else {
-            column![account, general].spacing(24).into()
-        };
-        self.page(container(layout).padding(Padding::ZERO.top(16)), 960.0)
-    }
-    fn toggle_setting<'a>(
+    /// A setting with its switch (`.setting` + `.toggle`).
+    pub(crate) fn toggle_setting<'a>(
         &self,
         title: &'static str,
         detail: &'static str,
@@ -397,8 +313,8 @@ impl App {
         .into()
     }
 
-    /// `AccountManager`.
-    fn account_manager(&self) -> Element<'_, Message> {
+    /// `AccountManager`: the profile column beside the settings column when there is room (`two_columns`).
+    pub(crate) fn account_manager(&self, two_columns: bool) -> Element<'_, Message> {
         let p = self.p();
         let a = &self.account;
         if let Err(reason) = &a.endpoints {
@@ -725,7 +641,14 @@ impl App {
             .push(self.section(1, "Sign-in methods", unavailable(methods), methods_body))
             .push(self.section(2, "Sessions", unavailable(sessions_summary), sessions_body));
         let right = settings_card(p, sections);
-        column![left, right].spacing(12).into()
+        if two_columns {
+            row![left.width(Fill), container(right).width(Fill)]
+                .spacing(12)
+                .align_y(iced::Alignment::Start)
+                .into()
+        } else {
+            column![left, right].spacing(12).into()
+        }
     }
     fn list_placeholder(&self) -> Element<'_, Message> {
         text(if self.account.view.error.is_some() {

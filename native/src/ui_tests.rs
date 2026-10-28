@@ -57,6 +57,14 @@ fn bounds(ui: &mut Simulator<'_, Message>, id: &'static str) -> Rectangle {
         .unwrap_or_else(|_| panic!("{id} is on screen"))
         .bounds()
 }
+/// The headless view of an app (for other test modules).
+pub(crate) fn simulator_for(app: &App) -> Simulator<'_, Message> {
+    simulator(app)
+}
+/// Clicks visible text, as `click` does (for other test modules).
+pub(crate) fn click_label(app: &mut App, label: &'static str) -> Vec<Message> {
+    click(app, label)
+}
 /// Clicks the topmost visible text with this label, as a pointer would.
 fn click(app: &mut App, label: &'static str) -> Vec<Message> {
     let mut ui = simulator(app);
@@ -275,9 +283,13 @@ fn snapshots() {
     }
     let _ = app.update(Message::TogglePopover(Popover::Search));
     let _ = app.update(Message::SearchInput("faith".into()));
-    app.results =
-        crate::store::Store::search(&app.store.as_ref().unwrap().scripture_path, "faith", None)
-            .unwrap();
+    app.results = crate::store::Store::search(
+        &app.store.as_ref().unwrap().scripture_path,
+        "faith",
+        None,
+        false,
+    )
+    .unwrap();
     app.searching = false;
     shot(app, "search");
     let _ = app.update(Message::ClosePopover);
@@ -473,6 +485,102 @@ fn plan_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
         "psalms".into(),
     ))));
     shot(app, "library-book");
+    website_213_snapshots(app, shot);
+}
+
+/// Settings' sections, the faith tradition, the default Bible and the reader's note links (website 2.12–2.13).
+fn website_213_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
+    use crate::library_ui::{LibraryMsg, LibraryPage};
+    use crate::settings_ui::SettingsTab;
+    for (tab, name) in [
+        (SettingsTab::Account, "settings-account"),
+        (SettingsTab::Reading, "settings-reading"),
+        (SettingsTab::BibleTranslations, "settings-translations"),
+        (SettingsTab::StudyTools, "settings-study-tools"),
+        (SettingsTab::Feedback, "settings-feedback"),
+    ] {
+        let _ = app.update(Message::SettingsTab(tab));
+        shot(app, name);
+    }
+    let _ = app.update(Message::SettingsTab(SettingsTab::ReleaseNotes));
+    let _ = app.update(Message::Release(crate::release_notes::ReleaseMsg::Thumbs(
+        crate::release_notes::decode_thumbs(),
+    )));
+    shot(app, "settings-release-notes");
+    let first = crate::release_notes::all_screenshots()
+        .next()
+        .unwrap()
+        .clone();
+    let _ = app.update(Message::Release(crate::release_notes::ReleaseMsg::Open(
+        first,
+    )));
+    shot(app, "settings-release-viewer");
+    let _ = app.update(Message::Release(crate::release_notes::ReleaseMsg::Close));
+    let _ = app.update(Message::ToggleFocus);
+    shot(app, "settings-simple");
+    let _ = app.update(Message::ToggleFocus);
+    // Note links beside verses, and the picker of several notes.
+    let jeremiah = Location {
+        volume: "oldtestament".into(),
+        book: "jeremiah".into(),
+        chapter: 31,
+    };
+    for (title, body) in [
+        (
+            "The new covenant",
+            "**[Jeremiah 31:31–33](/browse/oldtestament/jeremiah/31#v-31)**",
+        ),
+        (
+            "Written in hearts",
+            "[Jeremiah 31:33](/browse/oldtestament/jeremiah/31#v-33) and [31:31](/browse/oldtestament/jeremiah/31#v-31)",
+        ),
+    ] {
+        let mut note = crate::store::Note::new("2026-10-26", None);
+        note.title = title.into();
+        note.body = body.into();
+        app.store.as_mut().unwrap().save_note(&note).unwrap();
+    }
+    let _ = app.update(Message::Navigate(jeremiah.clone(), Some(31)));
+    let _ = app.update(Message::ClearSelection);
+    let _ = app.update(Message::NoteLinks(crate::note_links::NoteLinkMsg::Marker(
+        31,
+    )));
+    {
+        let out =
+            PathBuf::from(std::env::var("VERSE_SNAPSHOTS").expect("VERSE_SNAPSHOTS directory"));
+        let path = out.join("reader-note-links.png");
+        let _ = std::fs::remove_file(out.join("reader-note-links-tiny-skia.png"));
+        let mut ui = simulator(app);
+        ui.point_at(iced::Point::new(640.0, 500.0));
+        let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+            delta: iced::mouse::ScrollDelta::Pixels { x: 0.0, y: -2600.0 },
+        })]);
+        ui.snapshot(&app.theme())
+            .unwrap()
+            .matches_image(&path)
+            .unwrap();
+    }
+    let _ = app.update(Message::NoteLinks(crate::note_links::NoteLinkMsg::Close));
+    // A default Bible that couldn't load this chapter: the bundled text with the website's notice.
+    let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::SetDefault(
+        "BSB".into(),
+    )));
+    let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::Primary(
+        jeremiah,
+        "BSB".into(),
+        Err("offline".into()),
+    )));
+    shot(app, "reader-default-bible-notice");
+    let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::SetDefault(
+        "lds".into(),
+    )));
+    // Other denominations.
+    let _ = app.update(Message::SetFaith(crate::faith::OTHER));
+    let _ = app.update(Message::Library(LibraryMsg::Show(LibraryPage::Home)));
+    shot(app, "faith-other-library");
+    let _ = app.update(Message::SetScreen(Screen::Guides));
+    shot(app, "faith-other-hidden");
+    let _ = app.update(Message::SetFaith(crate::faith::LATTER_DAY_SAINT));
 }
 
 #[test]
@@ -485,8 +593,15 @@ fn the_gear_leads_to_settings_and_sign_in_like_the_website() {
     assert_eq!(header::screen_index(app.screen), None);
     let _ = app.update(Message::Frame(app.now + Duration::from_millis(400)));
     let mut ui = simulator(app);
-    assert!(ui.find("Account settings").is_ok());
-    assert!(ui.find("Quick marks").is_ok());
+    // The Account section opens first (`/account`), its heading and lead under the tabs.
+    assert!(
+        ui.find("Your profile, sign-in methods and devices.")
+            .is_ok()
+    );
+    assert!(
+        ui.find("Sign in to manage your account and sync your study. General settings are saved on this device.")
+            .is_ok()
+    );
     drop(ui);
     let _ = click(app, "Sign in");
     assert_eq!(app.screen, Screen::SignIn);
@@ -592,4 +707,92 @@ fn the_bible_catalog_chooses_languages_like_the_website() {
             .iter()
             .any(|b| b.id.starts_with("spa_"))
     );
+}
+
+#[test]
+fn settings_has_the_websites_six_tabs_in_the_header_and_follows_the_keyboard() {
+    use crate::settings_ui::SettingsTab;
+    use iced::keyboard::{self, key::Named};
+    let mut f = fixture();
+    let app = &mut f.app;
+    let _ = app.update(Message::SetScreen(Screen::Settings));
+    assert_eq!(app.settings_tab, SettingsTab::Account);
+    let mut ui = simulator(app);
+    // From 900px the pill sits at the header's right, beside the navigation (one header row, 48px tall).
+    let tabs = bounds(&mut ui, "settings-tabs");
+    assert_eq!((tabs.y, tabs.height), (16.0, 48.0));
+    assert!((tabs.x + tabs.width - 1230.0).abs() < 1.0, "{tabs:?}");
+    // Only the open section is named; the others are icons.
+    assert!(ui.find("Account").is_ok());
+    assert!(ui.find("Release notes").is_err());
+    for tab in [
+        "account",
+        "reading",
+        "bible-translations",
+        "study-tools",
+        "release-notes",
+        "feedback",
+    ] {
+        let id: &'static str = Box::leak(format!("settings-tab-{tab}").into_boxed_str());
+        assert!(ui.find(selector::id(id)).is_ok(), "{id}");
+    }
+    drop(ui);
+    // A tab opens its section.
+    let _ = click_id(app, "settings-tab-study-tools");
+    assert_eq!(app.settings_tab, SettingsTab::StudyTools);
+    let mut ui = simulator(app);
+    assert!(ui.find("Quick marks").is_ok());
+    assert!(
+        ui.find("The marks at the top of the selection menu when you choose verses.")
+            .is_ok()
+    );
+    drop(ui);
+    // Left and Right step and wrap, Home and End go to the ends.
+    let key = |app: &mut App, named: Named| {
+        let _ = app.update(Message::Event(iced::Event::Keyboard(
+            keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(named),
+                modified_key: keyboard::Key::Named(named),
+                physical_key: keyboard::key::Physical::Unidentified(
+                    keyboard::key::NativeCode::Unidentified,
+                ),
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::default(),
+                text: None,
+                repeat: false,
+            },
+        )));
+    };
+    key(app, Named::ArrowRight);
+    assert_eq!(app.settings_tab, SettingsTab::ReleaseNotes);
+    key(app, Named::End);
+    assert_eq!(app.settings_tab, SettingsTab::Feedback);
+    key(app, Named::ArrowRight);
+    assert_eq!(app.settings_tab, SettingsTab::Account);
+    key(app, Named::ArrowLeft);
+    assert_eq!(app.settings_tab, SettingsTab::Feedback);
+    key(app, Named::Home);
+    assert_eq!(app.settings_tab, SettingsTab::Account);
+    // Each section has the website's heading.
+    for (tab, title) in [
+        (SettingsTab::Reading, "Reading & appearance"),
+        (SettingsTab::BibleTranslations, "Bible translations"),
+        (SettingsTab::ReleaseNotes, "Release notes"),
+        (SettingsTab::Feedback, "Send feedback"),
+    ] {
+        let _ = app.update(Message::SettingsTab(tab));
+        let mut ui = simulator(app);
+        assert!(ui.find(title).is_ok(), "{title}");
+    }
+    // Simple mode keeps the pill at the top of the page instead.
+    let _ = app.update(Message::ToggleFocus);
+    let mut ui = simulator(app);
+    let tabs = bounds(&mut ui, "settings-tabs");
+    assert!(tabs.y > 64.0, "{tabs:?}");
+    assert!(tabs.width <= 480.0);
+    drop(ui);
+    // Leaving and coming back opens Account again, as `/account` does.
+    let _ = app.update(Message::SetScreen(Screen::Journal));
+    let _ = app.update(Message::SetScreen(Screen::Settings));
+    assert_eq!(app.settings_tab, SettingsTab::Account);
 }

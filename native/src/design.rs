@@ -249,6 +249,46 @@ pub fn outlined(p: Colors, radius: f32) -> impl Fn(&Theme, button::Status) -> bu
         ..Default::default()
     }
 }
+/// A small text control drawn as an underlined word (`underline underline-offset-2`), tinting on hover.
+pub fn underlined_link(p: Colors) -> impl Fn(&Theme, button::Status) -> button::Style {
+    ghost(p, 8.0)
+}
+/// Underlined label text for `underlined_link` controls (`underline underline-offset-2`).
+pub fn underlined<'a, M: 'a>(
+    label: impl Into<String>,
+    size: f32,
+    color: Color,
+    weight: iced::font::Weight,
+) -> iced::Element<'a, M> {
+    underlined_with(label, size, color, color, weight, 2.0)
+}
+/// Text with its underline in its own color and offset (`decoration-current/25 underline-offset-4`).
+pub fn underlined_with<'a, M: 'a>(
+    label: impl Into<String>,
+    size: f32,
+    color: Color,
+    line: Color,
+    weight: iced::font::Weight,
+    offset: f32,
+) -> iced::Element<'a, M> {
+    iced::widget::column![
+        iced::widget::text(label.into())
+            .size(size)
+            .color(color)
+            .font(sans(weight))
+            .wrapping(iced::widget::text::Wrapping::None),
+        container(iced::widget::space())
+            .width(iced::Fill)
+            .height(1)
+            .style(move |_| container::Style {
+                background: Some(line.into()),
+                ..Default::default()
+            }),
+    ]
+    .spacing((offset - 1.0).max(0.0))
+    .width(iced::Shrink)
+    .into()
+}
 /// A text-only link-style control in the given color.
 pub fn link(color: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_, status| button::Style {

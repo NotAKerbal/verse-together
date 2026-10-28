@@ -144,6 +144,7 @@ impl App {
             .into();
         }
         let content = match self.screen {
+            _ if self.content_hidden() => self.hidden_content_view(),
             Screen::Reader => self.reader(),
             Screen::Library => self.library_page_view(),
             Screen::Journal => self.journal_view(),
@@ -259,6 +260,7 @@ impl App {
             );
         }
         if self.screen == crate::Screen::Reader
+            && !self.content_hidden()
             && let Some(bar) = self.word_bar()
         {
             layers = layers.push(
@@ -274,6 +276,11 @@ impl App {
                     .align_x(Horizontal::Center)
                     .align_y(Vertical::Bottom),
             );
+        }
+        if self.screen == Screen::Settings
+            && let Some(viewer) = self.release_viewer()
+        {
+            layers = layers.push(viewer);
         }
         if let Some(error) = &self.error {
             layers = layers.push(
@@ -301,6 +308,54 @@ impl App {
             );
         }
         layers.into()
+    }
+
+    /// `AppMain`'s notice in place of a page this faith tradition hides.
+    fn hidden_content_view(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let link = |label: &'static str, m: Message| {
+            button(design::underlined(label, 16., p.ink, font::Weight::Normal))
+                .padding(0)
+                .on_press(m)
+                .style(design::link(p.ink))
+        };
+        let card = container(
+            column![
+                text("Content hidden by your faith tradition")
+                    .size(20)
+                    .font(sans(font::Weight::Semibold)),
+                text("You can change your faith tradition in Settings → Reading.").size(16),
+                row![
+                    link(
+                        "Browse the Bible",
+                        Message::Library(crate::library_ui::LibraryMsg::Show(
+                            crate::library_ui::LibraryPage::Home
+                        ))
+                    ),
+                    link(
+                        "Settings",
+                        Message::SettingsTab(crate::settings_ui::SettingsTab::Reading)
+                    ),
+                ]
+                .spacing(16)
+                .padding(Padding::ZERO.top(8)),
+            ]
+            .spacing(8),
+        )
+        .padding(24)
+        .width(Fill)
+        .id("content-hidden")
+        .style(design::card(p, 12.0));
+        let inset = shell_inset(self.window_width);
+        container(container(card).max_width(1180))
+            .center_x(Fill)
+            .padding(Padding {
+                top: CONTENT_TOP + 8.0,
+                right: inset,
+                bottom: 48.0,
+                left: inset,
+            })
+            .into()
     }
 
     pub(crate) fn scroll<'a>(
@@ -488,17 +543,38 @@ impl App {
         if let Some(marker) = path_marker {
             markers = markers.push(marker);
         }
-        let marker_slot = if bookmarked || has_note || has_path {
+        // The website's "Note" / "N notes" link to the journal notes that link this passage.
+        let note_marker = self.note_link_marker(number);
+        let has_link = note_marker.is_some();
+        if let Some(marker) = note_marker {
+            markers = markers.push(marker);
+        }
+        let raised = if has_path || has_link { 8.0 } else { 0.0 };
+        let marker_slot = if bookmarked || has_note || has_path || has_link {
             container(markers).padding(
                 Padding::ZERO
                     .left(8)
-                    .top(((line - 12.0) / 2.0 - if has_path { 8.0 } else { 0.0 }).max(0.0)),
+                    .top(((line - 12.0) / 2.0 - raised).max(0.0)),
             )
         } else {
             container(space()).width(0)
         };
         let verse_line =
             row![stack![words, number_button], marker_slot].align_y(iced::Alignment::Start);
+        let picker = (self.note_links.picker == Some(number))
+            .then(|| self.note_link_picker())
+            .flatten();
+        let verse_line: Element<'_, Message> = match picker {
+            Some(picker) => column![
+                verse_line,
+                container(picker)
+                    .width(Fill)
+                    .align_x(Horizontal::Right)
+                    .padding(Padding::ZERO.top(8))
+            ]
+            .into(),
+            _ => verse_line.into(),
+        };
         container(verse_line)
             .id(format!("verse-{number}"))
             .padding([8, 12])
@@ -793,11 +869,16 @@ impl App {
                         "Add to a journal note",
                         Message::VersesInJournal
                     ),
-                    action(
-                        &icons::BOOK_BIBLE,
-                        "Resources · Lessons & more",
-                        Message::Tools(crate::reader_tools::ToolsMsg::Resources)
-                    ),
+                    // Lesson resources are Latter-day Saint study content (`onResources` only for that tradition).
+                    if self.show_lds() {
+                        Element::from(action(
+                            &icons::BOOK_BIBLE,
+                            "Resources · Lessons & more",
+                            Message::Tools(crate::reader_tools::ToolsMsg::Resources),
+                        ))
+                    } else {
+                        space().height(0).into()
+                    },
                     action(
                         if self.copied_link {
                             &icons::CHECK
@@ -893,7 +974,10 @@ impl App {
         let mut volumes = column![].spacing(2);
         let mut seen: Vec<(&str, &str)> = Vec::new();
         for b in &self.books {
-            if !seen.iter().any(|(id, _)| *id == b.volume) {
+            // Other denominations see the Bible's volumes only (`ScriptureQuickNav`).
+            if !seen.iter().any(|(id, _)| *id == b.volume)
+                && (self.show_lds() || !crate::faith::is_lds_volume(&b.volume))
+            {
                 seen.push((b.volume.as_str(), b.volume_title.as_str()));
             }
         }
@@ -1069,6 +1153,9 @@ impl App {
             (Some("doctrineandcovenants"), "D&C"),
             (Some("pearl"), "PGP"),
         ] {
+            if scope.is_some_and(crate::faith::is_lds_volume) && !self.show_lds() {
+                continue;
+            }
             let chosen = self.scope.as_deref() == scope;
             let b = button(text(label).size(12))
                 .padding([5, 9])
@@ -1304,7 +1391,7 @@ impl App {
                 ]
                 .spacing(8),
             ]
-            .push(match self.bibles_settings() {
+            .push(match self.bibles_settings(true) {
                 Some(b) => Element::from(column![rule(), b].spacing(16)),
                 None => space().height(0).into(),
             })
