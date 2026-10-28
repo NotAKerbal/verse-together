@@ -64,6 +64,7 @@ export const UNRELEASED: UnreleasedNotes = {
     { kind: "new", text: "Approve the native desktop app in your browser to connect your account and sync study data." },
     { kind: "improved", text: "On desktop, move between chapters with the Left and Right arrow keys, or use the next-chapter link below the verses." },
     { kind: "improved", text: "Scripture and the Journal panel sit together in a centered layout. Log starts with reading only; choose Add a note to expand the full Markdown editor in the same panel." },
+    { kind: "new", text: "Select a word anywhere in Come, Follow Me to explore study helps, biblical languages, definitions, and word history in a sidebar beside the lesson." },
   ],
 };
 

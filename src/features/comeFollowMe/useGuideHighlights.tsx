@@ -45,6 +45,7 @@ import {
 import styles from "./studyCompanion.module.css";
 import { useAddToNote } from "./useAddToNote";
 import { useHeldSelection } from "./useHeldSelection";
+import { useSelectionExplore } from "./WordExplore";
 
 /*
   Study-guide annotations: select any of the guide's prose (the introduction, the reader's guide side, or the
@@ -408,6 +409,7 @@ function GuideSelectionMenu({
     [roots]
   );
   const { selection, clear } = useHeldSelection({ menuRef, contains, read, same: sameGuideSelection }, guide);
+  const explore = useSelectionExplore(selection?.text ?? "", clear, null);
 
   const placed = useSyncExternalStore(painted.subscribe, painted.get, () => NOTHING_PAINTED);
   const described = selection?.described.ok ? selection.described : null;
@@ -542,6 +544,7 @@ function GuideSelectionMenu({
         selectionReference={selection?.reference ?? ""}
         selectionKey={panelKey}
         selectedText={selection?.text ?? ""}
+        {...explore}
         quickMarks={quickMarks}
         annotationTitle="Annotate"
         annotationDescription={blocked ?? "Highlight, underline, or note"}
