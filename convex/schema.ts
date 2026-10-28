@@ -19,6 +19,27 @@ export default defineSchema({
   // Durable receipts make device imports safe to retry, including after the imported record is deleted.
   deviceStudyImports: defineTable({ clerkId: v.string(), deviceId: v.string(), recordId: v.string() })
     .index("by_owner_device", ["clerkId", "deviceId"]),
+  // An account deletion in progress (convex/accountDeletion.ts): which owner key is being swept, so a retry after a
+  // partial failure still finds it once the users row is gone. Removed when Better Auth has deleted the user.
+  accountDeletions: defineTable({ authUserId: v.string(), clerkId: v.string(), startedAt: v.number() })
+    .index("by_auth_user_id", ["authUserId"]),
+  // The native app's Google sign-in handoffs (convex/nativeSignIn.ts): an attempt bound to one OAuth transaction, and
+  // the hash of the one-time code that transaction's callback issued. Never a session token. Swept after expiry.
+  nativeSignIns: defineTable({
+    attempt: v.string(),
+    state: v.string(),
+    challenge: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    codeHash: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
+    codeExpiresAt: v.optional(v.number()),
+    usedAt: v.optional(v.number()),
+  })
+    .index("by_attempt", ["attempt"])
+    .index("by_state", ["state"])
+    .index("by_code_hash", ["codeHash"])
+    .index("by_expires_at", ["expiresAt"]),
   users: defineTable({
     // Stable app owner key referenced by every owned table's `clerkId` column. Legacy accounts keep
     // their Clerk user id here; accounts created after the Better Auth cutover use their Better Auth
@@ -450,7 +471,9 @@ export default defineSchema({
     contact: v.optional(v.string()),
     path: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_created_at", ["createdAt"]),
+  })
+    .index("by_created_at", ["createdAt"])
+    .index("by_clerk_id", ["clerkId"]),
 
   chapters: defineTable({
     volume: v.string(),

@@ -2,7 +2,7 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import authConfig from "./auth.config";
@@ -11,15 +11,36 @@ import {
   EMAIL_PASSWORD_STATIC_PATHS,
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  NATIVE_APP_ORIGIN,
   authCapabilities,
+  isAllowedNativeAuthorizationURL,
   isEmailPasswordEndpoint,
   readAuthEnvironment,
 } from "./authEnvironment";
 import { CLIENT_IP_HEADER } from "./authProxy";
 import { convexRateLimitStorage } from "./authRateLimit";
+import { NATIVE_EXCHANGE_PATH, NATIVE_EXCHANGE_RATE_LIMIT, nativeSignIn } from "./nativeSignInPlugin";
 
 // The component client has the Convex adapter plus helpers such as safeGetAuthUser.
 export const authComponent = createClient<DataModel>(components.betterAuth);
+
+/** Bounds the account-deletion sweep: SWEEP_BATCH rows per round (convex/accountDeletion.ts). */
+const MAX_DELETION_ROUNDS = 200;
+
+/**
+ * Deletes everything the app stores for a Better Auth user (see convex/accountDeletion.ts). Throws, leaving the
+ * Better Auth user in place so the owner can retry, unless every owned row is gone.
+ */
+async function deleteAppData(ctx: GenericCtx<DataModel>, authUserId: string) {
+  if (!("runMutation" in ctx)) throw new Error("Account deletion needs a mutation or action context.");
+  const clerkId = await ctx.runMutation(internal.accountDeletion.begin, { authUserId });
+  if (clerkId === null) return;
+  for (let round = 0; round < MAX_DELETION_ROUNDS; round++) {
+    const { done } = await ctx.runMutation(internal.accountDeletion.sweep, { clerkId });
+    if (done) return;
+  }
+  throw new Error("Deleting this account's study is taking longer than expected. Try again.");
+}
 
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   const environment = readAuthEnvironment();
@@ -37,7 +58,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 
   return betterAuth({
     baseURL: environment.siteUrl ?? undefined,
-    trustedOrigins: environment.trustedOrigins,
+    // The site (and AUTH_TRUSTED_ORIGINS), plus the native app's deep-link scheme for its sign-in return.
+    trustedOrigins: [...environment.trustedOrigins, NATIVE_APP_ORIGIN],
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       // Google-only unless AUTH_EMAIL_PASSWORD_ENABLED=true. `enabled: false` alone only stops email
@@ -82,11 +104,25 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     // Better Auth answers these with a plain 404 before rate limiting. It matches literal request paths,
     // so the hook below also refuses them by route template (covering /reset-password/:token) and for
     // direct auth.api calls.
-    disabledPaths: emailPassword ? [] : EMAIL_PASSWORD_STATIC_PATHS,
+    // Account deletion is confirmed by a fresh session only: no emailed deletion links are ever issued.
+    disabledPaths: [...(emailPassword ? [] : EMAIL_PASSWORD_STATIC_PATHS), "/delete-user/callback"],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (!emailPassword && isEmailPasswordEndpoint(ctx.path)) {
           throw new APIError("NOT_FOUND", { message: "Email and password sign-in is not available." });
+        }
+        // The Expo plugin's browser hop (it plants the OAuth state cookie on this site, then redirects): only
+        // ever to Google's authorization endpoint, so the route can't be used as an open redirect.
+        if (ctx.path === "/expo-authorization-proxy" && !isAllowedNativeAuthorizationURL(ctx.query?.authorizationURL)) {
+          throw new APIError("BAD_REQUEST", { message: "Invalid authorizationURL" });
+        }
+        if (ctx.path === "/delete-user") {
+          const body = (ctx.body ?? {}) as { password?: unknown; token?: unknown };
+          // A password is a second way to confirm, and must not work while password features are off; deletion
+          // tokens are never issued.
+          if ((body.password !== undefined && !emailPassword) || body.token !== undefined) {
+            throw new APIError("BAD_REQUEST", { message: "Sign in again to confirm deleting your account." });
+          }
         }
       }),
     },
@@ -99,6 +135,26 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
           },
         }
       : {},
+    user: {
+      deleteUser: {
+        // POST /delete-user from the signed-in owner. Better Auth requires the session to be fresh (created in the
+        // last day, its default freshAge) and otherwise answers SESSION_EXPIRED, so the app asks them to sign in
+        // again first. App data goes before the Better Auth user, so a failure leaves an account to retry with.
+        enabled: true,
+        beforeDelete: async (user) => {
+          await deleteAppData(ctx, user.id);
+        },
+        afterDelete: async (user) => {
+          if (!("runMutation" in ctx)) return;
+          try {
+            await ctx.runMutation(internal.accountDeletion.finish, { authUserId: user.id });
+          } catch (error) {
+            // The user is gone and their data with them; a leftover record only names the deleted ids.
+            console.error("Account deleted, but its deletion record could not be removed", error instanceof Error ? error.message : error);
+          }
+        },
+      },
+    },
     account: {
       accountLinking: {
         enabled: true,
@@ -127,6 +183,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         "/convex/token": false,
         "/convex/jwks": false,
         "/convex/.well-known/openid-configuration": false,
+        "/delete-user": { window: 60, max: 3 },
+        [NATIVE_EXCHANGE_PATH]: NATIVE_EXCHANGE_RATE_LIMIT,
       },
     },
     advanced: {
@@ -139,6 +197,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     plugins: [
       // The Convex plugin issues the RS256 JWTs Convex verifies (15 minute lifetime by default).
       convex({ authConfig }),
+      // The native app (mobile/): its client sends the cookie jar it keeps in SecureStore and an `expo-origin`
+      // header naming NATIVE_APP_ORIGIN, and signs in through the site's own Google callback in a browser tab. The
+      // return to the app carries a one-time code redeemable only with the app's private verifier, never the session
+      // (see convex/nativeSignInPlugin.ts). Web sign-in is unaffected.
+      ...nativeSignIn(ctx),
     ],
   });
 };

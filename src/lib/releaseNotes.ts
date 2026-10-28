@@ -60,7 +60,12 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    {
+      kind: "new",
+      text: "Delete your account and all the study saved in it from Settings → Account, or at versetogether.org/delete-account. You confirm before anything is deleted, and a deletion that stops partway can be finished later.",
+    },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [

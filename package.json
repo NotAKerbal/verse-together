@@ -41,6 +41,7 @@
     "qa:notes": "vite --config vite.qa.config.mjs --open /qa/notes/index.html"
   },
   "dependencies": {
+    "@better-auth/expo": "~1.6.33",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.13.1",
