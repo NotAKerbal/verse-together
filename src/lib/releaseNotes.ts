@@ -59,7 +59,7 @@ export type UnreleasedNotes = {
 
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
-  title: "Settings sections in the header, and release notes with versions",
+  title: "Settings sections in the header, release notes with versions, and clearer note links",
   items: [
     {
       kind: "improved",
@@ -84,6 +84,11 @@ export const UNRELEASED: UnreleasedNotes = {
       },
     },
     { kind: "new", text: "Release notes show each release's version, with screenshots of what changed." },
+    {
+      kind: "improved",
+      text: "In the reader, a note appears once, as a small Note link at the start of each passage it links to. The passage you were reading when you wrote it no longer counts as a link.",
+    },
+    { kind: "improved", text: "Verses quoted together in a note are separated by a blank line." },
   ],
 };
 
