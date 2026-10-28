@@ -44,9 +44,48 @@ Upstream states the data is in the public domain. It publishes no LICENSE file, 
 - **Attribution:** upstream doesn't ask for any. Verse Together credits it voluntarily: "Scripture text: LDS
   Scriptures database and text exports by Steve Dibb (scriptures.nephi.org), release 2020.12.08, public domain."
 
-Upstream's public-domain statement is about the USA. The text comes from the Church's 2013 edition. Verse
-Together hasn't independently reviewed that edition's editorial changes, or how the KJV is treated outside the
-US. In the United Kingdom, the KJV is covered by Crown letters patent.
+## Beyond upstream's statement
+
+Upstream's public-domain statement covers the USA only. The points below were checked on 2026-10-27. They are a
+record, not legal advice.
+
+### Where the text came from
+
+The [Import Process](https://scriptures.nephi.org/import_process) page says the text was extracted from HTML
+scripture pages, with verse numbers, paragraph marks and study-note markers stripped out. It doesn't name the
+site, though the markup it targets (`p.verse`, `sup.studyNoteMarker`) suggests the Church's online scriptures.
+
+### The Church's 2013 edition
+
+The Church publishes the edition. Its copyright notice wasn't verifiable from a primary source on 2026-10-27,
+because the Church's pages render it with script. The Church's own
+[summary of the 2013 adjustments](https://www.churchofjesuschrist.org/study/manual/about-the-scriptures/adjustments?lang=eng)
+says: "More than 99 percent of the 2013 adjustments were made in the study helps." In the scripture text itself,
+"adjustments were made to resolve minor typographical errors in spelling, wording, and punctuation," and some
+spellings were updated to match recent KJV editions. The study helps are excluded from this dataset.
+
+The underlying texts were first published between 1611 (KJV) and 1918 (D&C 138), and Official Declaration 2
+(1978) isn't included. Whether the 2013 edition's small text corrections attract a separate copyright hasn't been
+settled by any source found. The Church's
+[terms of use](https://www.churchofjesuschrist.org/legal/terms-of-use?lang=eng) limit reposting materials "from
+this site" without permission. Permission requests go to <https://permissions.churchofjesuschrist.org/>.
+
+### King James Version in the United Kingdom
+
+The KJV is in the public domain in most of the world. In the UK, the right to print, publish and import it is a
+Crown prerogative, licensed under letters patent ([Wikipedia](https://en.wikipedia.org/wiki/King_James_Version#Copyright_status)). Cambridge University Press administers it in England, Wales
+and Northern Ireland, and the Scottish Bible Board in Scotland. Cambridge's KJV copyright pages (for example
+[ISBN 978-0-521-22862-6](https://assets.cambridge.org/97805212/28626/copyright/9780521228626_copyright_info.pdf))
+state:
+
+> Rights in the Authorized (King James) Version of the Bible are administered in the United Kingdom by the Crown's patentee, Cambridge University Press. Applications for permission for liturgical or non-commercial educational use up to a maximum of 500 verses (or less than a full book) not required. Other uses subject to written permission being obtained from the Permissions Department, Cambridge University Press, Cambridge CB2 8RU (www.cambridge.org).
+
+Verse Together bundles the whole KJV, which is far beyond that allowance. No source found says whether the
+letters patent reach an app downloaded in the UK; Cambridge's copyright pages don't mention apps. According to
+[Wikipedia](https://en.wikipedia.org/wiki/King_James_Version#Copyright_status), Cambridge considers
+requests case by case and said in 2011 that it generally charges no fee. [Bible.com](https://www.bible.com/versions/1)'s
+KJV, for example, carries "Rights in the Authorized (King James) Version of the Bible are vested in the Crown"
+and "Published by permission of the Crown's patentee, Cambridge University Press."
 
 Translations other than the KJV, which the reader fetches at runtime from bible-api.com, aren't bundled. This
 record doesn't cover them.

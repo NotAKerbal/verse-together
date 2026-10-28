@@ -77,13 +77,6 @@ Final prompt:
 
 > Use case: stylized-concept. Asset type: standalone background artwork for the VerseTogether journal hero. Input reference is the approved UI mockup; extract its visual art direction only. Generate a wide landscape image 1600 x 520, absolutely NO text, no UI, no boxes, no glyphs or borders. Match the painterly sunrise landscape visible in the mockup's upper-right hero: distant layered blue-gray mountains around a broad valley, warm golden early morning sky, softly glowing sun near right third of frame, clouds catching muted peach and gold light, rocky foreground with sparse plants and an elegant mature tree framing the far right edge. Left half of frame must be very dark, subdued, low-detail warm charcoal-green atmospheric mountains so live HTML text will read well on top. Artwork gets brighter and more detailed toward the right half. Preserve a continuous natural landscape across full image, no artificial straight fade boundary. Style: restrained cinematic classical oil-painting digital illustration, slight visible painterly brushwork, atmospheric depth, quiet reverent mood. Palette dark warm charcoal and muted mountain greens, antique gold dawn and terracotta-cloud highlights. No people, no buildings, no religious figures, no modern objects, no watermark, no typography. Full-bleed natural landscape. The only needed deliverable is the landscape art, not a UI screenshot.
 
-## Outside this directory
-
-`public/Gemini_Generated_Image_4qmpme4qmpme4qmp.jpeg` (2048 × 2048, open-book logo concept) was added in
-7347741 with no description. Its filename suggests Google Gemini output, but nothing else records its origin.
-Nothing in the app references it, but it is still served publicly from `/`. The app's live icons are in
-`public/brand/`.
-
 ## Adding artwork
 
 Record each new file here or in its prompts JSON with the tool, date, final prompt, processing and SHA-256. For
