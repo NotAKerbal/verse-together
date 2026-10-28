@@ -23,7 +23,7 @@
     "test:browse": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/scriptureBrowsing.test.mjs",
     "test:jst": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/jst.test.mjs",
     "cfm:check": "node scripts/cfm-content.mjs check",
-    "test:auth": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/safeRedirect.test.mjs src/lib/signInFlow.test.mjs src/features/auth/authErrors.test.mjs scripts/auth-migration.test.mjs",
+    "test:auth": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/safeRedirect.test.mjs src/lib/signInFlow.test.mjs src/features/auth/authErrors.test.mjs src/features/auth/accountLists.test.mjs scripts/auth-migration.test.mjs",
     "test:convex": "vitest run",
     "auth:migrate": "node scripts/auth-migration.mjs",
     "test:ai-insights": "node --experimental-strip-types --test src/lib/chapterInsights.test.mjs",
