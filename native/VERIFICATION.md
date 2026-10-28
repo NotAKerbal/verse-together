@@ -1,3 +1,129 @@
+# Independent review of the repaired native expansion
+
+Codex reviewed the final implementation on top of `756dfec` and independently passed 104 native tests
+(1 optional snapshot exporter ignored), 5 renderer tests, 46 real Convex/Better Auth contract tests, strict
+clippy, formatting and whitespace checks. The originally failing rapid-edit sync regression passes unchanged.
+The account changes now use logical revisions, field-specific atomic mutations, idempotent creates, scoped
+credentials, guarded drafts and generation-bound jobs. Live Google authentication and cloud sync are still
+blocked on deploying the server and website changes; they have not been validated against production.
+
+Reviewed release SHA-256: `52da3e7b618b6dda0c55c5e8547ded3da37913aa563281a3eaddd4d4269cdf70`.
+The packaged binary matches. Native desktop verification used `/tmp/verse-final-parent-qa --no-account`:
+Mark 9 with the live BSB comparison rendered; the new Journal opened, created and saved a reflection, and
+Escape returned to the day. SQLite confirmed the exact title and body entered through the native editor.
+Earlier independent checks also verified CFM Contents, the scripture dock, green highlights and persistence.
+The release package contains no QA databases or credentials. Full remaining-feature inventory: `PARITY.md`.
+
+The sections below retain the implementation agent's evidence and earlier build history.
+
+# Native repair and parity continuation — October 27, 2026 (evening)
+
+Base `756dfec`, uncommitted working tree on `t3/rust-desktop-app` (shared checkout
+`/home/jeffrey-home/.t3/worktrees/verse-together/t3-b6b04554`). Rust 1.99.1 from `/tmp/verse-native-tools/env.sh`.
+Linux GNOME Wayland 1280×800. No commit, push, PR, merge or deployment was made.
+
+## Automated checks (all on the final tree unless noted)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --manifest-path native/Cargo.toml` | **Passed**: 104 passed, 1 ignored (snapshot exporter). Includes the reviewer's `review_sync_ack_does_not_discard_a_second_edit_within_one_second`, 16 sync tests against a contract stand-in (lost replies, in-flight edits, conflicts kept once, deletions after lost creates, cancellation, backlog, canonical progress keys), 8 account lifecycle tests through the real update loop with an in-memory credential store, auth/loopback tests incl. decline and cancel-then-revoke |
+| Renderer tests | `cargo test --manifest-path native/Cargo.toml -p iced_tiny_skia` | **Passed**: 5 |
+| Strict clippy | `cargo clippy --manifest-path native/Cargo.toml --all-targets -- -D warnings` | **Passed** (no findings) |
+| Format | `cargo fmt --check` | **Passed** |
+| Release build | `cargo build --manifest-path native/Cargo.toml --release --locked` | **Passed** |
+| Full Vitest (web + Convex, real Better Auth component) | `npx vitest run` | **Passed** (48 files) after updating `tests/journalEntry.test.ts` for `createJournalEntry`'s new `markdownRevision` field. One earlier full run had the rate-limit test time out under load; it passed alone and in the later full run |
+| Native backend contracts | `npx vitest run tests/convex/nativeSync.test.ts tests/convex/nativeAuthHttp.test.ts tests/nativeAuth.test.ts tests/journalEntry.test.ts` | **Passed**: 46 (nativeSync 12: field-level verse sync, removals, coded refusals, ownership, UNAUTHENTICATED; idempotent creates with revisions, REVISION_CONFLICT, metadata-only saves, idempotent deletes; readings; device import replay; guide spans; plans. nativeAuthHttp 8: expired grant, foreign Origin refused, three concurrent exchanges → exactly one 200, account changed → 409, signed-out page → 401, bearer account management) |
+| Typecheck | `npx tsc --noEmit -p .` and `-p convex` | **Passed** |
+| Lint (new/changed files) | `npx eslint convex/nativeSync.ts convex/nativeAuth*.ts src/features/auth/NativeAuthorize.tsx src/app/native tests/…` | **Passed**. `convex/insights.ts` has pre-existing `@ts-nocheck`/`any` lint errors unrelated to this change |
+
+## Real desktop checks (release build, Linux Computer Use, profile `/tmp/verse-claude-qa`, D-Bus isolated so the real keyring was never read)
+
+- Study paths: live markers on 1 Nephi 1 (verses 1, 4, 5) and John 3; panels show kind, title, direction, notice list
+  and sources. A click is presented within 300 ms (the debug build's long relayout had delayed it).
+- Contents jump (October 26 guide → Jeremiah 31:1–3) presented within 600 ms without further input — the reported
+  deferred redraw is fixed by redrawing after every programmatic scroll/focus (`presented`).
+- Guide prose: dragging across words selects them (formatting kept); the green quick mark is drawn on exactly the
+  span and stored with `part=reader`, the heading's block id, UTF-16 offsets, quote and 32-unit context.
+- Your Bibles: Add a Bible → Berean Standard Bible; BSB shown under each KJV verse with changed words colored;
+  preferences persisted. JST switch: Mark 9:43 shows the JST Mark 9:40–48 passage; a navigation jump stays on its
+  verse after the extras load (fixed during this check).
+- Explore "hand" (Mark 9): study helps topics, Strong's Greek entries with Greek lemmas, English meanings.
+- Settings and Sign in screens (gear → Settings, no active nav link; Sign in card centered); the keyring-unavailable
+  notice appeared because D-Bus was deliberately isolated. "Continue with Google" was not pressed (the production
+  server does not have the endpoints yet).
+- Plans signed out: "Sign in to keep a plan" card. Lesson cards, the featured card and the journal art have rounded
+  corners (renderer change).
+- Journal: wrote a reflection, Escape closed it to its day; a pasted `Ḥesed — covenant love ✓` was stored exactly.
+- Synthetic clicks without prior pointer motion were sometimes missed on the first try; with a pointer move first
+  they always registered (a real pointer always moves first). Not reproduced in the Iced simulator.
+
+## Not verified / blocked
+
+- All account features (sign-in, sync, Settings account sections, Plans signed in, copying device study) need
+  `convex/nativeAuth.ts`, `convex/nativeSync.ts`, the `/native/authorize` page and the `createJournalEntry`
+  revision change deployed, then a live Google sign-in test. Verified only against the repository's Convex and
+  Better Auth test runtime and local stand-ins.
+- macOS/Windows, accessibility, IME and long-form editing were not verified.
+- The original handoff window (PID 666794) was already gone before this session's GUI work; it was not touched.
+
+# Native web-parity expansion — October 27, 2026
+
+Branch `t3/rust-desktop-app`, working tree on top of `756dfec37c7d327a7917ce1e743568abaa9f9105` (uncommitted;
+the parent agent commits after independent review). Ubuntu 24.04.5, GNOME/Wayland 1280×800, Rust 1.99.1.
+Claude implemented this expansion; it has not yet been independently reviewed. Feature inventory: `PARITY.md`.
+
+Optimized executable SHA-256 (the build used for the final desktop checks): 50346ab5823f1c96e3021358981a994e5528741535f438e2f45cc6d891801abb.
+
+## Automated checks
+
+- **Passed:** `cargo test` — 65 passed, 1 ignored (snapshot export). New: mark model (UTF-16 offsets, range
+  split/merge, presets), mark layer layout, journal model, lesson schedule/overview/covers/checksums/sections,
+  store migration from an earlier profile with backup, failed-migration rollback, account/device isolation,
+  journal persistence, sync payload mapping, PKCE vector, loopback callback validation, a full native sign-in
+  round trip against a local stand-in server, word-range marking through the app, quick-mark editing.
+- **Passed:** `cargo test -p iced_tiny_skia` — 5 renderer tests, including two new local corrections (below).
+- **Passed:** `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`.
+- **Passed:** `cargo build --release --locked`; `ldd` shows only libc/libm/libgcc (keyring uses pure-Rust D-Bus).
+- **Passed:** `npx vitest run` — 46 files / 397 tests (one earlier run under high machine load had timeouts; the
+  re-run passed). New `tests/convex/nativeAuthHttp.test.ts` runs the real Better Auth handler on Convex's test
+  runtime: website session → `/native/grant` → `/native/token` with the PKCE verifier → bearer `get-session` →
+  Convex JWT from `/convex/token` → code reuse refused → wrong verifier refused and burns the code → app
+  sign-out ends only the app's session. `tests/nativeAuth.test.ts` covers the rules (RFC 7636 vector).
+- **Passed:** `tsc --noEmit` for the app and `convex/`; ESLint on all new/changed web and backend files.
+- **Passed:** a package staged at `/tmp/verse-parity-package` (from the build before the last renderer fix) (README, PARITY, VERIFICATION, licenses with 361
+  dependency notices); `--version` runs with an empty environment; no databases or credentials in the archive.
+  `native/dist` was not repackaged because the earlier handoff app is still running from it.
+
+## Real native desktop checks (release build, Linux Computer Use)
+
+Profile `/tmp/verse-parity-qa`, seeded with a SQLite backup copy of the earlier QA profile (`/tmp/verse-native-qa`
+untouched; its handoff window was left running). Screenshots: `/tmp/verse-parity-evidence/`.
+
+- **Passed:** the earlier profile migrated on first open: Alma 32:21's highlight became the web's yellow, its
+  bookmark and note were kept, `study-before-v2.sqlite` was written.
+- **Passed:** Journal: calendar, goals, invitation art and prompts, verse-note entry, writing a reflection
+  (title focus during the glide, Markdown body, preview), closing back to the calendar, Ctrl+S, persistence
+  across restarts, goal progress updating, opening a verse entry in the reader at that verse.
+- **Passed:** Reader: highlight drawn under the words only; drag-selecting words and applying a green highlight
+  and red underline to exactly those words; active-state rings and remove tooltips; marks persisted.
+- **Passed:** Come, Follow Me overview (Oct 26 featured with Rembrandt cover and credit, chips, previous lessons),
+  lesson hero, Contents jump, scripture dock opening at the section's verses, marking in the dock, the same marks
+  shown in the reader via "Open in reader".
+- **Passed:** Settings: account section (signed out), quick-mark rename/reorder/remove, dark and light themes.
+- **Found and fixed during these checks:** Journal glide stalled without input events (frame ticker added); the
+  title lost focus mid-glide (stable layer positions); opening the dock reset the guide's scroll (stable layout);
+  dock and reader jumps ran before the target existed (deferred one message); dock marks misaligned (advanced
+  shaping); cover/journal images spilled outside their frames and dark patches remained after switching to light
+  (both renderer defects, fixed in `vendor/iced_tiny_skia` with regression tests; see its `PATCH.md`).
+
+## Not verified / blocked
+
+- **Blocked:** live sign-in and sync. The backend plugin, bearer plugin and `/native/authorize` page are not
+  deployed; production currently answers 404, which the app reports. No live Google account was used; no
+  browser was opened against production. Convex sync calls are verified for payload shape only.
+- **Not run:** writing a session to the real system keyring (avoided touching the user's keyring); macOS and
+  Windows builds; screen readers/IME; long-running sync stress.
+
 # Native design-fidelity verification — October 27, 2026
 
 Environment: Ubuntu 24.04.5 x86_64, GNOME/Wayland, 1280×800 desktop. Rust 1.99.1, Iced 0.14,

@@ -572,15 +572,47 @@ impl Engine {
     ) {
         match image {
             #[cfg(feature = "image")]
-            Image::Raster { image, bounds, .. } => {
+            Image::Raster {
+                image,
+                bounds,
+                clip_bounds: local_clip_bounds,
+            } => {
                 let physical_bounds = *bounds * _transformation;
+                // Local correction: honor the image's own clip bounds (its widget's bounds), as text does.
+                // A cropped or `ContentFit::Cover` image is drawn larger than its widget and relies on them.
+                let Some(clip_bounds) =
+                    _clip_bounds.intersection(&(*local_clip_bounds * _transformation))
+                else {
+                    return;
+                };
 
-                if !_clip_bounds.intersects(&physical_bounds) {
+                if !clip_bounds.intersects(&physical_bounds) {
                     return;
                 }
 
-                let clip_mask = (!physical_bounds.is_within(&_clip_bounds))
-                    .then_some(_clip_mask as &_);
+                let clipped = !physical_bounds.is_within(&clip_bounds);
+                // Local correction: honor the image's border radius (upstream applied it only on other
+                // backends), so art in a rounded card is clipped to the card's corners.
+                let radii = <[f32; 4]>::from(image.border_radius);
+                let rounded = radii.iter().any(|r| *r > 0.0);
+                if clipped || rounded {
+                    adjust_clip_mask(_clip_mask, clip_bounds);
+                }
+                if rounded {
+                    let scale = _transformation.scale_factor();
+                    let path = rounded_rectangle(
+                        *local_clip_bounds * _transformation,
+                        radii.map(|r| r * scale),
+                    );
+                    _clip_mask.intersect_path(
+                        &path,
+                        tiny_skia::FillRule::Winding,
+                        true,
+                        tiny_skia::Transform::identity(),
+                    );
+                }
+                let clipped = clipped || rounded;
+                let clip_mask = clipped.then_some(_clip_mask as &_);
 
                 let center = physical_bounds.center();
                 let radians = f32::from(image.rotation);
@@ -600,6 +632,10 @@ impl Engine {
                     transform,
                     clip_mask,
                 );
+                if clipped {
+                    // Later primitives in this pass expect the pass's own mask.
+                    adjust_clip_mask(_clip_mask, _clip_bounds);
+                }
             }
             #[cfg(feature = "svg")]
             Image::Vector { svg, bounds, .. } => {
@@ -921,5 +957,40 @@ mod shadow_regression_tests {
             }
         }
         assert_eq!(tiled.data(), full.data(), "incremental redraw must not leave darker shadow bands");
+    }
+}
+
+#[cfg(all(test, feature = "image"))]
+mod image_clip_regression_tests {
+    use super::*;
+    use crate::core::image::Handle;
+
+    /// A 4×4 opaque red image drawn into 32×32 bounds, clipped to the middle 8×8.
+    #[test]
+    fn image_clip_cropped_images_stay_inside_their_widget() {
+        let red: Vec<u8> = [255u8, 0, 0, 255].repeat(16);
+        let image = Image::Raster {
+            image: crate::core::Image::new(Handle::from_rgba(4, 4, red)),
+            bounds: Rectangle { x: 0.0, y: 0.0, width: 32.0, height: 32.0 },
+            clip_bounds: Rectangle { x: 12.0, y: 12.0, width: 8.0, height: 8.0 },
+        };
+        let mut pixels = tiny_skia::Pixmap::new(32, 32).unwrap();
+        pixels.fill(tiny_skia::Color::WHITE);
+        let full = Rectangle { x: 0.0, y: 0.0, width: 32.0, height: 32.0 };
+        let mut mask = tiny_skia::Mask::new(32, 32).unwrap();
+        adjust_clip_mask(&mut mask, full);
+        Engine::new().draw_image(&image, Transformation::IDENTITY, &mut pixels.as_mut(), &mut mask, full);
+        for y in 0..32usize {
+            for x in 0..32usize {
+                let i = (y * 32 + x) * 4;
+                let inside = (12..20).contains(&x) && (12..20).contains(&y);
+                let red = pixels.data()[i + 1] < 50;
+                assert_eq!(red, inside, "pixel {x},{y}");
+            }
+        }
+        // The pass's mask is restored for the primitives drawn after the image.
+        let mut probe = tiny_skia::Mask::new(32, 32).unwrap();
+        adjust_clip_mask(&mut probe, full);
+        assert_eq!(mask.data(), probe.data());
     }
 }

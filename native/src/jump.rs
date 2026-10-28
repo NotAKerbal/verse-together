@@ -49,3 +49,55 @@ pub fn to_verse<Message: Send + 'static>(verse: u32) -> Task<Message> {
     })
     .then(|y| operation::scroll_to("reader", scrollable::AbsoluteOffset { x: 0., y }))
 }
+
+/// Scrolls `scrollable` so the container `target` sits `offset` below its top.
+pub fn to_verse_in<Message: Send + 'static>(
+    scrollable: &str,
+    target: &str,
+    offset: f32,
+) -> Task<Message> {
+    struct Find {
+        scrollable: Id,
+        target: Id,
+        content_y: f32,
+        target_y: Option<f32>,
+        offset: f32,
+    }
+    impl Operation<f32> for Find {
+        fn traverse(&mut self, children: &mut dyn FnMut(&mut dyn Operation<f32>)) {
+            children(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&self.target) {
+                self.target_y = Some(bounds.y);
+            }
+        }
+        fn scrollable(
+            &mut self,
+            id: Option<&Id>,
+            _: Rectangle,
+            content: Rectangle,
+            _: Vector,
+            _: &mut dyn Scrollable,
+        ) {
+            if id == Some(&self.scrollable) {
+                self.content_y = content.y;
+            }
+        }
+        fn finish(&self) -> Outcome<f32> {
+            match self.target_y {
+                Some(y) => Outcome::Some((y - self.content_y - self.offset).max(0.)),
+                None => Outcome::None,
+            }
+        }
+    }
+    let id = scrollable.to_string();
+    operate(Find {
+        scrollable: Id::from(id.clone()),
+        target: Id::from(target.to_string()),
+        content_y: 0.,
+        target_y: None,
+        offset,
+    })
+    .then(move |y| operation::scroll_to(id.clone(), scrollable::AbsoluteOffset { x: 0., y }))
+}

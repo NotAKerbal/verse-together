@@ -16,6 +16,7 @@ cp "$native_root/README.md" "$stage/README.md"
 cp "$native_root/assets/licenses/"* "$stage/licenses/"
 python3 "$native_root/collect-licenses.py" "$stage/licenses/dependencies"
 if [[ -f "$native_root/VERIFICATION.md" ]]; then cp "$native_root/VERIFICATION.md" "$stage/VERIFICATION.md"; fi
+if [[ -f "$native_root/PARITY.md" ]]; then cp "$native_root/PARITY.md" "$stage/PARITY.md"; fi
 tar -C "$native_root/dist" -czf "$native_root/dist/$package_name.tar.gz" "$package_name"
 (
   cd "$native_root/dist"

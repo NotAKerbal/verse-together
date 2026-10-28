@@ -461,7 +461,7 @@ export const createJournalEntry = mutation({
     const source = args.source ? normalizeNoteSource(args.source) : undefined;
     if (args.logReading && !source) throw new Error("Choose what you read");
 
-    if (await wasEntryDeleted(ctx, clerkId, args.requestId)) return { id: null, duplicate: true, deleted: true };
+    if (await wasEntryDeleted(ctx, clerkId, args.requestId)) return { id: null, duplicate: true, deleted: true, markdownRevision: null };
     const now = Date.now();
     const content = {
       title: deriveNoteTitle(args.markdownBody),
@@ -502,13 +502,18 @@ export const createJournalEntry = mutation({
           entryRequestFingerprint: fingerprint,
           entryRequestRevision: revision,
         });
-        return { id: existing._id, duplicate: true, deleted: false };
+        return { id: existing._id, duplicate: true, deleted: false, markdownRevision: revision };
       }
       // Edited since (here or in another window). Repeating what this request last wrote, or matching what the
       // entry now holds, is the same save. Anything else would either drop the caller's changes or overwrite the
       // later edits, so it is refused, naming the entry; the client keeps its text to save as a separate entry.
-      if (fingerprint === existing.entryRequestFingerprint || fingerprint === current) {
-        return { id: existing._id, duplicate: true, deleted: false };
+      // The revision reported is the one this content is at: what the request last wrote, or the entry's current
+      // one when it holds exactly this content, so a client never takes later edits as its own base.
+      if (fingerprint === current) {
+        return { id: existing._id, duplicate: true, deleted: false, markdownRevision: existing.markdownRevision ?? 0 };
+      }
+      if (fingerprint === existing.entryRequestFingerprint) {
+        return { id: existing._id, duplicate: true, deleted: false, markdownRevision: existing.entryRequestRevision ?? 0 };
       }
       throw new ConvexError({
         code: "ENTRY_CONFLICT",
@@ -531,7 +536,7 @@ export const createJournalEntry = mutation({
       updatedAt: now,
       lastActiveAt: now,
     });
-    return { id, duplicate: false, deleted: false };
+    return { id, duplicate: false, deleted: false, markdownRevision: 0 };
   },
 });
 

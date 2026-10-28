@@ -30,11 +30,9 @@ pub fn label_font() -> iced::Font {
 pub fn measure_labels() -> [f32; 3] {
     NAV_ITEMS.map(|(label, _, _)| design::measure(label, LABEL_SIZE, label_font()).ceil())
 }
-pub fn screen_index(screen: Screen) -> usize {
-    NAV_ITEMS
-        .iter()
-        .position(|(_, _, s)| *s == screen)
-        .unwrap_or(0)
+/// The navigation link a screen belongs to; Settings and Sign in have none (the website shows no active label).
+pub fn screen_index(screen: Screen) -> Option<usize> {
+    NAV_ITEMS.iter().position(|(_, _, s)| *s == screen)
 }
 
 /// The header's running transitions. Every value is derived from the clock, so changing the target part way through
@@ -57,6 +55,8 @@ pub struct Motion {
     /// The active indicator's offset in links, and the width of the label it wraps.
     pub indicator_index: Transition,
     pub indicator_label: Transition,
+    /// The indicator's opacity: it fades out on a screen with no link.
+    pub indicator_shown: Transition,
 }
 
 impl Motion {
@@ -74,18 +74,29 @@ impl Motion {
             tint: [0, 1, 2].map(|i| Transition::new(on(i), TINT, EASE, now)),
             indicator_index: Transition::new(active as f32, NAV, NAV_EASE, now),
             indicator_label: Transition::new(widths[active], NAV, NAV_EASE, now),
+            indicator_shown: Transition::new(1.0, FADE, EASE, now),
         }
     }
-    pub fn set_active(&mut self, active: usize, widths: [f32; 3], now: Instant) {
-        self.active = active;
+    pub fn set_active(&mut self, active: Option<usize>, widths: [f32; 3], now: Instant) {
         for i in 0..3 {
-            let on = if i == active { 1.0 } else { 0.0 };
+            let on = if Some(i) == active { 1.0 } else { 0.0 };
             self.label[i].set(on, now, self.animate);
             self.label_opacity[i].set(on, now, self.animate);
             self.tint[i].set(on, now, self.animate);
         }
-        self.indicator_index.set(active as f32, now, self.animate);
-        self.indicator_label.set(widths[active], now, self.animate);
+        self.indicator_shown
+            .set(if active.is_some() { 1.0 } else { 0.0 }, now, self.animate);
+        let Some(active) = active else {
+            self.active = usize::MAX;
+            return;
+        };
+        // From no link, the indicator appears where it is going rather than sliding from the last one.
+        let from_none = self.active == usize::MAX;
+        self.active = active;
+        self.indicator_index
+            .set(active as f32, now, self.animate && !from_none);
+        self.indicator_label
+            .set(widths[active], now, self.animate && !from_none);
     }
     pub fn set_collapsed(&mut self, collapsed: bool, now: Instant) {
         self.collapsed = collapsed;
@@ -101,6 +112,7 @@ impl Motion {
             &self.chevron,
             &self.indicator_index,
             &self.indicator_label,
+            &self.indicator_shown,
         ]
         .into_iter()
         .chain(&self.label)
@@ -183,6 +195,8 @@ impl App {
         let mut line = row![self.nav_pill()].spacing(12).align_y(Center);
         if self.screen == Screen::Reader {
             line = line.push(space::horizontal()).push(self.reader_pill());
+        } else if self.screen == Screen::Guides && self.lessons.open.is_some() {
+            line = line.push(space::horizontal()).push(self.lesson_pill());
         }
         container(line)
             .padding(Padding {
@@ -201,6 +215,7 @@ impl App {
         let m = &self.motion;
         let widths = self.label_widths;
         let alpha = m.content_opacity.value(now);
+        let indicator_alpha = alpha * m.indicator_shown.value(now);
         let links_widths = m.link_widths(widths, now);
         let mut links = row![].spacing(LINK_GAP).align_y(Center);
         for (i, (label, glyph, screen)) in NAV_ITEMS.iter().enumerate() {
@@ -250,7 +265,7 @@ impl App {
         let (x, w) = m.indicator(now);
         let indicator = container(container(space()).width(w).height(CONTROL).style(move |_| {
             container::Style {
-                background: Some(fade(p.ink, alpha).into()),
+                background: Some(fade(p.ink, indicator_alpha).into()),
                 border: Border {
                     radius: 11.2.into(),
                     ..Default::default()
@@ -263,33 +278,58 @@ impl App {
         .height(CONTROL)
         .clip(true);
         let links = stack![indicator, links];
-        let settings_open = self.popover == Some(Popover::AppSettings);
-        let account = button(
-            container(icon(&icons::GEAR, fade(p.ink, alpha), 16.))
-                .center_x(CONTROL)
-                .center_y(CONTROL),
-        )
-        .padding(0)
-        .on_press(Message::TogglePopover(Popover::AppSettings))
-        .style(move |_, status| button::Style {
-            background: Some(
-                fade(
-                    if settings_open || matches!(status, button::Status::Hovered) {
-                        p.hover
-                    } else {
-                        p.soft
-                    },
-                    alpha,
-                )
-                .into(),
-            ),
-            text_color: p.ink,
-            border: Border {
-                radius: 18.0.into(),
+        // Signed out, the gear opens Settings; signed in, the avatar opens the account menu (`AccountControl`).
+        let settings_open = self.popover == Some(Popover::AppSettings)
+            || matches!(self.screen, Screen::Settings | Screen::SignIn);
+        let glyph: Element<'_, Message> = match &self.account.session {
+            Some(session) => container(
+                text(crate::account_ui::initials(
+                    &session.user.name,
+                    &session.user.email,
+                ))
+                .size(11)
+                .font(crate::design::sans(iced::font::Weight::Bold))
+                .color(fade(p.paper, alpha)),
+            )
+            .center_x(CONTROL - 12.0)
+            .center_y(CONTROL - 12.0)
+            .style(move |_| container::Style {
+                background: Some(fade(p.ink, alpha).into()),
+                border: Border {
+                    radius: 999.0.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        });
+            })
+            .into(),
+            None => icon(&icons::GEAR, fade(p.ink, alpha), 16.).into(),
+        };
+        let account = button(container(glyph).center_x(CONTROL).center_y(CONTROL))
+            .padding(0)
+            .on_press(if self.account.session.is_some() {
+                Message::TogglePopover(Popover::AppSettings)
+            } else {
+                Message::SetScreen(Screen::Settings)
+            })
+            .style(move |_, status| button::Style {
+                background: Some(
+                    fade(
+                        if settings_open || matches!(status, button::Status::Hovered) {
+                            p.hover
+                        } else {
+                            p.soft
+                        },
+                        alpha,
+                    )
+                    .into(),
+                ),
+                text_color: p.ink,
+                border: Border {
+                    radius: 18.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
         let content = row![
             space().width(12),
             vrule(p, CONTROL, alpha),
@@ -298,7 +338,7 @@ impl App {
             space().width(12),
             vrule(p, CONTROL, alpha),
             space().width(12),
-            hint(account, "Settings", p),
+            container(hint(account, "Settings", p)).id("nav-settings"),
         ]
         .align_y(Center);
         let shown = m.open.value(now);
@@ -584,7 +624,7 @@ mod tests {
     fn switching_screens_glides_the_indicator_and_swaps_labels() {
         let t0 = Instant::now();
         let mut m = Motion::new(0, WIDTHS, true, t0);
-        m.set_active(1, WIDTHS, t0);
+        m.set_active(Some(1), WIDTHS, t0);
         assert!(m.is_animating(t0));
         let mid = t0 + Duration::from_millis(100);
         let (x, w) = m.indicator(mid);
@@ -634,7 +674,7 @@ mod tests {
     fn reduced_motion_settles_immediately() {
         let t0 = Instant::now();
         let mut m = Motion::new(0, WIDTHS, false, t0);
-        m.set_active(2, WIDTHS, t0);
+        m.set_active(Some(2), WIDTHS, t0);
         m.set_collapsed(true, t0);
         assert!(!m.is_animating(t0));
         assert_eq!(m.indicator(t0), (84.0, 42.0 + 104.0));

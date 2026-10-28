@@ -34,3 +34,9 @@ Final prompt:
 Final prompt:
 
 > Use case: historical-scene. Asset type: wide cover art for Old Testament Come Follow Me lessons without a bespoke cover. Primary request: a peaceful ancient Judean landscape, winding footpath between olive trees on sunlit terraced hills, distant pale mountains and warm morning sky. Style: painterly oil landscape with textured brushwork, muted olive, sandstone and soft golden light, contemplative scripture study mood. Wide 3:2 composition suitable for 16:9 cropping. No text. Absolutely NO people, NO human figures, NO Jesus, NO Savior, NO deities, NO angels, NO religious figure depictions. No watermark.
+
+## Historical painting covers
+
+### rembrandt-jeremiah.webp
+
+Used for October 26, 2026. Rembrandt van Rijn, *Jeremiah Lamenting the Destruction of Jerusalem*, 1630, Rijksmuseum. [Wikimedia Commons source](https://commons.wikimedia.org/wiki/File:Rembrandt_-_Jeremiah_lamenting.jpg). Public Domain Mark 1.0, verified on the accessed source page. Original 1992×2532; non-generative thumbnail resized to 1180×1500 and encoded as WebP (quality 88), 212,612 bytes, SHA-256 `9af446f23fbc5678e9b4a560fad0b7d647603ed4a6276c87be9d8f60fbb9fd4b`. CSS focus 50% 38%; the 16:9 crop was visually checked. No AI generation or edits, and no depiction of the Savior.

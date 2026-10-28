@@ -94,6 +94,12 @@ pub struct Colors {
     pub gold: Color,
     pub read: Color,
     pub shadow: Color,
+    /// `--accent-goal`
+    pub goal: Color,
+    /// `--accent-note`: a selected journal entry.
+    pub note: Color,
+    /// `--accent-primary`: the calendar's entry dots.
+    pub primary: Color,
 }
 impl Colors {
     pub fn new(dark: bool) -> Self {
@@ -113,6 +119,9 @@ impl Colors {
                 gold: color!(0x443923),
                 read: color!(0x8ea391),
                 shadow: Color::from_rgba(0., 0., 0., 0.45),
+                goal: color!(0xc9ad6a),
+                note: color!(0x2c281d),
+                primary: color!(0xc9ad6a),
             }
         } else {
             let ink = color!(0x1f1d1a);
@@ -130,8 +139,73 @@ impl Colors {
                 gold: color!(0xecdcae),
                 read: color!(0x6d8070),
                 shadow: Color::from_rgba(31. / 255., 29. / 255., 26. / 255., 0.12),
+                goal: color!(0x947026),
+                note: color!(0xf2ead6),
+                primary: color!(0xecdcae),
             }
         }
+    }
+}
+impl Colors {
+    /// Every color at `alpha` of its opacity, for content fading in or out as a whole.
+    pub fn faded(self, alpha: f32) -> Self {
+        let f = |c| fade(c, alpha);
+        Self {
+            paper: f(self.paper),
+            card: f(self.card),
+            card_strong: f(self.card_strong),
+            soft: f(self.soft),
+            hover: f(self.hover),
+            ink: f(self.ink),
+            muted: f(self.muted),
+            faint: f(self.faint),
+            rule: f(self.rule),
+            accent: f(self.accent),
+            gold: f(self.gold),
+            read: f(self.read),
+            shadow: f(self.shadow),
+            goal: f(self.goal),
+            note: f(self.note),
+            primary: f(self.primary),
+        }
+    }
+}
+/// `.panel-card`: the journal's and lessons' cards.
+pub fn card(p: Colors, radius: f32) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
+        background: Some(p.card.into()),
+        text_color: Some(p.ink),
+        border: Border {
+            color: p.rule,
+            width: 1.0,
+            radius: radius.into(),
+        },
+        ..Default::default()
+    }
+}
+/// A bordered pill or circle control (`ICON_BUTTON_CLASS`, `PILL_BUTTON_CLASS`).
+pub fn outlined(p: Colors, radius: f32) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| button::Style {
+        background: Some(if hovered(status) { p.hover } else { p.card }.into()),
+        text_color: p.ink,
+        border: Border {
+            color: p.rule,
+            width: 1.0,
+            radius: radius.into(),
+        },
+        ..Default::default()
+    }
+}
+/// A text-only link-style control in the given color.
+pub fn link(color: Color) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| button::Style {
+        background: None,
+        text_color: if hovered(status) {
+            mix(color, Color::BLACK, 0.15)
+        } else {
+            color
+        },
+        ..Default::default()
     }
 }
 pub fn fade(color: Color, alpha: f32) -> Color {

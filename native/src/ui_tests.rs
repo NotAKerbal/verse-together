@@ -1,7 +1,7 @@
 // Renders the real view headlessly (Iced's own test simulator, Tiny Skia) to check layout and clicks against the
 // website's measured geometry.
 use crate::store::Location;
-use crate::{App, Message, Popover, Screen, design};
+use crate::{App, Message, Popover, Screen, design, header};
 use iced::{Rectangle, Settings, Size};
 use iced_test::selector::Candidate;
 use iced_test::{Simulator, selector};
@@ -30,6 +30,7 @@ fn fixture() -> Fixture {
     ));
     let mut app = App::from_directory(&dir);
     app.window_width = WINDOW.width;
+    app.window_height = WINDOW.height;
     app.motion.animate = true;
     let _ = app.update(Message::Navigate(
         Location {
@@ -280,7 +281,7 @@ fn snapshots() {
     shot(app, "search");
     let _ = app.update(Message::ClosePopover);
     let _ = app.update(Message::SelectVerse(21));
-    let _ = app.update(Message::Highlight);
+    let _ = app.update(Message::QuickMark(0, false));
     shot(app, "selected");
     let _ = app.update(Message::ClearSelection);
     let _ = app.update(Message::ToggleLog);
@@ -300,4 +301,114 @@ fn snapshots() {
     let _ = app.update(Message::SetScreen(Screen::Guides));
     let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
     shot(app, "guides");
+    parity_snapshots(app, &shot);
+}
+
+/// The journal, lessons and marks added for web parity.
+fn parity_snapshots(app: &mut App, shot: &dyn Fn(&App, &str)) {
+    use crate::journal_ui::JournalMsg;
+    use crate::lessons_ui::LessonMsg;
+    use crate::marks::{MarkColor, MarkKind};
+    let _ = app.update(Message::Lesson(LessonMsg::Open("2026-10-26".into())));
+    shot(app, "lesson");
+    let jer = Location {
+        volume: "oldtestament".into(),
+        book: "jeremiah".into(),
+        chapter: 31,
+    };
+    let _ = app.update(Message::Lesson(LessonMsg::Dock(jer, Some((1, 3)))));
+    let _ = app.update(Message::Lesson(LessonMsg::DockMark(1)));
+    shot(app, "lesson-dock");
+    let _ = app.update(Message::TogglePopover(Popover::Contents));
+    shot(app, "lesson-contents");
+    let _ = app.update(Message::ClosePopover);
+    let _ = app.update(Message::SetScreen(Screen::Reader));
+    let _ = app.update(Message::SelectVerse(21));
+    let _ = app.update(Message::QuickMark(0, false));
+    let _ = app.update(Message::Mark(
+        MarkKind::Underline,
+        Some(MarkColor::Named("blue")),
+        false,
+    ));
+    let _ = app.update(Message::ToggleStyles);
+    shot(app, "marks-panel");
+    let _ = app.update(Message::ClearSelection);
+    shot(app, "marks");
+    let _ = app.update(Message::SetScreen(Screen::Journal));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
+    shot(app, "journal-home");
+    let _ = app.update(Message::Journal(JournalMsg::New(Some(
+        "What helped you feel closer to God?".into(),
+    ))));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(140)));
+    shot(app, "journal-opening");
+    let _ = app.update(Message::Journal(JournalMsg::Title("Seeds of faith".into())));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
+    shot(app, "journal-note");
+    let _ = app.update(Message::Journal(JournalMsg::Close));
+    let _ = app.update(Message::Journal(JournalMsg::EditGoals));
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(300)));
+    shot(app, "journal-goals");
+    let _ = app.update(Message::Journal(JournalMsg::CancelGoals));
+    let _ = app.update(Message::TogglePopover(Popover::AppSettings));
+    shot(app, "settings-account");
+}
+
+#[test]
+fn the_gear_leads_to_settings_and_sign_in_like_the_website() {
+    let mut f = fixture();
+    let app = &mut f.app;
+    // Signed out, the navigation's gear opens Settings (the website's /account), with no active link.
+    let _ = click_id(app, "nav-settings");
+    assert_eq!(app.screen, Screen::Settings);
+    assert_eq!(header::screen_index(app.screen), None);
+    let _ = app.update(Message::Frame(app.now + Duration::from_millis(400)));
+    let mut ui = simulator(app);
+    assert!(ui.find("Account settings").is_ok());
+    assert!(ui.find("Quick marks").is_ok());
+    drop(ui);
+    let _ = click(app, "Sign in");
+    assert_eq!(app.screen, Screen::SignIn);
+    let mut ui = simulator(app);
+    // The website's card: 448px wide, centered at 1280px (x416), 40px under the header's content line (y120).
+    let card = bounds(&mut ui, "sign-in-card");
+    assert_eq!((card.x, card.y, card.width), (416.0, 120.0, 448.0));
+    assert!(
+        (card.height - 275.0).abs() < 24.0,
+        "card height {}",
+        card.height
+    );
+    assert!(ui.find("Continue with Google").is_ok());
+    assert!(
+        ui.find("New to Verse Together? Continuing with Google creates your account.")
+            .is_ok()
+    );
+    // Google-only, as the production deployment: no invented email or password fields.
+    assert!(ui.find("Password").is_err());
+    assert!(ui.find("Email").is_err());
+}
+
+#[test]
+fn your_bibles_opens_its_catalog_from_reader_settings() {
+    let mut f = fixture();
+    let app = &mut f.app;
+    let _ = app.update(Message::Navigate(
+        Location {
+            volume: "newtestament".into(),
+            book: "john".into(),
+            chapter: 3,
+        },
+        None,
+    ));
+    let _ = app.update(Message::TogglePopover(Popover::ReaderSettings));
+    let messages = click(app, "+ Add Bible");
+    assert!(
+        messages.iter().any(|m| matches!(
+            m,
+            Message::Tools(crate::reader_tools::ToolsMsg::BiblesView(_))
+        )),
+        "{messages:?}"
+    );
+    assert_eq!(app.popover, Some(Popover::ReaderSettings));
+    assert_eq!(app.tools.bibles_view, crate::reader_tools::BiblesView::Add);
 }

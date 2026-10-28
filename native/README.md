@@ -30,18 +30,56 @@ under your user data directory, needs no sudo, and creates no services or autost
   Searches can be scoped to any of the five volumes. The first 100 matches are shown; `100+` means refine the query.
 - Native word selection and copying within a verse. Scripture text is immutable: typing cannot alter it.
 - Click a verse **number** to study it. Shift-click another number to select a range; Ctrl-click (Cmd-click on
-  macOS) adds/removes individual verses. Copy a selected passage, highlight it or bookmark it.
+  macOS) adds/removes individual verses. Copy a selected passage, bookmark it, or add it to a journal note.
+- The website's marks: highlights and underlines in red, yellow, blue, green, pink, purple or a custom `#rrggbb`
+  color, on whole verses or on exactly the words you select (drag across words; a floating bar offers the quick
+  marks, copy, and "add to a journal note"). Quick marks can be renamed, reordered, removed or added from
+  **More styles**; manage them under the navigation's settings. Word ranges are stored in the website's UTF-16
+  offsets, so they mean the same words in both apps, and a mark is never drawn on changed text.
 - **Log** opens the chapter's panel: mark the chapter read and revisit this chapter's notes and marks.
-- Personal plain-text notes on verses, a local journal of notes/marks, and chapter read/unread tracking.
+- Personal notes on verses and chapter read/unread tracking (marking a chapter read also logs today's reading).
   Save a note explicitly or leave the passage: changing selection, chapter, screen, or closing the window saves
   the draft. A failed save displays an error and prevents leaving the draft. Notes on a range attach to its
-  first verse. The journal shows the 1,000 most recently updated marked/annotated verses.
+  first verse.
+- **Journal**, as on the website: a month calendar with entry dots, weekly goals (study days and reflections,
+  Monday–Sunday, editable), this month's study days, the reflection invitation with its prompts, the selected
+  day's entries (Markdown notes, logged readings, and verse notes), and a reflection worth revisiting. Opening a
+  note glides the day's list into the rail. Notes have a title, a Markdown body with preview, an optional source
+  (scripture or lesson) and reading log, and save on leaving, closing or Ctrl+S.
 - Reader settings (gear in the chapter pill): simple mode, the website's 85–130% text-size range in 1% steps, serif/sans, and text width
   (comfortable/wide/full). Appearance (light/dark) is under the navigation's settings gear. Preferences persist;
   profiles from earlier builds keep their notes and move from the old 22px default to the website's 16px.
 - Header animations follow GNOME's "Animations" setting (off = no motion) and only run while a transition is active.
-- The four checked-in Come, Follow Me guides, with section navigation. Recognized scripture links open locally;
-  other HTTP(S) links open in the system browser. These are the repository's stored guides, not a live lesson feed.
+- **Come, Follow Me**, as on the website: this week's lesson from the real 2026 schedule (read from the website's
+  own source), earlier and upcoming published guides with their covers and painting credits, chapter chips, and
+  each lesson's page with its hero, contents, guide text, and log. Verse-by-verse sections and scripture links
+  open the passage in a dock beside the guide, where verses can be marked with the same marks as the reader.
+  The guides are those published in the repository, plus the October 26 guide published upstream on `master`.
+- **Reader study tools**, from the website's own public endpoints (network needed; the scripture itself stays
+  embedded): study-path markers beside verses (AI chapter insights, cached on the website), **Explore** a selected
+  word (Bible Dictionary/Guide/Topical Guide topics matched on this computer and read from the website, Strong's
+  Hebrew and Greek, English dictionaries), **Resources** for selected verses from the published lessons, and for
+  the Bible **Your Bibles** in Reader settings (other translations shown verse by verse beside the KJV with their
+  changed words colored) and the **Joseph Smith Translation** passages for the chapter. Each shows loading and
+  failure states; nothing is invented when a service is unavailable.
+- **Guide prose marks**: drag across words in a Come, Follow Me guide to highlight, underline or note them, with the
+  same quick marks as the reader. Spans are anchored as the website anchors them (block, UTF-16 offsets, quote and
+  context), so they find their words again after edits.
+- **Plans** ("Your study plans" on Come, Follow Me): the account's reading plans with progress, today's chapters,
+  the day-by-day schedule, marking chapters read, deleting a plan, and the website's two quick-start plans.
+- **Copy share link** for selected verses: the website's `/share/...` passage link.
+- **Settings and sign-in**, as the website's `/account` and `/sign-in`: the navigation's gear opens Settings
+  (account, simple mode, appearance, quick marks); signed in, the avatar opens the account menu. "Continue with
+  Google" opens the website in your browser; after you approve there, the app receives its own session through a
+  one-time, PKCE-protected code on `127.0.0.1` (Cancel on the website stops the app waiting). The session is kept
+  in the system keyring, bound to the website, the Convex deployment and this study profile. Signed in: profile
+  name, sign-in methods, sessions ("Sign out other devices"), sync status, and an explicit **Copy this computer's
+  study** into the account (the website's idempotent import; copying again only adds what wasn't copied). Marks,
+  verse notes, guide marks, journal notes, readings, read chapters and goals sync in the background — after
+  changes, every minute while open, and with growing retry delays after failures. This computer's own study stays
+  separate and is never merged or overwritten. **This needs the matching server change (`convex/nativeAuth.ts`,
+  `convex/nativeSync.ts`, the `/native/authorize` page and the `createJournalEntry` revision field) deployed;
+  until then, signing in reports that the server doesn't offer desktop sign-in yet.**
 
 ## Keyboard
 
@@ -49,22 +87,29 @@ under your user data directory, needs no sudo, and creates no services or autost
 | --- | --- |
 | Ctrl/Cmd K | Search |
 | Enter in search | Open the first matching passage |
-| Escape | Close the open header panel, leave simple mode, clear the verse selection, or close Log |
-| Alt Left / Right | Previous / next chapter |
+| Escape | Close the open header panel, close an open journal note (as Back does on the website), dismiss a guide selection, leave simple mode, clear the verse selection, or close Log |
+| Alt Left / Right | Previous / next chapter (Alt Left closes an open journal note) |
 | Ctrl/Cmd J | Journal |
 | Ctrl/Cmd S | Save the current note |
 | Ctrl/Cmd C | Copy selected words in a text field; otherwise copy selected verses |
 
 ## Data
 
-Personal data is local. On Linux it normally lives in `~/.local/share/versetogethernative/` (respecting
-`XDG_DATA_HOME`). `study.sqlite` holds notes, highlights, bookmarks, preferences and read chapters. Back up
+Personal data is local unless you sign in. On Linux it normally lives in `~/.local/share/versetogethernative/`
+(respecting `XDG_DATA_HOME`). `study.sqlite` holds notes, marks, bookmarks, journal notes, readings, preferences
+and read chapters; a signed-in account's synced copy is kept beside this computer's own study and removed from
+this computer when you sign out. Opening a profile from an earlier build upgrades it in one transaction after
+writing a snapshot of the original to `study-before-v<version>.sqlite` (kept; delete it once you are satisfied). Back up
 this file while the app is closed, or back up the entire directory. Do not delete it to update the app.
 The `scriptures-<hash>.sqlite` files are replaceable caches of the embedded dataset. Notes are kept separately
 so updating the embedded corpus does not overwrite them.
 
 `./verse-together --data-dir /path/to/folder` uses a separate study directory. Development and GUI verification
-used isolated temporary data, not your personal notes. There are no cloud credentials or services in the binary.
+used isolated temporary data, not your personal notes. The binary contains no credentials or secrets.
+`VERSE_TOGETHER_SITE` and `VERSE_TOGETHER_CONVEX_URL` point the account at another deployment (for example a
+preview); both must be set together, use https (plain http only for `127.0.0.1`/`localhost`), and a saved session
+is only ever used with the deployment and profile it was made for. `--no-account` (or
+`VERSE_TOGETHER_NO_ACCOUNT=1`) turns sign-in and sync off and never touches the keyring — use it for QA profiles.
 
 ## Build from source
 
@@ -96,7 +141,7 @@ provided. macOS compilation and runtime behavior have not been verified on a Mac
 The Linux package and `package-linux.sh` are for Linux only.
 
 The build script generates a SQLite database and FTS5 index from the existing scripture bundles and navigation
-catalog and embeds it into the executable. The fonts and four study guides are also embedded. `src/icons.rs` is
+catalog and embeds it into the executable. The fonts, the published study guides and the study helps topic index are also embedded. `src/icons.rs` is
 generated from the website's `@fortawesome/free-solid-svg-icons` package by `node native/scripts/generate-icons.mjs`
 (an asset step only; the generated file is checked in and the app has no Node or JavaScript at runtime). Font
 Awesome Free icons are CC BY 4.0; the license ships in `licenses/`. The renderer uses
@@ -108,17 +153,19 @@ The earlier Tauri target remains separate under `src-tauri`; it is not used by t
 
 ## Current scope
 
-This is a working offline native reader and study app, not full web-feature parity. Google sign-in, Convex sync,
-shared/social content, remote translation comparisons, online reference tools, AI insights and the web app's rich
-note editor have not been ported. Local notes do not automatically appear on the website. Accessibility, IME,
-long-form editing, cross-verse word dragging, macOS and Windows builds need further verification before a broad
-release. Native rendering follows the same visual language but is not pixel-identical to browser rendering.
+See `PARITY.md` for the feature-by-feature inventory, including what is partial or not ported (for example the
+custom plan builder, the social feed, cross-paragraph guide selections, in-place JST reading, and the website's
+rich Markdown editor). Account sign-in and sync are implemented and tested against the real Better Auth and
+Convex functions in the repository's test runtime, but need the server change deployed and have not been verified
+against live Google sign-in. Accessibility, IME, long-form editing, cross-verse word dragging, macOS and Windows
+builds need further verification before a broad release. Native rendering follows the same visual language but is
+not pixel-identical to browser rendering.
 
 Use `./verse-together --benchmark --data-dir /tmp/verse-benchmark` for local data initialization, repeated chapter
 reads and FTS queries. These measure the local data path, not end-to-end startup or a comparison with the website.
 See `VERIFICATION.md` for the tested build and observations.
 
-The pinned Tiny Skia renderer has a small local correction for shadow clipping and dirty-region invalidation,
-found during real native testing of the animated header and popovers. Its source and pixel-level regression tests
+The pinned Tiny Skia renderer has small local corrections for shadow clipping, dirty-region invalidation and
+image corner radii, found during real native testing. Its source and pixel-level regression tests
 are checked in under `vendor/iced_tiny_skia`; see its `PATCH.md`. Run those tests with
 `cargo test --manifest-path native/Cargo.toml -p iced_tiny_skia shadow_`.

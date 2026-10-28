@@ -1,20 +1,22 @@
 use crate::design::{self, icon, sans, serif};
 use crate::header::{self, CONTENT_TOP, PILL_HEIGHT, TOP, shell_inset};
 use crate::icons;
+use crate::mark_layer::{self, Run};
+use crate::marks;
 use crate::selectable;
 use crate::store::{self, Location, TextWidth};
-use crate::{App, Message, Popover, Screen, guides};
+use crate::{App, Message, Popover, Screen};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::text::{LineHeight, Wrapping};
 use iced::widget::text_editor::Binding;
 use iced::widget::{
-    button, column, container, markdown, mouse_area, opaque, row, scrollable, slider, space, stack,
-    text, text_editor, text_input,
+    button, column, container, mouse_area, opaque, row, scrollable, slider, space, stack, text,
+    text_editor, text_input,
 };
 use iced::{Alignment::Center, Border, Color, Element, Fill, Font, Length, Padding, font};
 
 /// The study panel beside the reader, and the gap before it.
-const PANEL_WIDTH: f32 = 300.0;
+pub(crate) const PANEL_WIDTH: f32 = 300.0;
 const PANEL_GAP: f32 = 12.0;
 /// The book and chapter picker's scrolling area, and one book row in it (13px label, 7px padding, 1px gap).
 const LIBRARY_HEIGHT: f32 = 416.0;
@@ -131,6 +133,9 @@ impl App {
             Screen::Reader => self.reader(),
             Screen::Journal => self.journal_view(),
             Screen::Guides => self.guides_view(),
+            Screen::Settings => self.settings_view(),
+            Screen::SignIn => self.sign_in_view(),
+            Screen::Plans => self.plans_view(),
         };
         // Stable layers, so opening a panel or animating the header never resets the reader's scroll position:
         // the page, a click-away layer under the header, the header, then panels and notices.
@@ -146,10 +151,13 @@ impl App {
         } else {
             self.header()
         };
-        stack![content, shade, header, self.overlay()]
+        let mut layers = stack![content, shade, header, self.overlay()]
             .width(Fill)
-            .height(Fill)
-            .into()
+            .height(Fill);
+        if self.motion.is_animating(self.now) || self.journal.motion.is_animating(self.now) {
+            layers = layers.push(crate::ticker::ticker());
+        }
+        layers.into()
     }
 
     fn overlay(&self) -> Element<'_, Message> {
@@ -160,7 +168,9 @@ impl App {
                 Popover::Search => (self.search_view(), 352.0, true),
                 Popover::Library | Popover::Chapters => (self.library_view(), 600.0, true),
                 Popover::ReaderSettings => (self.reader_settings(), 384.0, true),
-                Popover::AppSettings => (self.app_settings(), 280.0, false),
+                Popover::AppSettings => (self.account_menu(), 256.0, false),
+                Popover::Contents => (self.contents_panel(), 380.0, true),
+                Popover::LessonLog => (self.lesson_log_panel(), 340.0, true),
             };
             let inset = shell_inset(self.window_width);
             layers = layers.push(
@@ -221,6 +231,35 @@ impl App {
                     .align_y(Vertical::Bottom),
             );
         }
+        if self.screen == crate::Screen::Guides
+            && let Some(bar) = self.guide_bar()
+        {
+            layers = layers.push(
+                container(opaque(bar))
+                    .padding(24)
+                    .width(Fill)
+                    .height(Fill)
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Bottom),
+            );
+        }
+        if self.screen == crate::Screen::Reader
+            && let Some(bar) = self.word_bar()
+        {
+            layers = layers.push(
+                container(opaque(bar))
+                    .padding(Padding {
+                        top: 0.0,
+                        right: 24.0,
+                        bottom: if self.error.is_some() { 84.0 } else { 24.0 },
+                        left: 24.0,
+                    })
+                    .width(Fill)
+                    .height(Fill)
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Bottom),
+            );
+        }
         if let Some(error) = &self.error {
             layers = layers.push(
                 container(opaque(
@@ -249,7 +288,7 @@ impl App {
         layers.into()
     }
 
-    fn scroll<'a>(
+    pub(crate) fn scroll<'a>(
         &self,
         content: impl Into<Element<'a, Message>>,
     ) -> iced::widget::Scrollable<'a, Message> {
@@ -306,7 +345,8 @@ impl App {
         };
         let gutter = (self.window_width * 0.026).clamp(16.0, 32.0);
         let side = self.reader_side();
-        let panel_open = (!self.selected.is_empty() || self.log_open) && !self.focus;
+        let panel_open = (!self.selected.is_empty() || self.log_open || self.tools.panel.is_some())
+            && !self.focus;
         let mut page = column![];
         let top = if self.focus {
             // Simple mode: the wordmark alone, scrolling with the page, as on the website.
@@ -334,7 +374,7 @@ impl App {
         let reader = self.scroll(page).id("reader").width(Fill).height(Fill);
         // Both slots are always present so opening study tools never discards the reader's scroll state.
         let panel: Element<'_, Message> = if panel_open {
-            container(self.study_panel())
+            container(self.tools_panel().unwrap_or_else(|| self.study_panel()))
                 .padding(Padding {
                     top: CONTENT_TOP,
                     right: self.panel_inset(),
@@ -360,10 +400,32 @@ impl App {
         let p = self.p();
         let selected = self.selected.contains(&number);
         let annotation = self.annotations.iter().find(|a| a.verse == number);
-        let highlighted = annotation.is_some_and(|a| a.highlighted);
+        let dark = self.preferences.dark;
+        // Highlights and underlines are painted under the words, on exactly the marked text.
+        let runs: Vec<Run> = match annotation.filter(|a| a.is_marked()) {
+            Some(a) => {
+                let verse_text = &self.verses[index].text;
+                let mut runs = vec![Run {
+                    text: self.verse_prefix[index].clone(),
+                    highlight: None,
+                    underline: None,
+                }];
+                runs.extend(
+                    marks::segments(&a.marks, verse_text)
+                        .into_iter()
+                        .map(|s| Run {
+                            text: verse_text[s.start..s.end].to_string(),
+                            highlight: s.highlight.map(|c| c.highlight(dark)),
+                            underline: s.underline.map(|c| c.underline(dark)),
+                        }),
+                );
+                runs
+            }
+            None => vec![],
+        };
         let bookmarked = annotation.is_some_and(|a| a.bookmarked);
         let has_note = annotation.is_some_and(|a| !a.note.trim().is_empty());
-        let words = selectable::paragraph(
+        let words = selectable::paragraph(mark_layer::marks(
             text_editor(&self.verse_content[index])
                 .font(font)
                 .size(size)
@@ -392,7 +454,11 @@ impl App {
                     selection: Color { a: 0.55, ..p.gold },
                 })
                 .into(),
-        );
+            runs,
+            font,
+            size,
+            line,
+        ));
         let label = number.to_string();
         let digits_width = design::measure(&label, BADGE_SIZE, badge_font());
         let mut badge = column![
@@ -430,23 +496,32 @@ impl App {
         if has_note {
             markers = markers.push(icon(&icons::NOTE_STICKY, p.muted, 12.));
         }
-        let marker_slot = if bookmarked || has_note {
-            container(markers).padding(Padding::ZERO.left(8).top((line - 12.0) / 2.0))
+        let path_marker = self.path_marker(number);
+        let has_path = path_marker.is_some();
+        if let Some(marker) = path_marker {
+            markers = markers.push(marker);
+        }
+        let marker_slot = if bookmarked || has_note || has_path {
+            container(markers).padding(
+                Padding::ZERO
+                    .left(8)
+                    .top(((line - 12.0) / 2.0 - if has_path { 8.0 } else { 0.0 }).max(0.0)),
+            )
         } else {
             container(space()).width(0)
         };
-        container(row![stack![words, number_button], marker_slot].align_y(iced::Alignment::Start))
+        let verse_line =
+            row![stack![words, number_button], marker_slot].align_y(iced::Alignment::Start);
+        let body: Element<'_, Message> = match self.verse_extras(number, &self.verses[index].text) {
+            Some(extras) => column![verse_line, extras].spacing(6).into(),
+            None => verse_line.into(),
+        };
+        container(body)
             .id(format!("verse-{number}"))
             .padding([8, 12])
             .width(Fill)
             .style(move |_| container::Style {
-                background: if highlighted {
-                    Some(p.gold.into())
-                } else if selected {
-                    Some(p.hover.into())
-                } else {
-                    None
-                },
+                background: if selected { Some(p.hover.into()) } else { None },
                 border: Border {
                     radius: 6.0.into(),
                     color: if selected { p.rule } else { Color::TRANSPARENT },
@@ -557,11 +632,7 @@ impl App {
                     ..Default::default()
                 }),
             );
-            let marked: Vec<_> = self
-                .annotations
-                .iter()
-                .filter(|a| a.highlighted || a.bookmarked || !a.note.trim().is_empty())
-                .collect();
+            let marked: Vec<_> = self.annotations.iter().filter(|a| !a.is_empty()).collect();
             if marked.is_empty() {
                 panel = panel.push(
                     text("No notes or marks in this chapter.")
@@ -579,7 +650,20 @@ impl App {
                     ]
                     .spacing(6)
                     .align_y(Center);
-                    if a.highlighted {
+                    for (kind, color) in [
+                        (marks::MarkKind::Highlight, a.marks.highlight.as_ref()),
+                        (marks::MarkKind::Underline, a.marks.underline.as_ref()),
+                    ] {
+                        if let Some(color) = color {
+                            title = title.push(crate::view_marks::sample(
+                                kind,
+                                color,
+                                self.preferences.dark,
+                                p.ink,
+                            ));
+                        }
+                    }
+                    if !a.marks.text_marks.is_empty() {
                         title = title.push(icon(&icons::HIGHLIGHTER, p.accent, 12.));
                     }
                     if a.bookmarked {
@@ -664,26 +748,41 @@ impl App {
                         Message::Copy
                     ),
                     action(
-                        &icons::HIGHLIGHTER,
-                        if self.selection_marked(false) {
-                            "Remove highlight"
-                        } else {
-                            "Highlight"
-                        },
-                        Message::Highlight
-                    ),
-                    action(
                         &icons::BOOKMARK,
-                        if self.selection_marked(true) {
+                        if self.selection_bookmarked() {
                             "Remove bookmark"
                         } else {
                             "Bookmark"
                         },
                         Message::Bookmark
                     ),
+                    action(
+                        &icons::PEN_TO_SQUARE,
+                        "Add to a journal note",
+                        Message::VersesInJournal
+                    ),
+                    action(
+                        &icons::BOOK_BIBLE,
+                        "Resources · Lessons & more",
+                        Message::Tools(crate::reader_tools::ToolsMsg::Resources)
+                    ),
+                    action(
+                        if self.copied_link {
+                            &icons::CHECK
+                        } else {
+                            &icons::SHARE_NODES
+                        },
+                        if self.copied_link {
+                            "Share link copied"
+                        } else {
+                            "Copy share link"
+                        },
+                        Message::CopyShareLink
+                    ),
                 ]
                 .spacing(2),
             );
+            panel = panel.push(self.mark_tools(false));
             let first = self.selected.first().copied().unwrap_or(1);
             panel = panel.push(
                 text(if self.selected.len() > 1 {
@@ -1022,7 +1121,10 @@ impl App {
             .into()
     }
 
-    fn setting_label<'a>(&self, label: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+    pub(crate) fn setting_label<'a>(
+        &self,
+        label: impl text::IntoFragment<'a>,
+    ) -> Element<'a, Message> {
         text(label)
             .size(12)
             .font(sans(font::Weight::Medium))
@@ -1030,7 +1132,7 @@ impl App {
             .into()
     }
 
-    fn segmented<'a, T: Copy + PartialEq + 'a>(
+    pub(crate) fn segmented<'a, T: Copy + PartialEq + 'a>(
         &self,
         options: &[(T, &'static str)],
         current: T,
@@ -1161,199 +1263,14 @@ impl App {
                 ]
                 .spacing(8),
             ]
+            .push(match self.bibles_settings() {
+                Some(b) => Element::from(column![rule(), b].spacing(16)),
+                None => space().height(0).into(),
+            })
             .spacing(16),
         )
         .padding(14)
         .style(design::popover(p))
-        .into()
-    }
-
-    fn app_settings(&self) -> Element<'_, Message> {
-        let p = self.p();
-        container(
-            column![
-                self.setting_label("Appearance"),
-                self.segmented(
-                    &[(false, "Light"), (true, "Dark")],
-                    self.preferences.dark,
-                    Message::SetDark
-                )
-            ]
-            .spacing(8),
-        )
-        .padding(14)
-        .style(design::popover(p))
-        .into()
-    }
-
-    fn journal_view(&self) -> Element<'_, Message> {
-        let p = self.p();
-        let mut contents = column![
-            text("Journal").font(serif()).size(40),
-            text("Thoughts, passages, and things worth remembering.")
-                .font(serif())
-                .size(19)
-                .color(p.muted),
-            space::vertical().height(12),
-            container(space())
-                .height(1)
-                .width(Fill)
-                .style(move |_| container::Style {
-                    background: Some(p.rule.into()),
-                    ..Default::default()
-                })
-        ]
-        .spacing(10);
-        if self.journal.is_empty() {
-            contents = contents
-                .push(space::vertical().height(28))
-                .push(text("Make room for a thought.").font(serif()).size(26))
-                .push(
-                    text("Select a verse number in the reader to add a note, highlight, or bookmark.")
-                        .size(15)
-                        .color(p.muted),
-                )
-                .push(
-                    button(text("Open the reader").size(13))
-                        .padding([10, 16])
-                        .style(design::active(p))
-                        .on_press(Message::SetScreen(Screen::Reader)),
-                );
-        }
-        for entry in &self.journal {
-            let mut marks = row![
-                text(&entry.reference)
-                    .font(serif())
-                    .size(22)
-                    .color(p.accent),
-                space::horizontal()
-            ]
-            .spacing(10)
-            .align_y(Center);
-            if entry.bookmarked {
-                marks = marks.push(icon(&icons::BOOKMARK, p.accent, 14.));
-            }
-            if entry.highlighted {
-                marks = marks.push(icon(&icons::HIGHLIGHTER, p.accent, 14.));
-            }
-            let mut item = column![
-                marks,
-                text(&entry.text)
-                    .font(serif())
-                    .size(17)
-                    .line_height(1.6)
-                    .color(p.muted)
-            ]
-            .spacing(10);
-            if !entry.note.trim().is_empty() {
-                item = item.push(text(&entry.note).size(15).line_height(1.5));
-            }
-            contents = contents.push(
-                button(item)
-                    .padding(18)
-                    .width(Fill)
-                    .style(design::quiet(p))
-                    .on_press(Message::Navigate(entry.location.clone(), Some(entry.verse))),
-            );
-        }
-        self.scroll(
-            container(contents.max_width(820))
-                .padding(Padding {
-                    top: CONTENT_TOP + 12.0,
-                    right: 24.0,
-                    bottom: 64.0,
-                    left: 24.0,
-                })
-                .center_x(Fill),
-        )
-        .id("journal")
-        .height(Fill)
-        .into()
-    }
-
-    fn guides_view(&self) -> Element<'_, Message> {
-        let p = self.p();
-        let mut sidebar = column![
-            text("Come, Follow Me")
-                .size(12)
-                .font(sans(font::Weight::Medium))
-                .color(p.muted),
-            space::vertical().height(4)
-        ]
-        .spacing(6);
-        for (i, guide) in guides::GUIDES.iter().enumerate() {
-            let chosen = i == self.guide;
-            let b = button(
-                column![
-                    text(guide.title).size(13),
-                    text(guide.date)
-                        .size(11)
-                        .color(if chosen { p.paper } else { p.muted })
-                ]
-                .spacing(4),
-            )
-            .padding([9, 12])
-            .width(Fill)
-            .on_press(Message::Guide(i));
-            sidebar = sidebar.push(if chosen {
-                b.style(design::active(p))
-            } else {
-                b.style(design::quiet(p))
-            });
-        }
-        sidebar = sidebar.push(space::vertical().height(12)).push(
-            text("In this guide")
-                .size(12)
-                .font(sans(font::Weight::Medium))
-                .color(p.muted),
-        );
-        for (i, (title, _)) in self.guide_sections.iter().enumerate() {
-            sidebar = sidebar.push(
-                button(text(title).size(13).color(if i == self.section {
-                    p.accent
-                } else {
-                    p.ink
-                }))
-                .padding([7, 10])
-                .width(Fill)
-                .style(design::quiet(p))
-                .on_press(Message::Section(i)),
-            );
-        }
-        let mut style = markdown::Style::from(self.theme());
-        style.font = serif();
-        style.link_color = p.accent;
-        let mut guide_settings = markdown::Settings::with_text_size(18, style);
-        guide_settings.h1_size = 32.into();
-        guide_settings.h2_size = 26.into();
-        let guide = markdown::view(&self.markdown, guide_settings)
-            .map(|uri| Message::OpenLink(uri.to_string()));
-        let document = column![
-            text(guides::GUIDES[self.guide].date)
-                .size(12)
-                .color(p.accent),
-            guide,
-            space::vertical().height(30)
-        ]
-        .spacing(18)
-        .max_width(860);
-        let inset = shell_inset(self.window_width);
-        container(
-            row![
-                container(self.scroll(sidebar)).width(250).height(Fill),
-                self.scroll(container(document).center_x(Fill).padding([0, 24]))
-                    .id("guide")
-                    .height(Fill)
-            ]
-            .spacing(20)
-            .height(Fill),
-        )
-        .padding(Padding {
-            top: CONTENT_TOP,
-            right: inset,
-            bottom: 0.0,
-            left: inset,
-        })
         .into()
     }
 }

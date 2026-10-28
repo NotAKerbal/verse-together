@@ -19,8 +19,9 @@ pub struct Surface {
         Box<dyn compositor::Window>,
     >,
     clip_mask: tiny_skia::Mask,
-    layer_stack: VecDeque<Vec<Layer>>,
-    background_color: Color,
+    /// Each recent frame's layers and the background it was cleared with, newest first. Local correction: the
+    /// background is kept per frame, as a buffer of age 2 or more may still show an earlier background.
+    layer_stack: VecDeque<(Vec<Layer>, Color)>,
     max_age: u8,
 }
 
@@ -71,7 +72,6 @@ impl crate::graphics::Compositor for Compositor {
             window,
             clip_mask: tiny_skia::Mask::new(1, 1).expect("Create clip mask"),
             layer_stack: VecDeque::new(),
-            background_color: Color::BLACK,
             max_age: 0,
         };
 
@@ -173,26 +173,21 @@ pub fn present(
         }
     };
 
-    let damage = last_layers
-        .and_then(|last_layers| {
-            (surface.background_color == background_color).then(|| {
-                damage::diff(
-                    last_layers,
-                    renderer.layers(),
-                    |layer| vec![layer.bounds],
-                    Layer::damage,
-                )
-            })
-        })
-        .unwrap_or_else(|| vec![Rectangle::with_size(viewport.logical_size())]);
+    let damage = frame_damage(
+        last_layers,
+        renderer.layers(),
+        background_color,
+        Rectangle::with_size(viewport.logical_size()),
+    );
 
     if damage.is_empty() {
         if let Some(last_layers) = last_layers {
             surface.layer_stack.push_front(last_layers.clone());
         }
     } else {
-        surface.layer_stack.push_front(renderer.layers().to_vec());
-        surface.background_color = background_color;
+        surface
+            .layer_stack
+            .push_front((renderer.layers().to_vec(), background_color));
 
         let damage = damage::group(
             damage,
@@ -217,6 +212,27 @@ pub fn present(
 
     on_pre_present();
     buffer.present().map_err(|_| compositor::SurfaceError::Lost)
+}
+
+/// What must be redrawn in a buffer last drawn as `last`: the layers' differences, or everything when there is no
+/// earlier frame or it was cleared with another background (a theme change).
+fn frame_damage(
+    last: Option<&(Vec<Layer>, Color)>,
+    layers: &[Layer],
+    background_color: Color,
+    viewport: Rectangle,
+) -> Vec<Rectangle> {
+    last.and_then(|(last_layers, last_background)| {
+        (*last_background == background_color).then(|| {
+            damage::diff(
+                last_layers,
+                layers,
+                |layer| vec![layer.bounds],
+                Layer::damage,
+            )
+        })
+    })
+    .unwrap_or_else(|| vec![viewport])
 }
 
 pub fn screenshot(
@@ -265,4 +281,26 @@ pub fn screenshot(
             acc
         },
     )
+}
+
+#[cfg(test)]
+mod background_damage_regression_tests {
+    use super::*;
+
+    #[test]
+    fn an_older_buffer_cleared_with_another_background_is_redrawn_whole() {
+        let viewport = Rectangle::with_size(crate::core::Size::new(64.0, 48.0));
+        let dark = Color::from_rgb(0.09, 0.09, 0.08);
+        let light = Color::from_rgb(0.96, 0.95, 0.93);
+        let layers: Vec<Layer> = Vec::new();
+        // Same background, same layers: nothing to redraw.
+        assert!(frame_damage(Some(&(layers.clone(), light)), &layers, light, viewport).is_empty());
+        // A buffer last drawn in the dark theme must be repainted entirely in the light one, even when it is two
+        // frames old and the newest frame already used the light background.
+        assert_eq!(
+            frame_damage(Some(&(layers.clone(), dark)), &layers, light, viewport),
+            vec![viewport]
+        );
+        assert_eq!(frame_damage(None, &layers, light, viewport), vec![viewport]);
+    }
 }
