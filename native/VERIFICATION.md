@@ -1,3 +1,101 @@
+# Independent date-picker and entry-recovery acceptance — October 28, 2026
+
+Reviewed the native follow-up on `d985baa`: migration/backup, transactional note creation and draft removal,
+owner switching/sign-out, autosave scheduling, nested popup events and shared plan-calendar extraction.
+**Passed independently:** 196 native tests (1 optional exporter ignored), strict all-target clippy, format,
+whitespace and locked release build. Vendored renderer unchanged; its 5 tests passed at `d985baa`.
+Logs `/tmp/verse-journal-final-{tests,clippy,release}.log`. Final binary SHA-256:
+`d93d711f1195def74b1414552bd0d18388e15b37c3d4f9c1c764956501a937a7`.
+
+**Passed in the actual final release window:** copied the earlier real-UI QA profile to
+`/tmp/verse-journal-final-rootqa`, launched with `--no-account`. Its one original note survived v5→v6, and
+`study-before-v6.sqlite` remained at v5 with that note. Opened New entry, typed leading/trailing whitespace and
+bold Markdown, opened the Day calendar and picked October 22. The autosaved copy held the exact text and day.
+Force-closed only the exact validated test PID, restarted, and saw the recovered composer. Save entry created
+one new note on October 22 with exact Markdown; the original note was unchanged and recovery-row count was zero.
+The QA window was closed normally. Calendar evidence: `/tmp/verse-journal-calendar-reviewed.png`.
+No account, keyring, backend or production write; fresh account recovery, macOS/Windows and accessibility remain
+not run. Font/list-editor differences and keyboard-focus limitations are described below and in `PARITY.md`.
+
+# Journal date pickers and crash-safe new entry — October 28, 2026 (Claude, implementation)
+
+Base `d985baa` (`t3/rust-desktop-app`), uncommitted tree; for independent review. Scope `native/` only. Two gaps
+left by the Journal fidelity pass, closed:
+
+## What changed
+
+- **Date fields with calendars.** The plan builder's `<input type="date">` calendar moved, unchanged in look, into
+  `date_picker.rs` (`Calendar`, typed-date parsing, the calendar view, its keys, the button inside the field); the
+  builder now uses it, and so do the new entry's **Day** and the reading editor's **Read on**. Typing still works
+  (only a whole, real date with a four-digit year; `02/30/2027`, `10/28/26` are refused as before). The calendar
+  opens from its button or Alt+Down/F4 in the focused field; arrows, Page Up/Down, Enter choose; Today; Clear only
+  for Read on (Day is required, as on the website, so Chrome-style Clear is not offered). Field padding grew on the
+  right for the button; nothing else in the Journal's layout moved.
+- **`popup.rs`.** Panels may hold popups of their own (the Read on calendar inside the reading editor; innermost
+  takes events first). `Escape::Hold` captures Escape and lets the app close things in order (calendar, then
+  reading editor, then note); the reading editor uses it too. `capture_outside` keeps the press that dismisses a
+  calendar from reaching what is under it. `on_open` opens from the keyboard while the anchor's field has focus.
+- **Crash-safe new entry.** Schema **v6** adds `entry_drafts(owner, draft, updated)` (backup
+  `study-before-v6.sqlite` first, as every upgrade). The composer is written there for its owner only on the
+  existing autosave tick after it changed (`entry_unkept`; no timer while idle; no write per key), and shown again
+  on the next start (this computer's at once, an account's when its session begins). `Store::save_entry` writes
+  the note and deletes the copy in one transaction; a copy whose note id already exists is dropped instead of
+  offered. Emptying the entry deletes the copy. `keep_entry_draft` (close, owner switch, sign-out — still called
+  before the owner changes and before unsent changes are counted) saves a written entry as that day's note under
+  its owner exactly as before, now atomically with its copy, and reads a copy not yet shown first so none is left
+  behind; failures return false and keep the text and the current owner. `forget_owner` also removes the account's
+  copy. Nothing in sync, revisions, the outbox, read-only guards, cloud auth or float normalization changed.
+
+## Checks (final tree)
+
+| Check | Command / procedure | Result |
+| --- | --- | --- |
+| Native tests | `cargo test --manifest-path native/Cargo.toml --locked` | **Passed**: 196 (1 optional exporter ignored); 13 new |
+| New regressions | `journal_tests` (6: forced-quit recovery and exactly-once save; close/hide/emptying; normal close → one note, no copy; failed keep and failed Save entry retry; Day calendar, keyboard, invalid dates; Alt+Down open in the headless UI, outside press doesn't reach the composer's Close, Today chosen inside not the page's, Read on Clear, Escape order), `account::tests` (2: recovered entry per owner, sign-out still asks; failed save keeps owner), `store::tests` (3: v5→v6 upgrade with notes/marks/backup, per-owner keep and atomic save, failed save keeps copy), `date_picker::tests` (2) | **Passed**; mutation checks: turning off `capture_outside` fails the click-through test, removing the atomic delete fails two journal tests |
+| Clippy / format / whitespace | `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check` | **Passed** |
+| Release notes current | `node native/scripts/generate-release-notes.mjs --check` | **Passed** |
+| Release build | `cargo build --manifest-path native/Cargo.toml --locked --release` (3m37s) | **Passed**; sha256 `d93d711f…937a7`, the binary used below |
+| Renderer tests | not rerun: `vendor/iced_tiny_skia` unchanged | **Not run** (5 passed at `d985baa`) |
+| Plan calendar snapshot | `ui_tests::snapshots` (optional exporter) | **Not run**; the builder's calendar code was moved, not restyled; plan tests pass |
+
+## Real desktop check (release builds, Linux Computer Use, `--no-account`, own `--data-dir` under `/tmp/verse-journal-dates-1028`)
+
+Evidence (screenshots, DB dumps): `/tmp/verse-journal-dates-1028/`.
+
+- **Before (`d985baa` build, `profile-before`):** Day and Read on were plain text fields (`before-composer-day.png`,
+  `before-read-on.png`). Text typed in the new entry, then `kill -9` of that exact PID: after restart the text was
+  gone (`before-typed-before-kill.png`, `before-after-kill-lost.png`; profile v5, 0 notes).
+- **Upgrade:** the new build on a copy of that v5 profile (one note) → v6, the note kept, `study-before-v6.sqlite`
+  at v5 with the note.
+- **Day calendar:** button opened it above the field (no room below) on October with the day filled, Today, no
+  Clear (`after-day-calendar-open.png`); previous-month arrow → September; clicking Sep 20 set `09/20/2026` and the
+  editor under the click did not take focus. Click in the field, Alt+Down opened it on the 20th; → and Page Down
+  moved to Oct 21; Enter chose `10/21/2026` and did not save the entry. Alt+Down then Escape closed it with the
+  composer and field focus kept. With it open, a click on the composer's Close only closed the calendar.
+- **Read on calendar (nested):** composer → Log reading → the field's button opened the calendar over the reading
+  editor with Clear and Today (`after-read-on-calendar-open.png`); Escape closed only the calendar; reopened, Oct 19
+  chosen — the "Whole chapter" segment under the click stayed unselected; Log reading set the entry's reading
+  (1 Nephi 1:1) and Day `10/19/2026`.
+- **Forced quit and recovery:** entry `"  Leading spaces kept\n\n**Bold** line with trailing spaces   \n\nLast line"`
+  with the prompt, the reading and Day 10/19; after the autosave tick the row held exactly that
+  (`kept-row-before-kill.txt`); `kill -9` of the validated PID; restart showed the same prompt, reading chip, text
+  and Day, and the day's list still one entry (`after-recovered-top.png`, `after-recovered-day.png`). Save entry
+  opened Mon Oct 19 with "Reading logged" (`after-saved-entry.png`); the DB had 2 notes, the new one with the
+  draft's id and the exact Markdown, 0 copies (`db-after-save.txt`). `kill -9` again, restart: no composer; Write
+  a reflection opened an empty one (`after-restart-after-save.png`).
+- **Typed validation:** `02/30/2027` → "Choose a day for this entry.", nothing saved (`after-invalid-day.png`).
+- Text removed, window closed normally: final DB 2 notes, 0 copies (`db-final.txt`). All test windows closed; the
+  desktop service left running.
+
+## Not run / remaining
+
+- Account recovery was checked by tests only (no sign-in in this pass). Known consequence of keeping the d985baa
+  owner-switch rule: a crash-recovered entry of this computer's own study, followed by an account session restored
+  at startup, is saved as a note of this computer's study when the owner switches (kept, never copied to the
+  account, but no longer an unsaved entry). macOS/Windows, screen readers and IMEs not
+  run. The optional blank-list Enter difference (CodeMirror makes a two-item list loose before ending it) and the
+  caption italic/letter-spacing are unchanged: not small enough to match exactly here.
+
 # Independent Journal review — October 28, 2026
 
 Reviewed the Claude Journal pass on desktop base `8a9acc6`, including one-document editing, composer

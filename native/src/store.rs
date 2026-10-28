@@ -609,6 +609,23 @@ pub struct NoteSaved {
     /// draft and the published note was left as it is.
     pub read_only: bool,
 }
+/// The journal's unsaved new entry (the website's `EntryDraft`), kept for its owner until Save entry makes it a note
+/// so that it survives the app being stopped. `id` is the note it becomes: saving it removes this copy in the same
+/// transaction, so a retry after a crash can never save it twice.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EntryDraft {
+    pub id: String,
+    /// The whole entry as Markdown, exactly as written.
+    pub text: String,
+    /// The Day field as typed (`MM/DD/YYYY`, possibly unfinished).
+    pub day: String,
+    pub journal_date: String,
+    pub source: Option<NoteSource>,
+    pub reading_at: Option<i64>,
+    pub prompt: Option<String>,
+    /// The reader chose the day or the reading themselves.
+    pub edited: bool,
+}
 /// Whether an account note can be changed here: the website edits drafts only (`JournalNoteEditor`'s `readOnly`),
 /// and the server refuses edits to any other status (`nativeSync:saveJournalNote`).
 pub fn status_is_read_only(status: &str) -> bool {
@@ -624,7 +641,7 @@ pub struct Store {
     owner: String,
 }
 /// The study database's layout version (`PRAGMA user_version`).
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 const SCHEMA_V2: &str = "
   CREATE TABLE IF NOT EXISTS preferences(id INTEGER PRIMARY KEY CHECK(id=1), json TEXT NOT NULL);
   CREATE TABLE annotations_v2(owner TEXT NOT NULL DEFAULT '', volume TEXT NOT NULL, book TEXT NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL,
@@ -683,6 +700,11 @@ const SCHEMA_V5: &str = "
   CREATE TABLE IF NOT EXISTS note_status(owner TEXT NOT NULL DEFAULT '', remote_id TEXT NOT NULL, status TEXT NOT NULL,
     PRIMARY KEY(owner, remote_id));
 ";
+/// Version 6: the journal's unsaved new entry, one per owner, so text written in it survives the app being stopped
+/// before it is saved (`EntryDraft`). It is never a note and never syncs.
+const SCHEMA_V6: &str = "
+  CREATE TABLE IF NOT EXISTS entry_drafts(owner TEXT NOT NULL PRIMARY KEY, draft TEXT NOT NULL, updated INTEGER NOT NULL);
+";
 fn columns(connection: &Connection, table: &str) -> Result<Vec<String>> {
     let mut stmt = connection
         .prepare(&format!("PRAGMA table_info({table})"))
@@ -710,6 +732,7 @@ fn migrate(study: &mut Connection, directory: &Path) -> Result<()> {
         "notes",
         "reading_log",
         "guide_marks",
+        "entry_drafts",
     ] {
         if !columns(study, table)?.is_empty() {
             has_data |= study
@@ -768,6 +791,7 @@ fn migrate(study: &mut Connection, directory: &Path) -> Result<()> {
     }
     tx.execute_batch(SCHEMA_V4).map_err(error)?;
     tx.execute_batch(SCHEMA_V5).map_err(error)?;
+    tx.execute_batch(SCHEMA_V6).map_err(error)?;
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)
         .map_err(error)?;
     tx.commit().map_err(error)
@@ -827,6 +851,115 @@ fn note_status_in(c: &Connection, owner: &str, id: &str) -> Result<String> {
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok("draft".into()),
         Err(e) => Err(error(e)),
     }
+}
+/// Writes a journal note for `owner` inside `tx` (`Store::save_note`).
+fn note_in(
+    tx: &rusqlite::Transaction<'_>,
+    owner: &str,
+    account: bool,
+    note: &Note,
+) -> Result<NoteSaved> {
+    let source = source_json(note.source.as_ref())?;
+    let title = note.title.trim().to_string();
+    let existing = match tx.query_row(
+        &format!("SELECT {NOTE_COLUMNS},deleted FROM notes WHERE owner=?1 AND id=?2"),
+        params![owner, note.id],
+        |r| Ok((read_note(r)?, r.get::<_, bool>(9)?)),
+    ) {
+        Ok(row) => Some(row),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(e) => return Err(error(e)),
+    };
+    // Another owner's row with this id is never touched.
+    let taken = existing.is_none()
+        && tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM notes WHERE id=?1)",
+                [&note.id],
+                |r| r.get::<_, bool>(0),
+            )
+            .map_err(error)?;
+    // A published (or archived) note is never changed here: the account refuses it, and its text may be shared.
+    // Text written in it is kept as a separate draft on the same day instead.
+    let read_only = match &existing {
+        Some((stored, false)) if status_is_read_only(&note_status_in(tx, owner, &note.id)?) => {
+            let text = stored.title != title || stored.body != note.body;
+            if !text {
+                let meta = stored.journal_date != note.journal_date
+                    || stored.source != note.source
+                    || stored.reading_at != note.reading_at;
+                if meta {
+                    return Err("Published notes can't be changed.".into());
+                }
+                return Ok(NoteSaved {
+                    id: note.id.clone(),
+                    rev: stored.rev,
+                    forked: false,
+                    read_only: false,
+                });
+            }
+            true
+        }
+        _ => false,
+    };
+    let rev = next_rev(tx)?;
+    let stale = existing
+        .as_ref()
+        .is_some_and(|(stored, deleted)| *deleted || stored.rev != note.rev);
+    let saved = if read_only {
+        // The copy doesn't log the reading again: the published note keeps it.
+        let id = new_id();
+        tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,NULL,?7,?7,?8,?9,?8,?8,?10)",
+            params![id, owner, title, note.body, note.journal_date, source, now(), account, rev, new_id()]).map_err(error)?;
+        NoteSaved {
+            id,
+            rev,
+            forked: true,
+            read_only: true,
+        }
+    } else if taken || stale {
+        let id = new_id();
+        tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?8,?9,?10,?9,?9,?11)",
+            params![id, owner, title, note.body, note.journal_date, source, note.reading_at, now(), account, rev, new_id()]).map_err(error)?;
+        NoteSaved {
+            id,
+            rev,
+            forked: existing.is_some() || taken,
+            read_only: false,
+        }
+    } else if let Some((stored, _)) = &existing {
+        let body = stored.title != title || stored.body != note.body;
+        let meta = stored.journal_date != note.journal_date
+            || stored.source != note.source
+            || stored.reading_at != note.reading_at;
+        if !body && !meta {
+            return Ok(NoteSaved {
+                id: note.id.clone(),
+                rev: stored.rev,
+                forked: false,
+                read_only: false,
+            });
+        }
+        tx.execute("UPDATE notes SET title=?3, body=?4, journal_date=?5, source=?6, reading_at=?7, updated=?8, rev=?9,
+                body_dirty=body_dirty|?10, meta_dirty=meta_dirty|?11, dirty=dirty|?10|?11 WHERE owner=?1 AND id=?2",
+            params![owner, note.id, title, note.body, note.journal_date, source, note.reading_at, now(), rev, account && body, account && meta]).map_err(error)?;
+        NoteSaved {
+            id: note.id.clone(),
+            rev,
+            forked: false,
+            read_only: false,
+        }
+    } else {
+        tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?10,?10,?12)",
+            params![note.id, owner, title, note.body, note.journal_date, source, note.reading_at, note.created, now(), account, rev, new_id()]).map_err(error)?;
+        NoteSaved {
+            id: note.id.clone(),
+            rev,
+            forked: false,
+            read_only: false,
+        }
+    };
+    Ok(saved)
 }
 fn source_json(source: Option<&NoteSource>) -> Result<Option<String>> {
     source.map(serde_json::to_string).transpose().map_err(error)
@@ -1236,6 +1369,14 @@ impl Store {
     /// Saves a note from an editor that loaded it at `note.rev`. If the stored note changed since (a sync brought
     /// an edit made elsewhere), that edit is kept and this text is saved as a separate note on the same day.
     pub fn save_note(&mut self, note: &Note) -> Result<NoteSaved> {
+        self.write_note(note, false)
+    }
+    /// Save entry: the unsaved new entry becomes this note, and its recovery copy (`entry_draft`) is removed in the
+    /// same transaction. Either both happen or neither does.
+    pub fn save_entry(&mut self, note: &Note) -> Result<NoteSaved> {
+        self.write_note(note, true)
+    }
+    fn write_note(&mut self, note: &Note, entry: bool) -> Result<NoteSaved> {
         if note.title.chars().count() > NOTE_TITLE_MAX {
             return Err(format!("Keep the title to {NOTE_TITLE_MAX} characters."));
         }
@@ -1243,111 +1384,62 @@ impl Store {
             return Err("This note is too long to save.".into());
         }
         let account = self.is_account();
-        let source = source_json(note.source.as_ref())?;
-        let title = note.title.trim().to_string();
         let tx = self.study.transaction().map_err(error)?;
-        let existing = match tx.query_row(
-            &format!("SELECT {NOTE_COLUMNS},deleted FROM notes WHERE owner=?1 AND id=?2"),
-            params![self.owner, note.id],
-            |r| Ok((read_note(r)?, r.get::<_, bool>(9)?)),
+        let saved = note_in(&tx, &self.owner, account, note)?;
+        if entry {
+            tx.execute("DELETE FROM entry_drafts WHERE owner=?1", [&self.owner])
+                .map_err(error)?;
+        }
+        tx.commit().map_err(error)?;
+        Ok(saved)
+    }
+    /// This owner's unsaved new entry, if one was kept. A copy whose note already exists (it was saved) is
+    /// dropped rather than offered again.
+    pub fn entry_draft(&mut self) -> Result<Option<EntryDraft>> {
+        let stored: Option<String> = match self.study.query_row(
+            "SELECT draft FROM entry_drafts WHERE owner=?1",
+            [&self.owner],
+            |r| r.get(0),
         ) {
-            Ok(row) => Some(row),
+            Ok(json) => Some(json),
             Err(rusqlite::Error::QueryReturnedNoRows) => None,
             Err(e) => return Err(error(e)),
         };
-        // Another owner's row with this id is never touched.
-        let taken = existing.is_none()
-            && tx
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM notes WHERE id=?1)",
-                    [&note.id],
-                    |r| r.get::<_, bool>(0),
-                )
-                .map_err(error)?;
-        // A published (or archived) note is never changed here: the account refuses it, and its text may be shared.
-        // Text written in it is kept as a separate draft on the same day instead.
-        let read_only = match &existing {
-            Some((stored, false))
-                if status_is_read_only(&note_status_in(&tx, &self.owner, &note.id)?) =>
-            {
-                let text = stored.title != title || stored.body != note.body;
-                if !text {
-                    let meta = stored.journal_date != note.journal_date
-                        || stored.source != note.source
-                        || stored.reading_at != note.reading_at;
-                    if meta {
-                        return Err("Published notes can't be changed.".into());
-                    }
-                    return Ok(NoteSaved {
-                        id: note.id.clone(),
-                        rev: stored.rev,
-                        forked: false,
-                        read_only: false,
-                    });
-                }
-                true
-            }
-            _ => false,
+        let Some(json) = stored else {
+            return Ok(None);
         };
-        let rev = next_rev(&tx)?;
-        let stale = existing
-            .as_ref()
-            .is_some_and(|(stored, deleted)| *deleted || stored.rev != note.rev);
-        let saved = if read_only {
-            // The copy doesn't log the reading again: the published note keeps it.
-            let id = new_id();
-            tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,NULL,?7,?7,?8,?9,?8,?8,?10)",
-                params![id, self.owner, title, note.body, note.journal_date, source, now(), account, rev, new_id()]).map_err(error)?;
-            NoteSaved {
-                id,
-                rev,
-                forked: true,
-                read_only: true,
-            }
-        } else if taken || stale {
-            let id = new_id();
-            tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?8,?9,?10,?9,?9,?11)",
-                params![id, self.owner, title, note.body, note.journal_date, source, note.reading_at, now(), account, rev, new_id()]).map_err(error)?;
-            NoteSaved {
-                id,
-                rev,
-                forked: existing.is_some() || taken,
-                read_only: false,
-            }
-        } else if let Some((stored, _)) = &existing {
-            let body = stored.title != title || stored.body != note.body;
-            let meta = stored.journal_date != note.journal_date
-                || stored.source != note.source
-                || stored.reading_at != note.reading_at;
-            if !body && !meta {
-                return Ok(NoteSaved {
-                    id: note.id.clone(),
-                    rev: stored.rev,
-                    forked: false,
-                    read_only: false,
-                });
-            }
-            tx.execute("UPDATE notes SET title=?3, body=?4, journal_date=?5, source=?6, reading_at=?7, updated=?8, rev=?9,
-                    body_dirty=body_dirty|?10, meta_dirty=meta_dirty|?11, dirty=dirty|?10|?11 WHERE owner=?1 AND id=?2",
-                params![self.owner, note.id, title, note.body, note.journal_date, source, note.reading_at, now(), rev, account && body, account && meta]).map_err(error)?;
-            NoteSaved {
-                id: note.id.clone(),
-                rev,
-                forked: false,
-                read_only: false,
-            }
-        } else {
-            tx.execute("INSERT INTO notes(id,owner,title,body,journal_date,source,reading_at,created,updated,dirty,rev,body_dirty,meta_dirty,request_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?10,?10,?12)",
-                params![note.id, self.owner, title, note.body, note.journal_date, source, note.reading_at, note.created, now(), account, rev, new_id()]).map_err(error)?;
-            NoteSaved {
-                id: note.id.clone(),
-                rev,
-                forked: false,
-                read_only: false,
-            }
+        // An unreadable copy is left as it is (a later build may read it); nothing is offered.
+        let Ok(draft) = serde_json::from_str::<EntryDraft>(&json) else {
+            return Ok(None);
         };
-        tx.commit().map_err(error)?;
-        Ok(saved)
+        let saved = self
+            .study
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM notes WHERE id=?1)",
+                [&draft.id],
+                |r| r.get::<_, bool>(0),
+            )
+            .map_err(error)?;
+        if saved {
+            self.save_entry_draft(None)?;
+            return Ok(None);
+        }
+        Ok(Some(draft))
+    }
+    /// Keeps (or, with `None`, forgets) this owner's unsaved new entry.
+    pub fn save_entry_draft(&mut self, draft: Option<&EntryDraft>) -> Result<()> {
+        match draft {
+            Some(d) => self.study.execute(
+                "INSERT INTO entry_drafts(owner,draft,updated) VALUES(?1,?2,?3)
+                 ON CONFLICT(owner) DO UPDATE SET draft=excluded.draft, updated=excluded.updated",
+                params![self.owner, serde_json::to_string(d).map_err(error)?, now()],
+            ),
+            None => self
+                .study
+                .execute("DELETE FROM entry_drafts WHERE owner=?1", [&self.owner]),
+        }
+        .map(|_| ())
+        .map_err(error)
     }
     pub fn delete_note(&mut self, id: &str) -> Result<()> {
         let account = self.is_account();
@@ -1453,6 +1545,7 @@ impl Store {
             "reading_log",
             "guide_marks",
             "note_status",
+            "entry_drafts",
         ] {
             tx.execute(&format!("DELETE FROM {table} WHERE owner=?1"), [owner])
                 .map_err(error)?;
@@ -2338,7 +2431,8 @@ mod tests {
         drop(store);
         let store = Store::open(&dir).unwrap();
         assert_eq!(store.note(&note.id).unwrap().unwrap().body, note.body);
-        let backup = Connection::open(dir.join("study-before-v5.sqlite")).unwrap();
+        let backup =
+            Connection::open(dir.join(format!("study-before-v{SCHEMA_VERSION}.sqlite"))).unwrap();
         assert_eq!(
             backup
                 .query_row("SELECT body FROM notes", [], |r| r.get::<_, String>(0))
@@ -2352,6 +2446,155 @@ mod tests {
             4
         );
         drop(backup);
+        drop(store);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    /// A profile from the build before the journal kept unsaved entries (version 5) keeps every note and mark, is
+    /// backed up first, and can then keep an entry.
+    #[test]
+    fn a_version_5_profile_upgrades_with_its_notes_and_marks_and_a_backup() {
+        let dir = directory();
+        let mut store = Store::open(&dir).unwrap();
+        let l = Location::default();
+        store
+            .save_annotation(
+                &l,
+                &Annotation {
+                    verse: 2,
+                    note: "Marked before".into(),
+                    bookmarked: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut note = Note::new("2026-10-27", None);
+        note.body = "  Exactly *this*\n\n- [ ] kept  \n".into();
+        store.save_note(&note).unwrap();
+        store.set_owner("account-a");
+        let mut account_note = Note::new("2026-10-26", None);
+        account_note.body = "Account note".into();
+        store.save_note(&account_note).unwrap();
+        store
+            .study
+            .execute_batch("DROP TABLE entry_drafts; PRAGMA user_version=5;")
+            .unwrap();
+        drop(store);
+        let mut store = Store::open(&dir).unwrap();
+        assert_eq!(store.note(&note.id).unwrap().unwrap().body, note.body);
+        assert_eq!(store.annotations(&l).unwrap()[0].note, "Marked before");
+        store.set_owner("account-a");
+        assert_eq!(
+            store.note(&account_note.id).unwrap().unwrap().body,
+            "Account note"
+        );
+        assert_eq!(store.unsynced("account-a").unwrap(), 1);
+        let backup = Connection::open(dir.join("study-before-v6.sqlite")).unwrap();
+        assert_eq!(
+            backup
+                .query_row("SELECT COUNT(*) FROM notes", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            backup
+                .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            5
+        );
+        drop(backup);
+        // The upgraded profile keeps an unsaved entry.
+        let kept = EntryDraft {
+            id: new_id(),
+            text: "x".into(),
+            day: "10/28/2026".into(),
+            journal_date: "2026-10-28".into(),
+            source: None,
+            reading_at: None,
+            prompt: None,
+            edited: false,
+        };
+        store.save_entry_draft(Some(&kept)).unwrap();
+        assert_eq!(store.entry_draft().unwrap(), Some(kept));
+        drop(store);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    fn entry(text: &str) -> EntryDraft {
+        EntryDraft {
+            id: new_id(),
+            text: text.into(),
+            day: "10/27/2026".into(),
+            journal_date: "2026-10-27".into(),
+            source: Some(NoteSource::lesson("2026-10-26", "Come, Follow Me")),
+            reading_at: Some(1_761_600_000),
+            prompt: Some("What did you notice?".into()),
+            edited: true,
+        }
+    }
+    /// The unsaved new entry is kept per owner, exactly, and saving it removes the copy in the same write: a
+    /// retry (after a crash, say) neither saves it twice nor offers it again.
+    #[test]
+    fn an_unsaved_entry_is_kept_per_owner_and_saved_once() {
+        let dir = directory();
+        let mut store = Store::open(&dir).unwrap();
+        let device = entry("  Device draft\n\n- \n\ttabbed  \n\n");
+        store.save_entry_draft(Some(&device)).unwrap();
+        // Another owner sees nothing of it, and keeps its own.
+        store.set_owner("account-a");
+        assert_eq!(store.entry_draft().unwrap(), None);
+        let account = entry("Account draft");
+        store.save_entry_draft(Some(&account)).unwrap();
+        store.set_owner("");
+        drop(store);
+        let mut store = Store::open(&dir).unwrap();
+        assert_eq!(store.entry_draft().unwrap(), Some(device.clone()));
+        // Save entry: one note, and no copy left to offer again.
+        let mut note = Note::new(&device.journal_date, device.source.clone());
+        note.id = device.id.clone();
+        note.set_markdown(&device.text);
+        let saved = store.save_entry(&note).unwrap();
+        assert_eq!(saved.id, device.id);
+        assert_eq!(store.entry_draft().unwrap(), None);
+        assert_eq!(store.all_notes().unwrap().len(), 1);
+        assert_eq!(
+            store.note(&device.id).unwrap().unwrap().markdown(),
+            device.text
+        );
+        // A copy whose note already exists (it was saved) is dropped, never offered.
+        store.save_entry_draft(Some(&device)).unwrap();
+        assert_eq!(store.entry_draft().unwrap(), None);
+        let rows: i64 = store
+            .study
+            .query_row(
+                "SELECT COUNT(*) FROM entry_drafts WHERE owner=''",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 0);
+        // The account's copy is untouched by all of that, and goes when the account is forgotten.
+        store.set_owner("account-a");
+        assert_eq!(store.entry_draft().unwrap(), Some(account));
+        store.forget_owner("account-a").unwrap();
+        assert_eq!(store.entry_draft().unwrap(), None);
+        drop(store);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    /// If the note can't be written, the kept copy stays too.
+    #[test]
+    fn a_failed_save_entry_keeps_the_copy() {
+        let dir = directory();
+        let mut store = Store::open(&dir).unwrap();
+        let kept = entry("Keep me");
+        store.save_entry_draft(Some(&kept)).unwrap();
+        store
+            .study
+            .execute_batch("CREATE TRIGGER no_notes BEFORE INSERT ON notes BEGIN SELECT RAISE(ABORT,'disk full'); END;")
+            .unwrap();
+        let mut note = Note::new(&kept.journal_date, None);
+        note.id = kept.id.clone();
+        note.body = kept.text.clone();
+        assert!(store.save_entry(&note).is_err());
+        assert_eq!(store.entry_draft().unwrap(), Some(kept));
         drop(store);
         fs::remove_dir_all(dir).unwrap();
     }

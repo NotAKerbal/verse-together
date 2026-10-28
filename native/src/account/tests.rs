@@ -91,6 +91,92 @@ fn composer_drafts_stay_with_the_owner_when_signing_in_or_the_session_ends() {
     assert_eq!(notes_of(&f, ""), ["Guest entry draft"]);
 }
 
+/// A kept (crash-recovered) new entry belongs to its owner: after a restart it is shown only to that owner, and
+/// signing out first saves it under the account, so the unsent-changes confirmation still applies.
+#[test]
+fn a_recovered_entry_is_shown_only_to_its_owner_and_signing_out_still_asks() {
+    use crate::journal_ui::JournalMsg;
+    use crate::md_editor::{Action, Edit};
+    let mut f = fixture();
+    sign_in(&mut f, "account-a");
+    let _ = f.app.update_journal(JournalMsg::New(None));
+    let _ = f
+        .app
+        .update_journal(JournalMsg::ComposerBody(Action::Edit(Edit::Paste(
+            std::sync::Arc::new("Account A's unsaved entry\n".into()),
+        ))));
+    let _ = f.app.update(Message::Autosave);
+    // Killed: a fresh start shows this computer's own study, without the account's entry.
+    let mut f = Fixture {
+        app: App::from_directory(&f.dir),
+        dir: std::mem::take(&mut f.dir),
+    };
+    assert_eq!(f.app.store.as_ref().unwrap().owner(), "");
+    assert!(f.app.journal.composer.is_none());
+    // Another account never sees it.
+    sign_in(&mut f, "account-b");
+    assert!(f.app.journal.composer.is_none());
+    let _ = f.app.update_account(AccountMsg::SignOut(true));
+    let _ = f.app.update_account(AccountMsg::SignedOut(Ok(())));
+    assert!(f.app.journal.composer.is_none());
+    // Its own account does, exactly.
+    sign_in(&mut f, "account-a");
+    assert_eq!(
+        f.app.journal.composer.as_ref().unwrap().draft.body.text(),
+        "Account A's unsaved entry\n"
+    );
+    assert!(notes_of(&f, "account-a").is_empty());
+    // Signing out keeps it as an unsent account note first, so it asks.
+    let generation = f.app.account.generation;
+    let _ = f
+        .app
+        .update_account(AccountMsg::Synced(generation, Ok(SyncReport::default())));
+    let _ = f.app.update_account(AccountMsg::SignOut(false));
+    assert_eq!(f.app.account.confirm_sign_out, Some(1));
+    assert!(f.app.journal.composer.is_none());
+    assert_eq!(notes_of(&f, "account-a"), ["Account A's unsaved entry\n"]);
+    assert!(notes_of(&f, "").is_empty());
+    let mut store = Store::open(&f.dir).unwrap();
+    store.set_owner("account-a");
+    assert_eq!(store.entry_draft().unwrap(), None);
+}
+
+/// A kept entry that can't be saved when the account changes stays shown under its own owner; nothing is copied.
+#[test]
+fn a_kept_entry_that_cant_be_saved_keeps_the_owner() {
+    use crate::journal_ui::JournalMsg;
+    use crate::md_editor::{Action, Edit};
+    let mut f = fixture();
+    let _ = f.app.update_journal(JournalMsg::New(None));
+    let _ = f
+        .app
+        .update_journal(JournalMsg::ComposerBody(Action::Edit(Edit::Paste(
+            std::sync::Arc::new("Guest entry".into()),
+        ))));
+    let _ = f.app.update(Message::Autosave);
+    let db = rusqlite::Connection::open(f.dir.join("study.sqlite")).unwrap();
+    db.execute_batch(
+        "CREATE TRIGGER reject BEFORE INSERT ON notes BEGIN SELECT RAISE(ABORT,'disk full'); END;",
+    )
+    .unwrap();
+    let _ = f.app.update_account(AccountMsg::SignIn);
+    let generation = f.app.account.generation;
+    let _ = f
+        .app
+        .update_account(AccountMsg::SignedIn(generation, Ok(session("account-a"))));
+    assert_eq!(f.app.store.as_ref().unwrap().owner(), "");
+    assert_eq!(
+        f.app.journal.composer.as_ref().unwrap().draft.body.text(),
+        "Guest entry"
+    );
+    db.execute_batch("DROP TRIGGER reject;").unwrap();
+    let mut store = Store::open(&f.dir).unwrap();
+    assert!(store.entry_draft().unwrap().is_some());
+    store.set_owner("account-a");
+    assert_eq!(store.entry_draft().unwrap(), None);
+    assert!(store.all_notes().unwrap().is_empty());
+}
+
 #[test]
 fn an_ended_session_saves_writing_under_its_own_account_first() {
     let mut f = fixture();

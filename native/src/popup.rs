@@ -1,7 +1,8 @@
 // A panel that opens below its anchor over the rest of the page (as a browser's date picker opens below its
 // field), without moving anything: the anchor is laid out as usual and the panel is drawn as an overlay, kept
 // inside the window. A press outside both, or Escape, dismisses it; other keys can be handed to the app while
-// it is open (the date picker's arrows, Page Up/Down and Enter).
+// it is open (the date picker's arrows, Page Up/Down and Enter). A panel may hold popups of its own (the journal's
+// reading editor holds its date's calendar); the innermost takes events first.
 use iced::advanced::widget::{Operation, Tree};
 use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer};
 use iced::keyboard;
@@ -15,10 +16,12 @@ pub struct Popup<'a, Message> {
     panel: Option<Element<'a, Message>>,
     on_dismiss: Option<Message>,
     on_key: Option<Box<KeyMap<'a, Message>>>,
+    on_open: Option<Message>,
     placement: Placement,
 }
 /// Where the panel goes: its gap from the anchor, its margin from the window's edges, and whether it lines up with
-/// the anchor's right edge (else its left). Escape dismisses it unless the app handles that key itself.
+/// the anchor's right edge (else its left), what Escape does, and whether the press that dismisses it is kept from
+/// what lies under it (as the browser's date picker, a window of its own, keeps it).
 #[derive(Debug, Clone, Copy)]
 pub struct Placement {
     pub gap: f32,
@@ -26,7 +29,19 @@ pub struct Placement {
     /// The room it needs to keep from the window's top or bottom edge to open on that side.
     pub clearance: f32,
     pub right: bool,
-    pub escape: bool,
+    pub escape: Escape,
+    pub capture_outside: bool,
+}
+/// What Escape does while the panel is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Escape {
+    /// Dismisses it.
+    Dismiss,
+    /// Nothing here, and nothing under it sees the key: the app closes what is open in its own order (a calendar
+    /// inside a dialog before the dialog).
+    Hold,
+    /// Passes the key on untouched.
+    Pass,
 }
 impl Default for Placement {
     fn default() -> Self {
@@ -35,7 +50,8 @@ impl Default for Placement {
             margin: 8.0,
             clearance: 0.0,
             right: false,
-            escape: true,
+            escape: Escape::Dismiss,
+            capture_outside: false,
         }
     }
 }
@@ -48,6 +64,7 @@ pub fn popup<'a, Message>(
         panel,
         on_dismiss: None,
         on_key: None,
+        on_open: None,
         placement: Placement::default(),
     }
 }
@@ -58,6 +75,12 @@ impl<'a, Message> Popup<'a, Message> {
     }
     pub fn placement(mut self, placement: Placement) -> Self {
         self.placement = placement;
+        self
+    }
+    /// Opens the panel from the keyboard, as the browser's date input does (Alt+Down or F4 while the anchor has the
+    /// keyboard).
+    pub fn on_open(mut self, m: Message) -> Self {
+        self.on_open = Some(m);
         self
     }
     pub fn on_key(
@@ -118,6 +141,21 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for Popup<'_, 
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        if self.panel.is_none()
+            && let Some(open) = &self.on_open
+            && let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
+            && opens(key, *modifiers)
+            && has_focus(
+                self.anchor.as_widget_mut(),
+                &mut tree.children[0],
+                layout,
+                renderer,
+            )
+        {
+            shell.publish(open.clone());
+            shell.capture_event();
+            return;
+        }
         self.anchor.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -199,6 +237,41 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for Popup<'_, 
             }
         }
     }
+}
+
+/// Alt+Down or F4: the keys that open a browser's date picker from its field.
+fn opens(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> bool {
+    use keyboard::key::Named;
+    match key {
+        keyboard::Key::Named(Named::ArrowDown) => modifiers.alt(),
+        keyboard::Key::Named(Named::F4) => modifiers.is_empty(),
+        _ => false,
+    }
+}
+/// Whether a widget in the anchor (its text field) has the keyboard.
+fn has_focus<Message>(
+    anchor: &mut dyn Widget<Message, iced::Theme, iced::Renderer>,
+    tree: &mut Tree,
+    layout: Layout<'_>,
+    renderer: &iced::Renderer,
+) -> bool {
+    struct Probe(bool);
+    impl Operation for Probe {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            _bounds: Rectangle,
+            state: &mut dyn iced::advanced::widget::operation::Focusable,
+        ) {
+            self.0 |= state.is_focused();
+        }
+    }
+    let mut probe = Probe(false);
+    anchor.operate(tree, layout, renderer, &mut probe);
+    probe.0
 }
 
 struct Panel<'a, 'b, Message> {
@@ -284,15 +357,22 @@ impl<Message: Clone> overlay::Overlay<Message, iced::Theme, iced::Renderer>
                     shell.capture_event();
                 } else if !on_anchor && let Some(m) = &self.on_dismiss {
                     shell.publish(m.clone());
+                    if self.placement.capture_outside {
+                        shell.capture_event();
+                    }
                 }
             }
             Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
-                    if self.placement.escape
-                        && let Some(m) = &self.on_dismiss
-                    {
-                        shell.publish(m.clone());
-                        shell.capture_event();
+                    match self.placement.escape {
+                        Escape::Dismiss => {
+                            if let Some(m) = &self.on_dismiss {
+                                shell.publish(m.clone());
+                                shell.capture_event();
+                            }
+                        }
+                        Escape::Hold => shell.capture_event(),
+                        Escape::Pass => {}
                     }
                 } else if let Some(f) = self.on_key
                     && let Some(m) = f(key, *modifiers)
@@ -313,6 +393,16 @@ impl<Message: Clone> overlay::Overlay<Message, iced::Theme, iced::Renderer>
         self.panel
             .as_widget_mut()
             .operate(self.tree, layout, renderer, operation);
+    }
+    fn overlay<'c>(
+        &'c mut self,
+        layout: Layout<'c>,
+        renderer: &iced::Renderer,
+    ) -> Option<overlay::Element<'c, Message, iced::Theme, iced::Renderer>> {
+        let bounds = layout.bounds();
+        self.panel
+            .as_widget_mut()
+            .overlay(self.tree, layout, renderer, &bounds, Vector::ZERO)
     }
     fn mouse_interaction(
         &self,

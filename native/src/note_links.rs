@@ -816,7 +816,8 @@ fn floating<'a>(
             margin: 12.0,
             clearance: 12.0,
             right: true,
-            escape: false,
+            escape: crate::popup::Escape::Pass,
+            capture_outside: false,
         })
         .into()
 }

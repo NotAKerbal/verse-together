@@ -7,6 +7,7 @@ mod account_ui;
 mod anim;
 mod bible_catalog;
 mod cloud;
+mod date_picker;
 mod design;
 mod faith;
 mod feedback;
@@ -16,6 +17,8 @@ mod header;
 #[allow(dead_code)]
 mod icons;
 mod journal;
+#[cfg(test)]
+mod journal_tests;
 mod journal_ui;
 mod jst;
 mod jst_text;
@@ -427,6 +430,9 @@ impl App {
             note_links: Default::default(),
         };
         app.load_chapter();
+        // This computer's own unsaved new entry, if the app last stopped before it was saved. An account's is shown
+        // once its session is restored (`switch_owner`).
+        app.restore_entry_draft();
         app
     }
     fn p(&self) -> Colors {
@@ -544,7 +550,9 @@ impl App {
         }
     }
     fn has_unsaved_notes(&self) -> bool {
-        self.note_dirty || self.journal.open.as_ref().is_some_and(|note| note.dirty)
+        self.note_dirty
+            || self.journal.open.as_ref().is_some_and(|note| note.dirty)
+            || self.journal.entry_unkept
     }
     fn report<T>(&mut self, result: Result<T, String>) -> Option<T> {
         match result {
@@ -1296,7 +1304,9 @@ impl App {
                 // retry slowly until saving works again. Idle windows have no autosave timer.
                 let verse_saved = self.save_note();
                 let journal_saved = self.save_journal_note();
-                self.autosave_failed = !verse_saved || !journal_saved;
+                // The new entry isn't saved as a note; the profile keeps a copy of it until Save entry.
+                let entry_kept = self.keep_entry_copy();
+                self.autosave_failed = !verse_saved || !journal_saved || !entry_kept;
             }
             Message::EditNote(action) => {
                 self.note_dirty |= action.is_edit();
@@ -1576,8 +1586,13 @@ impl App {
                         }
                         keyboard::Key::Named(keyboard::key::Named::Escape) => {
                             // The journal's goal editor and reading editor close first (`onCancel`, the chip's
-                            // Escape), leaving the note open.
-                            if self.screen == Screen::Journal && self.journal.goal_draft.is_some() {
+                            // Escape), leaving the note open; an open calendar closes before the field's dialog,
+                            // as the browser's date picker does.
+                            if self.screen == Screen::Journal && self.journal.date.is_some() {
+                                self.journal.date = None;
+                            } else if self.screen == Screen::Journal
+                                && self.journal.goal_draft.is_some()
+                            {
                                 self.journal.goal_draft = None;
                             } else if self.screen == Screen::Journal
                                 && self.journal.reading.is_some()

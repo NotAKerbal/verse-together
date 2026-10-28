@@ -252,6 +252,10 @@ impl App {
         self.journal.open = None;
         self.journal.composer = None;
         self.journal.reading = None;
+        self.journal.date = None;
+        self.journal.entry_unkept = false;
+        // The new owner's own unsaved new entry, if one was kept; never another owner's.
+        self.restore_entry_draft();
         if self.screen == Screen::Journal {
             self.reload_journal();
         }

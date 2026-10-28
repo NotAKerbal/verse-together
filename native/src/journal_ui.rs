@@ -2,6 +2,7 @@
 // the left rail and the selected day in the main card. Opening a note glides the day's list into the rail (280ms,
 // cubic-bezier(0.2, 0, 0, 1)) while the calendar fades out and the note fades in from the right.
 use crate::anim::{CubicBezier, NAV, Transition};
+use crate::date_picker::{self, Calendar};
 use crate::design::{self, Colors, icon, sans, serif};
 use crate::header::CONTENT_TOP;
 use crate::icons;
@@ -76,6 +77,8 @@ pub enum EditKind {
 const UNDO_LIMIT: usize = 200;
 /// The unsaved entry (`JournalEntryComposer`): a blank note under the day's actions, saved as an entry only when
 /// asked. Closing it keeps what was written until it is saved.
+/// It is also kept in the profile for its owner (`store::EntryDraft`), on the autosave timer after it changes, so a
+/// crash or forced quit doesn't lose it; Save entry removes that copy as it makes the note.
 pub struct Composer {
     pub draft: OpenNote,
     pub shown: bool,
@@ -91,6 +94,52 @@ impl Composer {
     fn pristine(&self) -> bool {
         !self.edited && self.draft.body.is_empty() && self.draft.note.reading_at.is_none()
     }
+    /// Something worth keeping was written or logged (whitespace alone isn't).
+    fn has_content(&self) -> bool {
+        !self.draft.body.text().trim().is_empty() || self.draft.note.reading_at.is_some()
+    }
+    /// What the profile keeps of it.
+    fn recovery(&self) -> store::EntryDraft {
+        let note = &self.draft.note;
+        store::EntryDraft {
+            id: note.id.clone(),
+            text: self.draft.body.text(),
+            day: self.day.clone(),
+            journal_date: note.journal_date.clone(),
+            source: note.source.clone(),
+            reading_at: note.reading_at,
+            prompt: self.draft.prompt.clone(),
+            edited: self.edited,
+        }
+    }
+    /// The entry as it was kept, shown again.
+    fn recovered(kept: store::EntryDraft) -> Self {
+        let mut draft = blank_entry(&kept.journal_date, kept.prompt);
+        draft.note.id = kept.id;
+        draft.note.source = kept.source;
+        draft.note.reading_at = kept.reading_at;
+        draft.body = md_editor::Content::with_text(&kept.text);
+        Self {
+            draft,
+            shown: true,
+            day: kept.day,
+            edited: kept.edited,
+            problem: None,
+            focused: false,
+        }
+    }
+}
+/// The journal's two date fields (`<input type="date">`): the new entry's Day and the reading editor's Read on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DateField {
+    Day,
+    ReadOn,
+}
+/// A date field's open calendar.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DatePicker {
+    pub field: DateField,
+    pub calendar: Calendar,
 }
 /// Which entry the reading editor (`ReadingChip`'s dialog) changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +186,10 @@ pub struct JournalState {
     pub phone_day: bool,
     /// A note opened or closed: the day's list goes back to its top on the next frame.
     pub snap_list: bool,
+    /// The open date calendar, if any.
+    pub date: Option<DatePicker>,
+    /// The new entry changed since the profile last kept it (the autosave timer keeps it).
+    pub entry_unkept: bool,
 }
 impl JournalState {
     pub fn new(now: Instant) -> Self {
@@ -159,6 +212,8 @@ impl JournalState {
             recent_sources: vec![],
             phone_day: false,
             snap_list: false,
+            date: None,
+            entry_unkept: false,
         }
     }
 }
@@ -204,6 +259,13 @@ pub enum JournalMsg {
     CancelGoals,
     OpenSource(NoteSource),
     DeleteReading(String),
+    /// A date field's calendar: open or close it, move its month or keyboard day, choose a day (or clear it).
+    DateOpen(DateField),
+    DateClose,
+    DateMonth(i32),
+    DateStep(i64),
+    DateEnter,
+    DatePick(DateField, Option<String>),
 }
 
 impl App {
@@ -444,7 +506,10 @@ impl App {
         match &mut self.journal.composer {
             Some(c) if !c.pristine() => {
                 c.shown = true;
-                c.draft.prompt = prompt;
+                if c.draft.prompt != prompt {
+                    c.draft.prompt = prompt;
+                    self.journal.entry_unkept = true;
+                }
             }
             _ => {
                 self.journal.composer = Some(Composer {
@@ -506,7 +571,8 @@ impl App {
         let Some(store) = &mut self.store else {
             return Task::none();
         };
-        let result = store.save_note(&note);
+        // The note and the removal of the entry's kept copy are one transaction: a crash or retry can't save twice.
+        let result = store.save_entry(&note);
         let Some(saved) = self.report(result) else {
             if let Some(c) = &mut self.journal.composer {
                 c.problem =
@@ -515,6 +581,7 @@ impl App {
             return Task::none();
         };
         self.journal.composer = None;
+        self.journal.entry_unkept = false;
         self.journal.reading = None;
         self.reload_journal();
         self.sync_soon();
@@ -524,15 +591,19 @@ impl App {
         }
         Task::none()
     }
-    /// Closing the app with something written in the new entry keeps it: it is saved as that day's entry (the
-    /// website keeps an unsaved entry in the browser instead). Returns false, keeping the window open, if that fails.
+    /// Closing the app, or changing whose study is shown, with something written in the new entry keeps it: it is
+    /// saved as that day's entry under its owner, and its kept copy goes with it (the website keeps an unsaved entry
+    /// in the browser instead). An entry with nothing worth keeping is let go, with its kept copy. A kept copy not
+    /// yet shown (its restore failed) is read first, so it is never left behind. Returns false, changing nothing, if
+    /// that fails.
     pub(crate) fn keep_entry_draft(&mut self) -> bool {
+        if self.journal.composer.is_none() && !self.restore_entry_draft() {
+            return false;
+        }
         let Some(c) = &self.journal.composer else {
             return true;
         };
-        if c.draft.body.text().trim().is_empty() && c.draft.note.reading_at.is_none() {
-            return true;
-        }
+        let content = c.has_content();
         let mut note = c.draft.note.clone();
         note.set_markdown(&c.draft.body.text());
         if let Some(day) = parse_field_date(&c.day) {
@@ -541,12 +612,64 @@ impl App {
         let Some(store) = &mut self.store else {
             return true;
         };
-        let result = store.save_note(&note);
+        let result = if content {
+            store.save_entry(&note).map(|_| ())
+        } else {
+            store.save_entry_draft(None)
+        };
         if self.report(result).is_none() {
             return false;
         }
-        self.journal.composer = None;
-        self.sync_soon();
+        if content {
+            self.journal.composer = None;
+            self.journal.date = None;
+            self.sync_soon();
+        }
+        self.journal.entry_unkept = false;
+        true
+    }
+    /// The autosave timer keeps the new entry in the profile for its owner once it has changed (only then, so an
+    /// idle window does nothing). Returns false, keeping the text in the editor, if that fails.
+    pub(crate) fn keep_entry_copy(&mut self) -> bool {
+        if !self.journal.entry_unkept {
+            return true;
+        }
+        let kept = self
+            .journal
+            .composer
+            .as_ref()
+            .filter(|c| c.has_content())
+            .map(Composer::recovery);
+        let Some(store) = &mut self.store else {
+            return true;
+        };
+        let result = store.save_entry_draft(kept.as_ref());
+        if self.report(result).is_none() {
+            return false;
+        }
+        self.journal.entry_unkept = false;
+        true
+    }
+    /// Shows the new entry kept for the study now shown, if there is one (after the app starts, or another owner's
+    /// study is shown). Returns false if it couldn't be read.
+    pub(crate) fn restore_entry_draft(&mut self) -> bool {
+        let Some(store) = &mut self.store else {
+            return true;
+        };
+        let result = store.entry_draft();
+        let Some(kept) = self.report(result) else {
+            return false;
+        };
+        if let Some(kept) = kept
+            && self
+                .journal
+                .composer
+                .as_ref()
+                .is_none_or(Composer::pristine)
+        {
+            self.journal.composer = Some(Composer::recovered(kept));
+            self.journal.entry_unkept = false;
+        }
         true
     }
     /// The sources the reading chip can log for an entry: its own first, then the open note's, the selected day's
@@ -693,6 +816,7 @@ impl App {
         match target {
             ReadingTarget::Composer => {
                 if let Some(c) = &mut self.journal.composer {
+                    self.journal.entry_unkept = true;
                     c.edited = true;
                     c.problem = None;
                     if remove {
@@ -737,6 +861,55 @@ impl App {
         Task::none()
     }
     pub(crate) fn update_journal(&mut self, message: JournalMsg) -> Task<Message> {
+        let task = self.journal_message(message);
+        // A calendar goes with its field (the new entry closed or saved, the reading editor closed).
+        let field_shown = match self.journal.date.map(|d| d.field) {
+            Some(DateField::Day) => self.journal.composer.as_ref().is_some_and(|c| c.shown),
+            Some(DateField::ReadOn) => self.journal.reading.is_some(),
+            None => true,
+        };
+        if !field_shown {
+            self.journal.date = None;
+        }
+        task
+    }
+    /// The typed (or else today's) date a field's calendar opens on.
+    fn date_field_value(&self, field: DateField) -> Option<String> {
+        match field {
+            DateField::Day => self.journal.composer.as_ref().map(|c| c.day.clone()),
+            DateField::ReadOn => self.journal.reading.as_ref().map(|r| r.date.clone()),
+        }
+    }
+    fn set_date_field(&mut self, field: DateField, value: String) {
+        match field {
+            DateField::Day => {
+                if let Some(c) = &mut self.journal.composer {
+                    c.day = value;
+                    c.edited = true;
+                    c.problem = None;
+                    self.journal.entry_unkept = true;
+                }
+            }
+            DateField::ReadOn => {
+                if let Some(edit) = &mut self.journal.reading {
+                    edit.date = value;
+                    edit.error = None;
+                }
+            }
+        }
+        // An open calendar follows a whole date typed into its field.
+        let typed = self
+            .date_field_value(field)
+            .and_then(|v| date_picker::parse_typed_date(&v))
+            .and_then(|k| chrono::NaiveDate::parse_from_str(&k, "%Y-%m-%d").ok());
+        if let Some(d) = &mut self.journal.date
+            && d.field == field
+            && let Some(day) = typed
+        {
+            d.calendar = Calendar::on(day);
+        }
+    }
+    fn journal_message(&mut self, message: JournalMsg) -> Task<Message> {
         match message {
             JournalMsg::Month(by) => {
                 self.journal.month = journal::shift_month(&self.journal.month, by);
@@ -821,6 +994,7 @@ impl App {
                 if let Some(c) = &mut self.journal.composer {
                     if action.is_edit() {
                         c.problem = None;
+                        self.journal.entry_unkept = true;
                     }
                     edit_entry(&mut c.draft, action);
                 }
@@ -828,14 +1002,11 @@ impl App {
             JournalMsg::ComposerUndo | JournalMsg::ComposerRedo => {
                 if let Some(c) = &mut self.journal.composer {
                     step_history(&mut c.draft, matches!(message, JournalMsg::ComposerUndo));
+                    self.journal.entry_unkept = true;
                 }
             }
             JournalMsg::ComposerDay(day) => {
-                if let Some(c) = &mut self.journal.composer {
-                    c.day = day.chars().take(10).collect();
-                    c.edited = true;
-                    c.problem = None;
-                }
+                self.set_date_field(DateField::Day, day.chars().take(10).collect());
             }
             JournalMsg::ComposerFocus(focused) => {
                 if let Some(c) = &mut self.journal.composer {
@@ -886,10 +1057,48 @@ impl App {
                 }
             }
             JournalMsg::ReadingDate(value) => {
-                if let Some(edit) = &mut self.journal.reading {
-                    edit.date = value.chars().take(10).collect();
-                    edit.error = None;
+                self.set_date_field(DateField::ReadOn, value.chars().take(10).collect());
+            }
+            JournalMsg::DateOpen(field) => {
+                if self.journal.date.is_some_and(|d| d.field == field) {
+                    self.journal.date = None;
+                } else if let Some(value) = self.date_field_value(field) {
+                    // An empty or unfinished field opens on today.
+                    let day = date_picker::parse_typed_date(&value)
+                        .and_then(|k| chrono::NaiveDate::parse_from_str(&k, "%Y-%m-%d").ok())
+                        .unwrap_or_else(crate::plan_model::today);
+                    self.journal.date = Some(DatePicker {
+                        field,
+                        calendar: Calendar::on(day),
+                    });
                 }
+            }
+            JournalMsg::DateClose => self.journal.date = None,
+            JournalMsg::DateMonth(by) => {
+                if let Some(d) = &mut self.journal.date {
+                    d.calendar.shift_month(by);
+                }
+            }
+            JournalMsg::DateStep(by) => {
+                if let Some(d) = &mut self.journal.date {
+                    d.calendar.step(by);
+                }
+            }
+            JournalMsg::DateEnter => {
+                if let Some(d) = self.journal.date {
+                    let key = d.calendar.focus.format("%Y-%m-%d").to_string();
+                    return self.journal_message(JournalMsg::DatePick(d.field, Some(key)));
+                }
+            }
+            JournalMsg::DatePick(field, key) => {
+                // The new entry's Day is required, so its calendar offers no Clear.
+                if key.is_some() || field == DateField::ReadOn {
+                    let value = key
+                        .map(|k| date_picker::date_display(&k))
+                        .unwrap_or_default();
+                    self.set_date_field(field, value);
+                }
+                self.journal.date = None;
             }
             JournalMsg::ReadingSave => return self.save_reading(false),
             JournalMsg::ReadingRemove => return self.save_reading(true),
@@ -2327,7 +2536,9 @@ impl App {
                     margin: 16.0,
                     clearance: 0.0,
                     right: false,
-                    escape: true,
+                    // The app closes the reading editor (after a calendar open inside it).
+                    escape: crate::popup::Escape::Hold,
+                    capture_outside: false,
                 })
                 .into(),
         )
@@ -2463,7 +2674,18 @@ impl App {
         panel = panel.push(
             column![
                 small_label("Read on"),
-                field(&edit.date, JournalMsg::ReadingDate, "MM/DD/YYYY")
+                self.journal_date_field(
+                    DateField::ReadOn,
+                    field(&edit.date, JournalMsg::ReadingDate, "mm/dd/yyyy")
+                        .id("journal-read-on")
+                        .padding(Padding {
+                            top: 7.0,
+                            right: 38.0,
+                            bottom: 7.0,
+                            left: 8.0,
+                        }),
+                    Length::Fill,
+                )
             ]
             .spacing(4),
         );
@@ -2624,28 +2846,38 @@ impl App {
         }
         let day = column![
             text("Day").size(14).font(sans(font::Weight::Semibold)),
-            text_input("MM/DD/YYYY", &c.day)
-                .on_input(|v| Message::Journal(JournalMsg::ComposerDay(v)))
-                .on_submit(msg(JournalMsg::SaveEntry))
-                .size(14)
-                .padding([7, 10])
-                .width(146)
-                .style(move |_, status| text_input::Style {
-                    background: Color::TRANSPARENT.into(),
-                    border: Border {
-                        color: if matches!(status, text_input::Status::Focused { .. }) {
-                            p.accent
-                        } else {
-                            p.rule
+            self.journal_date_field(
+                DateField::Day,
+                text_input("mm/dd/yyyy", &c.day)
+                    .id("journal-entry-day")
+                    .on_input(|v| Message::Journal(JournalMsg::ComposerDay(v)))
+                    .on_submit(msg(JournalMsg::SaveEntry))
+                    .size(14)
+                    .padding(Padding {
+                        top: 7.0,
+                        right: 38.0,
+                        bottom: 7.0,
+                        left: 10.0,
+                    })
+                    .width(146)
+                    .style(move |_, status| text_input::Style {
+                        background: Color::TRANSPARENT.into(),
+                        border: Border {
+                            color: if matches!(status, text_input::Status::Focused { .. }) {
+                                p.accent
+                            } else {
+                                p.rule
+                            },
+                            width: 1.0,
+                            radius: 8.0.into(),
                         },
-                        width: 1.0,
-                        radius: 8.0.into(),
-                    },
-                    icon: p.muted,
-                    placeholder: p.faint,
-                    value: p.ink,
-                    selection: p.primary,
-                }),
+                        icon: p.muted,
+                        placeholder: p.faint,
+                        value: p.ink,
+                        selection: p.primary,
+                    }),
+                Length::Fixed(146.0),
+            ),
         ]
         .spacing(4);
         let save = button(
@@ -2685,6 +2917,55 @@ impl App {
             .padding(Padding::ZERO.top(8)),
         )
         .into()
+    }
+
+    /// A journal date field (`<input type="date">`): typed, or chosen from its calendar (`date_picker`), which opens
+    /// below it over the page. A press outside closes the calendar without reaching what is under it; Escape closes
+    /// it before the dialog it is in (the app's Escape). The new entry's Day is required: its calendar has no Clear.
+    fn journal_date_field<'a>(
+        &'a self,
+        field: DateField,
+        input: iced::widget::TextInput<'a, Message>,
+        width: Length,
+    ) -> Element<'a, Message> {
+        let p = self.p();
+        let msg = |m: JournalMsg| Message::Journal(m);
+        let open = self.journal.date.filter(|d| d.field == field);
+        let anchor = date_picker::with_toggle(
+            p,
+            input,
+            open.is_some(),
+            msg(JournalMsg::DateOpen(field)),
+            width,
+        );
+        let panel = open.map(|d| {
+            let chosen = self
+                .date_field_value(field)
+                .and_then(|v| date_picker::parse_typed_date(&v))
+                .and_then(|k| chrono::NaiveDate::parse_from_str(&k, "%Y-%m-%d").ok());
+            self.date_calendar(
+                &d.calendar,
+                chosen,
+                None,
+                field == DateField::ReadOn,
+                move |key| Message::Journal(JournalMsg::DatePick(field, key)),
+                |by| Message::Journal(JournalMsg::DateMonth(by)),
+            )
+        });
+        crate::popup::popup(anchor, panel)
+            .on_dismiss(msg(JournalMsg::DateClose))
+            .on_open(msg(JournalMsg::DateOpen(field)))
+            .on_key(date_picker::calendar_keys(
+                |by| Message::Journal(JournalMsg::DateStep(by)),
+                |by| Message::Journal(JournalMsg::DateMonth(by)),
+                msg(JournalMsg::DateEnter),
+            ))
+            .placement(crate::popup::Placement {
+                escape: crate::popup::Escape::Hold,
+                capture_outside: true,
+                ..Default::default()
+            })
+            .into()
     }
 
     fn editor_palette(&self) -> md_editor::Palette {
@@ -3357,11 +3638,8 @@ pub(crate) fn field_date(day: &str) -> String {
         .map(|d| d.format("%m/%d/%Y").to_string())
         .unwrap_or_default()
 }
-/// A date typed as `MM/DD/YYYY` (or `YYYY-MM-DD`) as a journal day.
+/// A date typed as `MM/DD/YYYY` (or `YYYY-MM-DD`) as a journal day: a whole, real date with a four-digit year, as
+/// the browser's date input takes (`date_picker::parse_typed_date`).
 pub(crate) fn parse_field_date(value: &str) -> Option<String> {
-    let value = value.trim();
-    chrono::NaiveDate::parse_from_str(value, "%m/%d/%Y")
-        .or_else(|_| chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d"))
-        .ok()
-        .map(journal::key)
+    date_picker::parse_typed_date(value)
 }

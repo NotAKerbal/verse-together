@@ -64,8 +64,9 @@ localhost deployments retain the website proxy. Credentials remain scoped to the
   editor (headings at their sizes, bold, italics, links, quotes, lists and code styled in place, syntax hidden
   off the caret's line, Ctrl/⌘-click to follow a safe link, list continuation on Enter, undo/redo), an optional
   source (scripture or lesson) and editable reading chip. Saved notes autosave, including on leaving, closing or Ctrl+S.
-  A New entry waits for Save entry; a normal app close keeps a written entry, but force-quit recovery of that
-  unsaved composer is not implemented. Below 1024px the calendar, day and note use separate stages. A note the
+  A New entry waits for Save entry. Its text, day and reading are kept in an owner-specific recovery copy
+  on the autosave tick and restored after a crash. A normal app close keeps a written entry as a note.
+  Journal Day and Read on fields support typing and calendar pickers (Alt+Down or F4 from the field). Below 1024px the calendar, day and note use separate stages. A note the
   account has published (or archived) opens read-only, as on the website ("Published · read-only"): its text can be
   selected, copied and its links followed, but nothing can be typed, undone, re-dated, logged or deleted (archived
   notes can still be deleted). If a note is published elsewhere while you are writing in it here, what you wrote is
