@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsContentPath } from "@/lib/faithTradition";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -8,6 +11,7 @@ import { useBrowseNavHref } from "@/lib/browseNavigation";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
 export default function MobileBottomNav() {
+  const { showLdsContent } = useFaithTradition();
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
 
@@ -18,7 +22,7 @@ export default function MobileBottomNav() {
       aria-label="Primary mobile navigation"
     >
       <div className="segmented-control mobile-nav-control pointer-events-auto w-full max-w-sm">
-        {primaryNavItems.map((item) => {
+        {primaryNavItems.filter((item) => showLdsContent || !isLdsContentPath(item.href)).map((item) => {
           const active = isPathActive(pathname, item.href) || (item.href === "/browse" && pathname === "/");
           const href = item.href === "/browse" ? browseHref : item.href;
           return (

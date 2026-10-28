@@ -1,5 +1,8 @@
 "use client";
 
+import { useFaithTradition } from "@/lib/useFaithTradition";
+import { isLdsVolume } from "@/lib/faithTradition";
+
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import BrowseCard, { type BrowseCardImage } from "@/components/BrowseCard";
@@ -39,6 +42,7 @@ const VOLUME_ART: Record<string, BrowseCardImage> = {
 const LIBRARY_VOLUMES = buildLibraryVolumes(scriptureCatalog);
 
 function LibraryView() {
+  const { showLdsContent } = useFaithTradition();
   return (
     <section className="page-shell browse-shell">
       {/* Focus target after an in-place selection change, like SelectionHeader's title. */}
@@ -52,7 +56,7 @@ function LibraryView() {
       {/* One grid: study cards first (hidden in simple mode), then the volumes. Continue Reading
           renders nothing without a saved position, so it never leaves a gap. */}
       <ul className="browse-grid browse-library">
-        <ComeFollowMeCard className="simple-hide" />
+        {showLdsContent ? <ComeFollowMeCard className="simple-hide" /> : null}
         <ContinueReadingCard className="simple-hide" />
         <BrowseCard
           href="/notes"
@@ -62,7 +66,7 @@ function LibraryView() {
           title="Journal"
           description="Your notes and reading"
         />
-        {LIBRARY_VOLUMES.map((volume) => (
+        {LIBRARY_VOLUMES.filter((volume) => showLdsContent || !isLdsVolume(volume.id)).map((volume) => (
           <BrowseCard
             key={volume.id}
             href={volume.href}

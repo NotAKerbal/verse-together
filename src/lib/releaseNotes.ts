@@ -60,7 +60,12 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    {
+      kind: "new",
+      text: "Choose your faith tradition in Settings → Reading. Other denominations keeps Bible reading and your journal while hiding Latter-day Saint scriptures, Come Follow Me, Joseph Smith Translation and study resources. Your choice is saved on this device.",
+    },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [
