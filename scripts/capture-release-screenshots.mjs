@@ -4,7 +4,7 @@
 //
 //   npm run build && npx next start -p 3123          (a production build: no development overlay)
 //   PLAYWRIGHT_CORE_DIR=/path/with/node_modules node scripts/capture-release-screenshots.mjs \
-//     [--base http://localhost:3123] [--only unreleased-settings-header,2.9.0-jst]
+//     [--base http://localhost:3123] [--only 2.12.0-settings-header,2.9.0-jst]
 //
 // playwright-core isn't a project dependency: point PLAYWRIGHT_CORE_DIR at any directory where it's installed
 // (npm install playwright-core in a scratch directory). CHROME_PATH defaults to /usr/bin/google-chrome.
@@ -98,7 +98,7 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
-    name: "unreleased-settings-header",
+    name: "2.12.0-settings-header",
     viewport: { width: 1280, height: 920 },
     async run(page, viewport) {
       await open(page, "/account");
@@ -114,7 +114,7 @@ const SHOTS = [
     },
   },
   {
-    name: "unreleased-reader-settings",
+    name: "2.12.0-reader-settings",
     viewport: { width: 1280, height: 900 },
     async run(page, viewport) {
       await open(page, "/browse/bookofmormon/1nephi/1");

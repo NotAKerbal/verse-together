@@ -59,40 +59,56 @@ export type UnreleasedNotes = {
 
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
-  title: "Settings sections in the header, release notes with versions, and clearer note links",
-  items: [
-    {
-      kind: "improved",
-      text: "Settings shows one section at a time: your account, reading, study tools or these release notes. Choose one from the pill at the right of the app's header, beside the navigation; on phones and tablets, and in simple mode, the pill sits at the top of the page.",
-      screenshot: {
-        src: "/release-notes/unreleased-settings-header.webp",
-        width: 1600,
-        height: 973,
-        alt: "The Settings page. The app's navigation is at the top left and, at the top right of the same header, a pill with Account, Reading, Study tools and Release notes, Reading selected. Below, the Reading section spans the page: a John 1:1–3 preview beside text size, typeface, text width and comparison view controls, with simple mode below.",
-        caption: "Settings' sections in the header, with Reading open.",
-      },
-    },
-    {
-      kind: "new",
-      text: "Set text size, typeface, text width and comparison view in Settings with a live preview, or reset them. The reader's settings menu has the same controls.",
-      screenshot: {
-        src: "/release-notes/unreleased-reader-settings.webp",
-        width: 816,
-        height: 1034,
-        alt: "The reader's settings menu open over 1 Nephi 1, with simple mode, text size, typeface, text width, comparison view and a link to all settings.",
-        caption: "The same appearance controls in the reader's settings menu.",
-      },
-    },
-    { kind: "new", text: "Release notes show each release's version, with screenshots of what changed." },
-    {
-      kind: "improved",
-      text: "In the reader, a note appears once, as a small Note link at the start of each passage it links to. The passage you were reading when you wrote it no longer counts as a link.",
-    },
-    { kind: "improved", text: "Verses quoted together in a note are separated by a blank line." },
-  ],
+  title: "Upcoming changes",
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.12.0",
+    date: "2026-10-27",
+    title: "Unified settings and illustrated release history",
+    items: [
+      {
+        kind: "improved",
+        text: "Settings shows one section at a time: your account, reading, study tools or these release notes. Choose one from the pill at the right of the app's header, beside the navigation; on phones and tablets, and in simple mode, the pill sits at the top of the page.",
+        screenshot: {
+          src: "/release-notes/2.12.0-settings-header.webp",
+          width: 1600,
+          height: 973,
+          alt: "The Settings page. The app's navigation is at the top left and, at the top right of the same header, a pill with Account, Reading, Study tools and Release notes, Reading selected. Below, the Reading section spans the page: a John 1:1–3 preview beside text size, typeface, text width and comparison view controls, with simple mode below.",
+          caption: "Settings' sections in the header, with Reading open.",
+        },
+      },
+      {
+        kind: "new",
+        text: "Set text size, typeface, text width and comparison view in Settings with a live preview, or reset them. The reader's settings menu has the same controls.",
+        screenshot: {
+          src: "/release-notes/2.12.0-reader-settings.webp",
+          width: 816,
+          height: 1034,
+          alt: "The reader's settings menu open over 1 Nephi 1, with simple mode, text size, typeface, text width, comparison view and a link to all settings.",
+          caption: "The same appearance controls in the reader's settings menu.",
+        },
+      },
+      { kind: "new", text: "Release notes show each release's version, with screenshots of what changed." },
+    ],
+    commits: ["848fb3d", "4f24599"],
+  },
+  {
+    version: "2.11.0",
+    date: "2026-10-27",
+    title: "Clearer note links and scripture quotes",
+    items: [
+      {
+        kind: "improved",
+        text: "In the reader, a note appears once, as a small Note link at the start of each passage it links to. The passage you were reading when you wrote it no longer counts as a link.",
+      },
+      { kind: "improved", text: "Verses quoted together in a note are separated by a blank line." },
+    ],
+    masterCommit: "163cc73",
+    commits: ["4a93b63", "c92b364"],
+  },
   {
     version: "2.10.0",
     date: "2026-10-27",
