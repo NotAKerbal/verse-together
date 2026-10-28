@@ -1,3 +1,4 @@
+import { isRecord, get, getString, getNumber } from "@/lib/jsonFields";
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 import { fetchBibleApiChapter } from "@/lib/bibleApi";
 import { fetchHelloaoChapter } from "@/lib/helloaoApi";
@@ -35,30 +36,6 @@ export type ChapterFetchOptions = {
 };
 
 const BASE_URL = "https://openscriptureapi.org/api/scriptures/v1/lds/en";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
-
-function get(obj: unknown, key: string): unknown {
-  if (!isRecord(obj)) return undefined;
-  return obj[key];
-}
-
-function getString(obj: unknown, key: string): string | undefined {
-  const v = get(obj, key);
-  return typeof v === "string" ? v : undefined;
-}
-
-function getNumber(obj: unknown, key: string): number | undefined {
-  const v = get(obj, key);
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  return undefined;
-}
 
 function getArray(obj: unknown, key: string): unknown[] {
   const v = get(obj, key);

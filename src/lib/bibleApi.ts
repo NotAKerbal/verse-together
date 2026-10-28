@@ -1,3 +1,4 @@
+import { get, getString, getNumber } from "@/lib/jsonFields";
 import { getBibleBookBySlug, isBibleTranslationId, normalizeBibleTranslationId } from "@/lib/bibleCanon";
 
 export type BibleApiChapterResponse = {
@@ -6,30 +7,6 @@ export type BibleApiChapterResponse = {
   translationName?: string;
   verses: Array<{ verse: number; text: string }>;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
-
-function get(obj: unknown, key: string): unknown {
-  if (!isRecord(obj)) return undefined;
-  return obj[key];
-}
-
-function getString(obj: unknown, key: string): string | undefined {
-  const value = get(obj, key);
-  return typeof value === "string" ? value : undefined;
-}
-
-function getNumber(obj: unknown, key: string): number | undefined {
-  const value = get(obj, key);
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return undefined;
-}
 
 function parseVerses(raw: unknown): Array<{ verse: number; text: string }> {
   const list = Array.isArray(get(raw, "verses")) ? (get(raw, "verses") as unknown[]) : [];
