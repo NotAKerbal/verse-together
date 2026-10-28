@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Verse Together",
+    "slug": "verse-together",
+    "scheme": "versetogether",
+    "version": "1.0.5",
+    "orientation": "default",
+    "icon": "../public/brand/icons/light/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#f6f3ec",
+    "ios": {
+      "bundleIdentifier": "org.versetogether.app",
+      "buildNumber": "6",
+      "supportsTablet": true,
+      "icon": {
+        "light": "../public/brand/icons/light/icon.png",
+        "dark": "../public/brand/icons/dark/icon.png"
+      }
+    },
+    "android": {
+      "package": "org.versetogether.app",
+      "versionCode": 6,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png",
+        "backgroundColor": "#f8f4ed"
+      },
+      "softwareKeyboardLayoutMode": "resize",
+      "allowBackup": true,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_WIFI_STATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash-light.png",
+          "imageWidth": 112,
+          "backgroundColor": "#f6f3ec",
+          "dark": {
+            "image": "./assets/brand/splash-dark.png",
+            "backgroundColor": "#181715"
+          }
+        }
+      ],
+      [
+        "expo-system-ui"
+      ],
+      "./plugins/withStoreSigning",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ],
+      "expo-web-browser",
+      "./plugins/withBackupRules"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

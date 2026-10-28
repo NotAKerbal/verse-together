@@ -1,4 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Verse Together
+
+One repository for the web app, native Android/iOS app, and native Rust desktop app. They share scripture,
+Come, Follow Me content, artwork and backend APIs. See [the monorepo guide](docs/monorepo.md) for setup and boundaries.
+
+```bash
+npm run apps                         # list apps
+npm run app -- mobile check          # mobile typecheck, tests and generated data
+npm run app -- desktop dev           # native Rust app
+npm run apps:check                   # all app checks, sequentially
+```
+
+The web app remains at the repository root, mobile is in [mobile/](mobile/README.md), and the Rust desktop app is
+in [native/](native/README.md). The web and Convex deployment paths are unchanged.
 
 ## Getting Started
 

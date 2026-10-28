@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01-browse.png",
+    "sourceAttachmentId": "e4ead6c8-dd8e-49ed-9bd8-283280aea610",
+    "sha256": "360927d7cce9cb4c9b228272af9e838b7f6103328252e1fdd78955d9f6424d10",
+    "processing": "None: byte-identical owner-provided native app capture"
+  },
+  {
+    "file": "02-reader.png",
+    "sourceAttachmentId": "e8b8e98d-dc88-49d8-9cb2-4852b8828b20",
+    "sha256": "150c703de6093b977f4750e88b13ea94b5b650e477d3e39e2ad10e487f0cdc6b",
+    "processing": "None: byte-identical owner-provided native app capture"
+  },
+  {
+    "file": "03-come-follow-me.png",
+    "sourceAttachmentId": "74674a0a-1fd4-4954-8a93-41c4387046fa",
+    "sha256": "ce7a9deec626fc6b08b9c4c645b536679e0e525229c30b83f2872c54bb78c7bf",
+    "processing": "None: byte-identical owner-provided native app capture"
+  },
+  {
+    "file": "04-journal.png",
+    "sourceAttachmentId": "7c15d22f-bf59-4a15-87d3-8cad7b6bd152",
+    "sha256": "5cf6a44b5ae590709dd44207338727f8fe783c17a73d4ba7646c08ca77569bf6",
+    "processing": "None: byte-identical owner-provided native app capture"
+  },
+  {
+    "file": "05-study-guide.png",
+    "sourceAttachmentId": "6d9bfddf-42da-4318-9927-a41cac8bbb81",
+    "sha256": "7dabcbbf4b640af3c48dc9ca476b7918ba2d2bead77dffb267aaafc90b217ca0",
+    "processing": "None: byte-identical owner-provided native app capture"
+  }
+]
