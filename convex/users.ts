@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
+import { isAccountDeletionStarted } from "./accountDeletion";
 import { authComponent } from "./auth";
 import { findAppUserByAuthUserId, getAuthenticatedAuthUserId } from "./utils";
 import { DEFAULT_JOURNAL_GOALS, journalGoalsProblem } from "../src/lib/journalGoals";
@@ -39,6 +40,8 @@ async function ensureCurrentUserInternal(ctx: MutationCtx) {
   if (!authUserId) throw new Error("Unauthorized");
   const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) throw new Error("Unauthorized");
+  // A deletion that stopped partway must be finished (by deleting again), not undone by provisioning anew.
+  if (await isAccountDeletionStarted(ctx, authUserId)) throw new Error("This account is being deleted. Delete it again to finish.");
 
   // Only a verified address is stored on the app row: it powers friend lookup by email, which must not
   // reach an account that merely typed someone else's address.
@@ -131,6 +134,26 @@ export const viewer = query({
     if (!authUserId) return null;
     const row = await findAppUserByAuthUserId(ctx, authUserId);
     return row ? viewerPayload(row) : null;
+  },
+});
+
+/**
+ * The signed-in account's app user and any unfinished deletion of it, read in one transaction. Starting a deletion
+ * removes the users row and records the deletion together (convex/accountDeletion.ts), so this never shows the
+ * viewer gone without the deletion that removed it: separate `viewer` and `accountDeletion:pending` subscriptions can
+ * update one before the other, and a client must not take that moment for a session that ended. Null when signed out.
+ */
+export const accountStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const authUserId = await getAuthenticatedAuthUserId(ctx);
+    if (!authUserId) return null;
+    const row = await findAppUserByAuthUserId(ctx, authUserId);
+    const deletion = await ctx.db.query("accountDeletions").withIndex("by_auth_user_id", (q) => q.eq("authUserId", authUserId)).first();
+    return {
+      viewer: row ? viewerPayload(row) : null,
+      deletion: deletion ? { appUserId: deletion.clerkId, startedAt: deletion.startedAt } : null,
+    };
   },
 });
 

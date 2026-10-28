@@ -28,6 +28,9 @@ type Viewer = {
 
 type ViewerState = { sessionId: string; viewer: Viewer | null; error: string | null };
 
+/** The signed-in owner's own account deletion that stopped partway (convex/accountDeletion.ts). */
+export type PendingDeletion = { appUserId: string; startedAt: number };
+
 type AuthContextValue = {
   /** False when this build has no Convex/Better Auth configuration (NEXT_PUBLIC_CONVEX_URL). */
   configured: boolean;
@@ -39,6 +42,11 @@ type AuthContextValue = {
   isAdmin: boolean;
   legacyAccount: boolean;
   legacyAccountPending: boolean;
+  /**
+   * Set while this session's account deletion stopped partway. `user` stays null (the app user is already gone and
+   * is never provisioned again); only finishing the deletion (/delete-account) or signing out is offered.
+   */
+  pendingDeletion: PendingDeletion | null;
   /** Better Auth user fields straight from the session (for the account page). */
   authUser: { id: string; email: string; name: string; image: string | null; emailVerified: boolean } | null;
   /** A Convex JWT for ConvexHttpClient calls. The Clerk-era `template` option is accepted and ignored. */
@@ -129,7 +137,7 @@ const ACCEPTED_SESSION_VERIFY_GRACE_MS = 1_500;
  * Resolves the Better Auth session into the app user. `user` (and admin/legacy flags) are exposed only
  * while Convex currently accepts the session's JWT and the app user has been provisioned/linked
  * server-side for that session, so callers that gate Convex queries or mutations on `user` never run
- * against a half-established, rejected, or signed-out identity. After provisioning, a live `users.viewer`
+ * against a half-established, rejected, or signed-out identity. After provisioning, a live `users.accountStatus`
  * subscription keeps admin status and the account link current and withdraws `user` as soon as the
  * server stops recognising the session (signed out or revoked elsewhere), without waiting for the JWT
  * to expire.
@@ -170,21 +178,35 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
     [ensureCurrentUser]
   );
 
+  // Asked before provisioning: an account whose deletion stopped partway is never recreated.
+  const pendingDeletion = useQuery(api.accountDeletion.pending, sessionId && convexAuthenticated ? {} : "skip") as
+    | PendingDeletion
+    | null
+    | undefined;
+
   useEffect(() => {
-    if (!sessionId || !convexAuthenticated) return;
+    if (!sessionId || !convexAuthenticated || pendingDeletion !== null) return;
     if (viewerState?.sessionId === sessionId) return;
     void runEnsure(sessionId).then((next) => {
       if (next) setViewerState(next);
     });
-  }, [sessionId, convexAuthenticated, viewerState?.sessionId, runEnsure]);
+  }, [sessionId, convexAuthenticated, pendingDeletion, viewerState?.sessionId, runEnsure]);
 
   const currentViewerState = sessionId && viewerState?.sessionId === sessionId ? viewerState : null;
   // Convex accepted this session at least once: provisioning ran under its token.
   const sessionWasAccepted = !!currentViewerState?.viewer;
   const provisioned = convexAuthenticated ? (currentViewerState?.viewer ?? null) : null;
 
-  // Live view of the linked app user; null once the session is gone server-side or the link is removed.
-  const liveViewer = useQuery(api.users.viewer, provisioned ? {} : "skip") as Omit<Viewer, "legacyAccountPending"> | null | undefined;
+  // Live view of the linked app user and any deletion of it, read together: starting a deletion removes the app user
+  // and records the deletion in one step, so the viewer is never seen gone before the deletion that removed it (two
+  // separate subscriptions could deliver those in either order). Null once the session is gone server-side.
+  const liveStatus = useQuery(api.users.accountStatus, provisioned ? {} : "skip") as
+    | { viewer: Omit<Viewer, "legacyAccountPending"> | null; deletion: PendingDeletion | null }
+    | null
+    | undefined;
+  const liveViewer = liveStatus === undefined ? undefined : (liveStatus?.viewer ?? null);
+  const deletion = pendingDeletion ?? liveStatus?.deletion ?? null;
+  const deleting = !!sessionId && convexAuthenticated && deletion ? deletion : null;
   const viewerRevoked = !!provisioned && liveViewer === null;
   // Only a viewer provisioned for this session, while Convex and the server accept it right now.
   const viewer = useMemo<Viewer | null>(() => {
@@ -199,7 +221,7 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
   }, [provisioned, liveViewer]);
 
   // Convex verification state for the current session.
-  const convexUnverified = !!sessionId && !convexAuthLoading && (!convexAuthenticated || viewerRevoked);
+  const convexUnverified = !!sessionId && !convexAuthLoading && (!convexAuthenticated || (viewerRevoked && !deleting));
   const [rejectedSessionId, setRejectedSessionId] = useState<string | null>(null);
   if (!convexUnverified && rejectedSessionId !== null) setRejectedSessionId(null);
 
@@ -218,11 +240,11 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
   const error = sessionId
     ? convexRejected
       ? "Your session couldn't be verified. Sign in again."
-      : convexAuthenticated
+      : convexAuthenticated && !deleting
         ? (currentViewerState?.error ?? null)
         : null
     : null;
-  const loading = sessionPending || (!!sessionId && !error && !viewer);
+  const loading = sessionPending || (!!sessionId && !error && !viewer && !deleting);
 
   const user: AppUser | null = useMemo(
     () =>
@@ -317,10 +339,10 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
   }, [router, sessionId]);
 
   const refresh = useCallback(async () => {
-    if (!sessionId || !convexAuthenticated) return;
+    if (!sessionId || !convexAuthenticated || pendingDeletion !== null) return;
     const next = await runEnsure(sessionId);
     if (next) setViewerState(next);
-  }, [sessionId, convexAuthenticated, runEnsure]);
+  }, [sessionId, convexAuthenticated, pendingDeletion, runEnsure]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -332,6 +354,7 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
       isAdmin: viewer?.isAdmin === true,
       legacyAccount: viewer?.legacyAccount === true,
       legacyAccountPending: viewer?.legacyAccountPending === true,
+      pendingDeletion: deleting,
       authUser: sessionUser
         ? {
             id: sessionUser.id,
@@ -347,7 +370,7 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
       signOut,
       refresh,
     }),
-    [user, loading, error, viewer, sessionUser, getToken, promptSignIn, signingIn, signOut, refresh]
+    [user, loading, error, viewer, deleting, sessionUser, getToken, promptSignIn, signingIn, signOut, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -366,6 +389,7 @@ export function UnconfiguredAuthProvider({ children }: PropsWithChildren) {
       isAdmin: false,
       legacyAccount: false,
       legacyAccountPending: false,
+      pendingDeletion: null,
       authUser: null,
       getToken: async () => null,
       promptSignIn: (returnTo?: string) => router.push(signInHref(returnPathFor(returnTo))),
