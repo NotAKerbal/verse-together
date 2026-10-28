@@ -524,6 +524,7 @@ impl App {
                     return Task::none();
                 };
                 self.account.confirm_sign_out = None;
+                self.popover = None;
                 // This computer stops showing the account at once (a running sync stops before its next write);
                 // its cache is removed once that sync has let go, then the server session is ended.
                 self.account.next_generation();

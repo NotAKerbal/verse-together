@@ -189,11 +189,13 @@ fn signing_out_asks_before_discarding_unsent_changes() {
             },
         )
         .unwrap();
+    f.app.popover = Some(crate::Popover::AppSettings);
     let _ = f.app.update_account(AccountMsg::SignOut(false));
     assert_eq!(f.app.account.confirm_sign_out, Some(1));
     assert!(f.app.account.session.is_some());
     let _ = f.app.update_account(AccountMsg::SignOut(true));
     assert!(f.app.account.session.is_none());
+    assert!(f.app.popover.is_none());
     assert_eq!(f.app.store.as_ref().unwrap().owner(), "");
 }
 
