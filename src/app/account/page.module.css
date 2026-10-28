@@ -1,7 +1,24 @@
+/* Fill the viewport while keeping the phone navigation's existing bottom clearance. */
+:global(.app-body):has(.shell) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+:global(.app-main):has(> .shell) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
 .shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   width: min(100%, 64rem);
   margin-inline: auto;
-  padding-block: 1rem 3rem;
+  padding-block: 1rem 1.5rem;
 }
 
 /*
@@ -1067,9 +1084,10 @@
   }
 }
 
-/* Below every section: a quiet link to the privacy policy. */
+/* Push the policy to the bottom on short pages; let it follow longer sections. */
 .policyLink {
-  margin-top: 2rem;
+  margin-top: auto;
+  padding-top: 2rem;
   font-size: .8rem;
   color: var(--foreground-soft);
 }
