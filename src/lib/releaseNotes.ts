@@ -1,20 +1,3 @@
-/*
-  Release notes shown in Settings, and the app's version.
-
-  Versions follow production: master is what Verse Together serves. Version 2.0.0 is the Marker redesign that
-  replaced the whole interface (d65680e, 2026-09-25), together with everything master received directly before
-  production releases began coming from dev. Since then each merge of dev into master is one release, and each
-  release adds one to the minor version (2.1.0, 2.2.0, ...). The major version stays 2 unless the project owner
-  decides otherwise.
-
-  Work that is not on master yet goes in UNRELEASED. When dev is merged into master, it becomes the next release,
-  package.json and package-lock.json take its version, and `npm run release:check` confirms they agree. See
-  AGENTS.md ("Releases") for the full procedure.
-
-  This file is read by scripts/release-version.mjs with Node's type stripping: keep it free of imports and of
-  TypeScript syntax that needs compiling (enums, namespaces).
-*/
-
 export type ReleaseNoteKind = "new" | "improved";
 
 export type ReleaseScreenshot = {
@@ -38,7 +21,6 @@ export type ReleaseNoteItem = {
 };
 
 export type Release = {
-  /** Semantic version: 2.minor.0 for each dev-to-master release. */
   version: string;
   /** The day the release reached master (the release merge's commit date), YYYY-MM-DD. */
   date: string;
