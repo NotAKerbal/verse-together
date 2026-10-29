@@ -3,6 +3,14 @@
 These instructions apply to every coding agent working in this repository, including Codex and Claude Code
 (`CLAUDE.md` imports this file).
 
+## Code comments
+
+- Do not add code comments. This includes inline, block, JSX, documentation comments, TODOs, and commented-out code.
+- Express intent through clear names, types, and simple code. Put necessary explanations in project documentation.
+- Before handing off changes, remove comments from code you add or change. Do not perform unrelated comment cleanup.
+- Preserve legally required license notices and required machine-consumed directives. These are the only exceptions;
+  do not use directives to bypass checks or carry explanatory prose.
+
 ## Branches
 
 - `dev` is the integration branch. Feature branches merge into `dev`, and dev deploys to the Vercel preview and the
