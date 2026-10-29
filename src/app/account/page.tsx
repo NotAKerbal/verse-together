@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBookBible, faBookOpen, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
+import { faBookBible, faBookOpen, faCirclePlay, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
 import { AppHeaderPortal, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import FeedbackForm from "@/components/FeedbackForm";
 import AccountManager from "@/features/auth/AccountManager";
@@ -215,6 +215,17 @@ export default function AccountPage() {
           <FeedbackForm />
         </SettingsPanel>
       </div>
+
+      {/* Under every section, above the privacy policy that ends the page. */}
+      <p className={styles.guideLink}>
+        <Link href="/feature-guide">
+          <FontAwesomeIcon icon={faCirclePlay} aria-hidden="true" className={styles.guideLinkIcon} />
+          <span>
+            <span className={styles.guideLinkTitle}>Feature guide</span>
+            <span className={styles.guideLinkText}>Short clips showing how each part of Verse Together works</span>
+          </span>
+        </Link>
+      </p>
 
       <p className={styles.policyLink}>
         <Link href="/privacy">Privacy policy</Link>

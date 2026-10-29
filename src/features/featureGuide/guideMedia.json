@@ -1,0 +1,226 @@
+{
+  "browse-library": {
+    "durationSeconds": 11.13,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 470592,
+    "posterBytes": 43198
+  },
+  "browse-chapter-grid": {
+    "durationSeconds": 9.58,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 452438,
+    "posterBytes": 37468
+  },
+  "search-reference": {
+    "durationSeconds": 11.92,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 618557,
+    "posterBytes": 37334
+  },
+  "search-phrase": {
+    "durationSeconds": 17.0,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 387040,
+    "posterBytes": 15900
+  },
+  "reading-settings": {
+    "durationSeconds": 18.79,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 1140901,
+    "posterBytes": 57664
+  },
+  "reading-simple-mode": {
+    "durationSeconds": 12.08,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 749521,
+    "posterBytes": 50754
+  },
+  "bibles-add": {
+    "durationSeconds": 10.67,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 151220,
+    "posterBytes": 11182
+  },
+  "bibles-language": {
+    "durationSeconds": 21.42,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 407666,
+    "posterBytes": 13366
+  },
+  "compare-inline": {
+    "durationSeconds": 17.29,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 588138,
+    "posterBytes": 23128
+  },
+  "compare-side-by-side": {
+    "durationSeconds": 13.08,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 312463,
+    "posterBytes": 13748
+  },
+  "bibles-default": {
+    "durationSeconds": 14.04,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 477977,
+    "posterBytes": 24078
+  },
+  "jst": {
+    "durationSeconds": 21.08,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 945233,
+    "posterBytes": 47456
+  },
+  "faith-tradition": {
+    "durationSeconds": 13.04,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 337915,
+    "posterBytes": 12854
+  },
+  "marks-highlight": {
+    "durationSeconds": 12.25,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 519490,
+    "posterBytes": 36600
+  },
+  "marks-underline": {
+    "durationSeconds": 18.83,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 762484,
+    "posterBytes": 37006
+  },
+  "marks-remove": {
+    "durationSeconds": 13.38,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 528259,
+    "posterBytes": 37264
+  },
+  "quick-marks-name": {
+    "durationSeconds": 9.88,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 205972,
+    "posterBytes": 18706
+  },
+  "quick-marks-use": {
+    "durationSeconds": 14.08,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 676358,
+    "posterBytes": 40114
+  },
+  "explore-study-helps": {
+    "durationSeconds": 21.5,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 1046786,
+    "posterBytes": 48330
+  },
+  "explore-languages": {
+    "durationSeconds": 20.67,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 744360,
+    "posterBytes": 36712
+  },
+  "study-paths": {
+    "durationSeconds": 14.17,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 721023,
+    "posterBytes": 46342
+  },
+  "notes-quote": {
+    "durationSeconds": 15.42,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 649869,
+    "posterBytes": 40060
+  },
+  "notes-write": {
+    "durationSeconds": 11.83,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 489455,
+    "posterBytes": 41474
+  },
+  "log-reading": {
+    "durationSeconds": 18.83,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 926228,
+    "posterBytes": 44130
+  },
+  "journal-goals": {
+    "durationSeconds": 11.79,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 474172,
+    "posterBytes": 30454
+  },
+  "journal-prompts": {
+    "durationSeconds": 12.21,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 437029,
+    "posterBytes": 18878
+  },
+  "journal-day": {
+    "durationSeconds": 9.88,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 315760,
+    "posterBytes": 15152
+  },
+  "cfm-week": {
+    "durationSeconds": 14.25,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 545050,
+    "posterBytes": 20192
+  },
+  "cfm-context": {
+    "durationSeconds": 16.88,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 517926,
+    "posterBytes": 18956
+  },
+  "cfm-note": {
+    "durationSeconds": 9.46,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 258151,
+    "posterBytes": 23826
+  },
+  "focus-share": {
+    "durationSeconds": 14.92,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 394825,
+    "posterBytes": 12480
+  },
+  "settings-tour": {
+    "durationSeconds": 26.71,
+    "width": 1280,
+    "height": 720,
+    "videoBytes": 590839,
+    "posterBytes": 10082
+  }
+}

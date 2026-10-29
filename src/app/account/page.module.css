@@ -1085,6 +1085,53 @@
 }
 
 /* Push the policy to the bottom on short pages; let it follow longer sections. */
+/* The feature guide: a quiet link under the open section, apart from the privacy policy footer. */
+.guideLink {
+  margin-top: 2rem;
+}
+
+.guideLink a {
+  display: inline-flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .55rem .9rem .55rem .7rem;
+  border: 1px solid var(--surface-border);
+  border-radius: .9rem;
+  background: var(--surface-card);
+  color: var(--foreground);
+}
+
+.guideLink a:hover {
+  background: var(--surface-card-strong);
+  border-color: var(--rule-strong);
+}
+
+.guideLink a:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+}
+
+.guideLinkIcon {
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--accent-rubric);
+}
+
+.guideLinkTitle {
+  display: block;
+  font-family: var(--font-serif-text);
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.guideLinkText {
+  display: block;
+  font-size: .8rem;
+  line-height: 1.4;
+  color: var(--foreground-muted);
+}
+
 .policyLink {
   margin-top: auto;
   padding-top: 2rem;
