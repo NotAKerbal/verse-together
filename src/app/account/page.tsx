@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBookBible, faBookOpen, faClockRotateLeft, faCommentDots, faHighlighter, faUser } from "@fortawesome/free-solid-svg-icons";
@@ -93,6 +93,28 @@ function SettingsTabs({ placement, selected, onSelect, carryFocusRef }: Settings
   const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<SettingsTabId, HTMLButtonElement>());
 
+  // Match the primary navigation: animate to each label's real width, with one sliding highlight.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const labels = Array.from(list.querySelectorAll<HTMLElement>(`.${styles.tabLabelText}`));
+    const measureLabels = () => {
+      labels.forEach((label) => {
+        const width = `${label.getBoundingClientRect().width}px`;
+        const button = label.closest("button");
+        button?.style.setProperty("--settings-label-width", width);
+        if (button?.getAttribute("aria-selected") === "true") {
+          list.style.setProperty("--settings-active-label-width", width);
+        }
+      });
+      list.dataset.measured = "true";
+    };
+    measureLabels();
+    const observer = new ResizeObserver(measureLabels);
+    labels.forEach((label) => observer.observe(label));
+    return () => observer.disconnect();
+  }, [selected, placement]);
+
   // Only one copy exists at a time, so moving between the page and the header remounts the tabs. The old copy
   // notes whether it had focus before it is removed, and the new one gives focus to its open tab.
   useLayoutEffect(() => {
@@ -122,9 +144,11 @@ function SettingsTabs({ placement, selected, onSelect, carryFocusRef }: Settings
       aria-label="Settings"
       aria-orientation="horizontal"
       data-placement={placement}
+      style={{ "--settings-active-index": SETTINGS_TABS.indexOf(selected) } as CSSProperties}
       className={styles.tabList}
       onKeyDown={handleKeyDown}
     >
+      <span className={styles.tabIndicator} aria-hidden="true" />
       {SETTINGS_TABS.map((tab) => {
         const isSelected = tab === selected;
         return (
@@ -146,7 +170,7 @@ function SettingsTabs({ placement, selected, onSelect, carryFocusRef }: Settings
             onClick={() => onSelect(tab)}
           >
             <FontAwesomeIcon icon={TABS[tab].icon} aria-hidden="true" className={styles.tabIcon} />
-            <span className={styles.tabLabel}>{TABS[tab].label}</span>
+            <span className={styles.tabLabel}><span className={styles.tabLabelText}>{TABS[tab].label}</span></span>
           </button>
         );
       })}

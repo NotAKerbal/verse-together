@@ -57,9 +57,18 @@
 
 .tabLabel {
   max-width: 0;
+  margin-left: 0;
   overflow: hidden;
   opacity: 0;
   transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
+}
+
+.tabLabelText {
+  display: inline-block;
+}
+
+.tabIndicator {
+  display: none;
 }
 
 .tab[aria-selected="true"] {
@@ -68,7 +77,7 @@
 }
 
 .tab[aria-selected="true"] .tabLabel {
-  max-width: 10rem;
+  max-width: var(--settings-label-width, 0px);
   margin-left: .375rem;
   opacity: 1;
 }
@@ -133,6 +142,7 @@
 
 /* In the header (AppHeaderPortal): the navigation pill's chrome and controls, the open tab like its open link. */
 .tabList[data-placement="header"] {
+  position: relative;
   flex-shrink: 0;
   align-items: center;
   gap: .375rem;
@@ -146,16 +156,43 @@
 }
 
 .tabList[data-placement="header"] .tab {
+  flex-shrink: 0;
+  width: var(--desktop-nav-control-size);
   min-width: var(--desktop-nav-control-size);
   height: var(--desktop-nav-control-size);
-  padding-inline: .6rem;
+  padding-inline: .5rem;
   border-radius: .7rem;
   font-size: .8125rem;
-  transition: padding 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+  transition: width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
 }
 
 .tabList[data-placement="header"] .tab[aria-selected="true"] {
-  padding-inline: .75rem;
+  width: calc(var(--desktop-nav-control-size) + .375rem + var(--settings-label-width, 0px));
+  background: transparent;
+}
+
+.tabList[data-placement="header"] .tabIndicator {
+  display: block;
+  position: absolute;
+  top: .3125rem;
+  left: .375rem;
+  width: calc(var(--desktop-nav-control-size) + .375rem + var(--settings-active-label-width, 0px));
+  height: var(--desktop-nav-control-size);
+  border-radius: .7rem;
+  background: var(--surface-button-active);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(var(--settings-active-index, 0) * (var(--desktop-nav-control-size) + .375rem)));
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1), width 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.tabList[data-placement="header"][data-measured="true"] .tabIndicator {
+  opacity: 1;
+}
+
+/* Establish the initial geometry before enabling motion, including when tabs move into the header. */
+.tabList:not([data-measured="true"]) :is(.tab, .tabLabel, .tabIndicator) {
+  transition: none;
 }
 
 .tabList[data-placement="header"] .tab:focus-visible {
@@ -1010,7 +1047,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell *, .shell *::before, .tabList * {
+  .shell *, .shell *::before,
+  .tabList[data-placement] :is(.tab, .tabLabel, .tabIndicator) {
     transition: none;
   }
 }
