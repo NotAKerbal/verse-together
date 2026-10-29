@@ -20,11 +20,9 @@ function CheckIcon() {
 type Props = {
   href: string;
   label: string;
-  /** Mint tint with a check. */
   read: boolean;
 };
 
-/** A pill link to a chapter (or the first chapter of a range), tinted mint once it's read. */
 export default function ChapterChip({ href, label, read }: Props) {
   return (
     <Link

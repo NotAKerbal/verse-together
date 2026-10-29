@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown, faPenToSquare } from "@fortawesome/free-solid-svg-icons";
+import { type IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { faArrowRightFromBracket, faChevronDown, faCircleCheck, faDesktop, faEnvelope, faKey, faLaptop, faMobileScreenButton, faPenToSquare, faShieldHalved, faTabletScreenButton, faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/app/account/page.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -14,6 +15,7 @@ import { loadAccountLists, type ListProblem } from "./accountLists";
 import {
   FormMessage,
   GoogleButton,
+  GoogleMark,
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS,
   TextField,
@@ -23,27 +25,38 @@ import {
 type LinkedAccount = { providerId: string };
 type SessionRow = { id: string; userAgent?: string | null; createdAt: Date | string; expiresAt: Date | string };
 
-function Section({ title, summary, children }: { title: string; summary?: React.ReactNode; children: React.ReactNode }) {
-  const id = `account-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+function Section({ title, description, icon, summary, children, defaultOpen = false, danger = false }: {
+  title: string;
+  description: string;
+  icon: IconDefinition;
+  summary?: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  danger?: boolean;
+}) {
   return (
-    <details className={styles.accountSection}>
-      <summary className={styles.sectionSummary}>
-        <h3 id={id}>{title}</h3>
-        {summary ? <span className={styles.sectionMeta}>{summary}</span> : null}
-        <FontAwesomeIcon icon={faChevronDown} className={styles.chevron} aria-hidden="true" />
+    <details className={`${styles.accountSection} ${danger ? styles.dangerSection : ""}`} open={defaultOpen}>
+      <summary className={styles.accountSummary}>
+        <span className={styles.sectionIcon}><FontAwesomeIcon icon={icon} aria-hidden="true" /></span>
+        <div className={styles.sectionHeading}>
+          <h3>{title}</h3>
+          <span className={styles.sectionDescription}>{description}</span>
+        </div>
+        {summary ? <span className={styles.accountMeta}>{summary}</span> : null}
+        <FontAwesomeIcon icon={faChevronDown} className={styles.accountChevron} aria-hidden="true" />
       </summary>
-      <div className={styles.sectionContent}>{children}</div>
+      <div className={styles.accountContent}>{children}</div>
     </details>
   );
 }
 
 function describeAgent(agent: string | null | undefined): string {
   if (!agent) return "Unknown device";
-  const browser = /Edg\//.test(agent)
+  const browser = /Edg(?:e|A|iOS)?\//.test(agent)
     ? "Edge"
-    : /Chrome\//.test(agent)
+    : /Chrome\/|CriOS\//.test(agent)
       ? "Chrome"
-      : /Firefox\//.test(agent)
+      : /Firefox\/|FxiOS\//.test(agent)
         ? "Firefox"
         : /Safari\//.test(agent)
           ? "Safari"
@@ -212,7 +225,7 @@ function AccountDetails() {
         <div className={styles.footer}><SignOutButton label="Sign out" /></div>
       </div>
       <div className={styles.settingsColumn}>
-        <div className={styles.settingsCard}>
+        <div className={styles.accountControls}>
           {listProblem ? (
             <div className="space-y-2">
               <FormMessage tone="error">{listProblem.message}</FormMessage>
@@ -239,7 +252,7 @@ function AccountDetails() {
               )}
             </div>
           ) : null}
-          {!authUser.emailVerified ? <Section title="Email" summary="Not confirmed">
+          {!authUser.emailVerified ? <Section title="Email" description="Confirm your email address" icon={faEnvelope} summary="Not confirmed">
             <p className="text-sm">
               <span className="font-semibold">{authUser.email}</span>{" "}
               <span className="text-[color:var(--foreground-muted)]">
@@ -254,14 +267,22 @@ function AccountDetails() {
             ) : null}
           </Section> : null}
 
-          <Section title="Sign-in methods" summary={accounts === null ? (listFailed.accounts ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
+          <Section title="Sign-in methods" description="How you access your account" icon={faShieldHalved} defaultOpen summary={accounts === null ? (listFailed.accounts ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
             {accounts === null ? (
               <ListPlaceholder failed={listFailed.accounts} />
             ) : (
-              <ul className="space-y-1 text-sm">
-                {emailPassword ? <li>Email and password: {hasPassword ? "set up" : "not set up"}</li> : null}
+              <ul className={styles.accountRows}>
+                {emailPassword ? <li className={styles.accountRow}>
+                  <span className={styles.rowIcon}><FontAwesomeIcon icon={faKey} aria-hidden="true" /></span>
+                  <span className={styles.rowTitle}>Email and password</span>
+                  <ConnectionStatus connected={hasPassword} label={hasPassword ? "Set up" : "Not set up"} />
+                </li> : null}
                 {!emailPassword || capabilities?.google || hasGoogle ? (
-                  <li>Google: {hasGoogle ? "connected" : "not connected"}</li>
+                  <li className={styles.accountRow}>
+                    <span className={`${styles.rowIcon} ${styles.googleIcon}`}><GoogleMark /></span>
+                    <span className={styles.rowTitle}>Google</span>
+                    <ConnectionStatus connected={hasGoogle} label={hasGoogle ? "Connected" : "Not connected"} />
+                  </li>
                 ) : null}
               </ul>
             )}
@@ -269,7 +290,7 @@ function AccountDetails() {
           </Section>
 
           {emailPassword ? (
-            <Section title="Password">
+            <Section title="Password" description="Update your sign-in password" icon={faKey}>
               {accounts === null ? null : hasPassword ? (
                 <ChangePasswordForm onChanged={loadLists} />
               ) : capabilities?.emailDelivery ? (
@@ -285,23 +306,43 @@ function AccountDetails() {
             </Section>
           ) : null}
 
-          <Section title="Sessions" summary={sessions === null ? (listFailed.sessions ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
+          <Section title="Signed-in devices" description="Where your account is signed in" icon={faLaptop} defaultOpen summary={sessions === null ? (listFailed.sessions ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}>
             <SessionsPanel sessions={sessions} failed={listFailed.sessions} onChanged={loadLists} />
           </Section>
 
-          <Section title="Delete account">
-            <p className="text-sm">
-              Permanently deletes your account and all the study saved in it, on the website and in the app.{" "}
-              <Link href="/delete-account" className="font-semibold underline underline-offset-2">
-                Delete my account
-              </Link>
+          <Section title="Delete account" description="Permanently remove your account and study" icon={faTrashCan} danger>
+            <p className={styles.dangerDescription}>
+              This permanently deletes your account and all the study saved in it, on the website and in the app. This cannot be undone.
             </p>
+            <Link href="/delete-account" className={styles.dangerButton}>
+              <FontAwesomeIcon icon={faTrashCan} aria-hidden="true" />
+              Delete my account
+            </Link>
           </Section>
 
         </div>
       </div>
     </div>
   );
+}
+
+function ConnectionStatus({ connected, label }: { connected: boolean; label: string }) {
+  return <span className={styles.statusBadge} data-connected={connected}>
+    {connected ? <FontAwesomeIcon icon={faCircleCheck} aria-hidden="true" /> : null}
+    {label}
+  </span>;
+}
+
+function DeviceIcon({ agent }: { agent?: string | null }) {
+  const icon = !agent ? faDesktop : /iPad|Tablet|Android(?!.*Mobile)/i.test(agent) ? faTabletScreenButton
+    : /iPhone|Android|Mobile/i.test(agent) ? faMobileScreenButton : faLaptop;
+  return <span className={styles.rowIcon}><FontAwesomeIcon icon={icon} aria-hidden="true" /></span>;
+}
+
+function SessionDate({ value }: { value: Date | string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return <span className={styles.rowDescription}>Signed in <time dateTime={date.toISOString()}>{date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</time></span>;
 }
 
 function ListPlaceholder({ failed }: { failed: boolean }) {
@@ -545,19 +586,24 @@ function SessionsPanel({
 
   return (
     <div className="space-y-3">
-      <ul className="space-y-1 text-sm">
-        {sessions.map((session) => (
-          <li key={session.id}>
-            {describeAgent(session.userAgent)}
-            {session.id === currentId ? <span className="font-semibold"> · This device</span> : null}
+      <ul className={styles.accountRows}>
+        {[...sessions].sort((a, b) => Number(b.id === currentId) - Number(a.id === currentId)).map((session) => (
+          <li key={session.id} className={styles.accountRow} data-current={session.id === currentId}>
+            <DeviceIcon agent={session.userAgent} />
+            <span className={styles.rowBody}>
+              <span className={styles.rowTitle}>{describeAgent(session.userAgent)}</span>
+              <SessionDate value={session.createdAt} />
+            </span>
+            {session.id === currentId ? <span className={styles.currentBadge}>This device</span> : null}
           </li>
         ))}
       </ul>
+      {sessions.length === 0 ? <p className={styles.rowDescription}>No signed-in devices to show.</p> : null}
       {message ? <FormMessage tone={message.tone}>{message.text}</FormMessage> : null}
       <button
         type="button"
         className={SECONDARY_BUTTON_CLASS}
-        disabled={pending || others.length === 0}
+        disabled={pending || !currentId || others.length === 0}
         aria-busy={pending}
         onClick={async () => {
           if (pending) return;
@@ -578,8 +624,10 @@ function SessionsPanel({
           }
         }}
       >
-        Sign out other devices
+        <FontAwesomeIcon icon={faArrowRightFromBracket} aria-hidden="true" className={styles.actionIcon} />
+        {pending ? "Signing out…" : "Sign out other devices"}
       </button>
+      <p className={styles.rowDescription}>This device stays signed in.</p>
     </div>
   );
 }

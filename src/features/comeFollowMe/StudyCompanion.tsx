@@ -10,7 +10,7 @@ import { useReaderHeaderDock } from "@/components/ReaderHeaderSlot";
 import { useInsightBuilder, type ReaderChapter, type ReaderChapterRegistration } from "@/features/insights/InsightBuilderProvider";
 import type { NoteSource } from "@/features/notes/journal";
 import JournalLogButton from "@/features/notes/JournalLogButton";
-import { getChapterHref } from "@/features/plans/scriptureCatalog";
+import { getChapterHref } from "@/features/reading/scriptureCatalog";
 import { decodeFragment, normalizeTarget, parseRangeAnchor, rangeAnchor, rangeBooks, rangeEntry, rangeScriptureTarget, scriptureAnchor, scriptureVerseId, type RangeChapter } from "@/lib/cfm/cfmAnchors";
 import type { GuideContextBlock, GuideReaderSection, TocItem } from "@/lib/cfm/cfmGuide";
 import ContentsNav, { ContentsOpener, type ContentsHandle } from "./ContentsNav";

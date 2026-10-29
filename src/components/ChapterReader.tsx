@@ -41,7 +41,7 @@ import { hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferen
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
-import { useMyReadingLog, useTrackLastPosition } from "@/features/plans/useReadingProgress";
+import { useMyReadingLog, useTrackLastPosition } from "@/features/reading/useReadingProgress";
 import { scriptureLinksForChapter } from "../../convex/noteScriptureLinks";
 import { chapterReadPassages, hasReaderNote } from "@/features/notes/chapterReadStatus";
 import { useJournalEntryActions } from "@/features/notes/useJournalEntryActions";
@@ -62,7 +62,7 @@ import {
 } from "@/lib/chapterInsights";
 import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
-import { getBookLabel } from "@/features/plans/scriptureCatalog";
+import { getBookLabel } from "@/features/reading/scriptureCatalog";
 import { useChapterAnnotations } from "@/features/annotations/useChapterAnnotations";
 import { useVerseQuickMarks } from "@/features/annotations/useVerseQuickMarks";
 import VerseAnnotationEditor from "@/features/annotations/VerseAnnotationEditor";

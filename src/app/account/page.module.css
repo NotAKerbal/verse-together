@@ -57,9 +57,18 @@
 
 .tabLabel {
   max-width: 0;
+  margin-left: 0;
   overflow: hidden;
   opacity: 0;
   transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
+}
+
+.tabLabelText {
+  display: inline-block;
+}
+
+.tabIndicator {
+  display: none;
 }
 
 .tab[aria-selected="true"] {
@@ -68,7 +77,7 @@
 }
 
 .tab[aria-selected="true"] .tabLabel {
-  max-width: 10rem;
+  max-width: var(--settings-label-width, 0px);
   margin-left: .375rem;
   opacity: 1;
 }
@@ -133,6 +142,7 @@
 
 /* In the header (AppHeaderPortal): the navigation pill's chrome and controls, the open tab like its open link. */
 .tabList[data-placement="header"] {
+  position: relative;
   flex-shrink: 0;
   align-items: center;
   gap: .375rem;
@@ -146,16 +156,42 @@
 }
 
 .tabList[data-placement="header"] .tab {
+  flex-shrink: 0;
+  width: var(--desktop-nav-control-size);
   min-width: var(--desktop-nav-control-size);
   height: var(--desktop-nav-control-size);
-  padding-inline: .6rem;
+  padding-inline: .5rem;
   border-radius: .7rem;
   font-size: .8125rem;
-  transition: padding 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+  transition: width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
 }
 
 .tabList[data-placement="header"] .tab[aria-selected="true"] {
-  padding-inline: .75rem;
+  width: calc(var(--desktop-nav-control-size) + .375rem + var(--settings-label-width, 0px));
+  background: transparent;
+}
+
+.tabList[data-placement="header"] .tabIndicator {
+  display: block;
+  position: absolute;
+  top: .3125rem;
+  left: .375rem;
+  width: calc(var(--desktop-nav-control-size) + .375rem + var(--settings-active-label-width, 0px));
+  height: var(--desktop-nav-control-size);
+  border-radius: .7rem;
+  background: var(--surface-button-active);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(var(--settings-active-index, 0) * (var(--desktop-nav-control-size) + .375rem)));
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1), width 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.tabList[data-placement="header"][data-measured="true"] .tabIndicator {
+  opacity: 1;
+}
+
+.tabList:not([data-measured="true"]) :is(.tab, .tabLabel, .tabIndicator) {
+  transition: none;
 }
 
 .tabList[data-placement="header"] .tab:focus-visible {
@@ -327,6 +363,215 @@
   justify-self: start;
 }
 
+.accountControls {
+  container-type: inline-size;
+  display: grid;
+  gap: .75rem;
+  min-width: 0;
+}
+
+.accountSection {
+  min-width: 0;
+  border: 1px solid var(--surface-border);
+  border-radius: .9rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+  overflow: hidden;
+}
+
+.accountSummary {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-height: 76px;
+  padding: .875rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sectionHeading {
+  flex: 1;
+  min-width: 0;
+}
+
+.accountSummary h3 {
+  font-family: inherit;
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.sectionDescription {
+  display: block;
+  margin-top: .2rem;
+  font-size: .72rem;
+  line-height: 1.5;
+  color: var(--foreground-muted);
+}
+
+.sectionIcon,
+.rowIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: .65rem;
+  background: var(--surface-card-soft);
+  color: var(--foreground-muted);
+}
+
+.sectionIcon svg,
+.rowIcon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.accountMeta {
+  max-width: 7rem;
+  font-size: .7rem;
+  color: var(--foreground-muted);
+  text-align: right;
+}
+
+.accountChevron {
+  flex-shrink: 0;
+  width: .65rem;
+  color: var(--foreground-soft);
+  transition: transform 160ms ease;
+}
+
+.accountSection[open] > summary .accountChevron {
+  transform: rotate(180deg);
+}
+
+.accountContent {
+  display: grid;
+  gap: .875rem;
+  padding: 0 .875rem 1rem;
+}
+
+.accountRows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--surface-border);
+  border-radius: .65rem;
+  overflow: hidden;
+}
+
+.accountRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .65rem;
+  min-width: 0;
+  padding: .75rem;
+}
+
+.accountRow + .accountRow {
+  border-top: 1px solid var(--surface-border);
+}
+
+.accountRow[data-current="true"] {
+  background: var(--surface-card-soft);
+}
+
+.rowBody {
+  display: grid;
+  flex: 1;
+  gap: .2rem;
+  min-width: 6rem;
+}
+
+.rowTitle {
+  flex: 1;
+  min-width: 5rem;
+  font-size: .8rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.rowDescription {
+  font-size: .72rem;
+  line-height: 1.5;
+  color: var(--foreground-muted);
+}
+
+.googleIcon {
+  background: #fff;
+  border: 1px solid var(--surface-border);
+}
+
+.statusBadge,
+.currentBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .2rem .5rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  font-size: .65rem;
+  font-weight: 500;
+  color: var(--foreground-muted);
+}
+
+.statusBadge svg {
+  width: .75rem;
+}
+
+.statusBadge[data-connected="true"],
+.currentBadge {
+  color: var(--foreground);
+  background: var(--surface-card-soft);
+}
+
+.actionIcon {
+  width: .85rem;
+  margin-right: .4rem;
+}
+
+.dangerSection {
+  border-color: var(--accent-rubric-line);
+  box-shadow: none;
+}
+
+.dangerSection .sectionIcon {
+  color: var(--accent-rubric);
+  background: color-mix(in srgb, var(--accent-rubric) 10%, transparent);
+}
+
+.dangerDescription {
+  font-size: .8rem;
+  line-height: 1.6;
+  color: var(--foreground-muted);
+}
+
+.dangerButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  gap: .5rem;
+  min-height: 44px;
+  padding: .6rem .875rem;
+  border: 1px solid var(--accent-rubric-line);
+  border-radius: 999px;
+  color: var(--accent-rubric);
+  font-size: .8rem;
+  font-weight: 600;
+}
+
+.dangerButton svg { width: .8rem; }
+.dangerButton:hover { background: color-mix(in srgb, var(--accent-rubric) 10%, transparent); }
+
+@container (max-width: 23rem) {
+  .accountSummary { flex-wrap: wrap; gap: .5rem; }
+  .sectionHeading { flex-basis: calc(100% - 4rem); }
+  .accountMeta { max-width: none; margin-left: 2.75rem; text-align: left; }
+  .accountChevron { margin-left: auto; }
+}
+
 .sectionSummary {
   display: flex;
   align-items: center;
@@ -370,6 +615,7 @@
   padding: .25rem .75rem .75rem;
 }
 
+.accountSummary:hover,
 .sectionSummary:hover,
 .profile:hover,
 .edit:hover,
@@ -377,6 +623,7 @@
   background: var(--surface-button-hover);
 }
 
+.accountSummary::-webkit-details-marker,
 .profile::-webkit-details-marker,
 .sectionSummary::-webkit-details-marker {
   display: none;
@@ -1010,7 +1257,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell *, .shell *::before, .tabList * {
+  .shell *, .shell *::before,
+  .tabList[data-placement] :is(.tab, .tabLabel, .tabIndicator) {
     transition: none;
   }
 }
@@ -1085,7 +1333,6 @@
 }
 
 /* Push the policy to the bottom on short pages; let it follow longer sections. */
-/* The feature guide: a quiet link under the open section, apart from the privacy policy footer. */
 .guideLink {
   margin-top: 2rem;
 }

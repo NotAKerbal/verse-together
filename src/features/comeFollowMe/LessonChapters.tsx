@@ -1,8 +1,8 @@
 "use client";
 
-import ChapterChip from "@/features/plans/ChapterChip";
-import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
-import { useBookProgress } from "@/features/plans/useReadingProgress";
+import ChapterChip from "@/features/reading/ChapterChip";
+import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/reading/scriptureCatalog";
+import { useBookProgress } from "@/features/reading/useReadingProgress";
 import type { ChapterRange } from "@/lib/comeFollowMe";
 
 function describeRange(range: ChapterRange): string {

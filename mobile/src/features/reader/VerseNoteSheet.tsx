@@ -4,19 +4,15 @@
 // note never drops a mark, and changing a mark here never drops the note.
 
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import Sheet from "../../components/Sheet";
 import { Button } from "../../components/ui";
 import {
   ANNOTATION_BODY_MAX,
-  MARK_COLORS,
   annotationProblem,
   highlightOf,
-  isCustomMarkColor,
-  markColorLabel,
   underlineColorOf,
   type MarkColor,
-  type MarkKind,
   type VerseAnnotation,
 } from "../../shared/web";
 import { attempt } from "../../storage/study";
@@ -24,53 +20,9 @@ import { assertStudyIdentity, useStudyIdentity } from "../../storage/studySessio
 import { useVerseConflict, verseStudy } from "../../storage/verseAnnotations";
 import { useTheme } from "../../theme/theme";
 import { fonts } from "../../theme/tokens";
-import MarkSample from "./MarkSample";
-import { CustomMarkColor } from "./MarkStylePicker";
+import MarkColorChoice from "./MarkColorChoice";
 
 type Choice = MarkColor | "none";
-
-/** One mark's color (or none), each choice showing how the mark looks (MarkColorChoice). */
-function MarkColorChoice({ kind, value, onChange }: { kind: MarkKind; value: Choice; onChange: (color: Choice) => void }) {
-  const { colors } = useTheme();
-  const title = kind === "highlight" ? "Highlight" : "Underline";
-  const options: Choice[] = ["none", ...MARK_COLORS, ...(isCustomMarkColor(value) ? [value] : [])];
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundMuted }}>{title}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={title} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
-        {options.map((option) => {
-          const active = option === value;
-          const label = option === "none" ? "None" : markColorLabel(option);
-          return (
-            <Pressable
-              key={option}
-              testID={`note-${kind}-${option}`}
-              accessibilityRole="radio"
-              accessibilityLabel={option === "none" ? `No ${kind}` : `${label} ${kind}`}
-              accessibilityState={{ checked: active }}
-              onPress={() => onChange(option)}
-              style={{
-                minHeight: 36,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingHorizontal: 8,
-                borderRadius: 8,
-                borderWidth: active ? 2 : 1,
-                borderColor: active ? colors.foreground : colors.surfaceBorder,
-                backgroundColor: active ? colors.surfaceCardSoft : colors.surfaceButton,
-              }}
-            >
-              {option === "none" ? <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: colors.surfaceBorder }} /> : <MarkSample preset={{ kind, color: option }} size={12} />}
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.foreground }}>{label}</Text>
-            </Pressable>
-          );
-        })}
-        <CustomMarkColor value={value} kind={kind} label={title} disabled={false} onChange={onChange} />
-      </View>
-    </View>
-  );
-}
 
 function Editor({ target, label, annotation: current, onClose }: Props) {
   const { colors } = useTheme();
@@ -146,8 +98,8 @@ function Editor({ target, label, annotation: current, onClose }: Props) {
       <Text style={{ alignSelf: "flex-end", marginTop: -10, fontFamily: fonts.sans, fontSize: 11, color: colors.foregroundSoft }}>
         {text.length}/{ANNOTATION_BODY_MAX}
       </Text>
-      <MarkColorChoice kind="highlight" value={highlight} onChange={setHighlight} />
-      <MarkColorChoice kind="underline" value={underline} onChange={setUnderline} />
+      <MarkColorChoice testIDPrefix="note" kind="highlight" value={highlight} onChange={setHighlight} />
+      <MarkColorChoice testIDPrefix="note" kind="underline" value={underline} onChange={setUnderline} />
       {error ? (
         <Text accessibilityRole="alert" style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.accentRubric }}>
           {error}

@@ -98,6 +98,16 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.17.0-tester-signup",
+    viewport: { width: 1000, height: 1200 },
+    async run(page, viewport) {
+      await open(page, "/testing");
+      const form = page.locator("form");
+      await form.waitFor();
+      return pad(await form.boundingBox(), 16, viewport);
+    },
+  },
+  {
     name: "2.16.0-lesson-explore",
     viewport: { width: 1440, height: 1000 },
     async run(page, viewport) {

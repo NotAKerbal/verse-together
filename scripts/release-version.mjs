@@ -1,10 +1,3 @@
-// Release versions: one check that the app's release notes, package.json and package-lock.json agree, and the
-// facts an agent needs when dev is merged into master (see AGENTS.md, "Releases").
-//
-//   node scripts/release-version.mjs check             notes, metadata and screenshots agree
-//   node scripts/release-version.mjs next              the next release's version (one more minor)
-//   node scripts/release-version.mjs status [base]     has this checkout already prepared the release over base?
-//                                                      (base defaults to origin/master)
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -27,10 +20,17 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-/** Each dev-to-master release adds one to the minor version. */
-export function nextVersion(version) {
-  const [major, minor] = parseVersion(version);
-  return `${major}.${minor + 1}.0`;
+export function nextVersion(version, bump = "minor") {
+  const parsed = parseVersion(version);
+  if (!parsed) throw new Error(`Invalid release version: ${version}`);
+  const [major, minor, patch] = parsed;
+  if (bump === "patch") return `${major}.${minor}.${patch + 1}`;
+  if (bump === "minor") return `${major}.${minor + 1}.0`;
+  throw new Error(`Invalid release bump: ${bump}. Use minor or patch.`);
+}
+
+export function isPreparedVersion(version, released) {
+  return version === nextVersion(released, "minor") || version === nextVersion(released, "patch");
 }
 
 /** Width and height from a PNG or WebP file's header, or null for anything else. */
@@ -136,7 +136,7 @@ function versionAt(ref) {
   return JSON.parse(execFileSync("git", ["show", `${ref}:package.json`], { cwd: ROOT, encoding: "utf8" })).version;
 }
 
-async function main([command, base = "origin/master"]) {
+async function main([command, argument]) {
   const { RELEASES, UNRELEASED } = await loadReleaseNotes();
   if (command === "check") {
     const problems = findProblems({
@@ -154,25 +154,26 @@ async function main([command, base = "origin/master"]) {
     return;
   }
   if (command === "next") {
-    console.log(nextVersion(RELEASES[0].version));
+    console.log(nextVersion(RELEASES[0].version, argument));
     return;
   }
   if (command === "status") {
+    const base = argument ?? "origin/master";
     const released = versionAt(base);
     const here = readJson("package.json").version;
     if (!(parseVersion(released)?.[0] >= 2)) {
       console.log(`${base} predates release versions (${released}); this checkout is ${here}.`);
     } else if (here === released) {
-      console.log(`Not prepared: this checkout is ${here}, the same as ${base}. The next release is ${nextVersion(released)}.`);
-    } else if (here === nextVersion(released)) {
-      console.log(`Prepared: this checkout is ${here}, one minor version over ${base} (${released}). Don't bump again.`);
+      console.log(`Not prepared: this checkout is ${here}, the same as ${base}. Next: ${nextVersion(released, "patch")} (patch) or ${nextVersion(released, "minor")} (minor).`);
+    } else if (isPreparedVersion(here, released)) {
+      console.log(`Prepared: this checkout is ${here}, one minor or patch version over ${base} (${released}). Don't bump again.`);
     } else {
-      console.error(`Unexpected: this checkout is ${here} and ${base} is ${released}; expected ${released} or ${nextVersion(released)}.`);
+      console.error(`Unexpected: this checkout is ${here} and ${base} is ${released}; expected ${released}, ${nextVersion(released, "patch")} (patch), or ${nextVersion(released, "minor")} (minor).`);
       process.exit(1);
     }
     return;
   }
-  console.error("Usage: node scripts/release-version.mjs check | next | status [base]");
+  console.error("Usage: node scripts/release-version.mjs check | next [minor|patch] | status [base]");
   process.exit(2);
 }
 

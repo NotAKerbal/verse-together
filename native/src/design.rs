@@ -442,6 +442,57 @@ pub fn rotated_icon<'a>(glyph: &Icon, color: Color, size: f32, degrees: f32) -> 
         .style(move |_, _| svg::Style { color: Some(color) })
 }
 
+/// The selection menu's line icons (`VerseActionBar`'s `ICON_PATHS`): 24px strokes 1.65 wide, round caps.
+pub mod line {
+    pub const ADD: &[&str] = &["M12 5v14", "M5 12h14"];
+    pub const NOTE: &[&str] = &[
+        "M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8",
+        "m16 3 5 5-9 9-5 1 1-5Z",
+    ];
+    pub const BOOK: &[&str] = &[
+        "M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Z",
+        "M12 6v14",
+    ];
+    pub const SPARK: &[&str] = &["m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"];
+    pub const FOCUS: &[&str] = &[
+        "M8 3H5a2 2 0 0 0-2 2v3",
+        "M16 3h3a2 2 0 0 1 2 2v3",
+        "M21 16v3a2 2 0 0 1-2 2h-3",
+        "M8 21H5a2 2 0 0 1-2-2v-3",
+        "M8 9h8",
+        "M8 13h5",
+    ];
+    pub const COPY: &[&str] = &["M9 9h11v12H9Z", "M5 16H3V3h12v2"];
+    pub const CHECK: &[&str] = &["m5 12 4 4L19 6"];
+    pub const CLOSE: &[&str] = &["m6 6 12 12", "M18 6 6 18"];
+    pub const BACK: &[&str] = &["m15 18-6-6 6-6"];
+}
+/// A line icon from `line`, in `color` at `size`.
+pub fn line_icon<'a>(paths: &'static [&'static str], color: Color, size: f32) -> svg::Svg<'a> {
+    static HANDLES: OnceLock<Mutex<HashMap<usize, svg::Handle>>> = OnceLock::new();
+    let handle = HANDLES
+        .get_or_init(Default::default)
+        .lock()
+        .expect("line icon cache")
+        .entry(paths.as_ptr() as usize)
+        .or_insert_with(|| {
+            let body: String = paths
+                .iter()
+                .map(|d| format!(r#"<path d="{d}"/>"#))
+                .collect();
+            svg::Handle::from_memory(
+                format!(
+                    r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"##
+                )
+                .into_bytes(),
+            )
+        })
+        .clone();
+    svg::Svg::new(handle)
+        .width(size)
+        .height(size)
+        .style(move |_, _| svg::Style { color: Some(color) })
+}
 /// `line-clamp`: `content` cut to at most `lines` lines at `width`, ending in "…" when it was cut.
 pub fn clamp_lines(
     content: &str,

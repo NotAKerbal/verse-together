@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/app/account/page.module.css";
@@ -64,19 +64,35 @@ function Items({ items, onOpen }: { items: ReleaseNoteItem[]; onOpen: (shot: Rel
   );
 }
 
+function ReleaseHeading({ titleId, title, version, date }: {
+  titleId: string;
+  title: string;
+  version: ReactNode;
+  date: ReactNode;
+}) {
+  return (
+    <header className={styles.releaseHeader}>
+      <p className={styles.releaseMeta}>
+        <span className={styles.releaseVersion}>{version}</span>
+        <span aria-hidden="true">·</span>
+        <span>{date}</span>
+      </p>
+      <h3 id={titleId}>{title}</h3>
+    </header>
+  );
+}
+
 function Entry({ release, onOpen }: { release: Release; onOpen: (shot: ReleaseScreenshot) => void }) {
   const titleId = `release-${release.version}`;
   return (
     <li className={styles.releaseEntry}>
       <article aria-labelledby={titleId}>
-        <header className={styles.releaseHeader}>
-          <p className={styles.releaseMeta}>
-            <span className={styles.releaseVersion}>Version {release.version}</span>
-            <span aria-hidden="true">·</span>
-            <span>{releaseDates(release)}</span>
-          </p>
-          <h3 id={titleId}>{release.title}</h3>
-        </header>
+        <ReleaseHeading
+          titleId={titleId}
+          title={release.title}
+          version={<>Version {release.version}</>}
+          date={releaseDates(release)}
+        />
         <Items items={release.items} onOpen={onOpen} />
       </article>
     </li>
@@ -132,14 +148,12 @@ export default function ReleaseNotes() {
 
       {UNRELEASED.items.length > 0 ? (
         <section className={`${styles.releaseEntry} ${styles.releaseUpcoming}`} aria-labelledby="release-unreleased">
-          <header className={styles.releaseHeader}>
-            <p className={styles.releaseMeta}>
-              <span className={styles.releaseVersion}>Unreleased</span>
-              <span aria-hidden="true">·</span>
-              <span>In development, coming in the next version</span>
-            </p>
-            <h3 id="release-unreleased">{UNRELEASED.title}</h3>
-          </header>
+          <ReleaseHeading
+            titleId="release-unreleased"
+            title={UNRELEASED.title}
+            version="Unreleased"
+            date="In development, coming in the next version"
+          />
           <Items items={UNRELEASED.items} onOpen={setViewing} />
         </section>
       ) : null}

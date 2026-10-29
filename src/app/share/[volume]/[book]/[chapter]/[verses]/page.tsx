@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Fragment } from "react";
 import ShareChrome from "@/components/ShareChrome";
 import SharePassageButton from "@/components/SharePassageButton";
-import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
+import { findCatalogBook, getBookLabel, getChapterHref } from "@/features/reading/scriptureCatalog";
 import { getLocalLdsChapter } from "@/lib/ldsLocalData.server";
 import { buildShareUrl, formatPassageReference, groupVerseRuns, parseVerseSpec } from "@/lib/passageShare";
 import { getScriptureVolumeLabel, normalizeScriptureVolume } from "@/lib/scriptureVolumes";

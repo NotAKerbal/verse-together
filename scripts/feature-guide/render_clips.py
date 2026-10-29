@@ -1,20 +1,20 @@
-"""Render the feature guide's silent demo clips and posters from captured footage.
 
-Usage: python render_clips.py --raw RAW_DIR [--ffmpeg FFMPEG] [--only ID ...] [--sheets DIR]
 
-RAW_DIR holds one folder per scene from capture.mjs: CDP screencast JPEG frames of the real app at 1920x1080
-(1280x720 CSS px at device scale 1.5) and frames.json with their timestamps, the capture's marks and every real
-mouse event the capture dispatched. For each clip in clips.json this script:
 
-- plays the scene's frames between two marks at real speed (a span can be retimed with "speed", or left out with
-  "cut" where a page is still loading), at a fixed frame rate, holding the latest frame while the page is unchanged;
-- draws a pointer and a click ring where the recorded mouse was (headless frames contain no cursor);
-- optionally crops to a 16:9 region of the page (CSS px) so small text stays readable;
-- encodes H.264 (yuv420p, faststart) with no audio stream at all, and a WebP poster of the clip's result.
 
-It then writes guideMedia.json (measured duration, size and bytes of every clip and poster) for the app.
-Needs Python 3 with Pillow and NumPy, and ffmpeg built with libx264 and libwebp.
-"""
+
+
+
+
+
+
+
+
+
+
+
+
+
 import argparse
 import bisect
 import json
@@ -39,7 +39,7 @@ args = None
 CFG = {}
 
 
-# ----------------------------------------------------------------------------- scenes
+
 @lru_cache(maxsize=None)
 def scene_meta(name):
     meta = json.load(open(os.path.join(args.raw, name, "frames.json")))
@@ -59,7 +59,7 @@ def scene_meta(name):
 
 
 def stime(scene, e):
-    """Scene time from a number, a mark name, p<n> (the n-th mouse press) or 'end', each optionally +/- seconds."""
+
     if isinstance(e, (int, float)):
         return float(e)
     m = re.match(r"^([A-Za-z_][\w]*)\s*([+-]\s*[\d.]+)?$", e)
@@ -75,11 +75,11 @@ def stime(scene, e):
 
 
 def plan_for(clip):
-    """[(out0, out1, scene0, speed)] covering the clip, from its marks and optional retimed spans."""
+
     sc = clip["scene"]
     a, b = stime(sc, clip["from"]), stime(sc, clip["to"])
     spans = [(stime(sc, x), stime(sc, y), float(v)) for x, y, v in clip.get("speed", [])]
-    # A cut leaves a span out (a page still loading, a placeholder flash): the clip goes straight past it.
+
     spans += [(stime(sc, x), stime(sc, y), None) for x, y in clip.get("cut", [])]
     plan, t, cur = [], 0.0, a
     for x, y, v in sorted(spans):
@@ -106,7 +106,7 @@ def scene_at(plan, u):
     return s0 + (o1 - o0) * v
 
 
-# ----------------------------------------------------------------------------- pointer
+
 def pointer_sprite():
     k = 8
     pts = [(3, 2), (3, 24), (9, 18.5), (13, 27), (17, 25.2), (13, 16.8), (21, 16.8)]
@@ -194,7 +194,7 @@ def frame(clip, plan, u, out_w, out_h):
     return draw_pointer(img, sm, st, crop, out_w)
 
 
-# ----------------------------------------------------------------------------- encode
+
 def render(clip):
     fps, out_w, out_h = CFG["fps"], CFG["width"], CFG["height"]
     plan = plan_for(clip)
@@ -224,7 +224,7 @@ def render(clip):
         raise RuntimeError(f"ffmpeg failed for {clip['id']}")
     os.replace(tmp, mp4)
     if poster_img is None:
-        poster_img = frame(clip, plan, (n - 1) / fps, out_w, out_h)  # the result the clip ends on
+        poster_img = frame(clip, plan, (n - 1) / fps, out_w, out_h)
     webp = os.path.join(OUT_DIR, clip["id"] + ".webp")
     pw = CFG["poster"]["width"]
     poster_img.resize((pw, round(pw * out_h / out_w)), Image.LANCZOS).save(webp, "WEBP", quality=CFG["poster"]["quality"], method=6)
@@ -239,7 +239,7 @@ def local_of(plan, st):
 
 
 def probe(mp4, webp):
-    """Measure the encoded file with ffmpeg itself, and refuse anything but a single H.264 yuv420p video stream."""
+
     out = subprocess.run([args.ffmpeg, "-hide_banner", "-i", mp4], capture_output=True, text=True).stderr
     streams = re.findall(r"Stream #\d+:\d+.*?: (\w+): (.*)", out)
     if len(streams) != 1 or streams[0][0] != "Video" or not streams[0][1].startswith("h264") or "yuv420p" not in streams[0][1]:
@@ -256,7 +256,7 @@ def probe(mp4, webp):
 
 
 def sheet(clip, path):
-    """Review sheet: one frame per second of the rendered clip."""
+
     plan = plan_for(clip)
     dur = plan[-1][1]
     tiles = [frame(clip, plan, min(dur - 0.04, t), 480, 270) for t in np.arange(0, dur, 1.0)]
@@ -307,7 +307,7 @@ def main():
         for cid, m in pool.imap_unordered(render_one, todo):
             media[cid] = m
             print(f"{cid:28s} {m['durationSeconds']:6.2f}s {m['videoBytes'] / 1e6:5.2f} MB  poster {m['posterBytes'] / 1e3:5.1f} kB", flush=True)
-    media = {k: media[k] for k in ids if k in media}  # manifest order; drops clips no longer listed
+    media = {k: media[k] for k in ids if k in media}
     with open(MEDIA_JSON, "w") as f:
         json.dump(media, f, indent=2)
         f.write("\n")

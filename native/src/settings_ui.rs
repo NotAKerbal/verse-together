@@ -233,7 +233,7 @@ impl App {
         self.window_width >= HEADER_MIN_WIDTH && !self.focus
     }
     /// The section's width inside the page.
-    fn settings_width(&self) -> f32 {
+    pub(crate) fn settings_width(&self) -> f32 {
         let inset = crate::header::shell_inset(self.window_width);
         let max = if self.window_width >= HEADER_MIN_WIDTH {
             1180.0
@@ -419,12 +419,37 @@ impl App {
             SettingsTab::Feedback => container(self.feedback_view()).max_width(672).into(),
         };
         page = page.push(column![header, body].spacing(14.4));
+        // Below every section, as on the website: a quiet link to the privacy policy (`.policyLink`).
+        page = page.push(
+            container(
+                button(design::underlined_with(
+                    "Privacy policy",
+                    12.8,
+                    p.faint,
+                    design::rule_strong(p),
+                    font::Weight::Normal,
+                    3.0,
+                ))
+                .padding(0)
+                .on_press(Message::OpenLink(format!(
+                    "{}/privacy",
+                    crate::cloud::DEFAULT_SITE
+                )))
+                .style(|_, _| iced::widget::button::Style::default()),
+            )
+            .padding(Padding::ZERO.top(32)),
+        );
         let inset = crate::header::shell_inset(self.window_width);
         self.scroll(
             container(container(page).width(Length::Fixed(width)))
                 .center_x(Fill)
                 .padding(Padding {
-                    top: CONTENT_TOP + 16.0,
+                    // In the phone layout the header holds nothing here, so the page starts at the top.
+                    top: if self.phone() {
+                        crate::header::TOP
+                    } else {
+                        CONTENT_TOP + 16.0
+                    },
                     right: inset,
                     bottom: 48.0,
                     left: inset,

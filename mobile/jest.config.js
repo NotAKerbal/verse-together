@@ -11,6 +11,7 @@ module.exports = {
   roots: ["<rootDir>/__tests__"],
   setupFiles: ["<rootDir>/jest.setup.js"],
   moduleNameMapper: {
+    "^react$": "<rootDir>/node_modules/react",
     "^@/(.*)$": "<rootDir>/../src/$1",
   },
   modulePaths: [path.join(__dirname, "node_modules")],

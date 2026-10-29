@@ -1,8 +1,4 @@
-/*
-  The feature guide (/feature-guide): a reading page set like the privacy policy and the study pages, cream paper and
-  warm ink, rubric kickers, serif headings and DM Sans for steps and controls, hairline rules instead of boxes. Every
-  color comes from the app theme tokens, so light and dark both apply. The clips themselves are light-theme footage.
-*/
+
 
 .guide {
   max-width: 68rem;
@@ -15,11 +11,8 @@
   gap: 0.75rem;
 }
 
-/* ------------------------------------------------------------------ groups' marks */
-/*
-  Each group has a muted ink of its own, a little warmer or cooler than the rubric, on its icon and kicker. The group's
-  name is always written beside it, so the color only helps the eye find its place.
-*/
+
+
 .accent[data-group="read"] {
   --group-accent: #4f6b56;
 }
@@ -69,7 +62,7 @@
   height: 0.85rem;
 }
 
-/* ------------------------------------------------------------------ topics */
+
 .index {
   display: flex;
   flex-direction: column;
@@ -87,7 +80,7 @@
 }
 
 .indexTitle {
-  /* "All topics" links land here, clear of the floating top bar. */
+
   scroll-margin-top: calc(var(--header-height) + 1.25rem);
   padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--rule-strong);
@@ -127,7 +120,7 @@
   border-radius: 0.8rem;
 }
 
-/* The cover: a clip's own poster, enlarged around the part of the screen the topic is about. */
+
 .thumb {
   position: relative;
   display: block;
@@ -137,7 +130,7 @@
   background: var(--surface-card-soft);
 }
 
-/* The group's ink along the cover's top edge, matching its mark below. */
+
 .thumb::after {
   position: absolute;
   inset: 0;
@@ -172,7 +165,7 @@
   text-underline-offset: 3px;
 }
 
-/* Shown above the title, but read after it, so each link's name starts with its topic. */
+
 .cardGroup {
   order: -1;
   display: flex;
@@ -205,7 +198,7 @@
   color: var(--foreground-soft);
 }
 
-/* Phones: one topic per row, its cover beside its title, so the whole list stays short. */
+
 @media (max-width: 559px) {
   .cards {
     grid-template-columns: minmax(0, 1fr);
@@ -239,7 +232,7 @@
     font-size: 1.02rem;
   }
 
-  /* Shown above the title, but read after it, so each link's name starts with its topic. */
+
 .cardGroup {
   order: -1;
   display: flex;
@@ -282,7 +275,7 @@
   white-space: nowrap;
 }
 
-/* ------------------------------------------------------------------ groups and sections */
+
 .group {
   display: flex;
   flex-direction: column;
@@ -306,7 +299,7 @@
   gap: 1.25rem;
   padding-block: clamp(1.5rem, 3vw, 2.25rem);
   border-bottom: 1px solid var(--rule);
-  /* An anchor link lands with the heading clear of the floating top bar. */
+
   scroll-margin-top: calc(var(--header-height) + 1.25rem);
 }
 
@@ -386,7 +379,7 @@
   gap: clamp(1.5rem, 3vw, 2rem);
 }
 
-/* A clip and its steps: stacked on phones and tablets, side by side on wide screens. */
+
 .clip {
   display: grid;
   gap: 0.9rem;
@@ -576,7 +569,7 @@
   border-radius: 4px;
 }
 
-/* ------------------------------------------------------------------ player */
+
 .player {
   display: flex;
   flex-direction: column;
@@ -767,7 +760,7 @@
   }
 }
 
-/* Full screen: the clip fills the screen above its controls. */
+
 .player:fullscreen {
   border: 0;
   border-radius: 0;

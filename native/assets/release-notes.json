@@ -3,20 +3,38 @@
     "title": "Upcoming changes",
     "items": [
       {
-        "kind": "new",
-        "text": "The native mobile and Rust desktop apps now live alongside the website, with shared scripture and lessons. Mobile adds account journal and annotation sync, the upgraded Explore panel, guide annotations and matching Settings sections."
-      },
-      {
         "kind": "improved",
-        "text": "Account settings asks you to sign in again when your session is too old to load devices, and shows progress when retrying sign-in methods and sessions."
-      },
-      {
-        "kind": "improved",
-        "text": "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages."
+        "text": "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows."
       }
     ]
   },
   "releases": [
+    {
+      "version": "2.17.0",
+      "date": "2026-10-28",
+      "title": "Mobile testing and account recovery",
+      "items": [
+        {
+          "kind": "new",
+          "text": "Volunteer for Android app testing or join the iOS waiting list through a shared signup link.",
+          "screenshot": {
+            "src": "/release-notes/2.17.0-tester-signup.webp",
+            "width": 1292,
+            "height": 1176,
+            "alt": "The mobile testing signup form with Android and iOS choices, empty name and email fields, and email consent.",
+            "caption": "Join Android testing or the iOS waiting list without an account."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "Account settings asks you to sign in again when your session is too old to load devices, and shows progress when retrying sign-in methods and sessions."
+        },
+        {
+          "kind": "improved",
+          "text": "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages."
+        }
+      ]
+    },
     {
       "version": "2.16.0",
       "date": "2026-10-28",

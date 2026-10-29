@@ -1473,6 +1473,7 @@ impl App {
             .padding([8, 16])
             .on_press(msg(ToolsMsg::CloseBibles))
             .style(design::outlined(p, 8.0));
+        let wide = self.bibles_dialog_wide();
         let bar = container(
             row![
                 container(back).width(80),
@@ -1488,8 +1489,8 @@ impl App {
             .spacing(8)
             .align_y(Center),
         )
-        .max_width(576)
-        .padding([12, 16]);
+        .max_width(if wide { f32::INFINITY } else { 576.0 })
+        .padding(if wide { [12, 20] } else { [12, 16] });
         let header = column![
             container(bar).center_x(Fill),
             container(space())
@@ -1500,25 +1501,88 @@ impl App {
                     ..Default::default()
                 }),
         ];
+        let list = view == BiblesView::List;
         let body: Element<'_, Message> = match view {
             BiblesView::List => self.bible_list(in_reader),
             BiblesView::Add if choosing => self.language_chooser(),
             BiblesView::Add => self.catalog_picker(),
         };
-        let body = self
-            .scroll(container(container(body).max_width(576).padding([20, 16])).center_x(Fill))
-            .id("bibles-dialog")
-            .height(Fill);
-        Some(opaque(
-            container(column![header, body])
-                .width(Fill)
-                .height(Fill)
-                .style(move |_| container::Style {
-                    background: Some(p.paper.into()),
-                    text_color: Some(p.ink),
+        let body = if wide {
+            container(body).padding([24, 32]).width(Fill)
+        } else {
+            container(container(body).max_width(576).padding([20, 16])).center_x(Fill)
+        };
+        let body = self.scroll(body).id("bibles-dialog");
+        if !wide {
+            // Phones and narrow windows: the whole window, as `h-dvh w-screen`.
+            return Some(opaque(
+                container(column![header, body.height(Fill)])
+                    .width(Fill)
+                    .height(Fill)
+                    .style(move |_| container::Style {
+                        background: Some(p.paper.into()),
+                        text_color: Some(p.ink),
+                        ..Default::default()
+                    }),
+            ));
+        }
+        // From 768px, a centered panel over the dimmed page: the list narrow and as tall as its rows, the catalog
+        // and language chooser wide with a steady height so the panel doesn't jump while searching.
+        let (w, h) = (self.window_width, self.window_height);
+        let (width, height) = if list {
+            ((w - 64.0).min(576.0), None)
+        } else {
+            ((w - 64.0).min(960.0), Some((h - 64.0).min(768.0)))
+        };
+        let panel = container(column![
+            header,
+            match height {
+                Some(_) => body.height(Fill),
+                None => body.height(Length::Shrink),
+            }
+        ])
+        .width(width)
+        .max_height(h - 64.0)
+        .style(move |_| container::Style {
+            background: Some(p.paper.into()),
+            text_color: Some(p.ink),
+            border: Border {
+                color: p.rule,
+                width: 1.0,
+                radius: 16.0.into(),
+            },
+            shadow: iced::Shadow {
+                color: design::fade(p.ink, 0.22),
+                offset: iced::Vector::new(0.0, 18.0),
+                blur_radius: 48.0,
+            },
+            ..Default::default()
+        });
+        let panel = match height {
+            Some(height) => panel.height(height),
+            None => panel,
+        };
+        // The backdrop closes it; the panel takes its own clicks, so nothing reaches the page behind.
+        let backdrop =
+            iced::widget::mouse_area(container(space()).width(Fill).height(Fill).style(|_| {
+                container::Style {
+                    background: Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.4).into()),
                     ..Default::default()
-                }),
+                }
+            }))
+            .on_press(msg(ToolsMsg::CloseBibles));
+        Some(opaque(
+            iced::widget::stack![
+                backdrop,
+                container(opaque(panel)).center_x(Fill).center_y(Fill),
+            ]
+            .width(Fill)
+            .height(Fill),
         ))
+    }
+    /// Whether the Bibles dialog is a centered panel (`md:`, from 768px) rather than the whole window.
+    pub(crate) fn bibles_dialog_wide(&self) -> bool {
+        self.window_width >= 768.0
     }
     /// The language chooser's options: "All languages" (while the search fits it), then the matching languages.
     pub(crate) fn language_options(&self) -> Vec<bible_catalog::Language> {
@@ -1546,15 +1610,22 @@ impl App {
         let p = self.p();
         let options = self.language_options();
         let mut c = column![
-            text_input(
-                "Search languages, e.g. Spanish or español",
-                &self.tools.language_query
+            container(
+                text_input(
+                    "Search languages, e.g. Spanish or español",
+                    &self.tools.language_query
+                )
+                .id("language-search")
+                .on_input(|q| msg(ToolsMsg::LanguageQuery(q)))
+                .on_submit(msg(ToolsMsg::LanguageFirst))
+                .padding([9, 12])
+                .size(13)
             )
-            .id("language-search")
-            .on_input(|q| msg(ToolsMsg::LanguageQuery(q)))
-            .on_submit(msg(ToolsMsg::LanguageFirst))
-            .padding([9, 12])
-            .size(13)
+            .max_width(if self.bibles_dialog_wide() {
+                448.0
+            } else {
+                f32::INFINITY
+            })
         ]
         .spacing(10);
         if options.is_empty() {
@@ -1567,28 +1638,68 @@ impl App {
             ));
             return c.into();
         }
-        let mut list = column![].spacing(0);
-        for (i, l) in options.iter().take(self.tools.language_limit).enumerate() {
+        let columns = if !self.bibles_dialog_wide() {
+            1
+        } else if self.window_width >= 1024.0 {
+            3
+        } else {
+            2
+        };
+        let option = |l: &bible_catalog::Language| {
             let current = l.id == self.tools.catalog_language;
-            if i > 0 {
-                list = list.push(divider(p));
+            button(
+                row![
+                    text(bible_catalog::language_display(l))
+                        .size(13)
+                        .width(Fill),
+                    text(if current { "✓" } else { "" }).size(13),
+                ]
+                .align_y(Center),
+            )
+            .padding(if columns > 1 { [9, 12] } else { [9, 14] })
+            .width(Fill)
+            .on_press(msg(ToolsMsg::CatalogLanguage(l.id.clone())))
+            .style(move |_, status| button::Style {
+                background: if matches!(status, button::Status::Hovered) {
+                    Some(p.hover.into())
+                } else if current && columns > 1 {
+                    Some(p.soft.into())
+                } else {
+                    None
+                },
+                text_color: p.ink,
+                border: iced::Border {
+                    radius: if columns > 1 { 8.0 } else { 0.0 }.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+        };
+        let shown: Vec<_> = options.iter().take(self.tools.language_limit).collect();
+        let list: Element<'_, Message> = if columns == 1 {
+            let mut list = column![].spacing(0);
+            for (i, l) in shown.iter().enumerate() {
+                if i > 0 {
+                    list = list.push(divider(p));
+                }
+                list = list.push(option(l));
             }
-            list = list.push(
-                button(
-                    row![
-                        text(bible_catalog::language_display(l))
-                            .size(13)
-                            .width(Fill),
-                        text(if current { "✓" } else { "" }).size(13),
-                    ]
-                    .align_y(Center),
-                )
-                .padding([9, 14])
-                .width(Fill)
-                .on_press(msg(ToolsMsg::CatalogLanguage(l.id.clone())))
-                .style(design::quiet(p)),
-            );
-        }
+            list.into()
+        } else {
+            // `md:grid md:grid-cols-2 md:gap-1 md:p-1.5 lg:grid-cols-3`.
+            let mut grid = column![].spacing(4);
+            for chunk in shown.chunks(columns) {
+                let mut line = row![].spacing(4);
+                for l in chunk {
+                    line = line.push(container(option(l)).width(Fill));
+                }
+                for _ in chunk.len()..columns {
+                    line = line.push(space().width(Fill));
+                }
+                grid = grid.push(line);
+            }
+            container(grid).padding(6).into()
+        };
         c = c.push(boxed(p, list));
         if options.len() > self.tools.language_limit {
             c = c.push(more_button(p, msg(ToolsMsg::LanguagesMore)));
@@ -1667,7 +1778,8 @@ impl App {
                 })
                 .collect()
         };
-        let mut c = column![
+        let wide = self.bibles_dialog_wide();
+        let controls = column![
             text_input("Search by name or abbreviation", query)
                 .id("catalog-search")
                 .on_input(|q| msg(ToolsMsg::CatalogQuery(q)))
@@ -1689,7 +1801,29 @@ impl App {
             .on_press_maybe(ready.then(|| msg(ToolsMsg::ChooseLanguage(true))))
             .style(design::outlined(p, 8.0)),
         ]
-        .spacing(10);
+        .spacing(12);
+        let mut c = column![].spacing(12);
+        // Beside the controls, the results say what they are (`md:block`).
+        if wide && !rows.is_empty() {
+            c = c.push(
+                text(if featured_only {
+                    "Featured English Bibles".to_string()
+                } else {
+                    format!(
+                        "{} {}{}",
+                        rows.len(),
+                        if rows.len() == 1 { "Bible" } else { "Bibles" },
+                        if language == bible_catalog::ALL_LANGUAGES {
+                            " in all languages".to_string()
+                        } else {
+                            format!(" in {language_name}")
+                        }
+                    )
+                })
+                .size(12)
+                .color(p.muted),
+            );
+        }
         if let Some(Load::Failed(_)) = &self.tools.catalog {
             c = c.push(boxed(
                 p,
@@ -1815,7 +1949,12 @@ impl App {
                     }),
             );
         }
-        c.into()
+        if wide {
+            // `md:grid-cols-[17rem_minmax(0,1fr)] md:gap-8`: the search and language beside the results.
+            row![controls.width(272), c.width(Fill)].spacing(32).into()
+        } else {
+            column![controls, c].spacing(12).into()
+        }
     }
     /// The website's `marker-switch`.
     pub(crate) fn switch<'a>(&self, on: bool, m: Message) -> Element<'a, Message> {

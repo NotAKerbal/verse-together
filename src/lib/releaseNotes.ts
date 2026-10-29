@@ -1,20 +1,3 @@
-/*
-  Release notes shown in Settings, and the app's version.
-
-  Versions follow production: master is what Verse Together serves. Version 2.0.0 is the Marker redesign that
-  replaced the whole interface (d65680e, 2026-09-25), together with everything master received directly before
-  production releases began coming from dev. Since then each merge of dev into master is one release, and each
-  release adds one to the minor version (2.1.0, 2.2.0, ...). The major version stays 2 unless the project owner
-  decides otherwise.
-
-  Work that is not on master yet goes in UNRELEASED. When dev is merged into master, it becomes the next release,
-  package.json and package-lock.json take its version, and `npm run release:check` confirms they agree. See
-  AGENTS.md ("Releases") for the full procedure.
-
-  This file is read by scripts/release-version.mjs with Node's type stripping: keep it free of imports and of
-  TypeScript syntax that needs compiling (enums, namespaces).
-*/
-
 export type ReleaseNoteKind = "new" | "improved";
 
 export type ReleaseScreenshot = {
@@ -38,7 +21,6 @@ export type ReleaseNoteItem = {
 };
 
 export type Release = {
-  /** Semantic version: 2.minor.0 for each dev-to-master release. */
   version: string;
   /** The day the release reached master (the release merge's commit date), YYYY-MM-DD. */
   date: string;
@@ -61,14 +43,36 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
-    { kind: "new", text: "Volunteer for Android app testing or join the iOS waiting list through a shared signup link." },
-    { kind: "new", text: "The native mobile and Rust desktop apps now live alongside the website, with shared scripture and lessons. Mobile adds account journal and annotation sync, the upgraded Explore panel, guide annotations and matching Settings sections." },
-    { kind: "improved", text: "Account settings asks you to sign in again when your session is too old to load devices, and shows progress when retrying sign-in methods and sessions." },
-    { kind: "improved", text: "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages." },
+    { kind: "new", text: "Open the feature guide from Settings for a visual catalog of short demos, written steps and shareable links to each topic." },
+    { kind: "improved", text: "Account settings uses clear sign-in and device cards with icons, connection badges and sign-in dates, puts this device first, and separates account deletion from everyday controls." },
+    { kind: "improved", text: "Removed the old study plans pages; the journal and reading progress remain available." },
+    { kind: "improved", text: "Settings tabs slide smoothly between sections, matching the main navigation and respecting reduced motion." },
+    { kind: "improved", text: "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows." },
   ],
 };
 
 export const RELEASES: readonly Release[] = [
+  {
+    version: "2.17.0",
+    date: "2026-10-28",
+    title: "Mobile testing and account recovery",
+    items: [
+      {
+        kind: "new",
+        text: "Volunteer for Android app testing or join the iOS waiting list through a shared signup link.",
+        screenshot: {
+          src: "/release-notes/2.17.0-tester-signup.webp",
+          width: 1292,
+          height: 1176,
+          alt: "The mobile testing signup form with Android and iOS choices, empty name and email fields, and email consent.",
+          caption: "Join Android testing or the iOS waiting list without an account.",
+        },
+      },
+      { kind: "improved", text: "Account settings asks you to sign in again when your session is too old to load devices, and shows progress when retrying sign-in methods and sessions." },
+      { kind: "improved", text: "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages." },
+    ],
+    commits: ["202964b", "ea79c3a", "b6075c8"],
+  },
   {
     version: "2.16.0",
     date: "2026-10-28",
@@ -86,6 +90,7 @@ export const RELEASES: readonly Release[] = [
         },
       },
     ],
+    masterCommit: "c964037",
     commits: ["a8be363"],
   },
   {
