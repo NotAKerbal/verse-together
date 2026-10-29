@@ -42,15 +42,33 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "The testing signup page has a simpler heading and less introductory text." },
-    { kind: "improved", text: "Account settings leaves space between the device list and the button to sign out other devices." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.1",
+    date: "2026-10-29",
+    title: "Simpler signup and account spacing",
+    items: [
+      {
+        kind: "improved",
+        text: "The testing signup page has a simpler heading and less introductory text.",
+        screenshot: {
+          src: "/release-notes/2.20.1-testing-signup.webp",
+          width: 1392,
+          height: 1378,
+          alt: "The testing signup page with the heading Help test Verse Together above the signup form.",
+          caption: "A simpler introduction to testing Verse Together.",
+        },
+      },
+      { kind: "improved", text: "Account settings leaves space between the device list and the button to sign out other devices." },
+    ],
+    commits: ["8374c79", "ea7d4f1"],
+  },
+  {
     version: "2.20.0",
+    masterCommit: "4effc6d",
     date: "2026-10-29",
     title: "Sign in with a passkey",
     items: [
