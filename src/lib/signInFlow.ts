@@ -2,7 +2,7 @@ import { appURL, safeReturnPath, signInHref } from "./safeRedirect.ts";
 
 // Decides where an app "Sign in" control sends the visitor. Pure so it can be unit tested.
 
-type Capabilities = { google: boolean; emailPassword: boolean };
+type Capabilities = { google: boolean; emailPassword: boolean; passkey?: boolean };
 
 export type SignInRoute =
   | { kind: "google"; callbackURL: string; errorCallbackURL: string }
@@ -40,19 +40,13 @@ export function socialCallbackURLs(
   return { callbackURL: appURL(target, origin), errorCallbackURL: appURL(signInHref(target, page), origin) };
 }
 
-/**
- * Google-only deployments go straight to Google. Anything else (capabilities unknown, email/password
- * switched on so there is a choice to make, or Google not configured) uses the sign-in page.
- * A failed Google attempt lands on the sign-in page with `?error=`, which never starts OAuth itself,
- * so an error can't loop back to Google.
- */
 export function chooseSignInRoute(
   capabilities: Capabilities | null | undefined,
   returnTo: string | null | undefined,
   origin?: string | null
 ): SignInRoute {
   const target = safeReturnPath(returnTo);
-  if (capabilities?.google && !capabilities.emailPassword) {
+  if (capabilities?.google && !capabilities.emailPassword && !capabilities.passkey) {
     return { kind: "google", ...socialCallbackURLs(target, origin) };
   }
   return { kind: "page", href: signInHref(target) };

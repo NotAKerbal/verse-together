@@ -3,7 +3,7 @@
 // and app users linked to a stable owner key, so tests go through the same identity checks as production
 // (convex/utils.ts) instead of trusting a bare JWT subject.
 import { convexTest } from "convex-test";
-import betterAuthTest from "@convex-dev/better-auth/test";
+import betterAuthTest from "./convex/betterAuth";
 import schema from "../convex/schema";
 import { components } from "../convex/_generated/api";
 

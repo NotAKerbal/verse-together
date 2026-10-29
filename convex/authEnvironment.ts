@@ -18,6 +18,7 @@ export type AuthEnvironment = {
 
 /** What the UI may offer. Only booleans: never echo configuration values to clients. */
 export type AuthCapabilities = {
+  passkey?: boolean;
   /** Email/password sign-up, sign-in and password management are switched on. */
   emailPassword: boolean;
   google: boolean;
@@ -126,6 +127,7 @@ export function authCapabilities(environment: AuthEnvironment): AuthCapabilities
   const emailPassword = environment.emailPasswordEnabled;
   const emailDelivery = emailPassword && environment.emailDelivery !== null;
   return {
+    passkey: environment.siteUrl !== null,
     emailPassword,
     google: environment.google !== null,
     emailDelivery,
