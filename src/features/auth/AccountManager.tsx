@@ -588,8 +588,8 @@ function SessionsPanel({
   const others = sessions.filter((session) => session.id !== currentId);
 
   return (
-    <div className="space-y-3">
-      <ul className={styles.accountRows}>
+    <div className="flex flex-col items-start gap-3">
+      <ul className={`${styles.accountRows} w-full`}>
         {[...sessions].sort((a, b) => Number(b.id === currentId) - Number(a.id === currentId)).map((session) => (
           <li key={session.id} className={styles.accountRow} data-current={session.id === currentId}>
             <DeviceIcon agent={session.userAgent} />
