@@ -839,7 +839,7 @@ fn the_bible_catalog_chooses_languages_like_the_website() {
 }
 
 #[test]
-fn your_bibles_opens_full_screen_like_the_websites_dialog() {
+fn your_bibles_opens_as_the_websites_dialog() {
     use crate::reader_tools::{BiblesView, Load, ToolsMsg};
     use crate::settings_ui::SettingsTab;
     use iced::keyboard::{self, key::Named};
@@ -867,17 +867,17 @@ fn your_bibles_opens_full_screen_like_the_websites_dialog() {
     assert!(ui.find("+ Add Bible").is_ok());
     assert!(ui.find("Search by name or abbreviation").is_err());
     drop(ui);
-    // The full-screen button opens the list over the whole window, header included.
+    // The expand button opens the list in a centered panel over the dimmed page (`md:w-[min(36rem,…)]`).
     let _ = app.update(Message::Tools(ToolsMsg::BiblesView(BiblesView::List)));
     let mut ui = simulator(app);
     let done = ui.find("Done").expect("Done").bounds();
     assert!(
-        done.y < 64.0 && done.x > 640.0 && done.x < 640.0 + 288.0 + 40.0,
+        done.x > 640.0 && done.x + done.width <= 640.0 + 288.0 && done.y > 64.0,
         "{done:?}"
     );
     assert!(ui.find("‹ Back").is_err(), "the list has no Back");
     drop(ui);
-    // The page underneath takes no clicks.
+    // The page underneath takes no clicks: a click beside the panel lands on the backdrop, which closes it.
     let messages = click_id(app, "settings-tab-reading");
     assert!(
         !messages
@@ -885,6 +885,8 @@ fn your_bibles_opens_full_screen_like_the_websites_dialog() {
             .any(|m| matches!(m, Message::SettingsTab(_))),
         "{messages:?}"
     );
+    assert_eq!(app.tools.bibles_dialog, None);
+    let _ = app.update(Message::Tools(ToolsMsg::BiblesView(BiblesView::List)));
     // Modal: the page's keys do nothing while it is open; Escape closes it.
     key(app, Named::ArrowRight);
     assert_eq!(app.settings_tab, SettingsTab::BibleTranslations);
@@ -897,8 +899,32 @@ fn your_bibles_opens_full_screen_like_the_websites_dialog() {
     let mut ui = simulator(app);
     assert!(ui.find("Add a Bible").is_ok());
     assert!(ui.find("‹ Back").is_ok());
-    assert!(ui.find("Search by name or abbreviation").is_ok());
+    // The catalog is wide (`min(60rem, 100vw − 4rem)`), its search beside the results.
+    let search = ui
+        .find("Search by name or abbreviation")
+        .expect("search")
+        .bounds();
+    let done = ui.find("Done").expect("Done").bounds();
+    assert!(done.x + done.width > 1280.0 - 32.0 - 200.0, "{done:?}");
+    assert!(
+        search.width <= 272.0 && search.x < 640.0 - 200.0,
+        "{search:?}"
+    );
     drop(ui);
+    // In a narrow window it is the whole window again, Done at the top.
+    app.window_width = 607.0;
+    let mut narrow = Simulator::with_size(
+        Settings {
+            default_font: design::SANS,
+            ..Settings::default()
+        },
+        Size::new(607.0, 800.0),
+        app.view(),
+    );
+    let done = narrow.find("Done").expect("Done").bounds();
+    assert!(done.y < 64.0 && done.x > 607.0 / 2.0, "{done:?}");
+    drop(narrow);
+    app.window_width = WINDOW.width;
     // The language chooser: Escape steps back to the catalog, then closes; Back goes to the list; Done closes.
     let _ = click(app, "Change ›");
     assert!(app.tools.choosing_language);
@@ -1132,4 +1158,256 @@ fn a_dragged_selection_follows_the_page_as_it_scrolls_under_a_still_pointer() {
         })
         .collect();
     assert!(blocks.last().is_some_and(|b| *b > 3), "{blocks:?}");
+}
+
+#[test]
+fn reader_settings_end_with_all_settings_and_settings_link_the_privacy_policy() {
+    let mut f = fixture();
+    let app = &mut f.app;
+    let _ = app.update(Message::TogglePopover(Popover::ReaderSettings));
+    click(app, "All settings");
+    assert_eq!(app.screen, Screen::Settings);
+    assert_eq!(app.settings_tab, crate::settings_ui::SettingsTab::Reading);
+    assert_eq!(app.popover, None);
+    for tab in [
+        crate::settings_ui::SettingsTab::BibleTranslations,
+        crate::settings_ui::SettingsTab::Feedback,
+    ] {
+        let _ = app.update(Message::SettingsTab(tab));
+        // Pressed, not applied: the link opens the website's policy in the browser.
+        let mut ui = simulator(app);
+        let mut hits = Vec::new();
+        let _ = ui.find(|candidate: Candidate<'_>| -> Option<Rectangle> {
+            if let Candidate::Text {
+                content,
+                visible_bounds: Some(visible),
+                ..
+            } = candidate
+                && content == "Privacy policy"
+            {
+                hits.push(visible);
+            }
+            None
+        });
+        let link = *hits
+            .last()
+            .unwrap_or_else(|| panic!("privacy policy under {tab:?}"));
+        let messages = press(ui, link);
+        assert!(
+            messages.iter().any(|m| matches!(
+                m,
+                Message::OpenLink(url) if url == "https://www.versetogether.org/privacy"
+            )),
+            "{tab:?}: {messages:?}"
+        );
+    }
+}
+
+#[test]
+fn the_selection_menu_labels_its_actions_and_they_act_on_click() {
+    use crate::select_text::Phase;
+    use crate::text_selection::Area;
+    let mut f = fixture();
+    let app = &mut f.app;
+    app.pointer.set(iced::Point::new(500.0, 460.0));
+    let _ = app.update(Message::Pick(
+        Area::Reader,
+        1,
+        10,
+        Phase::Press { clicks: 1 },
+    ));
+    let _ = app.update(Message::Pick(Area::Reader, 2, 20, Phase::Drag));
+    let _ = app.update(Message::Pick(Area::Reader, 2, 20, Phase::Release));
+    let texts = visible_texts(app);
+    for label in [
+        "New Note",
+        "Keep your thoughts",
+        "Annotate",
+        "Resources",
+        "Focus scripture",
+        "Read & share passage",
+        "Copy text",
+        "Alma 32:2–3",
+    ] {
+        assert!(texts.iter().any(|t| t == label), "{label} in {texts:?}");
+    }
+    click(app, "Annotate");
+    assert!(app.annotating);
+    let texts = visible_texts(app);
+    assert!(texts.iter().any(|t| t == "YOUR QUICK MARKS"));
+    assert!(texts.iter().any(|t| t == "Note on verse 2"));
+    click(app, "Underline");
+    assert_eq!(app.annotate_choice().0, crate::marks::MarkKind::Underline);
+    click(app, "Apply yellow underline");
+    assert!(app.mark_applied(
+        crate::marks::MarkKind::Underline,
+        &crate::marks::MarkColor::Named("yellow"),
+        true
+    ));
+    let _ = app.update(Message::Annotate(false));
+    click(app, "Focus scripture");
+    assert_eq!(app.selected.iter().copied().collect::<Vec<_>>(), vec![2, 3]);
+    assert!(app.word_selection.is_empty());
+}
+
+#[test]
+fn the_contents_drawer_lists_every_chapter_and_jumps() {
+    let mut f = fixture();
+    let app = &mut f.app;
+    let _ = app.update(Message::Lesson(crate::lessons_ui::LessonMsg::Open(
+        "2026-10-26".into(),
+    )));
+    let _ = app.update(Message::TogglePopover(Popover::Contents));
+    let texts = visible_texts(app);
+    for label in [
+        "CONTENTS",
+        "INTRODUCTION",
+        "CHAPTER BY CHAPTER",
+        "AFTER THE CHAPTERS",
+        "Weekly Study and Discussion Plan",
+        "Public Sources",
+    ] {
+        assert!(texts.iter().any(|t| t == label), "{label} in {texts:?}");
+    }
+    click(app, "Historical and Literary Context");
+    assert_eq!(app.popover, None);
+}
+
+/// Writes PNG snapshots of the core screens at a phone-like, a small-desktop and a desktop width, for reviewing
+/// narrow layouts: `VERSE_SNAPSHOTS=/tmp/dir cargo test width_snapshots -- --ignored`.
+#[test]
+#[ignore]
+fn width_snapshots() {
+    use crate::select_text::Phase;
+    use crate::text_selection::Area;
+    let out = PathBuf::from(std::env::var("VERSE_SNAPSHOTS").expect("VERSE_SNAPSHOTS directory"));
+    for (width, height) in [(607.0, 733.0), (920.0, 733.0), (1214.0, 733.0)] {
+        let mut f = fixture();
+        let app = &mut f.app;
+        app.window_width = width;
+        app.window_height = height;
+        app.motion.animate = false;
+        let shot = |app: &App, name: &str| {
+            let path = out.join(format!("{}-{name}.png", width as u32));
+            let _ =
+                std::fs::remove_file(out.join(format!("{}-{name}-tiny-skia.png", width as u32)));
+            let mut ui = Simulator::with_size(
+                Settings {
+                    default_font: design::SANS,
+                    ..Settings::default()
+                },
+                Size::new(width, height),
+                app.view(),
+            );
+            ui.snapshot(&app.theme())
+                .unwrap()
+                .matches_image(&path)
+                .unwrap();
+        };
+        shot(app, "reader");
+        for (popover, name) in [
+            (Popover::Library, "library"),
+            (Popover::ReaderSettings, "reader-settings"),
+            (Popover::Search, "search"),
+        ] {
+            let _ = app.update(Message::TogglePopover(popover));
+            shot(app, name);
+            let _ = app.update(Message::ClosePopover);
+        }
+        app.pointer.set(iced::Point::new(width * 0.4, 330.0));
+        let _ = app.update(Message::Pick(
+            Area::Reader,
+            1,
+            10,
+            Phase::Press { clicks: 1 },
+        ));
+        app.pointer.set(iced::Point::new(width * 0.6, 380.0));
+        let _ = app.update(Message::Pick(Area::Reader, 2, 20, Phase::Drag));
+        let _ = app.update(Message::Pick(Area::Reader, 2, 20, Phase::Release));
+        shot(app, "selection-menu");
+        let _ = app.update(Message::Annotate(true));
+        shot(app, "selection-annotate");
+        let _ = app.update(Message::ClearWords);
+        let _ = app.update(Message::SelectVerse(21));
+        shot(app, "verse-panel");
+        let _ = app.update(Message::ClearSelection);
+        let _ = app.update(Message::SetScreen(Screen::Library));
+        shot(app, "library-page");
+        let _ = app.update(Message::SetScreen(Screen::Journal));
+        shot(app, "journal");
+        let _ = app.update(Message::Journal(crate::journal_ui::JournalMsg::New(None)));
+        shot(app, "journal-composer");
+        let _ = app.update(Message::SetScreen(Screen::Guides));
+        shot(app, "guides");
+        let _ = app.update(Message::Lesson(crate::lessons_ui::LessonMsg::Open(
+            "2026-10-26".into(),
+        )));
+        shot(app, "lesson");
+        let _ = app.update(Message::TogglePopover(Popover::Contents));
+        shot(app, "lesson-contents");
+        let _ = app.update(Message::TogglePopover(Popover::LessonLog));
+        shot(app, "lesson-log");
+        let _ = app.update(Message::ClosePopover);
+        for tab in crate::settings_ui::SETTINGS_TABS {
+            let _ = app.update(Message::SettingsTab(tab));
+            shot(app, &format!("settings-{}", tab.id()));
+        }
+        let _ = app.update(Message::SettingsTab(
+            crate::settings_ui::SettingsTab::BibleTranslations,
+        ));
+        let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::BiblesView(
+            crate::reader_tools::BiblesView::Add,
+        )));
+        shot(app, "bibles-add");
+        let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::CloseBibles));
+        let _ = app.update(Message::SetScreen(Screen::Plans));
+        shot(app, "plans");
+    }
+}
+
+/// Draws (not only lays out) the screens whose controls were added for web parity, at a narrow and a desktop
+/// width: the renderer rejects shapes it can't build, such as a corner rounder than half the shape.
+#[test]
+fn new_parity_screens_draw_at_narrow_and_desktop_widths() {
+    use crate::select_text::Phase;
+    use crate::text_selection::Area;
+    for width in [607.0, 1214.0] {
+        let mut f = fixture();
+        let app = &mut f.app;
+        app.window_width = width;
+        app.window_height = 733.0;
+        let draw = |app: &App, what: &str| {
+            let mut ui = Simulator::with_size(
+                Settings {
+                    default_font: design::SANS,
+                    ..Settings::default()
+                },
+                Size::new(width, 733.0),
+                app.view(),
+            );
+            assert!(ui.snapshot(&app.theme()).is_ok(), "{what} at {width}");
+        };
+        let _ = app.update(Message::SettingsTab(
+            crate::settings_ui::SettingsTab::StudyTools,
+        ));
+        let _ = app.update(Message::PresetCustom(Some(0)));
+        draw(app, "study tools");
+        let _ = app.update(Message::SetScreen(Screen::Reader));
+        app.pointer.set(iced::Point::new(width / 2.0, 360.0));
+        let _ = app.update(Message::Pick(
+            Area::Reader,
+            1,
+            10,
+            Phase::Press { clicks: 1 },
+        ));
+        let _ = app.update(Message::Pick(Area::Reader, 2, 20, Phase::Release));
+        draw(app, "selection menu");
+        let _ = app.update(Message::Annotate(true));
+        let _ = app.update(Message::AnnotateStyle(
+            crate::marks::MarkKind::Underline,
+            crate::marks::MarkColor::Named("green"),
+        ));
+        let _ = app.update(Message::AnnotateCustom);
+        draw(app, "annotate");
+    }
 }

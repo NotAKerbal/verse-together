@@ -57,5 +57,10 @@ CFM read/write and editor-ownership connections added during integration. Rust s
 at `3b39252`, with release data regenerated from this repository and its history-range UI test made data-driven.
 The older branches' backend and Tauri history are not merged.
 
+The desktop's later native-only audit corrections (`482e249`: quick-mark editing, grouped lesson contents, the
+selection menu beside selected words, 600×640 minimum window with a phone layout below 768px, the centered Bibles
+dialog, and All settings/privacy links) were cherry-picked onto dev `7b9f993` without the rest of the desktop branch.
+They change only `native/`; the desktop release-note data was regenerated from this repository's 2.16.0 history.
+
 The released Android 1.0.5 UI build is a separate artifact and excludes account sync. Merging the newer source
 does not change that already-uploaded bundle; a later mobile release needs its own version/build number and QA.
