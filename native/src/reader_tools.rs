@@ -1333,7 +1333,13 @@ impl App {
         Task::batch(tasks)
     }
     fn load_resources(&mut self) -> Task<Message> {
-        let verses: Vec<u32> = self.selected.iter().copied().collect();
+        // The selected verses, or the verses of the selected words (the selection menu's Resources).
+        let words = self.word_verses();
+        let verses: Vec<u32> = if words.is_empty() {
+            self.selected.iter().copied().collect()
+        } else {
+            words
+        };
         if verses.is_empty() {
             return Task::none();
         }

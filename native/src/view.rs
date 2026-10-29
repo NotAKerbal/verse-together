@@ -122,7 +122,8 @@ impl App {
     }
     /// The width the reader's scroll area gets, with or without the study panel beside it.
     fn reader_width(&self, panel: bool) -> f32 {
-        if panel {
+        // In the phone layout the panel floats over the text, which keeps its width.
+        if panel && !self.phone() {
             self.window_width - PANEL_WIDTH - PANEL_GAP - self.panel_inset()
         } else {
             self.window_width
@@ -155,6 +156,15 @@ impl App {
             Screen::Settings => self.settings_view(),
             Screen::SignIn => self.sign_in_view(),
             Screen::Plans => self.plans_view(),
+        };
+        // The phone layout's docked navigation keeps the bottom of the window; pages end above it.
+        let docked = self.phone() && !(self.focus && self.screen == Screen::Reader);
+        let content: Element<'_, Message> = if docked {
+            container(content)
+                .padding(Padding::ZERO.bottom(header::BOTTOM_NAV_CLEAR))
+                .into()
+        } else {
+            content
         };
         // Stable layers, so opening a panel or animating the header never resets the reader's scroll position:
         // the page, a click-away layer under the header, the header, then panels and notices.
@@ -192,28 +202,40 @@ impl App {
         {
             layers = layers.push(crate::ticker::ticker());
         }
-        layers.into()
+        crate::pointer::tracked(layers, &self.pointer).into()
     }
 
     fn overlay(&self) -> Element<'_, Message> {
         let p = self.p();
         let mut layers = stack![].width(Fill).height(Fill);
-        if let Some(popover) = self.popover {
+        // The docked navigation is under every panel, drawer and menu, as the website's dialogs cover it.
+        if self.phone() && !(self.focus && self.screen == Screen::Reader) {
+            layers = layers.push(self.bottom_nav());
+        }
+        if self.popover == Some(Popover::Contents) {
+            layers = layers.push(self.contents_drawer());
+        } else if let Some(popover) = self.popover {
             let (panel, width, right) = match popover {
                 Popover::Search => (self.search_view(), 352.0, true),
                 Popover::Library | Popover::Chapters => (self.library_view(), 600.0, true),
                 Popover::ReaderSettings => (self.reader_settings(), 384.0, true),
                 Popover::AppSettings => (self.account_menu(), 256.0, false),
-                Popover::Contents => (self.contents_panel(), 380.0, true),
+                // Drawn as the drawer above.
+                Popover::Contents => (space().into(), 0.0, false),
                 Popover::LessonLog => (self.lesson_log_panel(), 340.0, true),
             };
             let inset = shell_inset(self.window_width);
+            let width: f32 = f32::min(width, self.window_width - 2.0 * inset);
             layers = layers.push(
                 container(container(opaque(panel)).width(width))
                     .padding(Padding {
                         top: TOP + PILL_HEIGHT + 8.0,
                         right: inset,
-                        bottom: 24.0,
+                        bottom: if self.phone() {
+                            header::BOTTOM_NAV_CLEAR + 8.0
+                        } else {
+                            24.0
+                        },
                         left: inset,
                     })
                     .width(Fill)
@@ -280,21 +302,9 @@ impl App {
         }
         if self.screen == crate::Screen::Reader
             && !self.content_hidden()
-            && let Some(bar) = self.word_bar()
+            && let Some(menu) = self.selection_menu()
         {
-            layers = layers.push(
-                container(opaque(bar))
-                    .padding(Padding {
-                        top: 0.0,
-                        right: 24.0,
-                        bottom: if self.error.is_some() { 84.0 } else { 24.0 },
-                        left: 24.0,
-                    })
-                    .width(Fill)
-                    .height(Fill)
-                    .align_x(Horizontal::Center)
-                    .align_y(Vertical::Bottom),
-            );
+            layers = layers.push(menu);
         }
         if self.screen == Screen::Settings
             && let Some(viewer) = self.release_viewer()
@@ -319,7 +329,16 @@ impl App {
                     .max_width(640)
                     .style(design::popover(p)),
                 ))
-                .padding(24)
+                .padding(Padding {
+                    top: 24.0,
+                    right: 24.0,
+                    bottom: if self.phone() {
+                        header::BOTTOM_NAV_CLEAR + 8.0
+                    } else {
+                        24.0
+                    },
+                    left: 24.0,
+                })
                 .width(Fill)
                 .height(Fill)
                 .align_x(Horizontal::Center)
@@ -494,11 +513,41 @@ impl App {
         page = page.push(container(passage).center_x(Fill).padding(Padding {
             top,
             // Beside the study panel, the panel's gap stands in for the right gutter.
-            right: if panel_open { 0.0 } else { side },
+            right: if panel_open && !self.phone() {
+                0.0
+            } else {
+                side
+            },
             bottom: 96.0,
             left: side,
         }));
-        let reader = self.scroll(page).id("reader").width(Fill).height(Fill);
+        let reader = self
+            .scroll(page)
+            .id("reader")
+            .on_scroll(|v| Message::ReaderScrolled(v.absolute_offset().y))
+            .width(Fill)
+            .height(Fill);
+        if self.phone() {
+            // Too narrow for the panel beside the text: it floats over it at the right, as a sheet.
+            let mut layers = stack![reader].width(Fill).height(Fill);
+            if panel_open {
+                layers = layers.push(
+                    container(opaque(
+                        self.tools_panel().unwrap_or_else(|| self.study_panel()),
+                    ))
+                    .padding(Padding {
+                        top: CONTENT_TOP,
+                        right: self.panel_inset(),
+                        bottom: 16.0,
+                        left: self.panel_inset(),
+                    })
+                    .width(Fill)
+                    .height(Fill)
+                    .align_x(Horizontal::Right),
+                );
+            }
+            return layers.into();
+        }
         // Both slots are always present so opening study tools never discards the reader's scroll state.
         let panel: Element<'_, Message> = if panel_open {
             container(self.tools_panel().unwrap_or_else(|| self.study_panel()))
@@ -944,6 +993,7 @@ impl App {
             );
             panel = panel.push(
                 text_editor(&self.note)
+                    .id("verse-note")
                     .placeholder("What stands out to you?")
                     .on_action(Message::EditNote)
                     .size(15)
@@ -1430,6 +1480,29 @@ impl App {
                 Some(b) => Element::from(column![rule(), b].spacing(16)),
                 None => space().height(0).into(),
             })
+            // `/account#reading`, closing the panel.
+            .push(column![
+                rule(),
+                space().height(12),
+                button(
+                    text("All settings")
+                        .size(12)
+                        .font(sans(font::Weight::Medium))
+                )
+                .padding(0)
+                .height(36)
+                .on_press(Message::SettingsTab(
+                    crate::settings_ui::SettingsTab::Reading
+                ))
+                .style(move |_, status| button::Style {
+                    text_color: if matches!(status, button::Status::Hovered) {
+                        p.ink
+                    } else {
+                        design::fade(p.ink, 0.7)
+                    },
+                    ..Default::default()
+                }),
+            ])
             .spacing(16),
         )
         .padding(14)
