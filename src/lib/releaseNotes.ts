@@ -63,6 +63,7 @@ export const UNRELEASED: UnreleasedNotes = {
   items: [
     { kind: "new", text: "Volunteer for Android app testing or join the iOS waiting list through a shared signup link." },
     { kind: "new", text: "The native mobile and Rust desktop apps now live alongside the website, with shared scripture and lessons. Mobile adds account journal and annotation sync, the upgraded Explore panel, guide annotations and matching Settings sections." },
+    { kind: "improved", text: "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows." },
     { kind: "improved", text: "Account settings asks you to sign in again when your session is too old to load devices, and shows progress when retrying sign-in methods and sessions." },
     { kind: "improved", text: "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages." },
   ],

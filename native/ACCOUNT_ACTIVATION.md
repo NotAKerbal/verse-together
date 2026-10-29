@@ -1,7 +1,9 @@
 # Current dev rollout
 
 Desktop approval and sync were deployed to dev at `ab8b2b013dd258b497cc4eac0ea83b64df7046ea` (PR #70), alongside
-mobile sign-in and deletion from web 2.14.0. Production remains `1647d51`; desktop production activation is not authorized.
+mobile sign-in and deletion from web 2.14.0. Production has since released them: website 2.15.0 (`17ec108`) added
+desktop approval and study sync, and production `origin/master` is `c964037` (2.16.0). Live production sign-in from
+the desktop app has not been verified.
 Live QA found that Vercel preview protection refuses native HTTP calls to the website. Native auth now uses the
 configured Convex deployment's matching `.convex.site` API; browser approval remains on the website. No protection
 was disabled. The earlier activation plan below is retained as historical preparation and production guidance.

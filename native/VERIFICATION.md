@@ -1,3 +1,28 @@
+# Monorepo integration of the audit corrections — October 28, 2026
+
+The desktop's native-only audit-correction commit `482e249` was cherry-picked onto dev `7b9f993` (which already
+holds `native/` from `3b39252`, `mobile/`, `apps.json` and `docs/monorepo.md`) as `b1d778a` on
+`t3/desktop-monorepo-integration`, without conflicts and without the rest of the desktop branch. `native/src/` now
+equals `482e249` except `parity_tests.rs`, which keeps dev's data-driven "Earlier releases" range. The selection
+menu in simple mode, Annotate's viewport/footer/bottom-navigation clamps, Resources preferring the selected words
+and the UTF-16 selection mapping are unchanged from the reviewed commit. The embedded Release notes now come from
+this repository's website source: 2.16.0 plus the upcoming items, regenerated with
+`native/scripts/generate-release-notes.mjs` (dev's copy predated its tester-signup item). The 2.14-only release-note
+caveats in the entries below are resolved by this integration. Production source (`origin/master` `c964037`) includes
+desktop approval and sync since 2.15.0; live production sign-in was not verified.
+
+**Passed** (`/tmp/verse-native-tools/env.sh`, `CARGO_BUILD_JOBS=4`): `npm run app -- desktop check` (format,
+release-note generator check, 205 native tests passed, 2 ignored), strict all-target clippy, locked release build
+(binary SHA-256 `0288299670cefba4eb8e51a7e916b59145fa65400c1078a360c6f4d343261b77`), root `release:check`,
+`test:release`, `next typegen` + `tsc --noEmit`, and the apps dispatcher listing and dry run. Logs:
+`/tmp/vt-integration-{check,clippy,release,releasecheck,testrelease,tsc}.log`.
+**Independent parent review:** checked the native source against `482e249` (only the preserved, data-driven release-history test differs), reviewed the generated release-note and documentation edits, and confirmed that mobile, backend, web runtime, package scripts and deployment configuration are unchanged against the dev base. Parent re-ran the desktop check (205 passed, 2 ignored), release validation, 53 deployment guard tests and 6 release tests. Logs `/tmp/vt-integration-root-check.log`.
+
+**Passed in a real window** (that release binary, `--no-account`, scratch `--data-dir /tmp/vt-integration-qa/profile`):
+Settings → Release notes names website 2.16.0, shows the upcoming items with the desktop audit item, the 2.16.0
+screenshot decodes, and "Earlier releases" reads 2.0.0–2.13.0. Evidence `/tmp/vt-integration-qa/0{1,2}-*.png`; the
+window was closed normally. The audit-correction GUI checks below were not repeated: their code is unchanged.
+
 # Independent audit-correction review — October 28, 2026
 
 Reviewed the native-only audit correction diff on base `3b39252`, including quick-mark duplicate/style rules,
