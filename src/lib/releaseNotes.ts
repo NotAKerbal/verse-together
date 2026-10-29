@@ -43,6 +43,7 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "improved", text: "The testing signup page has a simpler heading and less introductory text." },
     { kind: "improved", text: "Account settings leaves space between the device list and the button to sign out other devices." },
   ],
 };
