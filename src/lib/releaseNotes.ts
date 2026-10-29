@@ -1,20 +1,3 @@
-/*
-  Release notes shown in Settings, and the app's version.
-
-  Versions follow production: master is what Verse Together serves. Version 2.0.0 is the Marker redesign that
-  replaced the whole interface (d65680e, 2026-09-25), together with everything master received directly before
-  production releases began coming from dev. Since then each merge of dev into master is one release, and each
-  release adds one to the minor version (2.1.0, 2.2.0, ...). The major version stays 2 unless the project owner
-  decides otherwise.
-
-  Work that is not on master yet goes in UNRELEASED. When dev is merged into master, it becomes the next release,
-  package.json and package-lock.json take its version, and `npm run release:check` confirms they agree. See
-  AGENTS.md ("Releases") for the full procedure.
-
-  This file is read by scripts/release-version.mjs with Node's type stripping: keep it free of imports and of
-  TypeScript syntax that needs compiling (enums, namespaces).
-*/
-
 export type ReleaseNoteKind = "new" | "improved";
 
 export type ReleaseScreenshot = {
@@ -38,7 +21,6 @@ export type ReleaseNoteItem = {
 };
 
 export type Release = {
-  /** Semantic version: 2.minor.0 for each dev-to-master release. */
   version: string;
   /** The day the release reached master (the release merge's commit date), YYYY-MM-DD. */
   date: string;
@@ -61,6 +43,8 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "improved", text: "Account settings uses clear sign-in and device cards with icons, connection badges and sign-in dates, puts this device first, and separates account deletion from everyday controls." },
+    { kind: "improved", text: "Settings tabs slide smoothly between sections, matching the main navigation and respecting reduced motion." },
     { kind: "improved", text: "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows." },
   ],
 };

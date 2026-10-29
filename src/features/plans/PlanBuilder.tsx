@@ -1,5 +1,6 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
 import { useFaithTradition } from "@/lib/useFaithTradition";
 import { isLdsVolume } from "@/lib/faithTradition";
 
@@ -943,15 +944,16 @@ export default function PlanBuilder({ planId }: { planId?: string }) {
         </Link>
         <AccountControl variant="page" />
       </div>
-      <header className="page-hero space-y-3">
-        <div className="page-eyebrow">Study plans</div>
-        <h1 className="page-title">{editing ? "Edit plan" : "New plan"}</h1>
-        <p className="page-subtitle text-sm">
-          {editing
+      <PageHeader
+        eyebrow="Study plans"
+        title={editing ? "Edit plan" : "New plan"}
+        subtitle={
+          editing
             ? "Change what you're reading or how fast. Your read chapters stay put."
-            : "Two steps: what to read, then how fast. A whole volume, a handful of books, or one chapter range, it all works."}
-        </p>
-      </header>
+            : "Two steps: what to read, then how fast. A whole volume, a handful of books, or one chapter range, it all works."
+        }
+        subtitleSize="small"
+      />
       {content}
     </section>
   );

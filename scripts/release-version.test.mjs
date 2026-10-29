@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { findProblems, imageSize, loadReleaseNotes, nextVersion } from "./release-version.mjs";
+import { findProblems, imageSize, isPreparedVersion, loadReleaseNotes, nextVersion } from "./release-version.mjs";
 
 const png = (width, height) => {
   const buffer = Buffer.alloc(24);
@@ -35,9 +35,32 @@ function input({ releases, version = releases[0].version, files = {} }) {
   };
 }
 
-test("the next release adds one minor version", () => {
+test("the default next release adds one minor version", () => {
   assert.equal(nextVersion("2.10.0"), "2.11.0");
   assert.equal(nextVersion("2.0.0"), "2.1.0");
+  assert.equal(nextVersion("2.16.2", "minor"), "2.17.0");
+});
+
+test("patch releases increment the patch on the current minor line", () => {
+  assert.equal(nextVersion("2.16.0", "patch"), "2.16.1");
+  assert.equal(nextVersion("2.16.1", "patch"), "2.16.2");
+  assert.throws(() => nextVersion("2.16.0", "major"), /Use minor or patch/);
+  assert.throws(() => nextVersion("invalid", "patch"), /Invalid release version/);
+});
+
+test("release retries recognize both prepared bump types", () => {
+  for (const base of ["2.16.0", "2.16.2"]) {
+    assert.equal(isPreparedVersion(nextVersion(base, "patch"), base), true);
+    assert.equal(isPreparedVersion(nextVersion(base, "minor"), base), true);
+    assert.equal(isPreparedVersion(base, base), false);
+    assert.equal(isPreparedVersion("2.18.0", base), false);
+    assert.equal(isPreparedVersion("2.16.4", base), false);
+  }
+});
+
+test("patch history followed by a minor release passes validation", () => {
+  const releases = [release("2.17.0"), release("2.16.2"), release("2.16.1"), release("2.16.0")];
+  assert.deepEqual(findProblems(input({ releases })), []);
 });
 
 test("image sizes come from PNG and WebP headers", () => {
