@@ -16,16 +16,74 @@
   color: var(--foreground-soft);
 }
 
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ groups' marks */
+/*
+  Each group has a muted ink of its own, a little warmer or cooler than the rubric, on its icon and kicker. The group's
+  name is always written beside it, so the color only helps the eye find its place.
+*/
+.accent[data-group="read"] {
+  --group-accent: #4f6b56;
+}
+.accent[data-group="bibles"] {
+  --group-accent: #836020;
+}
+.accent[data-group="study"] {
+  --group-accent: #9a3020;
+}
+.accent[data-group="write"] {
+  --group-accent: #43577a;
+}
+.accent[data-group="more"] {
+  --group-accent: #74466a;
+}
+:global([data-theme="dark"]) .accent[data-group="read"] {
+  --group-accent: #9fbaa4;
+}
+:global([data-theme="dark"]) .accent[data-group="bibles"] {
+  --group-accent: #d0b474;
+}
+:global([data-theme="dark"]) .accent[data-group="study"] {
+  --group-accent: #e3907a;
+}
+:global([data-theme="dark"]) .accent[data-group="write"] {
+  --group-accent: #a5b7d6;
+}
+:global([data-theme="dark"]) .accent[data-group="more"] {
+  --group-accent: #cfa6c6;
+}
+
+.groupMark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--group-accent, var(--accent-rubric)) 13%, var(--surface-card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--group-accent, var(--accent-rubric)) 28%, transparent);
+  color: var(--group-accent, var(--accent-rubric));
+}
+
+.groupMark svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
 /* ------------------------------------------------------------------ topics */
 .index {
-  padding: 1.1rem 1.25rem 1.25rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 0.9rem;
-  background: var(--surface-card);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.5rem, 3vw, 2rem);
 }
 
 .indexTitle,
-.indexGroupTitle,
 .groupTitle {
   font-family: var(--font-sans);
   font-size: 0.72rem;
@@ -35,41 +93,212 @@
   color: var(--accent-rubric);
 }
 
-.indexGroups {
+.indexTitle {
+  /* "All topics" links land here, clear of the floating top bar. */
+  scroll-margin-top: calc(var(--header-height) + 1.25rem);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
-  gap: 1rem 1.75rem;
-  margin-top: 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr));
+  gap: 1rem;
 }
 
-.indexGroupTitle {
-  padding-bottom: 0.35rem;
-  border-bottom: 1px solid var(--rule);
-  color: var(--foreground-soft);
-}
-
-.indexGroup ol {
+.card {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  margin-top: 0.35rem;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.8rem;
+  background: var(--surface-card);
+  box-shadow: var(--surface-shadow-soft);
+  color: var(--foreground);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
+.card:hover {
+  border-color: color-mix(in srgb, var(--group-accent) 55%, var(--surface-border));
+  box-shadow: var(--surface-shadow-lift);
+  transform: translateY(-2px);
+}
 
-.indexGroup a {
-  display: inline-block;
-  padding-block: 0.3rem;
+.guide .card:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 3px;
+  border-radius: 0.8rem;
+}
+
+/* The cover: a clip's own poster, enlarged around the part of the screen the topic is about. */
+.thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-card-soft);
+}
+
+/* The group's ink along the cover's top edge, matching its mark below. */
+.thumb::after {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 3px 0 var(--group-accent);
+  content: "";
+  pointer-events: none;
+}
+
+.thumbImage {
+  object-fit: cover;
+  transform: scale(var(--zoom, 1));
+  transform-origin: var(--origin, 50% 50%);
+}
+
+.thumbPlay {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  background: rgba(31, 29, 26, 0.85);
+  color: #f6f3ec;
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.45);
+}
+
+.thumbPlay svg {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-left: 0.1rem;
+}
+
+.cardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+
+.cardTitle {
   font-family: var(--font-serif-text);
-  font-size: 1.02rem;
-  line-height: 1.3;
-  color: var(--foreground);
+  font-size: 1.08rem;
+  line-height: 1.28;
+}
+
+.card:hover .cardTitle {
   text-decoration: underline;
-  text-decoration-color: transparent;
+  text-decoration-color: var(--accent-rubric-line);
   text-underline-offset: 3px;
 }
 
-.indexGroup a:hover {
-  text-decoration-color: var(--accent-rubric-line);
+/* Shown above the title, but read after it, so each link's name starts with its topic. */
+.cardGroup {
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--group-accent);
+}
+
+.cardMark {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.cardMark svg {
+  width: 0.6rem;
+  height: 0.6rem;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: auto;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground-soft);
+}
+
+/* Phones: one topic per row, its cover beside its title, so the whole list stays short. */
+@media (max-width: 559px) {
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+  }
+
+  .card {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .thumb {
+    flex: 0 0 8.5rem;
+    align-self: center;
+    margin-left: 0.5rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 0.5rem;
+  }
+
+  .thumb::after {
+    display: none;
+  }
+
+  .thumbPlay {
+    bottom: 0.4rem;
+    left: 0.4rem;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .cardBody {
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.6rem 0.8rem;
+  }
+
+  .cardTitle {
+    font-size: 1.02rem;
+  }
+
+  /* Shown above the title, but read after it, so each link's name starts with its topic. */
+.cardGroup {
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--group-accent);
+}
+
+.cardMark {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.cardMark svg {
+  width: 0.6rem;
+  height: 0.6rem;
+}
+
+.cardMeta {
+    margin-top: 0;
+  }
 }
 
 .tradition {
@@ -93,12 +322,17 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-top: clamp(0.5rem, 2vw, 1.25rem);
+  margin-top: clamp(1.5rem, 4vw, 2.75rem);
 }
 
 .groupTitle {
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--rule-strong);
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 2px solid color-mix(in srgb, var(--group-accent) 45%, var(--rule-strong));
+  font-size: 0.8rem;
+  color: var(--group-accent);
 }
 
 .section {
@@ -117,6 +351,42 @@
   align-items: flex-start;
   gap: 0.5rem;
   max-width: 44rem;
+}
+
+.kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.kickerMark {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.kickerMark svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.kickerGroup {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--group-accent, var(--accent-rubric));
+}
+
+.kickerMeta {
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground-soft);
+}
+
+.kickerMeta::before {
+  content: "·";
+  margin-right: 0.55rem;
 }
 
 .sectionTitle {
@@ -238,6 +508,28 @@
 
 .tryIt:hover {
   text-decoration-color: currentColor;
+}
+
+.toTopics {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  margin-left: auto;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--foreground-muted);
+}
+
+.toTopics:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.toTopics svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .copyLink {
@@ -528,7 +820,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bigPlayIcon {
+  .bigPlayIcon,
+  .card {
     transition: none;
+  }
+
+  .card:hover {
+    transform: none;
   }
 }

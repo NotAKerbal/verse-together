@@ -66,6 +66,17 @@ describe("feature guide topics", () => {
     for (const clip of clips) expect(clip.steps.length).toBeGreaterThan(0);
   });
 
+  test("each topic's card shows one of its own clips, framed inside the poster", () => {
+    for (const section of GUIDE_SECTIONS) {
+      const { clip, center, zoom } = section.cover;
+      expect(section.clips.map((own) => own.id), section.id).toContain(clip);
+      for (const at of center) expect(at, section.id).toBeGreaterThanOrEqual(0);
+      for (const at of center) expect(at, section.id).toBeLessThanOrEqual(1);
+      expect(zoom, section.id).toBeGreaterThanOrEqual(1);
+      expect(zoom, section.id).toBeLessThanOrEqual(3);
+    }
+  });
+
   test("Try it links open pages that exist", () => {
     for (const { tryIt } of GUIDE_SECTIONS) {
       const url = new URL(tryIt.href, "https://example.org");

@@ -1,13 +1,29 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowUp,
+  faBookBible,
+  faBookOpen,
+  faFeather,
+  faHighlighter,
+  faPlay,
+  faShareNodes,
+  type IconDefinition,
+} from "@fortawesome/free-solid-svg-icons";
 import CopySectionLink from "@/features/featureGuide/CopySectionLink";
 import GuideClipPlayer from "@/features/featureGuide/GuideClipPlayer";
 import {
   clipMedia,
+  clipPosterSrc,
+  coverOrigin,
   formatClipDuration,
   GUIDE_GROUPS,
   GUIDE_SECTIONS,
+  sectionDuration,
   sectionsInGroup,
+  type GuideGroupId,
   type GuideSection,
 } from "@/features/featureGuide/guide";
 import styles from "@/features/featureGuide/featureGuide.module.css";
@@ -20,6 +36,65 @@ export const metadata: Metadata = {
 };
 
 const CLIP_COUNT = GUIDE_SECTIONS.reduce((count, section) => count + section.clips.length, 0);
+
+/** Each group's mark, repeated on its cards' heading, its part of the page and each of its topics. */
+const GROUP_ICONS: Record<GuideGroupId, IconDefinition> = {
+  read: faBookOpen,
+  bibles: faBookBible,
+  study: faHighlighter,
+  write: faFeather,
+  more: faShareNodes,
+};
+
+const GROUP_TITLES = Object.fromEntries(GUIDE_GROUPS.map((group) => [group.id, group.title])) as Record<GuideGroupId, string>;
+
+const clipCount = (section: GuideSection) => `${section.clips.length} ${section.clips.length === 1 ? "clip" : "clips"}`;
+
+function GroupMark({ group, className }: { group: GuideGroupId; className?: string }) {
+  return (
+    <span className={`${styles.groupMark} ${className ?? ""}`} aria-hidden="true">
+      <FontAwesomeIcon icon={GROUP_ICONS[group]} />
+    </span>
+  );
+}
+
+/** A topic in the index: its cover, title, group and how much there is to watch. The cover is decorative; the title names the link. */
+function TopicCard({ section }: { section: GuideSection }) {
+  const { cover } = section;
+  return (
+    <li className={styles.accent} data-group={section.group}>
+      <a href={`#${section.id}`} className={styles.card}>
+        <span
+          className={styles.thumb}
+          style={{ ["--zoom" as string]: cover.zoom, ["--origin" as string]: coverOrigin(cover) }}
+        >
+          <Image
+            src={clipPosterSrc(cover.clip)}
+            alt=""
+            fill
+            // Enlarged covers need more pixels than the card's width: about twice it.
+            sizes="(min-width: 640px) 36rem, 20rem"
+            className={styles.thumbImage}
+          />
+          <span className={styles.thumbPlay} aria-hidden="true">
+            <FontAwesomeIcon icon={faPlay} />
+          </span>
+        </span>
+        <span className={styles.cardBody}>
+          <span className={styles.cardTitle}>{section.title}</span>
+          <span className={styles.cardGroup}>
+            <GroupMark group={section.group} className={styles.cardMark} />
+            {GROUP_TITLES[section.group]}
+          </span>
+          <span className={styles.cardMeta}>
+            {clipCount(section)} · {sectionDuration(section)}
+            {section.latterDaySaint ? <LatterDaySaintLabel /> : null}
+          </span>
+        </span>
+      </a>
+    </li>
+  );
+}
 
 function LatterDaySaintLabel() {
   return (
@@ -34,6 +109,13 @@ function Section({ section }: { section: GuideSection }) {
   return (
     <section id={section.id} aria-labelledby={titleId} className={styles.section}>
       <header className={styles.sectionHead}>
+        <p className={styles.kicker}>
+          <GroupMark group={section.group} className={styles.kickerMark} />
+          <span className={styles.kickerGroup}>{GROUP_TITLES[section.group]}</span>
+          <span className={styles.kickerMeta}>
+            {clipCount(section)} · {sectionDuration(section)}
+          </span>
+        </p>
         <h3 id={titleId} className={styles.sectionTitle}>
           <a href={`#${section.id}`}>{section.title}</a>
         </h3>
@@ -83,6 +165,10 @@ function Section({ section }: { section: GuideSection }) {
           Try it: {section.tryIt.label} <span aria-hidden="true">&rarr;</span>
         </Link>
         <CopySectionLink sectionId={section.id} title={section.title} />
+        <a href="#guide-topics" className={styles.toTopics}>
+          <FontAwesomeIcon icon={faArrowUp} aria-hidden="true" />
+          All topics
+        </a>
       </footer>
     </section>
   );
@@ -91,16 +177,16 @@ function Section({ section }: { section: GuideSection }) {
 export default function FeatureGuidePage() {
   return (
     <article className={`page-shell ${styles.guide}`}>
-      <header className="page-hero space-y-3">
+      <header className={`page-hero ${styles.hero}`}>
         <div className="page-eyebrow">Verse Together</div>
         <h1 className="page-title">Feature guide</h1>
         <p className="page-subtitle">
-          How each part of Verse Together works: a short, silent clip of the app for each step, with the steps written out
-          beside it.
+          Short, silent clips of the app show how each feature works, with the steps written out beside them. Choose a
+          topic to begin.
         </p>
         <p className={styles.meta}>
-          {GUIDE_SECTIONS.length} topics · {CLIP_COUNT} clips · Recorded on the website on a computer; on a phone the same
-          tools are arranged for the smaller screen.
+          {GUIDE_SECTIONS.length} topics · {CLIP_COUNT} clips · Recorded on a computer; on a phone the same tools are
+          arranged for the smaller screen.
         </p>
       </header>
 
@@ -108,33 +194,17 @@ export default function FeatureGuidePage() {
         <h2 id="guide-topics" className={styles.indexTitle}>
           Topics
         </h2>
-        <div className={styles.indexGroups}>
-          {GUIDE_GROUPS.map((group) => (
-            <div key={group.id} className={styles.indexGroup}>
-              <p className={styles.indexGroupTitle}>{group.title}</p>
-              <ol>
-                {sectionsInGroup(group.id).map((section) => (
-                  <li key={section.id}>
-                    <a href={`#${section.id}`}>
-                      {section.title}
-                      {section.latterDaySaint ? (
-                        <>
-                          {" "}
-                          <LatterDaySaintLabel />
-                        </>
-                      ) : null}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </div>
+        <ul className={styles.cards}>
+          {GUIDE_SECTIONS.map((section) => (
+            <TopicCard key={section.id} section={section} />
           ))}
-        </div>
+        </ul>
       </nav>
 
       {GUIDE_GROUPS.map((group) => (
-        <div key={group.id} className={styles.group}>
+        <div key={group.id} className={`${styles.group} ${styles.accent}`} data-group={group.id}>
           <h2 id={`group-${group.id}`} className={styles.groupTitle}>
+            <GroupMark group={group.id} />
             {group.title}
           </h2>
           {sectionsInGroup(group.id).map((section) => (

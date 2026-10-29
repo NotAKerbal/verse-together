@@ -41,6 +41,16 @@ export type GuideSection = {
   /** Latter-day Saint content: shown when Settings › Reading › Faith tradition is the Church of Jesus Christ. */
   latterDaySaint?: boolean;
   tryIt: { href: string; label: string };
+  /** The topic's card in the index: one of its own clips' posters, enlarged around the part that shows the feature. */
+  cover: GuideCover;
+};
+
+export type GuideCover = {
+  clip: GuideClipId;
+  /** The point of the poster to center on, as fractions of its width and height. */
+  center: readonly [x: number, y: number];
+  /** How far to enlarge the poster (1 shows all of it). */
+  zoom: number;
 };
 
 export const GUIDE_SECTIONS: readonly GuideSection[] = [
@@ -71,6 +81,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     notes: [
       "On a computer, the Left and Right arrow keys move to the previous and next chapter, and a Next chapter link waits at the end of each chapter.",
     ],
+    cover: { clip: "browse-library", center: [0.74, 0.1], zoom: 2.6 },
     tryIt: { href: "/browse", label: "Open the library" },
   },
   {
@@ -99,6 +110,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       },
     ],
     notes: ["Phrase search uses the library stored in your browser, so it keeps working offline after the first visit."],
+    cover: { clip: "search-phrase", center: [0.3, 0.5], zoom: 1.5 },
     tryIt: { href: "/search", label: "Open search" },
   },
   {
@@ -128,6 +140,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       },
     ],
     notes: ["These choices are saved on this device. Settings › Reading has the same controls, with a preview."],
+    cover: { clip: "reading-simple-mode", center: [0.68, 0.8], zoom: 1.7 },
     tryIt: { href: "/account#reading", label: "Open Reading settings" },
   },
   {
@@ -168,6 +181,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     notes: [
       "Your Bibles are saved on this device. The trash button removes one; removing your default brings back the King James Bible.",
     ],
+    cover: { clip: "bibles-language", center: [0.32, 0.45], zoom: 1.6 },
     tryIt: { href: "/account#bible-translations", label: "Open Translations settings" },
   },
   {
@@ -196,6 +210,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       },
     ],
     notes: ["Add the Bibles you want to compare first (see Add Bibles above)."],
+    cover: { clip: "compare-inline", center: [0.33, 0.36], zoom: 1.7 },
     tryIt: { href: "/browse/newtestament/john/1", label: "Open John 1" },
   },
   {
@@ -218,6 +233,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     notes: [
       "The JST applies when the King James Bible (LDS edition) is the main text. A line above the chapter can show the KJV words the JST leaves out.",
     ],
+    cover: { clip: "jst", center: [0.3, 0.3], zoom: 2 },
     tryIt: { href: "/browse/newtestament/matthew/7", label: "Open Matthew 7" },
   },
   {
@@ -241,6 +257,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       "Other denominations hides Latter-day Saint scriptures, Come Follow Me, the Joseph Smith Translation and study resources. Choose the Church of Jesus Christ of Latter-day Saints to show them again. The choice is saved on this device.",
       "Topics marked Latter-day Saint in this guide are the ones it hides.",
     ],
+    cover: { clip: "faith-tradition", center: [0.45, 0.24], zoom: 1.6 },
     tryIt: { href: "/account#reading", label: "Open Reading settings" },
   },
   {
@@ -277,6 +294,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       },
     ],
     notes: ["Marks are saved on this device, and with your account when you're signed in."],
+    cover: { clip: "marks-highlight", center: [0.42, 0.47], zoom: 2.4 },
     tryIt: { href: "/browse/bookofmormon/alma/32", label: "Open Alma 32" },
   },
   {
@@ -301,6 +319,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       },
     ],
     notes: ["Each mark can be a highlight or an underline in any color. The arrows reorder them, and Restore defaults starts over."],
+    cover: { clip: "quick-marks-name", center: [0.3, 0.55], zoom: 1.8 },
     tryIt: { href: "/account#study-tools", label: "Open Study tools" },
   },
   {
@@ -342,6 +361,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       "Study paths are found by AI. Read the sources and decide what holds up.",
       "Study helps are Latter-day Saint resources, so Other denominations hides them; Biblical languages and English meanings stay.",
     ],
+    cover: { clip: "explore-languages", center: [0.22, 0.45], zoom: 2 },
     tryIt: { href: "/browse/bookofmormon/alma/32", label: "Open Alma 32" },
   },
   {
@@ -369,6 +389,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
         ],
       },
     ],
+    cover: { clip: "notes-write", center: [0.8, 0.28], zoom: 2 },
     tryIt: { href: "/browse/bookofmormon/alma/32", label: "Open Alma 32" },
   },
   {
@@ -387,6 +408,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
         ],
       },
     ],
+    cover: { clip: "log-reading", center: [0.8, 0.24], zoom: 2.1 },
     tryIt: { href: "/browse/bookofmormon/alma/32", label: "Open Alma 32" },
   },
   {
@@ -415,6 +437,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
         steps: ["Under Today's journal (or any day on the calendar), choose an entry.", "The day's entries are listed, with the one you chose open."],
       },
     ],
+    cover: { clip: "journal-goals", center: [0.6, 0.4], zoom: 1.4 },
     tryIt: { href: "/notes", label: "Open Journal" },
   },
   {
@@ -452,6 +475,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     notes: [
       "The guides are a personal Latter-day Saint study aid, not an official publication of the Church. You can select words in a lesson's scripture to Explore them, as in the reader.",
     ],
+    cover: { clip: "cfm-week", center: [0.5, 0.4], zoom: 1.2 },
     tryIt: { href: "/come-follow-me", label: "Open Come Follow Me" },
   },
   {
@@ -471,6 +495,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       },
     ],
     notes: ["Anyone can open a shared link, without an account."],
+    cover: { clip: "focus-share", center: [0.5, 0.4], zoom: 1.6 },
     tryIt: { href: "/share/bookofmormon/alma/32/21", label: "Open a focused passage" },
   },
   {
@@ -495,6 +520,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
       "You can use Verse Together without an account: your study is saved in this browser. Sign in with Google from Settings › Account to keep your notes, Journal and marks with your account, on any device.",
       "Reading, translation and quick mark settings stay on each device.",
     ],
+    cover: { clip: "settings-tour", center: [0.3, 0.38], zoom: 1.6 },
     tryIt: { href: "/account", label: "Open Settings" },
   },
 ];
@@ -510,6 +536,20 @@ export const clipPosterSrc = (id: GuideClipId) => `/feature-guide/${id}.webp`;
 export function formatClipDuration(seconds: number) {
   const whole = Math.round(seconds);
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+/** The section's clips, all together: "0:44". */
+export const sectionDuration = (section: GuideSection) =>
+  formatClipDuration(section.clips.reduce((total, clip) => total + clipMedia(clip.id).durationSeconds, 0));
+
+/**
+ * Where to enlarge a cover from (CSS transform-origin), so that its center lands in the middle of the card. Scaling
+ * by z about origin o puts o + (0.5 − o) / z in the middle; solved for o, kept inside the poster.
+ */
+export function coverOrigin({ center, zoom }: GuideCover) {
+  if (zoom <= 1) return "50% 50%";
+  const origin = (c: number) => Math.min(1, Math.max(0, (c - 0.5 / zoom) / (1 - 1 / zoom)));
+  return `${(origin(center[0]) * 100).toFixed(1)}% ${(origin(center[1]) * 100).toFixed(1)}%`;
 }
 
 export const sectionsInGroup = (group: GuideGroupId) => GUIDE_SECTIONS.filter((section) => section.group === group);
