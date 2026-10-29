@@ -8,7 +8,7 @@ vi.hoisted(() => {
 });
 
 import { convexTest } from "convex-test";
-import betterAuthTest from "@convex-dev/better-auth/test";
+import betterAuthTest from "./betterAuth";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import schema from "../../convex/schema";
 import { components } from "../../convex/_generated/api";

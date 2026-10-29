@@ -8,13 +8,14 @@ import {
 
 const GOOGLE = { GOOGLE_CLIENT_ID: " id ", GOOGLE_CLIENT_SECRET: "secret" };
 const RESEND = { RESEND_API_KEY: "key", AUTH_EMAIL_FROM: "Verse Together <no-reply@versetogether.org>" };
-const GOOGLE_ONLY = { emailPassword: false, google: true, emailDelivery: false, requireEmailVerification: false };
+const GOOGLE_ONLY = { passkey: true, emailPassword: false, google: true, emailDelivery: false, requireEmailVerification: false };
 
 describe("auth environment", () => {
   test("Google is off unless both halves of the secret pair are present", () => {
     const env = readAuthEnvironment({ SITE_URL: "https://versetogether.org/", GOOGLE_CLIENT_ID: "id-only", RESEND_API_KEY: "key" });
     expect(env.siteUrl).toBe("https://versetogether.org");
     expect(authCapabilities(env)).toEqual({
+      passkey: true,
       emailPassword: false,
       google: false,
       emailDelivery: false,
@@ -37,7 +38,7 @@ describe("auth environment", () => {
 
   test("only the exact value \"true\" enables email/password", () => {
     for (const value of ["", "1", "yes", "TRUE", "True", "on", "false"]) {
-      const env = readAuthEnvironment({ ...GOOGLE, ...RESEND, AUTH_EMAIL_PASSWORD_ENABLED: value });
+      const env = readAuthEnvironment({ SITE_URL: "https://versetogether.org", ...GOOGLE, ...RESEND, AUTH_EMAIL_PASSWORD_ENABLED: value });
       expect(authCapabilities(env)).toEqual(GOOGLE_ONLY);
     }
     expect(readAuthEnvironment({ AUTH_EMAIL_PASSWORD_ENABLED: " true " }).emailPasswordEnabled).toBe(true);
@@ -46,6 +47,7 @@ describe("auth environment", () => {
   test("future email mode: delivery and verification follow Resend once explicitly enabled", () => {
     const withoutResend = readAuthEnvironment({ ...GOOGLE, AUTH_EMAIL_PASSWORD_ENABLED: "true" });
     expect(authCapabilities(withoutResend)).toEqual({
+      passkey: false,
       emailPassword: true,
       google: true,
       emailDelivery: false,
@@ -53,6 +55,7 @@ describe("auth environment", () => {
     });
     const withResend = readAuthEnvironment({ ...GOOGLE, ...RESEND, AUTH_EMAIL_PASSWORD_ENABLED: "true" });
     expect(authCapabilities(withResend)).toEqual({
+      passkey: false,
       emailPassword: true,
       google: true,
       emailDelivery: true,

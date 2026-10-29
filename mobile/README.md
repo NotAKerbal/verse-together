@@ -389,11 +389,11 @@ were not added as new product scope.
   restarts. Journal/verse outbox data remains durable. Account preferences stay disabled until first hydration.
 - **Study paths.** Cached paths remain public. For uncached chapters, the native app sends its session's Convex
   token to the site's API, which verifies the reader with Convex before researching. This requires the updated
-  website route to be deployed; real signed-in acceptance is still pending.
+  website route, deployed in website 2.19.0; real signed-in acceptance is still pending.
 - **Platform choices.** Plan dates use YYYY-MM-DD entry and one-day buttons. Custom mark colors use hex input.
   Native guide selections remain bounded by their text runs/context blocks. HTTPS intent filters and native
-  routing are implemented; automatic domain verification still needs the Play signing certificate and website
-  deployment ([setup](store/APP-LINKS.md)). `versetogether://share/...` routes work without it.
+  routing are implemented; the production association and Google Digital Asset Links check pass. Verification
+  on a Play-installed 1.1.0 update remains pending ([setup](store/APP-LINKS.md)). `versetogether://share/...` routes work without it.
 - **Account methods.** Native sign-in is Google. Email/password management is deployment-dependent and off by
   default on the backend; a native password flow was not added.
 - **Physical devices, accessibility and iOS.** TalkBack/VoiceOver, minimum Android API 24, long-account/long-plan

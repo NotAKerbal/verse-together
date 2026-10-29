@@ -1,7 +1,7 @@
 // The Google-only rollout: email/password stays off by default, even with Resend configured and even
 // for users that already have a password, while Google sign-in keeps working.
 import { convexTest } from "convex-test";
-import betterAuthTest from "@convex-dev/better-auth/test";
+import betterAuthTest from "./betterAuth";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import schema from "../../convex/schema";
 import { api, components } from "../../convex/_generated/api";
@@ -10,7 +10,7 @@ const modules = import.meta.glob("../../convex/**/*.ts");
 const SITE_URL = "http://127.0.0.1:3199";
 const EMAIL = "existing@example.com";
 const PASSWORD = "correct-horse-battery";
-const GOOGLE_ONLY = { emailPassword: false, google: true, emailDelivery: false, requireEmailVerification: false };
+const GOOGLE_ONLY = { passkey: true, emailPassword: false, google: true, emailDelivery: false, requireEmailVerification: false };
 
 function setup() {
   const t = convexTest(schema, modules);
@@ -217,6 +217,7 @@ describe("future email/password mode (AUTH_EMAIL_PASSWORD_ENABLED=true)", () => 
     const { cookie } = await createPasswordUser(t, { resend: true });
     enableEmailPassword(true);
     expect(await t.query(api.auth.capabilities, {})).toEqual({
+      passkey: true,
       emailPassword: true,
       google: true,
       emailDelivery: true,

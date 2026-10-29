@@ -98,6 +98,18 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.20.0-passkey-sign-in",
+    viewport: { width: 1000, height: 1000 },
+    async run(page, viewport) {
+      await open(page, "/sign-in");
+      await page.getByRole("button", { name: "Sign in with a passkey", exact: true }).waitFor();
+      const title = await page.getByRole("heading", { name: "Sign in", exact: true }).boundingBox();
+      const button = await page.getByRole("button", { name: "Sign in with a passkey", exact: true }).boundingBox();
+      const hint = await page.getByText("Already added a passkey?", { exact: false }).boundingBox();
+      return pad(union(title, button, hint), 20, viewport);
+    },
+  },
+  {
     name: "2.18.0-feature-guide",
     viewport: { width: 1280, height: 1100 },
     async run(page, viewport) {

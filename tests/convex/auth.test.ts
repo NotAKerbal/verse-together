@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import betterAuthTest from "@convex-dev/better-auth/test";
+import betterAuthTest from "./betterAuth";
 import { describe, expect, test } from "vitest";
 import schema from "../../convex/schema";
 import { api, components, internal } from "../../convex/_generated/api";

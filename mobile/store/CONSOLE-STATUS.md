@@ -1,4 +1,14 @@
-# Current status — 1.0.5 serving in closed testing (2026-10-28)
+# Current status — Android 1.1.0 submitted to Alpha (2026-10-29)
+
+- **1.1.0 / versionCode 7** has been submitted to the existing **Closed testing – Alpha** track, named **1.1.0 — Reader and journal parity**. Publishing overview visibly shows **Changes in review**. Quick checks are still running; Google says the changes will be sent for review automatically after they pass. Managed publishing remains off, so approval will publish the update automatically.
+- **1.0.5 remains the serving Alpha release** until the new release is approved and made available.
+- Signed AAB: `/tmp/verse-together-play-1.1.0.aab`, SHA-256 `648a55a6f8e26309df8c1a8f0d06b7f0d15c7629ec342551a38b7bbf83aa8325`. All **20 bundle checks passed**, including the upload certificate, 3 ABIs, native reflection fields and 16 KB alignment.
+- Source: `61149946e17df684f11b8c2f82ce3254c5eded86`, integrated through [PR 74](https://github.com/NotAKerbal/verse-together/pull/74). **438 mobile tests**, mobile and website typecheck, **27 Android native tests**, and **12 website authorization/association tests** passed. The earlier phone/tablet signed-out runtime checks are in `../qa/`.
+- Supporting website **2.19.0 is live**, master `ddd553ca48df253e58de127ff45d77bab23bf3ee`, deployment `dpl_4pnht7DrvTFoxNH6QyjeCaw2EEiK`. Production build logs verified `prod:lovable-seal-140`. The Play certificate is configured; the live assetlinks file and Google's Digital Asset Links API both confirm the association.
+- **Not run:** real signed-in Google/sync/plan/deletion acceptance, physical devices, TalkBack and iOS. This is an update to the existing controlled test track, not a public-production launch.
+- Details and release notes: [1.1.0 release record](releases/1.1.0.md).
+
+## Previous release status — 1.0.5
 
 - **1.0.4 is live:** Play Console shows Alpha **Active** and **Available to selected testers**, released Oct 28 at 3:45 PM. The first listing/content submission has published.
 - **1.0.5 / versionCode 6 is serving:** Play Console’s Test and release page shows **1.0.5 — Explore, Settings and CFM** on Alpha with a serving time, and **You have no unpublished changes**. Managed publishing remains off.

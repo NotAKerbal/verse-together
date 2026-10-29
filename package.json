@@ -1,6 +1,6 @@
 {
   "name": "verse-together",
-  "version": "2.19.0",
+  "version": "2.20.0",
   "private": true,
   "engines": {
     "node": ">=24.0.0"
@@ -45,7 +45,9 @@
     "apps:check": "node scripts/apps.mjs --all check"
   },
   "dependencies": {
+    "@better-auth/core": "~1.6.33",
     "@better-auth/expo": "~1.6.33",
+    "@better-auth/passkey": "~1.6.33",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.13.1",
@@ -67,6 +69,7 @@
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@eslint/eslintrc": "^3",
+    "@levischuck/tiny-cbor": "^0.2.11",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

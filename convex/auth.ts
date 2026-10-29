@@ -1,3 +1,5 @@
+import { passkey } from "@better-auth/passkey";
+import authSchema from "./betterAuth/schema";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -23,7 +25,7 @@ import { nativeAppAuth } from "./nativeAuth";
 import { NATIVE_EXCHANGE_PATH, NATIVE_EXCHANGE_RATE_LIMIT, nativeSignIn } from "./nativeSignInPlugin";
 
 // The component client has the Convex adapter plus helpers such as safeGetAuthUser.
-export const authComponent = createClient<DataModel>(components.betterAuth);
+export const authComponent = createClient<DataModel, typeof authSchema>(components.betterAuth, { local: { schema: authSchema } });
 
 /** Bounds the account-deletion sweep: SWEEP_BATCH rows per round (convex/accountDeletion.ts). */
 const MAX_DELETION_ROUNDS = 200;
@@ -34,6 +36,11 @@ const MAX_DELETION_ROUNDS = 200;
  */
 async function deleteAppData(ctx: GenericCtx<DataModel>, authUserId: string) {
   if (!("runMutation" in ctx)) throw new Error("Account deletion needs a mutation or action context.");
+  for (let round = 0; round < MAX_DELETION_ROUNDS; round++) {
+    const done = await ctx.runMutation(components.betterAuth.adapter.deleteUserPasskeys, { userId: authUserId });
+    if (done) break;
+    if (round === MAX_DELETION_ROUNDS - 1) throw new Error("Removing passkeys is taking longer than expected. Try again.");
+  }
   const clerkId = await ctx.runMutation(internal.accountDeletion.begin, { authUserId });
   if (clerkId === null) return;
   for (let round = 0; round < MAX_DELETION_ROUNDS; round++) {
@@ -196,6 +203,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       },
     },
     plugins: [
+      passkey({
+        rpName: "Verse Together",
+        rpID: new URL(environment.siteUrl ?? "http://localhost").hostname,
+        origin: environment.siteUrl ?? "http://localhost",
+        authenticatorSelection: { residentKey: "required", userVerification: "required" },
+      }),
       // The Convex plugin issues the RS256 JWTs Convex verifies (15 minute lifetime by default).
       convex({ authConfig }),
       // The native app (mobile/): its client sends the cookie jar it keeps in SecureStore and an `expo-origin`
