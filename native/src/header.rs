@@ -23,6 +23,13 @@ pub const NAV_ITEMS: [(&str, &icons::Icon, Screen); 3] = [
     ("Come Follow Me", &icons::SHOE_PRINTS, Screen::Guides),
 ];
 pub const LABEL_SIZE: f32 = 13.0;
+/// Below this width the app takes its phone layout (`MobileBottomNav`, `sm:hidden`): the navigation docks at the
+/// bottom and only the page's own controls stay at the top right. The website switches at 640px and, from 640 to
+/// 767px, moves page controls into the page instead (`.app-header-slot` from `md`); this app's header has no
+/// second row, so it keeps the phone layout up to 768px.
+pub const PHONE_BELOW: f32 = 768.0;
+/// Room the docked navigation takes at the bottom of the window (its 58px pill and 14px gap).
+pub const BOTTOM_NAV_CLEAR: f32 = 76.0;
 
 pub fn label_font() -> iced::Font {
     sans(font::Weight::Medium)
@@ -193,10 +200,20 @@ fn hint<'a>(
 }
 
 impl App {
+    /// Whether the window is narrow enough for the phone layout.
+    pub(crate) fn phone(&self) -> bool {
+        self.window_width < PHONE_BELOW
+    }
     pub(crate) fn header(&self) -> Element<'_, Message> {
         let inset = shell_inset(self.window_width);
-        let mut line = row![self.nav_pill()].spacing(12).align_y(Center);
+        let phone = self.phone();
+        let mut line = if phone { row![] } else { row![self.nav_pill()] }
+            .spacing(12)
+            .align_y(Center);
         if self.content_hidden() {
+            if phone {
+                line = line.push(space::horizontal()).push(self.page_account());
+            }
             // Hidden content has no page controls (`AppMain` shows its notice in place of the page).
         } else if self.screen == Screen::Reader {
             line = line.push(space::horizontal()).push(self.reader_pill());
@@ -212,6 +229,9 @@ impl App {
                 None => self.library_search(),
             };
             line = line.push(space::horizontal()).push(right);
+        } else if phone && !matches!(self.screen, Screen::Settings | Screen::SignIn) {
+            // Journal, Come Follow Me and Plans show the account at their own top right (`variant="page"`).
+            line = line.push(space::horizontal()).push(self.page_account());
         }
         container(line)
             .padding(Padding {
@@ -221,6 +241,136 @@ impl App {
                 left: inset,
             })
             .width(Fill)
+            .into()
+    }
+
+    /// `AccountControl variant="page"`: a Settings pill when signed out, the avatar's menu when signed in.
+    fn page_account(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let open = self.popover == Some(Popover::AppSettings);
+        let content: Element<'_, Message> = match &self.account.session {
+            Some(session) => container(
+                text(crate::account_ui::initials(
+                    &session.user.name,
+                    &session.user.email,
+                ))
+                .size(12)
+                .font(sans(font::Weight::Bold))
+                .color(p.paper),
+            )
+            .center_x(32)
+            .center_y(32)
+            .style(move |_| container::Style {
+                background: Some(p.ink.into()),
+                border: Border {
+                    radius: 999.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .into(),
+            None => text("Settings")
+                .size(13.6)
+                .font(sans(font::Weight::Semibold))
+                .into(),
+        };
+        let signed_in = self.account.session.is_some();
+        button(container(content).center_y(Fill))
+            .padding(if signed_in { [0, 6] } else { [0, 16] })
+            .height(44)
+            .on_press(if signed_in {
+                Message::TogglePopover(Popover::AppSettings)
+            } else {
+                Message::SetScreen(Screen::Settings)
+            })
+            .style(move |_, status| button::Style {
+                background: Some(
+                    if open || matches!(status, button::Status::Hovered) {
+                        p.hover
+                    } else {
+                        p.card
+                    }
+                    .into(),
+                ),
+                text_color: p.ink,
+                border: Border {
+                    color: p.rule,
+                    width: 1.0,
+                    radius: 999.0.into(),
+                },
+                shadow: design::soft_shadow(p),
+                ..Default::default()
+            })
+            .into()
+    }
+    /// The phone layout's navigation (`MobileBottomNav`): one pill docked at the bottom, the current page's
+    /// button wider with its label.
+    pub(crate) fn bottom_nav(&self) -> Element<'_, Message> {
+        let p = self.p();
+        let active = screen_index(self.screen);
+        let mut links = row![].spacing(4).align_y(Center);
+        for (i, (label, glyph, screen)) in NAV_ITEMS.iter().enumerate().take(self.nav_count()) {
+            let on = active == Some(i);
+            let color = if on { p.paper } else { p.ink };
+            let mut content = row![icon(glyph, color, 22.)].align_y(Center);
+            if on {
+                content = content.push(
+                    text(*label)
+                        .size(12.8)
+                        .font(sans(font::Weight::Medium))
+                        .color(color)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                );
+            }
+            let link = button(container(content.spacing(6)).center_x(Fill).center_y(48))
+                .padding([0, 8])
+                .height(48)
+                .width(Length::FillPortion(if on { 3 } else { 1 }))
+                .on_press(if *screen == Screen::Reader {
+                    Message::Library(crate::library_ui::LibraryMsg::Nav)
+                } else {
+                    Message::SetScreen(*screen)
+                })
+                .style(move |_, status| button::Style {
+                    background: if on {
+                        Some(p.ink.into())
+                    } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+                        Some(p.hover.into())
+                    } else {
+                        None
+                    },
+                    text_color: color,
+                    border: Border {
+                        radius: 999.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            links = links.push(if on {
+                Element::from(link)
+            } else {
+                hint(link, label, p)
+            });
+        }
+        let pill = container(links)
+            .padding(5)
+            .width((self.window_width - 32.0).min(384.0))
+            .style(move |_| container::Style {
+                background: Some(p.card.into()),
+                border: Border {
+                    color: p.rule,
+                    width: 1.0,
+                    radius: 999.0.into(),
+                },
+                shadow: design::soft_shadow(p),
+                ..Default::default()
+            });
+        container(iced::widget::opaque(pill))
+            .padding(Padding::ZERO.bottom(13.6))
+            .width(Fill)
+            .height(Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Bottom)
             .into()
     }
 
@@ -433,7 +583,7 @@ impl App {
             .center_y(Fill),
         )
         .padding([0, 18])
-        .width(352)
+        .width(352.0_f32.min(self.header_room()))
         .height(PILL_HEIGHT)
         .on_press(Message::TogglePopover(Popover::Search))
         .style(move |_, status| button::Style {
@@ -457,6 +607,15 @@ impl App {
         .into()
     }
 
+    /// The header's width left for a page's controls beside the navigation (all of it in the phone layout).
+    pub(crate) fn header_room(&self) -> f32 {
+        let free = self.window_width - 2.0 * shell_inset(self.window_width);
+        if self.phone() {
+            free
+        } else {
+            free - self.nav_width() - 12.0
+        }
+    }
     fn nav_width(&self) -> f32 {
         let wordmark = design::measure("Verse", 20.0, serif())
             + design::measure("Together", 20.0, serif_italic());
@@ -538,20 +697,26 @@ impl App {
             .unwrap_or_else(|| "Library".into());
         // The website shrinks the trail before its navigation or action buttons. Reserve their
         // natural widths, then ellipsize the two breadcrumb labels inside the remaining space.
-        let max_width =
-            self.window_width - 2.0 * shell_inset(self.window_width) - self.nav_width() - 12.0;
+        let max_width = self.header_room();
+        let phone = self.phone();
         let slash = design::measure("/", 13.0, sans(font::Weight::Normal)) + 4.0;
         let log_width = design::measure("Log", 13.0, sans(font::Weight::Semibold)) + 42.0;
         let actions = 1.0 + 5.0 + log_width + 2.0 * CONTROL + 16.0;
         let trail = (max_width - 12.0 - 6.0 - CONTROL - 4.0 - slash - actions).max(48.0);
         let current = self.reference();
+        // Phones keep just the chapter in the trail.
         let current_width = (design::measure(&current, 13.0, sans(font::Weight::Semibold)) + 16.0)
-            .min((trail - 32.0).max(16.0));
+            .min(if phone {
+                trail + slash
+            } else {
+                (trail - 32.0).max(16.0)
+            });
         let volume_width = (trail - current_width).max(16.0);
         let volume = ellipsize(&volume, volume_width - 16.0, sans(font::Weight::Normal));
         let current = ellipsize(&current, current_width - 16.0, sans(font::Weight::Semibold));
-        let crumbs = row![
-            hint(
+        let mut crumbs = row![].align_y(Center);
+        if !phone {
+            crumbs = crumbs.push(hint(
                 crumb(
                     volume,
                     false,
@@ -559,21 +724,20 @@ impl App {
                     self.popover == Some(Popover::Library) && self.library_book.is_none(),
                 ),
                 "Choose a book",
-                p
+                p,
+            ));
+            crumbs = crumbs.push(container(text("/").size(13).color(p.faint)).padding([0, 2]));
+        }
+        let crumbs = crumbs.push(hint(
+            crumb(
+                current,
+                true,
+                Message::TogglePopover(Popover::Chapters),
+                self.popover == Some(Popover::Chapters),
             ),
-            container(text("/").size(13).color(p.faint)).padding([0, 2]),
-            hint(
-                crumb(
-                    current,
-                    true,
-                    Message::TogglePopover(Popover::Chapters),
-                    self.popover == Some(Popover::Chapters),
-                ),
-                "Choose a chapter",
-                p
-            ),
-        ]
-        .align_y(Center);
+            "Choose a chapter",
+            p,
+        ));
         let log_open = self.log_open;
         let log = button(
             container(

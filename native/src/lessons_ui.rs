@@ -2,7 +2,7 @@
 // lessons with their covers; a lesson's hero, contents and guide text; a scripture dock beside the guide that reads
 // and marks the passage a section discusses (the same verse marks as the reader); and the lesson's log.
 use crate::design::{self, Colors, icon, sans, serif};
-use crate::header::{CONTENT_TOP, PILL_HEIGHT, TOP, shell_inset};
+use crate::header::{CONTENT_TOP, PILL_HEIGHT, shell_inset};
 use crate::lessons::{self, Lesson, Section, Week};
 use crate::mark_layer::{self, Run};
 use crate::marks::{self, MarksPatch};
@@ -11,7 +11,7 @@ use crate::{App, Message, Popover, Screen};
 use iced::widget::{
     button, column, container, image, operation, row, scrollable, space, stack, text,
 };
-use iced::{Alignment::Center, Border, Color, Element, Fill, Length, Padding, Task, font};
+use iced::{Alignment::Center, Border, Color, Element, Fill, Padding, Task, font};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, OnceLock};
 
@@ -82,6 +82,106 @@ pub struct LessonsState {
     pub words: Vec<(usize, u32, crate::marks::TextRange)>,
     /// The verse note being written from the lesson: (companion chapter, verse) and its text.
     pub note: Option<(usize, u32, iced::widget::text_editor::Content)>,
+    /// Contents entries opened or closed to show their passages, by section; others follow `contents_current`.
+    pub contents_toggled: HashMap<usize, bool>,
+    /// The contents entry last jumped to (its chapter row stays open and is marked).
+    pub contents_current: Option<usize>,
+}
+
+/// Which part of the lesson a contents entry is in (`GuidePartName`), or the whole guide when nothing pairs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentsGroup {
+    Introduction,
+    Chapters,
+    Guide,
+    Closing,
+}
+impl ContentsGroup {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Introduction => "Introduction",
+            Self::Chapters => "Chapter by chapter",
+            Self::Guide => "Guide",
+            Self::Closing => "After the chapters",
+        }
+    }
+}
+/// One contents entry (`TocItem`): a `##` section, its chapter reference and subtitle when it is a chapter's
+/// commentary ("Jeremiah 31" · "Mourning Turned to Joy for All Israel"), and its `###` passages.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContentsItem {
+    pub section: usize,
+    pub group: ContentsGroup,
+    pub title: String,
+    pub chapter: Option<(String, Option<String>)>,
+    /// (section, short reference "31:1–3", title).
+    pub passages: Vec<(usize, String, String)>,
+}
+/// "Jeremiah 31: Mourning Turned to Joy" → ("Jeremiah 31", Some("Mourning Turned to Joy")).
+fn chapter_heading(title: &str) -> Option<(String, Option<String>)> {
+    let (head, rest) = match title.split_once(':') {
+        Some((h, r)) if !r.starts_with(|c: char| c.is_ascii_digit()) => (h, Some(r.trim())),
+        _ => (title, None),
+    };
+    let (book, number) = head.trim().rsplit_once(' ')?;
+    (!book.is_empty() && !number.is_empty() && number.chars().all(|c| c.is_ascii_digit())).then(
+        || {
+            (
+                format!("{} {number}", book.trim()),
+                rest.filter(|r| !r.is_empty()).map(str::to_string),
+            )
+        },
+    )
+}
+/// "Jeremiah 31:1–3 — Everlasting Love" → ("31:1–3", "Everlasting Love"); a heading without a reference keeps
+/// its whole title.
+fn passage_heading(title: &str) -> (String, String) {
+    let (reference, text) = title
+        .split_once(" — ")
+        .map(|(a, b)| (a.trim(), b.trim()))
+        .unwrap_or(("", title.trim()));
+    let short = reference
+        .rfind(' ')
+        .map(|at| &reference[at + 1..])
+        .filter(|r| r.chars().next().is_some_and(|c| c.is_ascii_digit()) && r.contains(':'))
+        .unwrap_or(reference);
+    (short.to_string(), text.to_string())
+}
+/// The lesson's contents, grouped as the website's drawer groups them: introduction, chapter by chapter, and
+/// after the chapters (or one "Guide" group when no section pairs with a chapter).
+pub fn contents(sections: &[Section], companion: &lessons::Companion) -> Vec<ContentsItem> {
+    let paired = companion.chapters.iter().any(|c| c.heading.is_some());
+    let mut items: Vec<ContentsItem> = vec![];
+    for (i, section) in sections.iter().enumerate() {
+        match section.level {
+            2 => {
+                let group = if !paired {
+                    ContentsGroup::Guide
+                } else if companion.introduction.contains(&i) {
+                    ContentsGroup::Introduction
+                } else if companion.closing.contains(&i) {
+                    ContentsGroup::Closing
+                } else {
+                    ContentsGroup::Chapters
+                };
+                items.push(ContentsItem {
+                    section: i,
+                    group,
+                    title: section.title.clone(),
+                    chapter: chapter_heading(&section.title),
+                    passages: vec![],
+                });
+            }
+            3 => {
+                if let Some(item) = items.last_mut() {
+                    let (short, text) = passage_heading(&section.title);
+                    item.passages.push((i, short, text));
+                }
+            }
+            _ => {}
+        }
+    }
+    items
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +214,8 @@ pub enum LessonMsg {
     OpenChapter(usize),
     OpenNote(String),
     Credit(String),
+    /// Show or hide a contents entry's passages.
+    ToggleContents(usize),
 }
 
 impl App {
@@ -173,6 +275,8 @@ impl App {
         self.lessons.guide = Default::default();
         self.lessons.open_context.clear();
         self.lessons.full.clear();
+        self.lessons.contents_toggled.clear();
+        self.lessons.contents_current = None;
         self.lessons.selected.clear();
         self.load_lesson_log();
         self.load_guide_marks();
@@ -282,8 +386,19 @@ impl App {
                 self.lessons.dock = None;
                 self.popover = None;
             }
+            LessonMsg::ToggleContents(section) => {
+                let open = self.contents_entry_open(section);
+                self.lessons.contents_toggled.insert(section, !open);
+            }
             LessonMsg::Jump(i) => {
                 self.popover = None;
+                if let Some(open) = &self.lessons.open {
+                    // The entry (or the entry a passage belongs to) stays open the next time Contents opens.
+                    self.lessons.contents_current = contents(&open.sections, &open.companion)
+                        .into_iter()
+                        .find(|item| item.section == i || item.passages.iter().any(|p| p.0 == i))
+                        .map(|item| item.section);
+                }
                 if let Some(open) = &self.lessons.open
                     && let Some(block) = open
                         .companion
@@ -672,12 +787,23 @@ impl App {
     fn featured_lesson(&self, lesson: &Lesson, width: f32) -> Element<'_, Message> {
         let p = self.p();
         let cover = lessons::cover(&lesson.start);
-        let media_w = (width * 630.0 / 1180.0).round();
-        let height = 517.0;
+        // Below 768px the art sits above the text at 3:2 (`.featured` has one column), else beside it.
+        let stacked = self.window_width < 768.0;
+        let (media_w, height) = if stacked {
+            (width, (width * 2.0 / 3.0).round())
+        } else {
+            ((width * 630.0 / 1180.0).round(), 517.0)
+        };
         // The card's 14px corners on the art's side (`.featuredMedia`).
-        let corners = iced::border::Radius::default()
-            .top_left(14.0)
-            .bottom_left(14.0);
+        let corners = if stacked {
+            iced::border::Radius::default()
+                .top_left(14.0)
+                .top_right(14.0)
+        } else {
+            iced::border::Radius::default()
+                .top_left(14.0)
+                .bottom_left(14.0)
+        };
         let mut media = stack![cover_image(cover, media_w, height, corners)];
         if let Some(credit) = &cover.credit {
             media = media.push(
@@ -691,7 +817,7 @@ impl App {
                     .width(Fill)
                     .height(Fill)
                     .align_y(iced::alignment::Vertical::Bottom)
-                    .style(|_| container::Style {
+                    .style(move |_| container::Style {
                         background: Some(
                             iced::gradient::Linear::new(iced::Degrees(180.0))
                                 .add_stop(0.7, Color::TRANSPARENT)
@@ -699,7 +825,11 @@ impl App {
                                 .into(),
                         ),
                         border: Border {
-                            radius: iced::border::Radius::default().bottom_left(14.0),
+                            radius: if stacked {
+                                iced::border::Radius::default()
+                            } else {
+                                iced::border::Radius::default().bottom_left(14.0)
+                            },
                             ..Default::default()
                         },
                         ..Default::default()
@@ -722,7 +852,12 @@ impl App {
             kicker,
             text(lesson.title.clone())
                 .font(serif())
-                .size(40)
+                // `clamp(1.65rem, 1.25rem + 1.6vw, 2.45rem)`, as it was (40px) on a wide window.
+                .size(if stacked {
+                    (20.0 + self.window_width * 0.016).clamp(26.4, 39.2)
+                } else {
+                    40.0
+                })
                 .line_height(1.1),
         ]
         .spacing(14);
@@ -802,14 +937,19 @@ impl App {
                 }),
             );
         }
-        container(row![
-            container(media).width(media_w).height(height).clip(true),
-            container(body).padding([40, 36]).width(Fill),
-        ])
-        .width(width)
-        .clip(true)
-        .style(design::card(p, 14.0))
-        .into()
+        let media = container(media).width(media_w).height(height).clip(true);
+        let card: Element<'_, Message> = if stacked {
+            // `padding: clamp(1.25rem, 3vw, 2.25rem)`.
+            let pad = (self.window_width * 0.03).clamp(20.0, 36.0);
+            column![media, container(body).padding(pad).width(Fill)].into()
+        } else {
+            row![media, container(body).padding([40, 36]).width(Fill)].into()
+        };
+        container(card)
+            .width(width)
+            .clip(true)
+            .style(design::card(p, 14.0))
+            .into()
     }
 
     pub(crate) fn credit_line<'a>(
@@ -840,11 +980,17 @@ impl App {
 
     fn lesson_grid(&self, lessons: &[Lesson], width: f32) -> Element<'_, Message> {
         let p = self.p();
-        let gap = 30.0;
-        let card_w = ((width - 2.0 * gap) / 3.0).floor();
+        // `repeat(auto-fill, minmax(min(100%, 17.5rem), 1fr))`: as many 280px columns as fit, at most three here.
+        let columns = (((width + 30.0) / (280.0 + 30.0)).floor() as usize).clamp(1, 3);
+        let gap = if columns == 3 {
+            30.0
+        } else {
+            (self.window_width * 0.025).clamp(16.0, 28.0)
+        };
+        let card_w = ((width - (columns - 1) as f32 * gap) / columns as f32).floor();
         let media_h = (card_w * 9.0 / 16.0).round();
         let mut grid = column![].spacing(gap);
-        for chunk in lessons.chunks(3) {
+        for chunk in lessons.chunks(columns) {
             let mut line = row![].spacing(gap);
             for lesson in chunk {
                 let cover = lessons::cover(&lesson.start);
@@ -1135,38 +1281,237 @@ impl App {
         .into()
     }
 
-    pub(crate) fn contents_panel(&self) -> Element<'_, Message> {
+    /// Whether a contents entry shows its passages: as last toggled, else open when it is the current entry.
+    pub(crate) fn contents_entry_open(&self, section: usize) -> bool {
+        self.lessons
+            .contents_toggled
+            .get(&section)
+            .copied()
+            .unwrap_or(self.lessons.contents_current == Some(section))
+    }
+    /// The lesson's contents (`ContentsNav`'s drawer): a sheet from the left edge over a dimmed page, its entries
+    /// grouped by part, each chapter one compact row whose passages open beneath it. Choosing an entry jumps
+    /// there and closes the drawer; the backdrop, × and Escape close it.
+    pub(crate) fn contents_drawer(&self) -> Element<'_, Message> {
         let p = self.p();
-        let mut list = column![].spacing(1);
-        if let Some(open) = &self.lessons.open {
-            for (i, section) in open.sections.iter().enumerate() {
-                list = list.push(
-                    button(
-                        text(&section.title)
-                            .size(if section.level == 3 { 12.5 } else { 13.5 })
-                            .font(sans(if section.level == 3 {
-                                font::Weight::Normal
-                            } else {
-                                font::Weight::Semibold
-                            }))
-                            .color(if section.level == 3 { p.muted } else { p.ink }),
-                    )
-                    .padding(Padding {
-                        top: 6.0,
-                        right: 10.0,
-                        bottom: 6.0,
-                        left: if section.level == 3 { 22.0 } else { 10.0 },
-                    })
-                    .width(Fill)
-                    .on_press(Message::Lesson(LessonMsg::Jump(i)))
-                    .style(design::quiet(p)),
-                );
+        let items = self
+            .lessons
+            .open
+            .as_ref()
+            .map(|open| contents(&open.sections, &open.companion))
+            .unwrap_or_default();
+        let ink2 = design::mix(p.ink, p.muted, 0.45);
+        let mut groups = column![].spacing(16);
+        for group in [
+            ContentsGroup::Introduction,
+            ContentsGroup::Guide,
+            ContentsGroup::Chapters,
+            ContentsGroup::Closing,
+        ] {
+            let in_group: Vec<&ContentsItem> = items.iter().filter(|i| i.group == group).collect();
+            if in_group.is_empty() {
+                continue;
             }
+            let mut list = column![].spacing(1.6);
+            for item in in_group {
+                let current = self.lessons.contents_current == Some(item.section);
+                let label: Element<'_, Message> = match &item.chapter {
+                    Some((reference, subtitle)) => {
+                        let mut spans = vec![
+                            iced::widget::span(reference.clone())
+                                .font(sans(font::Weight::Semibold))
+                                .color(p.accent),
+                        ];
+                        if let Some(subtitle) = subtitle {
+                            spans.push(
+                                iced::widget::span(format!(" {subtitle}"))
+                                    .font(sans(if current {
+                                        font::Weight::Semibold
+                                    } else {
+                                        font::Weight::Normal
+                                    }))
+                                    .color(ink2),
+                            );
+                        }
+                        iced::widget::rich_text::<(), _, _, _>(spans)
+                            .size(13.5)
+                            .line_height(1.35)
+                            .width(Fill)
+                            .into()
+                    }
+                    None => text(item.title.clone())
+                        .size(13.5)
+                        .line_height(1.35)
+                        .font(sans(if current {
+                            font::Weight::Semibold
+                        } else {
+                            font::Weight::Normal
+                        }))
+                        .color(if current { p.accent } else { p.ink })
+                        .width(Fill)
+                        .into(),
+                };
+                let link = button(label)
+                    .padding([4.8, 0.0])
+                    .width(Fill)
+                    .on_press(Message::Lesson(LessonMsg::Jump(item.section)))
+                    .style(move |_, status| button::Style {
+                        text_color: if matches!(status, button::Status::Hovered) {
+                            p.accent
+                        } else {
+                            p.ink
+                        },
+                        ..Default::default()
+                    });
+                let mut entry = row![link]
+                    .spacing(4)
+                    .align_y(iced::alignment::Vertical::Top);
+                let open = self.contents_entry_open(item.section);
+                if !item.passages.is_empty() {
+                    let chevron = design::rotated_icon(
+                        &crate::icons::CHEVRON_DOWN,
+                        p.muted,
+                        10.,
+                        if open { 180.0 } else { 0.0 },
+                    );
+                    let toggle = button(container(chevron).center_x(32).center_y(32))
+                        .padding(0)
+                        .on_press(Message::Lesson(LessonMsg::ToggleContents(item.section)))
+                        .style(move |_, status| button::Style {
+                            background: matches!(status, button::Status::Hovered)
+                                .then(|| p.hover.into()),
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        });
+                    entry = entry.push(self.hint(
+                        toggle,
+                        format!(
+                            "{} passages in {}",
+                            if open { "Hide" } else { "Show" },
+                            item.chapter.as_ref().map_or(&item.title, |c| &c.0)
+                        ),
+                    ));
+                }
+                let mut block = column![entry];
+                if open && !item.passages.is_empty() {
+                    let mut passages = column![];
+                    for (section, short, title) in &item.passages {
+                        let mut spans = vec![];
+                        if !short.is_empty() {
+                            spans.push(
+                                iced::widget::span(format!("{short} "))
+                                    .font(sans(font::Weight::Semibold))
+                                    .color(p.accent),
+                            );
+                        }
+                        spans.push(iced::widget::span(title.clone()).color(ink2));
+                        passages = passages.push(
+                            button(
+                                iced::widget::rich_text::<(), _, _, _>(spans)
+                                    .size(13.5)
+                                    .line_height(1.35)
+                                    .width(Fill),
+                            )
+                            .padding([4, 0])
+                            .width(Fill)
+                            .on_press(Message::Lesson(LessonMsg::Jump(*section)))
+                            .style(|_, _| button::Style::default()),
+                        );
+                    }
+                    block = block.push(container(passages).padding(Padding {
+                        top: 0.0,
+                        right: 0.0,
+                        bottom: 6.4,
+                        left: 12.0,
+                    }));
+                }
+                list = list.push(block);
+            }
+            groups = groups.push(
+                column![
+                    text(group.label().to_uppercase())
+                        .size(10)
+                        .font(sans(font::Weight::Semibold))
+                        .color(p.muted),
+                    // The list sizes the stack; its rule (`border-left`) runs down beside it.
+                    stack![
+                        container(list).padding(Padding::ZERO.left(12)).width(Fill),
+                        container(space().width(1).height(Fill)).style(move |_| {
+                            container::Style {
+                                background: Some(p.rule.into()),
+                                ..Default::default()
+                            }
+                        }),
+                    ],
+                ]
+                .spacing(4),
+            );
         }
-        container(self.scroll(list).height(Length::Shrink))
-            .padding(10)
-            .max_height((self.window_height - TOP - PILL_HEIGHT - 40.0).max(200.0))
-            .style(design::popover(p))
+        let close = button(
+            container(icon(&crate::icons::XMARK, p.muted, 14.))
+                .center_x(44)
+                .center_y(44),
+        )
+        .padding(0)
+        .on_press(Message::ClosePopover)
+        .style(|_, _| button::Style::default());
+        let head = row![
+            text("CONTENTS")
+                .size(11)
+                .font(sans(font::Weight::Semibold))
+                .color(p.muted)
+                .width(Fill),
+            self.hint(close, "Close contents".into()),
+        ]
+        .align_y(Center)
+        .padding(Padding::ZERO.right(8));
+        let width = (self.window_width * 0.88).min(352.0);
+        let sheet = container(
+            column![
+                head,
+                self.scroll(container(groups).padding(Padding {
+                    top: 4.0,
+                    right: 16.0,
+                    bottom: 24.0,
+                    left: 0.0,
+                }))
+                .id("contents-drawer")
+                .height(Fill),
+            ]
+            .spacing(4),
+        )
+        .padding(Padding {
+            top: 12.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 16.0,
+        })
+        .width(width)
+        .height(Fill)
+        .style(move |_| container::Style {
+            background: Some(p.paper.into()),
+            text_color: Some(p.ink),
+            border: Border {
+                color: p.rule,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        });
+        let backdrop =
+            iced::widget::mouse_area(container(space()).width(Fill).height(Fill).style(|_| {
+                container::Style {
+                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.35).into()),
+                    ..Default::default()
+                }
+            }))
+            .on_press(Message::ClosePopover);
+        stack![backdrop, iced::widget::opaque(sheet)]
+            .width(Fill)
+            .height(Fill)
             .into()
     }
 
