@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import Grid from "../../../src/components/Grid";
+import { LdsContentGate } from "../../../src/components/HiddenContent";
 import { Button, IconButton, Page, SectionHeading, softShadow } from "../../../src/components/ui";
 import { PUBLISHED_GUIDES } from "../../../src/cfm/guides";
 import { LessonCard, LessonChapters, LessonCoverImage, PaintingCaption } from "../../../src/features/cfm/LessonParts";
@@ -86,7 +87,16 @@ function NoLesson({ schedule }: { schedule: ScheduleStatus }) {
   );
 }
 
+/** Come, Follow Me is Latter-day Saint content: Other denominations sees the web's notice instead. */
 export default function ComeFollowMeScreen() {
+  return (
+    <LdsContentGate href="/come-follow-me">
+      <ComeFollowMeOverview />
+    </LdsContentGate>
+  );
+}
+
+function ComeFollowMeOverview() {
   const router = useRouter();
   const { colors } = useTheme();
   const today = localDateKey();
@@ -125,6 +135,14 @@ export default function ComeFollowMeScreen() {
         <Text style={{ paddingHorizontal: 4, fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, color: colors.foregroundSoft }}>
           Landscape and still-life covers are illustrations generated with AI and show no people.
           {hasPaintings ? " Paintings of the Savior are historical public-domain works, credited on each cover and in full on each lesson." : ""}
+        </Text>
+        <Text
+          accessibilityRole="link"
+          accessibilityHint="Opens your study plans; keeping a plan needs an account"
+          onPress={() => router.push("/plans" as never)}
+          style={{ paddingHorizontal: 4, fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundSoft, textDecorationLine: "underline", textDecorationColor: colors.ruleStrong }}
+        >
+          Your study plans
         </Text>
       </View>
     </Page>

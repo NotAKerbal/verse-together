@@ -33,6 +33,20 @@ beforeEach(() => {
 });
 
 describe("the app's real routes", () => {
+  it("keeps a quoted verse's source when saving without logging reading", async () => {
+    await renderRouter("./app", { initialUrl: "/browse/newtestament/john/1" });
+    await screen.findByTestId("reader-text");
+    await selectText("In the beginning");
+    await press(screen.getByLabelText("Add to journal"));
+    await screen.findByTestId("entry-text");
+    await press(screen.getByLabelText("Save entry"));
+    await waitFor(() => expect(deviceStudy.getSnapshot().notes).toHaveLength(1));
+    expect(deviceStudy.getSnapshot().notes[0]).toMatchObject({
+      source: { kind: "scripture", label: "John 1:1", verseStart: 1, verseEnd: 1, href: "/browse/newtestament/john/1#v-1" },
+      reading_at: null,
+    });
+  });
+
   it("keeps scripture readable when saving the reading position fails", async () => {
     const port = memoryStorage();
     setStoragePort({ ...port, setItem(key, value) {

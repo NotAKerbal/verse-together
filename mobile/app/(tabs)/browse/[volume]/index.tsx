@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Text, View } from "react-native";
 import Grid from "../../../../src/components/Grid";
+import { HiddenContentNotice, useLdsContentHidden } from "../../../../src/components/HiddenContent";
 import SelectionHeader from "../../../../src/components/SelectionHeader";
 import { ChevronCircle, Notice, Page, PressCard } from "../../../../src/components/ui";
 import { publicImage } from "../../../../src/data/images";
@@ -20,6 +21,8 @@ export default function VolumeScreen() {
   const { volume: volumeParam } = useLocalSearchParams<{ volume: string }>();
   const router = useRouter();
   const { colors } = useTheme();
+  const hidden = useLdsContentHidden({ volume: String(volumeParam) });
+  if (hidden) return <HiddenContentNotice />;
   const selection = parseBrowseSelection(`/browse/${volumeParam}`);
   // A one-book volume (D&C) opens its book's section list, as /browse/dnc does on the web.
   if (selection?.kind === "book") return <Redirect href={`/browse/${selection.volumeSlug}/${selection.book}` as never} />;

@@ -1,12 +1,14 @@
 // The phone navigation (MobileBottomNav.tsx with .mobile-nav-control in globals.css): a floating segmented pill
 // at the bottom, Browse / Journal / Come Follow Me. Every item is a 48pt icon; the active one grows to show its
-// label on the filled active surface. Hidden in simple mode, and while the keyboard is up.
+// label on the filled active surface. Hidden in simple mode, and while the keyboard is up. Other denominations
+// leaves out Come Follow Me, as the web's nav leaves out Latter-day Saint content.
 
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, Keyboard, LayoutAnimation, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isLdsContentPath, useFaithTradition } from "../storage/faithTradition";
 import { useSimpleMode } from "../storage/preferences";
 import { useTheme } from "../theme/theme";
 import { fonts, radii } from "../theme/tokens";
@@ -31,8 +33,14 @@ function useKeyboardVisible() {
   return visible;
 }
 
+/** The primary sections this device shows. */
+export function visibleNav(showLdsContent: boolean) {
+  return PRIMARY_NAV.filter((item) => showLdsContent || !isLdsContentPath(`/${item.route}`));
+}
+
 export function FloatingNavBar({ activeRoute, onSelect }: { activeRoute: string; onSelect: (route: string) => void }) {
   const { colors, scheme } = useTheme();
+  const { showLdsContent } = useFaithTradition();
   const insets = useSafeAreaInsets();
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
@@ -64,7 +72,7 @@ export function FloatingNavBar({ activeRoute, onSelect }: { activeRoute: string;
           softShadow(colors, scheme),
         ]}
       >
-        {PRIMARY_NAV.map((item) => {
+        {visibleNav(showLdsContent).map((item) => {
           const active = item.route === activeRoute;
           return (
             <Pressable

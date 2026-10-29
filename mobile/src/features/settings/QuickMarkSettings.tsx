@@ -1,8 +1,8 @@
 // Settings → Study tools → Quick marks (src/features/annotations/QuickMarkSettings.tsx): the marks across the top of
 // the selection menu, in their order, each a highlight or underline in one color and optionally named. Each row:
 // its sample and name, move up / move down / remove, then its name field and style picker. Below the list, a new
-// mark to add, and Restore defaults. Saved on this device in the reader preferences (reader_prefs_v1), as the web
-// saves a signed-out reader's.
+// mark to add, and Restore defaults. Saved in the reader preferences: this device's (reader_prefs_v1) signed out, the
+// account's (saveMarkPresets, through preferencesSync.ts) signed in, as the web saves them.
 
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
@@ -21,7 +21,8 @@ import {
   type MarkKind,
   type MarkPreset,
 } from "../../shared/web";
-import { useReaderPreferences } from "../../storage/preferences";
+import { useReaderPreferences, useReaderPreferencesReady } from "../../storage/preferences";
+import { ACCOUNT_SETTINGS_LOADING, usePreferencesPlace } from "./preferencesPlace";
 import { useTheme } from "../../theme/theme";
 import { fonts, REM } from "../../theme/tokens";
 import MarkSample from "../reader/MarkSample";
@@ -130,6 +131,10 @@ export default function QuickMarkSettings() {
   const { colors } = useTheme();
   const inputStyle = useInputStyle();
   const [prefs, setPrefs] = useReaderPreferences();
+  // An account's quick marks are shown and edited only once its own list has been read: until then the list here is
+  // the defaults, and an edit would replace the account's.
+  const ready = useReaderPreferencesReady();
+  const place = usePreferencesPlace();
   const presets = prefs.markPresets;
   const [adding, setAdding] = useState<MarkPreset | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,9 +147,9 @@ export default function QuickMarkSettings() {
   const change = (next: MarkPreset[]): boolean => {
     if (samePresets(presets, next)) return true;
     try {
-      setPrefs({ ...prefs, markPresets: next });
-      setError(null);
-      return true;
+      const saved = setPrefs({ ...prefs, markPresets: next });
+      setError(saved ? null : ACCOUNT_SETTINGS_LOADING);
+      return saved;
     } catch {
       setError("Couldn't save your quick marks on this device. Try again.");
       return false;
@@ -174,8 +179,19 @@ export default function QuickMarkSettings() {
     if (change([...presets, normalizeMarkPreset(addCandidate)])) setAdding(null);
   };
 
-  const summary = presets.length === 0 ? "None · Annotate still has every option · This device" : `${presets.length} of ${MARK_PRESETS_MAX} · This device`;
   const help = { fontFamily: fonts.sans, fontSize: 0.76 * REM, lineHeight: 0.76 * REM * 1.5, color: colors.foregroundMuted } as const;
+  if (!ready) {
+    return (
+      <View style={{ gap: 0.5 * REM, paddingVertical: 0.5 * REM }}>
+        <CardHeader title="Quick marks" meta={place} metaLive action={<TextButton label="Restore defaults" testID="quick-marks-restore" disabled onPress={() => {}} />} />
+        <Text testID="quick-marks-loading" accessibilityLiveRegion="polite" style={help}>
+          {`${ACCOUNT_SETTINGS_LOADING} Your quick marks can be changed once they arrive.`}
+        </Text>
+      </View>
+    );
+  }
+
+  const summary = presets.length === 0 ? `None · Annotate still has every option · ${place}` : `${presets.length} of ${MARK_PRESETS_MAX} · ${place}`;
   const row = { gap: 0.35 * REM, minHeight: 44, paddingTop: 0.3 * REM, paddingRight: 0.3 * REM, paddingBottom: 0.45 * REM, paddingLeft: 0.5 * REM, borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 0.6 * REM } as const;
 
   return (

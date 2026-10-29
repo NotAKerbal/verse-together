@@ -56,6 +56,27 @@ type Annotation = {
 };
 
 const serverError = () => new Error("[Request ID: test] Server Error");
+/** A plain Error thrown by a function, as a Convex client reports it (its message, then the stack). */
+const uncaught = (message: string) => new Error(`[Request ID: test] Server Error\nUncaught Error: ${message}\n    at handler (../convex/readingPlans.ts:1:1)`);
+
+type FakeStep = { volume: string; book: string; chapter: number; label: string };
+export type FakePlan = {
+  id: string;
+  owner: string;
+  title: string;
+  template: string;
+  steps: FakeStep[];
+  selections?: unknown[];
+  startDate?: string;
+  chaptersPerDay?: number;
+  readingDays?: boolean[];
+  createdAt: number;
+  updatedAt: number;
+};
+
+function readKey(owner: string, step: { volume: string; book: string; chapter: number }) {
+  return [owner, step.volume, step.book, step.chapter].join("|");
+}
 
 export class FakeStudyServer {
   notes = new Map<string, Note>();
@@ -63,6 +84,14 @@ export class FakeStudyServer {
   guides = new Map<string, GuideHighlight & { owner: string }>();
   deletedKeys = new Set<string>();
   goals = new Map<string, { studyDays: number; reflections: number }>();
+  /** Chapters each account marked read on the website (chapterReads), as "owner|volume|book|chapter". */
+  chapterReads = new Set<string>();
+  /** When each of chapterReads was read (convex/readingProgress.ts keeps the latest). */
+  chapterReadAt = new Map<string, number>();
+  /** Reading plans (convex/readingPlans.ts), by id. */
+  plans = new Map<string, FakePlan>();
+  /** Each account's last reading position (lastReadingPositions). */
+  positions = new Map<string, { volume: string; book: string; chapter: number; verse?: number; updatedAt: number }>();
   online = true;
   /** Reply to createJournalEntry as a backend from before it reported the revision. */
   legacyCreateReply = false;
@@ -110,6 +139,58 @@ export class FakeStudyServer {
     this.notes.set(id, { id, owner, markdownBody, markdownRevision: 0, journalDate, source, readingAt: reading ? now : null, createdAt: now, updatedAt: now, requestId: null, requestContent: null, edited: false });
     this.changed();
     return id;
+  }
+
+  webMarkChapterRead(owner: string, volume: string, book: string, chapter: number) {
+    const key = [owner, volume, book, chapter].join("|");
+    this.chapterReads.add(key);
+    this.chapterReadAt.set(key, this.now());
+    this.changed();
+  }
+
+  /** A plan made on the website (createPlan's normalization, simplified to what the tests use). */
+  webCreatePlan(owner: string, plan: Partial<FakePlan> & { title: string; steps: FakeStep[] }): string {
+    const id = this.id("plan_");
+    const now = this.now();
+    this.plans.set(id, { template: "custom", ...plan, id, owner, createdAt: now, updatedAt: now });
+    this.changed();
+    return id;
+  }
+
+  private planSummary(plan: FakePlan) {
+    const readCount = plan.steps.filter((step) => this.chapterReads.has(readKey(plan.owner, step))).length;
+    return {
+      id: plan.id,
+      title: plan.title,
+      template: plan.template,
+      stepCount: plan.steps.length,
+      readCount,
+      startDate: plan.startDate ?? null,
+      chaptersPerDay: plan.chaptersPerDay ?? null,
+      readingDays: plan.readingDays ?? null,
+      selections: plan.selections ?? null,
+      createdAt: plan.createdAt,
+      updatedAt: plan.updatedAt,
+    };
+  }
+
+  /** convex/readingPlans.ts normalizePlanInput, for the rules the app relies on. */
+  private planInput(args: Record<string, unknown>) {
+    const title = String(args.title ?? "").trim().slice(0, 120);
+    if (!title) throw uncaught("Give the plan a title");
+    const steps = (args.steps as FakeStep[] | undefined) ?? [];
+    if (steps.length === 0) throw uncaught("A plan needs at least one chapter");
+    const readingDays = args.readingDays as boolean[] | undefined;
+    if (readingDays && (readingDays.length !== 7 || !readingDays.some(Boolean))) throw uncaught("Pick at least one reading day");
+    const chaptersPerDay = args.chaptersPerDay === undefined ? undefined : Math.max(1, Math.min(steps.length, Math.round(Number(args.chaptersPerDay))));
+    return {
+      title,
+      steps,
+      selections: args.selections as unknown[] | undefined,
+      startDate: args.startDate as string | undefined,
+      chaptersPerDay,
+      readingDays: readingDays && readingDays.every(Boolean) ? undefined : readingDays,
+    };
   }
 
   webEditNote(id: string, markdownBody: string) {
@@ -238,6 +319,25 @@ export class FakeStudyServer {
       }
       case "readingProgress:listMyReadingLog":
         return [];
+      case "readingProgress:getMyProgressForBook": {
+        const prefix = `${owner}|${args.volume}|${args.book}|`;
+        const readChapters = [...this.chapterReads].filter((key) => key.startsWith(prefix)).map((key) => Number(key.slice(prefix.length))).sort((a, b) => a - b);
+        return { readChapters, latestReadChapter: readChapters.at(-1) ?? null, currentChapter: null };
+      }
+      case "readingPlans:listMyPlans":
+        return [...this.plans.values()].filter((plan) => plan.owner === owner).sort((a, b) => b.createdAt - a.createdAt).map((plan) => this.planSummary(plan));
+      case "readingPlans:getPlan": {
+        const plan = this.plans.get(String(args.planId));
+        if (!plan || plan.owner !== owner) return null;
+        return {
+          ...this.planSummary(plan),
+          steps: plan.steps.map((step, index) => ({ ...step, index, readAt: this.chapterReadAt.get(readKey(owner, step)) ?? null })),
+        };
+      }
+      case "readingProgress:getLastPosition": {
+        const position = this.positions.get(owner);
+        return position ? { volume: position.volume, book: position.book, chapter: position.chapter, verse: position.verse ?? null, updatedAt: position.updatedAt } : null;
+      }
       case "users:getJournalGoals":
         return this.goals.get(owner) ?? { studyDays: 5, reflections: 3 };
       case "annotations:getChapterAnnotations": {
@@ -431,12 +531,53 @@ export class FakeStudyServer {
       }
       case "insights:openReadingEntry":
         return { id: this.webCreateNote(owner, "", "2026-10-28") };
+      case "readingPlans:createPlan": {
+        const input = this.planInput(args);
+        const id = this.id("plan_");
+        this.plans.set(id, { id, owner, template: String(args.template), ...input, createdAt: now, updatedAt: now });
+        this.changed();
+        return { id };
+      }
+      case "readingPlans:updatePlan": {
+        const plan = this.plans.get(String(args.planId));
+        if (!plan || plan.owner !== owner) throw uncaught("Plan not found");
+        this.plans.set(plan.id, { id: plan.id, owner, template: "custom", ...this.planInput(args), createdAt: plan.createdAt, updatedAt: now });
+        this.changed();
+        return { id: plan.id };
+      }
+      case "readingPlans:deletePlan": {
+        const plan = this.plans.get(String(args.planId));
+        if (!plan || plan.owner !== owner) throw uncaught("Plan not found");
+        this.plans.delete(plan.id);
+        this.changed();
+        return { ok: true };
+      }
+      case "readingProgress:markChapterRead": {
+        if (!Number.isInteger(args.chapter) || Number(args.chapter) < 1) throw uncaught("Chapter must be a positive whole number");
+        const key = readKey(owner, args as never);
+        this.chapterReads.add(key);
+        this.chapterReadAt.set(key, now);
+        this.changed();
+        return { id: key, logId: `log-${args.requestId}`, duplicate: false };
+      }
+      case "readingProgress:unmarkChapterRead": {
+        const key = readKey(owner, args as never);
+        this.chapterReads.delete(key);
+        this.chapterReadAt.delete(key);
+        this.changed();
+        return { ok: true };
+      }
+      case "readingProgress:setLastPosition":
+        this.positions.set(owner, { volume: String(args.volume), book: String(args.book), chapter: Number(args.chapter), updatedAt: now });
+        this.changed();
+        return { ok: true };
     }
     throw serverError();
   }
 
   /** One account's connection. */
   client(owner: string): SyncClient & { closed: boolean } {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- The fake client methods need their server and client receivers separately.
     const server = this;
     const whenOnline = () => (server.online ? Promise.resolve() : new Promise<void>((resolve) => server.waiting.push(resolve)));
     const client = {

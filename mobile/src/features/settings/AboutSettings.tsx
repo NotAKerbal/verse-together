@@ -1,6 +1,6 @@
-// Settings → About: the app's own version (from the build's app config), what is bundled for offline reading, help
-// by email, the privacy policy, and how to delete an account. In place of the web's Release notes and Feedback,
-// which describe the website and send to its server.
+// Settings → About: the app's own version (from the build's app config), what is bundled for offline reading, the
+// website's release notes (named as the website's: its versions aren't the app's), help by email, the privacy policy,
+// and how to delete an account. Feedback has its own section, as on the web.
 
 import Constants from "expo-constants";
 import { Platform, Text, View } from "react-native";
@@ -12,6 +12,7 @@ import { scriptureCatalog } from "../../shared/web";
 import { useTheme } from "../../theme/theme";
 import { fonts, REM } from "../../theme/tokens";
 import { CardHeader, SettingsCard } from "./SettingsParts";
+import WebsiteReleaseNotes from "./WebsiteReleaseNotes";
 
 /** The privacy policy's contact (src/app/privacy/page.tsx) and the Play listing's support address. */
 export const SUPPORT_EMAIL = "isaachcochran@gmail.com";
@@ -32,7 +33,7 @@ function Body({ children }: { children: string }) {
   return <Text style={{ fontFamily: fonts.sans, fontSize: 0.8 * REM, lineHeight: 0.8 * REM * 1.55, color: colors.foregroundMuted }}>{children}</Text>;
 }
 
-export default function AboutSettings({ onOpenAccount }: { onOpenAccount: () => void }) {
+export default function AboutSettings({ onOpenAccount, onOpenFeedback }: { onOpenAccount: () => void; onOpenFeedback?: () => void }) {
   const version = appVersion();
   return (
     <View style={{ gap: 0.75 * REM }}>
@@ -44,10 +45,13 @@ export default function AboutSettings({ onOpenAccount }: { onOpenAccount: () => 
         </View>
       </SettingsCard>
 
+      <WebsiteReleaseNotes appVersion={version} />
+
       <SettingsCard label="Help">
         <CardHeader title="Help and feedback" meta="By email" />
         <View style={{ gap: 10, paddingBottom: 6 }}>
-          <Body>Questions, problems or ideas for Verse Together. Every message is read.</Body>
+          <Body>Questions, problems or ideas for Verse Together. Every message is read: send it from Feedback, or by email.</Body>
+          {onOpenFeedback ? <Button variant="secondary" icon="comment-dots" label="Go to Feedback" style={{ alignSelf: "flex-start" }} onPress={onOpenFeedback} /> : null}
           <Button
             variant="secondary"
             icon="envelope"

@@ -29,14 +29,13 @@ import {
   lexiconKey,
   lexiconLookups,
   noMatches,
-  studyHelpResults,
   type LookupState,
   type NoMatch,
 } from "./explore";
 import { ExploreLinksContext, ExternalLink, type ExploreDisclosure, type ExploreLinks, type NoteCard } from "./ExploreParts";
 import { BiblicalLanguagesSection, type LexiconResult } from "./LanguageSources";
 import { errorMessage } from "./network";
-import { ScriptureHelpsSection } from "./StudyHelpSources";
+import { ScriptureHelpsSection, useVisibleStudyHelps } from "./StudyHelpSources";
 import { loadComparison, loadTranslations, normalizeCompareText, sortTranslations, type HelloaoTranslation } from "./translations";
 import { useSharedResource } from "./useSharedResource";
 
@@ -127,7 +126,8 @@ function ExploreLookup({ term, context }: { term: string; context?: ExploreConte
         : { status: "loading" };
   const english = englishResults(lookup);
 
-  const helps = useMemo(() => studyHelpResults(term), [term]);
+  // None for Other denominations, so "no matches" and "nothing found" count only the sources shown.
+  const helps = useVisibleStudyHelps(term);
   const helpsStatus = sectionStatus(helps.map((result) => result.status));
 
   const plan = biblicalLanguagePlan(term, context);

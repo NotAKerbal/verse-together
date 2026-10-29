@@ -1,5 +1,4 @@
 import { createHash, createHmac } from "node:crypto";
-import { getServerViewer } from "@/lib/auth-server";
 import { NextRequest, NextResponse } from "next/server";
 import {
   CHAPTER_INSIGHT_PROMPT_VERSION,
@@ -12,6 +11,10 @@ import {
 import { buildChapterInsightResponseBody } from "@/lib/chapterInsightRequest";
 import { convexMutation, convexQuery } from "@/lib/convexHttp";
 import { getLocalLdsChapter } from "@/lib/ldsLocalData.server";
+import { getRequestViewer } from "@/lib/requestViewer";
+
+// Allow the 45-second research request plus authentication and cache work to finish.
+export const maxDuration = 90;
 
 type ChapterRequest = {
   volume?: unknown;
@@ -43,7 +46,7 @@ function cacheSignature(
 
 export async function POST(request: NextRequest) {
   // Study paths were generated once in a batch and cached in Convex. Reads never need an
-  // API key; the key only enables on-demand generation for a chapter that has no cache entry.
+  // API key or an account; the key only enables on-demand generation for a chapter that has no cache entry.
   const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
 
   let payload: ChapterRequest;
@@ -94,7 +97,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "AI insights are not configured yet." }, { status: 503 });
   }
 
-  const { viewer, token: convexToken } = await getServerViewer();
+  // Generating costs a paid research call, so it is for a verified, signed-in reader only: the browser's session
+  // cookie, or the native app's Convex token for its own session (src/lib/requestViewer.ts).
+  const { viewer, token: convexToken } = await getRequestViewer(request);
   if (!viewer) {
     return NextResponse.json({ error: "Sign in to generate chapter insights." }, { status: 401 });
   }

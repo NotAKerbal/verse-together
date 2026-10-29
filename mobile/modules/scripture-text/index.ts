@@ -8,10 +8,20 @@ import type { ComponentType, Ref } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 /**
- * A styled stretch: face, size and color (processColor), tracking in em, and an optional style merged into the face
- * (Android Typeface.create, iOS symbolic traits); without it the face is used exactly as named.
+ * A styled stretch: face, size and color (processColor), tracking in em, an optional style merged into the face
+ * (Android Typeface.create, iOS symbolic traits; without it the face is used exactly as named), and whether it is
+ * struck through (Android's strike-through paint, iOS's strikethrough attribute).
  */
-export type NativeRun = { start: number; end: number; font: string; size: number; color: number; letterSpacing?: number; style?: "bold" | "italic" | "boldItalic" };
+export type NativeRun = {
+  start: number;
+  end: number;
+  font: string;
+  size: number;
+  color: number;
+  letterSpacing?: number;
+  style?: "bold" | "italic" | "boldItalic";
+  strikethrough?: boolean;
+};
 /** A paragraph, its closing line break included: line height and the space after its last line. */
 export type NativeParagraph = { start: number; end: number; lineHeight: number; spacingAfter: number };
 export type NativeContent = { text: string; runs: NativeRun[]; paragraphs: NativeParagraph[] };

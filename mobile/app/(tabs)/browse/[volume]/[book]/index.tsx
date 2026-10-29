@@ -1,11 +1,12 @@
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
+import { HiddenContentNotice, useLdsContentHidden } from "../../../../../src/components/HiddenContent";
 import SelectionHeader from "../../../../../src/components/SelectionHeader";
 import { Notice, Page } from "../../../../../src/components/ui";
 import { readPassagesFromEntries } from "../../../../../src/features/readingProgress";
 import { chapterPath } from "../../../../../src/navigation/hrefs";
 import { buildBookView, normalizeScriptureVolume, scriptureCatalog, singleChapterBookHref } from "../../../../../src/shared/web";
-import { useLastPosition } from "../../../../../src/storage/preferences";
+import { useContinueReadingPosition } from "../../../../../src/storage/readingPosition";
 import { useJournalData } from "../../../../../src/storage/journalData";
 import { useTheme } from "../../../../../src/theme/theme";
 import { fonts } from "../../../../../src/theme/tokens";
@@ -16,8 +17,10 @@ export default function BookScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const { entries } = useJournalData();
-  const position = useLastPosition();
+  const position = useContinueReadingPosition();
   const volume = normalizeScriptureVolume(String(volumeParam));
+  const hidden = useLdsContentHidden({ volume });
+  if (hidden) return <HiddenContentNotice />;
   const single = singleChapterBookHref(scriptureCatalog, volume, String(book));
   if (single) return <Redirect href={single as never} />;
   const view = buildBookView(scriptureCatalog, volume, String(book));

@@ -1,13 +1,21 @@
 // Come, Follow Me lesson pieces (LessonOverview.tsx, LessonCoverImage.tsx, LessonChapters.tsx): cover art with a
-// painting's credit, the week's chapter chips (tinted once reading is logged), and the lesson cards.
+// painting's credit, the week's chapter chips (tinted once read), and the lesson cards.
+//
+// "Read" is the web's: signed in, the chapters the account marked read (readingProgress:getMyProgressForBook, its
+// chapterReads), asked once per book while the chips show and again when the screen comes back into view. Signed
+// out the website tints nothing (it has no progress to ask for); the app instead tints chapters whose reading was
+// logged in this device's journal, its own record of reading. Neither ever stands in for the other: an account that
+// can't be asked right now (offline, still being checked) shows what it last answered in this run, or no tint.
 
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Fragment, useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { openExternal } from "../../components/Blocks";
 import { publicImage } from "../../data/images";
 import { chapterPath } from "../../navigation/hrefs";
 import { getBookLabel, scriptureCatalog, shortCoverCredit, type ChapterRange, type Lesson, type LessonCover } from "../../shared/web";
+import { getStudySession, useStudySession, type StudySession } from "../../storage/studySession";
 import { useDeviceStudy } from "../../storage/study";
 import { useTheme } from "../../theme/theme";
 import { fonts } from "../../theme/tokens";
@@ -73,15 +81,86 @@ function describeRange(range: ChapterRange) {
   return range.from === range.to ? `${book} ${range.from}` : `${book} ${range.from}–${range.to}`;
 }
 
-export function LessonChapters({ ranges, label = "This week's chapters" }: { ranges: ChapterRange[]; label?: string }) {
-  const router = useRouter();
-  const { colors } = useTheme();
+/** readingProgress:getMyProgressForBook's answer (null: not signed in, as the server sees it). */
+type BookProgress = { readChapters: number[]; latestReadChapter: number | null; currentChapter: number | null } | null;
+
+/** The last answer per account and book, for this run only, so a lesson opened offline still shows it. */
+const answered = new Map<string, number[]>();
+
+function progressKey(owner: string, volume: string, book: string) {
+  return JSON.stringify([owner, volume, book]);
+}
+
+/** Tests: forget what the account answered. */
+export function resetLessonProgress() {
+  answered.clear();
+}
+
+/** The chapters of a book shown read for whoever's study is shown. */
+function useReadChapters(volume: string, book: string): ReadonlySet<number> {
+  const session = useStudySession();
   const study = useDeviceStudy();
+  const owner = session.mode === "account" ? session.owner : null;
+  const sync = session.mode === "account" ? session.sync : null;
+  const [, setAnswer] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (!owner || !sync) return;
+      let current = true;
+      const key = progressKey(owner, volume, book);
+      sync
+        .call<BookProgress>("getMyProgressForBook", { volume, book })
+        .then((progress) => {
+          // An answer for an account no longer shown is dropped.
+          const now: StudySession = getStudySession();
+          if (!current || now.mode !== "account" || now.owner !== owner) return;
+          answered.set(key, progress?.readChapters ?? []);
+          setAnswer((count) => count + 1);
+        })
+        .catch(() => {});
+      return () => {
+        current = false;
+      };
+    }, [owner, sync, volume, book]),
+  );
+  if (session.mode === "device") return readChapterSet(study, volume, book);
+  if (!owner) return new Set();
+  return new Set(answered.get(progressKey(owner, volume, book)) ?? []);
+}
+
+type BookGroup = { volume: string; book: string; ranges: ChapterRange[] };
+
+/** A week's ranges by book, so each book is asked about once. */
+function groupByBook(ranges: ChapterRange[]): BookGroup[] {
+  const groups: BookGroup[] = [];
+  for (const range of ranges) {
+    const last = groups[groups.length - 1];
+    if (last && last.volume === range.volume && last.book === range.book) last.ranges.push(range);
+    else groups.push({ volume: range.volume, book: range.book, ranges: [range] });
+  }
+  return groups;
+}
+
+export function LessonChapters({ ranges, label = "This week's chapters" }: { ranges: ChapterRange[]; label?: string }) {
   if (!ranges.length) return null;
   return (
     <View accessibilityLabel={label} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {groupByBook(ranges).map((group) => (
+        <Fragment key={`${group.volume}-${group.book}-${group.ranges[0].from}`}>
+          <BookChips {...group} />
+        </Fragment>
+      ))}
+    </View>
+  );
+}
+
+function BookChips({ volume, book, ranges }: BookGroup) {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const read = useReadChapters(volume, book);
+  return (
+    <>
       {ranges.map((range) => {
-        const read = readChapterSet(study, range.volume, range.book);
         let allRead = read.size > 0;
         for (let chapter = range.from; allRead && chapter <= range.to; chapter++) allRead = read.has(chapter);
         const text = describeRange(range);
@@ -105,7 +184,7 @@ export function LessonChapters({ ranges, label = "This week's chapters" }: { ran
           </Pressable>
         );
       })}
-    </View>
+    </>
   );
 }
 

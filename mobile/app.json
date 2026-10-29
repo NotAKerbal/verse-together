@@ -3,14 +3,14 @@
     "name": "Verse Together",
     "slug": "verse-together",
     "scheme": "versetogether",
-    "version": "1.0.5",
+    "version": "1.1.0",
     "orientation": "default",
     "icon": "../public/brand/icons/light/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#f6f3ec",
     "ios": {
       "bundleIdentifier": "org.versetogether.app",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "supportsTablet": true,
       "icon": {
         "light": "../public/brand/icons/light/icon.png",
@@ -19,12 +19,24 @@
     },
     "android": {
       "package": "org.versetogether.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
         "monochromeImage": "./assets/brand/adaptive-monochrome.png",
         "backgroundColor": "#f8f4ed"
       },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            { "scheme": "https", "host": "www.versetogether.org", "path": "/browse" },
+            { "scheme": "https", "host": "www.versetogether.org", "pathPrefix": "/browse/" },
+            { "scheme": "https", "host": "www.versetogether.org", "pathPrefix": "/share/" }
+          ]
+        }
+      ],
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": true,
       "blockedPermissions": [

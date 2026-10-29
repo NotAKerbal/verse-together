@@ -25,6 +25,7 @@ import { ThemeProvider } from "../src/theme/theme";
 import { ACCOUNT_CACHE_PREFIX, ACCOUNT_OUTBOX_PREFIX, LAST_OWNER_KEY, resetAccountStores } from "../src/storage/accountStudy";
 import { getStudySession, resetStudySession, subscribeStudySession } from "../src/storage/studySession";
 import { sha256Hex } from "../src/account/sessionBinding";
+import { SiteAuthError, getSiteAuth } from "../src/account/siteAuth";
 import { memorySecureStore } from "../testing/secureStore";
 
 type User = { id: string; owner: string; email: string; name: string };
@@ -759,5 +760,40 @@ describe("slow sign-out lifecycle", () => {
     expect(await screen.findByText("Signed out. Your study on this device is still here.")).toBeTruthy();
     fireEvent.press(screen.getByText("Continue with Google"));
     expect(await screen.findByText("Bea")).toBeTruthy();
+  });
+});
+
+describe("the account's requests to the site (siteAuth.ts)", () => {
+  it("opens for the verified owner only, sends its own session's token to its own site, and closes at sign-out", async () => {
+    const { server, storage } = await setup();
+    expect(getSiteAuth()).toBeNull();
+    fireEvent.press(await screen.findByText("Continue with Google"));
+    expect(await screen.findByText("Ada")).toBeTruthy();
+    const ada = getSiteAuth()!;
+    expect(ada.owner).toBe("owner-A");
+    expect(ada.siteOrigin).toBe("https://www.versetogether.org");
+
+    const sent: Array<{ url: string; authorization: string | undefined }> = [];
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      sent.push({ url: String(input), authorization: (init?.headers as Record<string, string> | undefined)?.authorization });
+      return new Response("{}", { status: 200 });
+    });
+    await ada.fetch("/api/insights/chapter", { method: "POST", body: "{}" });
+    const token = cookieJar(storage).sessionToken();
+    expect(sent).toEqual([{ url: "https://www.versetogether.org/api/insights/chapter", authorization: `Bearer jwt:${token}` }]);
+
+    fireEvent.press(screen.getByText("Sign out"));
+    expect(await screen.findByText("Continue with Google")).toBeTruthy();
+    expect(getSiteAuth()).toBeNull();
+    await expect(ada.fetch("/api/insights/chapter", { method: "POST", body: "{}" })).rejects.toThrow(SiteAuthError);
+    expect(sent).toHaveLength(1);
+
+    // Another account gets its own, and the first one's stays closed.
+    server.nextUser = BEA;
+    fireEvent.press(screen.getByText("Continue with Google"));
+    expect(await screen.findByText("Bea")).toBeTruthy();
+    expect(getSiteAuth()?.owner).toBe("owner-B");
+    expect(ada.live()).toBe(false);
+    fetchSpy.mockRestore();
   });
 });

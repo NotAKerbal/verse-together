@@ -44,6 +44,7 @@ export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
     { kind: "improved", text: "Settings groups the feature guide and privacy policy as quiet footer links." },
+    { kind: "improved", text: "Scripture links can open in the Android app, and signed-in Android readers can research study paths for uncached chapters." },
   ],
 };
 

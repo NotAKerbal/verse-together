@@ -1,7 +1,8 @@
 // Explore's study helps (the web's ScriptureHelpsSection, StudyHelpGuideRow and StudyHelpArticle): a row for each of
 // the Bible Dictionary, Guide to the Scriptures and Topical Guide with topics for the selection, titled with the
 // topic it shows. Open, it offers the guide's other matching topics in place, the entry's opening with "Read more",
-// links to the source, and a topic named in the entry's text opens in place of the entry.
+// links to the source, and a topic named in the entry's text opens in place of the entry. Latter-day Saint study helps,
+// so Other denominations shows none of them (useScriptureHelps in the web's WordStudySources.tsx).
 
 import { useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
@@ -10,10 +11,11 @@ import { studyHelpBrowseUrl, studyHelpEntryUrl, type StudyHelpGuide, type StudyH
 import type { SourceStatus } from "@/lib/exploreSources";
 import { openExternal } from "../../components/Blocks";
 import { Icon } from "../../components/ui";
+import { useFaithTradition } from "../../storage/faithTradition";
 import { toAppHref } from "../../navigation/hrefs";
 import { useTheme } from "../../theme/theme";
 import { fonts } from "../../theme/tokens";
-import { plural, studyHelpEntries, studyHelpKey, type StudyHelpGuideResult } from "./explore";
+import { plural, studyHelpEntries, studyHelpKey, studyHelpResults, type StudyHelpGuideResult } from "./explore";
 import { Eyebrow, ExploreLinksContext, ExploreNotice, ExploreRow, ExploreSection, ExternalLink, LoadError, LoadingLines, QuietButton, useTone, type ExploreDisclosure } from "./ExploreParts";
 import { useSharedResource } from "./useSharedResource";
 
@@ -190,8 +192,15 @@ export function BookIcon() {
   return <Icon name="book" size={15} color={palette.accent} />;
 }
 
+/** The study-help guides with topics for `term` that this device shows: none for Other denominations. */
+export function useVisibleStudyHelps(term: string): StudyHelpGuideResult[] {
+  const { showLdsContent } = useFaithTradition();
+  return useMemo(() => (showLdsContent ? studyHelpResults(term) : []), [showLdsContent, term]);
+}
+
 export function ScriptureHelpsSection({ helps, status, disclosure }: { helps: StudyHelpGuideResult[]; status: SourceStatus; disclosure: ExploreDisclosure }) {
-  if (status === "empty") return null;
+  const { showLdsContent } = useFaithTradition();
+  if (!showLdsContent || status === "empty") return null;
   const found = helps.filter((result) => result.status === "found");
   return (
     <ExploreSection
