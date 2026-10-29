@@ -4,7 +4,7 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { buildPlanSchedule, describePlanPace, describeReadingDays, formatDateKey, normalizeReadingDays } from "@/features/plans/planSchedule";
+import { buildPlanSchedule, describePlanPace, describeReadingDays, formatDateKey, normalizeReadingDays } from "./planSchedule";
 import { Button, Card, Icon, Page, Serif, Txt } from "../../components/ui";
 import { chapterPath } from "../../navigation/hrefs";
 import { useTheme } from "../../theme/theme";

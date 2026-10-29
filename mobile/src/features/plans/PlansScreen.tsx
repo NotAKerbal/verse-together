@@ -5,7 +5,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, View } from "react-native";
-import { describePlanPace, describeReadingDays, normalizeReadingDays } from "@/features/plans/planSchedule";
+import { describePlanPace, describeReadingDays, normalizeReadingDays } from "./planSchedule";
 import { Button, Card, IconButton, Page, Serif, Txt } from "../../components/ui";
 import { useTheme } from "../../theme/theme";
 import { ErrorText, NotLoaded, PageHero, PlansAccessNotice, PlansHeader, ProgressBar, Tag } from "./PlanParts";

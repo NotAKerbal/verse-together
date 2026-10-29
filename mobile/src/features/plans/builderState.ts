@@ -12,9 +12,10 @@ import {
   toDateKey,
   type PaceSummary,
   type PlanStepInput,
-} from "@/features/plans/planSchedule";
-import { autoTitleFromSelections, buildScopeSteps, isSameTarget, selectionsFromSteps, type PlanSelection, type PlanVolumeId } from "@/features/plans/planScope";
-import { PLAN_VOLUME_IDS, findCatalogBook, getBookLabel } from "@/features/plans/scriptureCatalog";
+} from "./planSchedule";
+import { autoTitleFromSelections, buildScopeSteps, isSameTarget, selectionsFromSteps, type PlanSelection, type PlanVolumeId } from "./planScope";
+import { findCatalogBook, getBookLabel } from "@/features/reading/scriptureCatalog";
+import { PLAN_VOLUME_IDS } from "./planCatalog";
 import { isLdsVolume } from "../../storage/faithTradition";
 import type { PlanDetailData, PlanWriteInput } from "./planData";
 

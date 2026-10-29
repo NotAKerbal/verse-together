@@ -6,8 +6,8 @@
 
 import { makeFunctionReference } from "convex/server";
 import { useSyncExternalStore } from "react";
-import type { PlanSelection } from "@/features/plans/planScope";
-import type { PlanStepInput, PlanTemplate } from "@/features/plans/planSchedule";
+import type { PlanSelection } from "../features/plans/planScope";
+import type { PlanStepInput, PlanTemplate } from "../features/plans/planSchedule";
 import type { SyncClient } from "./studySync";
 
 export type PlanSummary = {

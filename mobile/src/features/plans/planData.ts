@@ -1,7 +1,7 @@
-// Study plans, as the website keeps them (src/features/plans/useReadingProgress.ts): in the signed-in account only
+// Study plans live in the signed-in account only
 // (convex/readingPlans.ts), with "read" being the account's read chapters (readingProgress:markChapterRead /
 // unmarkChapterRead), so a chapter checked off here is read on the website too, and the other way round. Signed out
-// there are no plans, as on the web. Everything goes through the verified owner's own calls (accountCalls.ts): an
+// there are no plans. Everything goes through the verified owner's own calls (accountCalls.ts): an
 // answer for anyone else is never shown, and a change is sent only while connected and reported if it didn't save.
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
