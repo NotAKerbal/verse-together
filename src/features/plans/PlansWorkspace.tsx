@@ -1,5 +1,6 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
 import Link from "next/link";
 import { useState } from "react";
 import AccountControl from "@/components/AccountControl";
@@ -156,16 +157,17 @@ export default function PlansWorkspace() {
 
   return (
     <section className="page-shell py-4 sm:py-8">
-      <header className="page-hero space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="page-eyebrow">Study plans</div>
-          <AccountControl variant="page" />
-        </div>
-        <h1 className="page-title">Plans</h1>
-        <p className="page-subtitle text-sm">
-          Line up chapters, pace them across days, and watch the book and chapter grids fill in as you read.
-        </p>
-      </header>
+      <PageHeader
+        beforeTitle={
+          <div className="flex items-center justify-between gap-3">
+            <div className="page-eyebrow">Study plans</div>
+            <AccountControl variant="page" />
+          </div>
+        }
+        title="Plans"
+        subtitle="Line up chapters, pace them across days, and watch the book and chapter grids fill in as you read."
+        subtitleSize="small"
+      />
       {loading ? null : user ? <PlanList /> : <PlansSignedOut />}
     </section>
   );
