@@ -9,13 +9,6 @@
   padding-block: 1rem clamp(2rem, 6vw, 4rem);
 }
 
-.meta {
-  max-width: 40rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--foreground-soft);
-}
-
 .hero {
   display: flex;
   flex-direction: column;
@@ -159,27 +152,6 @@
   transform-origin: var(--origin, 50% 50%);
 }
 
-.thumbPlay {
-  position: absolute;
-  bottom: 0.6rem;
-  left: 0.6rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 999px;
-  background: rgba(31, 29, 26, 0.85);
-  color: #f6f3ec;
-  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.45);
-}
-
-.thumbPlay svg {
-  width: 0.65rem;
-  height: 0.65rem;
-  margin-left: 0.1rem;
-}
-
 .cardBody {
   display: flex;
   flex: 1;
@@ -255,13 +227,6 @@
 
   .thumb::after {
     display: none;
-  }
-
-  .thumbPlay {
-    bottom: 0.4rem;
-    left: 0.4rem;
-    width: 1.5rem;
-    height: 1.5rem;
   }
 
   .cardBody {

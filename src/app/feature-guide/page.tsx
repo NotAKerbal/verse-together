@@ -8,7 +8,6 @@ import {
   faBookOpen,
   faFeather,
   faHighlighter,
-  faPlay,
   faShareNodes,
   type IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";
@@ -34,8 +33,6 @@ export const metadata: Metadata = {
   // Linked from Settings and shared by hand; kept out of search results, not hidden.
   robots: { index: false, follow: true },
 };
-
-const CLIP_COUNT = GUIDE_SECTIONS.reduce((count, section) => count + section.clips.length, 0);
 
 /** Each group's mark, repeated on its cards' heading, its part of the page and each of its topics. */
 const GROUP_ICONS: Record<GuideGroupId, IconDefinition> = {
@@ -76,9 +73,6 @@ function TopicCard({ section }: { section: GuideSection }) {
             sizes="(min-width: 640px) 36rem, 20rem"
             className={styles.thumbImage}
           />
-          <span className={styles.thumbPlay} aria-hidden="true">
-            <FontAwesomeIcon icon={faPlay} />
-          </span>
         </span>
         <span className={styles.cardBody}>
           <span className={styles.cardTitle}>{section.title}</span>
@@ -178,16 +172,7 @@ export default function FeatureGuidePage() {
   return (
     <article className={`page-shell ${styles.guide}`}>
       <header className={`page-hero ${styles.hero}`}>
-        <div className="page-eyebrow">Verse Together</div>
         <h1 className="page-title">Feature guide</h1>
-        <p className="page-subtitle">
-          Short, silent clips of the app show how each feature works, with the steps written out beside them. Choose a
-          topic to begin.
-        </p>
-        <p className={styles.meta}>
-          {GUIDE_SECTIONS.length} topics · {CLIP_COUNT} clips · Recorded on a computer; on a phone the same tools are
-          arranged for the smaller screen.
-        </p>
       </header>
 
       <nav aria-labelledby="guide-topics" className={styles.index}>
