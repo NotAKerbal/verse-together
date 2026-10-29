@@ -16,7 +16,8 @@ import {
   type VerseTextRange,
 } from "../../shared/web";
 
-export type RunStyle = { font: string; size: number; color: string; letterSpacing?: number };
+/** A run's face, size, color and tracking, and optionally a style merged into the face and a strike-through. */
+export type RunStyle = { font: string; size: number; color: string; letterSpacing?: number; style?: "bold" | "italic" | "boldItalic"; strikethrough?: boolean };
 export type ParagraphStyle = RunStyle & { lineHeight: number };
 
 export type ScriptureStyle = {

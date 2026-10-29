@@ -32,8 +32,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * A styled stretch of the text: its face, size (sp), color (ARGB), tracking (em) and Typeface style (bold, italic;
- * NORMAL keeps the named face exactly as it resolves).
+ * A styled stretch of the text: its face, size (sp), color (ARGB), tracking (em), Typeface style (bold, italic;
+ * NORMAL keeps the named face exactly as it resolves) and whether it is struck through.
  */
 data class TextRun(
   val start: Int,
@@ -43,6 +43,7 @@ data class TextRun(
   val color: Int,
   val letterSpacing: Float = 0f,
   val style: Int = Typeface.NORMAL,
+  val strikethrough: Boolean = false,
 )
 
 /** A paragraph (its range includes its closing line break): line height (sp) and the space after its last line (dp). */
@@ -76,10 +77,17 @@ data class TextContent(val text: String, val runs: List<TextRun>, val paragraphs
   }
 }
 
-internal class RunSpan(val typeface: Typeface, val sizePx: Float, val color: Int, val letterSpacing: Float) : MetricAffectingSpan() {
+internal class RunSpan(
+  val typeface: Typeface,
+  val sizePx: Float,
+  val color: Int,
+  val letterSpacing: Float,
+  val strikethrough: Boolean = false,
+) : MetricAffectingSpan() {
   override fun updateDrawState(paint: TextPaint) {
     apply(paint)
     paint.color = color
+    paint.isStrikeThruText = strikethrough
   }
 
   override fun updateMeasureState(paint: TextPaint) = apply(paint)
@@ -224,7 +232,7 @@ class ScriptureTextWidget(
       val to = run.end.coerceIn(0, length)
       if (from >= to) continue
       val face = resolveFont(run.font)
-      val span = RunSpan(if (run.style == Typeface.NORMAL) face else Typeface.create(face, run.style), sp(run.size), run.color, run.letterSpacing)
+      val span = RunSpan(if (run.style == Typeface.NORMAL) face else Typeface.create(face, run.style), sp(run.size), run.color, run.letterSpacing, run.strikethrough)
       spannable.setSpan(span, from, to, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
       measure.typeface = span.typeface
       measure.textSize = span.sizePx

@@ -1,14 +1,14 @@
 // The Settings sections (src/features/settings/settingsTabs.ts and src/app/account/page.tsx): a pill of tabs, one
-// section open at a time, the open one dark with its name and the others as icons. The app shows the sections it
-// has: the web's Release notes and Feedback describe the website and send to its server, so the app has About
-// (its version, support, privacy and account deletion) in their place.
+// section open at a time, the open one dark with its name and the others as icons. The web's sections, with About
+// (this app's version, the website's release notes, support, privacy and account deletion) in place of Release
+// notes: the website's versions aren't the app's.
 
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Icon, softShadow, type IconName } from "../../components/ui";
 import { useTheme } from "../../theme/theme";
 import { fonts, REM } from "../../theme/tokens";
 
-export const SETTINGS_TABS = ["account", "reading", "bible-translations", "study-tools", "about"] as const;
+export const SETTINGS_TABS = ["account", "reading", "bible-translations", "study-tools", "feedback", "about"] as const;
 
 export type SettingsTabId = (typeof SETTINGS_TABS)[number];
 
@@ -31,7 +31,7 @@ export const TABS: Record<SettingsTabId, { label: string; icon: IconName; title:
     label: "Translations",
     icon: "book-bible",
     title: "Bible translations",
-    lead: "The Bible you read, and the translation you compare it with. Saved on this device.",
+    lead: "Choose your default Bible and manage saved translations. Saved on this device; also available in Reader settings.",
   },
   "study-tools": {
     label: "Study tools",
@@ -39,11 +39,17 @@ export const TABS: Record<SettingsTabId, { label: string; icon: IconName; title:
     title: "Study tools",
     lead: "The marks at the top of the selection menu when you choose verses.",
   },
+  feedback: {
+    label: "Feedback",
+    icon: "comment-dots",
+    title: "Feedback",
+    lead: "Ideas, problems, or requests for Verse Together. Every message is read.",
+  },
   about: {
     label: "About",
     icon: "circle-info",
     title: "About",
-    lead: "This app's version, help, privacy and your data.",
+    lead: "This app's version, the website's release notes, help, privacy and your data.",
   },
 };
 
@@ -57,8 +63,8 @@ export function tabFromParam(value: unknown): SettingsTabId {
 export function SettingsTabs({ selected, onSelect }: { selected: SettingsTabId; onSelect: (tab: SettingsTabId) => void }) {
   const { colors, scheme } = useTheme();
   const { width } = useWindowDimensions();
-  // The narrowest phones: the tabs sit closer and the open one shows only its name.
-  const narrow = width < 360;
+  // Narrow phones: the tabs sit closer and the open one shows only its name, so six fit with the longest name open.
+  const narrow = width < 400;
   return (
     <View
       accessibilityRole="tablist"
@@ -94,7 +100,7 @@ export function SettingsTabs({ selected, onSelect }: { selected: SettingsTabId; 
               flexGrow: isSelected ? 3 : 1,
               flexShrink: isSelected ? 0 : 1,
               flexBasis: isSelected ? "auto" : 0,
-              minWidth: narrow ? 40 : 44,
+              minWidth: width < 340 ? 36 : narrow ? 40 : 44,
               minHeight: 44,
               flexDirection: "row",
               alignItems: "center",

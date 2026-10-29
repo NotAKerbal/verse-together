@@ -1,7 +1,9 @@
 import { act, fireEvent, renderRouter, screen, waitFor, within } from "expo-router/testing-library";
 import { BackHandler } from "react-native";
 import * as Blocks from "../src/components/Blocks";
+import { studyHelpResults } from "../src/features/explore/explore";
 import * as draftIntent from "../src/features/journal/draftIntent";
+import { faithTradition } from "../src/storage/faithTradition";
 import { memoryStorage, setStoragePort } from "../src/storage/kv";
 import { lastPosition, readerPreferences } from "../src/storage/preferences";
 import { initDeviceStudy } from "../src/storage/study";
@@ -36,6 +38,8 @@ function installFetch() {
 
 const callsTo = (path: string) => calls.filter((call) => call.url.pathname === `/api/tools/${path}`);
 const param = (call: Call, name: string) => call.url.searchParams.get(name);
+/** Explore's own lookups, not the reader's (its chapter study paths, /api/insights/chapter). */
+const toolCalls = () => calls.filter((call) => call.url.pathname.startsWith("/api/tools/"));
 
 const EMPTY_DICTIONARY = (term: string) => ({
   ok: true,
@@ -73,6 +77,7 @@ async function settle(ms = 50) {
 const realFetch = global.fetch;
 beforeEach(() => {
   setStoragePort(memoryStorage());
+  faithTradition.reset();
   readerPreferences.reset();
   lastPosition.reset();
   initDeviceStudy();
@@ -102,7 +107,8 @@ describe("Explore from the reader", () => {
     await screen.findByTestId("reader-text");
     await selectText("faith");
     const ids = within(screen.getByTestId("verse-actions")).getAllByTestId(/^action-/).map((element) => element.props.testID);
-    expect(ids).toEqual(["action-explore", "action-journal", "action-annotate", "action-translations", "action-share", "action-copy"]);
+    // The web's order (VerseActionBar.tsx): Resources, for Latter-day Saint content, before Translations.
+    expect(ids).toEqual(["action-explore", "action-journal", "action-annotate", "action-resources", "action-translations", "action-share", "action-copy"]);
   });
 
   it("looks up the whole selected phrase, never just its first word, and shows every dictionary edition and word history", async () => {
@@ -230,13 +236,13 @@ describe("Explore from the reader", () => {
   it("cancels a lookup it no longer shows, and drops its late answer", async () => {
     route = (url) => (url.pathname === "/api/tools/study-helps" ? emptyRoute(url) : "pending");
     const sheet = await exploreIn("/browse/bookofmormon/alma/32", "things which are not seen", { from: "21  " });
-    const first = [...calls];
+    const first = toolCalls();
     expect(first.map((call) => param(call, "term"))).toEqual(["things which are not seen", "things which are not seen", "things which are not seen"]);
 
     await press(within(sheet).getByTestId("explore-choice-things"));
     expect(within(sheet).getByTestId("explore-subject")).toHaveTextContent("things");
     expect(first.every((call) => call.signal?.aborted)).toBe(true);
-    const second = calls.slice(first.length);
+    const second = toolCalls().slice(first.length);
     expect(second.map((call) => param(call, "term"))).toEqual(["things", "things", "things"]);
 
     // The old phrase's answer arrives late: nothing of it shows.
@@ -328,6 +334,25 @@ describe("Explore's study helps and biblical languages in a Bible chapter", () =
     expect(opened).toHaveBeenLastCalledWith("https://biblehub.com/greek/4102.htm");
     await press(within(languages).getByTestId("explore-interlinear"));
     expect(opened).toHaveBeenLastCalledWith("https://biblehub.com/interlinear/hebrews/11.htm");
+  });
+
+  it("leaves Latter-day Saint study helps out for Other denominations, in matches and in what found nothing", async () => {
+    // For Latter-day Saint content "faith" finds topics, and some guides find none and are named as checked.
+    const results = studyHelpResults("substance");
+    const unmatched = results.filter((result) => result.status === "empty").map((result) => result.guide.label);
+    expect(unmatched.length).toBeGreaterThan(0);
+    faithTradition.set("other");
+    const sheet = await exploreIn("/browse/newtestament/hebrews/11", "substance");
+    expect(within(sheet).queryByTestId("explore-section-helps")).toBeNull();
+    const none = within(sheet).getByTestId("explore-no-matches");
+    await press(within(none).getByRole("button"));
+    // Only the sources shown are counted and named as checked (Strong's found matches here); no study help guide is.
+    expect(within(none).getByText("No matches for “substance” in 2 sources")).toBeTruthy();
+    expect(within(sheet).getByText("English dictionaries")).toBeTruthy();
+    expect(within(sheet).getByText("Word histories")).toBeTruthy();
+    for (const label of results.map((result) => result.guide.label)) expect(within(sheet).queryByText(label)).toBeNull();
+    // No study help topic is looked up.
+    expect(callsTo("study-helps")).toEqual([]);
   });
 
   it("opens a guide's topic, a topic named in its text in place, and its scripture in the reader", async () => {

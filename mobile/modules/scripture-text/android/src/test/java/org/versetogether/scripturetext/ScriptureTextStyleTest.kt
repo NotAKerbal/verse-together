@@ -8,7 +8,9 @@ import android.text.Spanned
 import android.view.View
 import android.view.ViewGroup
 import androidx.test.core.app.ApplicationProvider
+import android.text.TextPaint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -98,5 +100,20 @@ class ScriptureTextStyleTest {
     assertEquals(17, widget.selectionEnd)
     assertEquals(listOf(6 to 17), events)
     assertTrue(widget.offsetTop(20) >= 0.0)
+  }
+
+  @Test
+  fun aStruckRunDrawsStruckThroughAndOthersDont() {
+    assertFalse(RunRecord().toRun().strikethrough)
+    val struck = TextRun(6, 11, "serif", 16f, Color.GRAY, strikethrough = true)
+    widget.setContent(TextContent(text, listOf(TextRun(0, 6, "serif", 16f, Color.BLACK), struck), emptyList()))
+    val all = spans()
+    val plainPaint = TextPaint().apply { isStrikeThruText = true }
+    all[0].updateDrawState(plainPaint)
+    assertFalse(plainPaint.isStrikeThruText)
+    val struckPaint = TextPaint()
+    all[1].updateDrawState(struckPaint)
+    assertTrue(struckPaint.isStrikeThruText)
+    assertEquals(Color.GRAY, struckPaint.color)
   }
 }

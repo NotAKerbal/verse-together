@@ -1,6 +1,6 @@
 // The text selection menu on phones (VerseActionBar.tsx and .selection-* in globals.css), in one card anchored
 // above the bottom navigation: the reader's quick marks and Clear across the top, then the actions (Explore, Add
-// to journal, Annotate, Translations, Share), and a footer with Copy text and the selection's reference.
+// to journal, Annotate, Resources, Translations, Share), and a footer with Copy text and the selection's reference.
 //
 // The selection is the reader's exact words (VerseTextRange: offsets in each verse's own text, from ScriptureText),
 // as on the web. A mark goes on those words only, splitting or replacing marks only within them (the shared
@@ -51,6 +51,8 @@ import { setDraftIntent } from "../journal/draftIntent";
 import MarkSample from "./MarkSample";
 import MarkStylePicker, { type MarkStyle } from "./MarkStylePicker";
 import { selectedWords, selectionKey as rangesKey } from "./scriptureDocument";
+import ResourcesSheet from "./ResourcesSheet";
+import { useFaithTradition } from "./studySettings";
 import VerseNoteSheet from "./VerseNoteSheet";
 
 export type SelectionTarget = {
@@ -344,6 +346,9 @@ export default function VerseActions({ ranges, onClear, bottomOffset, ...target 
   const [noteVerse, setNoteVerse] = useState<number | null>(null);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [translationsOpen, setTranslationsOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  // Lesson resources are Latter-day Saint material, offered as the web offers them (showLdsContent).
+  const { showLdsContent } = useFaithTradition();
 
   const marks = selectionMarks(sorted.map((verse) => target.annotations.get(verse) ?? null), sortedRanges);
   const reference = formatPassageReference(target.bookLabel, target.chapter, sorted);
@@ -470,6 +475,9 @@ export default function VerseActions({ ranges, onClear, bottomOffset, ...target 
               <Action featured icon="wand-magic-sparkles" title="Explore" description="Meaning & context" onPress={() => setExploreOpen(true)} testID="action-explore" />
               <Action icon="plus" title="Add to journal" description="Quote it in a new entry" onPress={addToJournal} testID="action-journal" />
               <Action icon="pen-to-square" title="Annotate" description="Highlight, underline, or note" onPress={() => setAnnotating(selectionKey)} testID="action-annotate" />
+              {showLdsContent ? (
+                <Action icon="book" title="Resources" description="Lessons & more" onPress={() => setResourcesOpen(true)} testID="action-resources" />
+              ) : null}
               {canCompare(target.volume, target.book) ? (
                 <Action icon="language" title="Translations" description="Compare the wording" onPress={() => setTranslationsOpen(true)} testID="action-translations" />
               ) : null}
@@ -508,6 +516,9 @@ export default function VerseActions({ ranges, onClear, bottomOffset, ...target 
         onClose={() => setNoteVerse(null)}
       />
       <ExploreSheet visible={exploreOpen} onClose={() => setExploreOpen(false)} text={plain} reference={reference} context={{ volume: target.volume, book: target.book, chapter: target.chapter, verses: sorted, verseCount: target.verses.length }} />
+      {showLdsContent ? (
+        <ResourcesSheet visible={resourcesOpen} onClose={() => setResourcesOpen(false)} selection={{ volume: target.volume, book: target.book, chapter: target.chapter, verses: sorted }} reference={reference} />
+      ) : null}
       {canCompare(target.volume, target.book) ? (
         <TranslationsSheet visible={translationsOpen} onClose={() => setTranslationsOpen(false)} book={target.book} chapter={target.chapter} verses={wholeVerses} reference={reference} />
       ) : null}

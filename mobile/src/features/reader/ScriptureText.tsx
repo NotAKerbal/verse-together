@@ -37,6 +37,8 @@ function nativeColor(color: string | undefined): number {
 export type ScriptureTextHandle = {
   /** A verse's top, from the text's top (-1 before the text has laid out). */
   verseTop(verse: number): Promise<number>;
+  /** The top of the line holding an offset of the document's text, from the text's top (-1 before layout). */
+  offsetTop(offset: number): Promise<number>;
 };
 
 type Props = {
@@ -72,6 +74,7 @@ const ScriptureText = forwardRef<ScriptureTextHandle, Props>(function ScriptureT
         if (!region || !native.current) return -1;
         return native.current.offsetTop(region.blockStart);
       },
+      offsetTop: async (offset) => (native.current ? native.current.offsetTop(offset) : -1),
     }),
     [document]
   );

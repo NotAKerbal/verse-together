@@ -131,7 +131,9 @@ npm run brand:check      # launcher, splash and store graphics match their vecto
 - **Journal.** Reflection invitation with the web's prompts, month calendar, weekly goals with an editor, this
   month's study days, a thought worth revisiting, a day view, full-text search, and an entry editor: Markdown
   with preview, a reading chip (whole chapter or verses, day), Save, revision-checked edits, Delete, and a
-  discard-changes guard. Verse notes appear as read-only entries that open their verse.
+  discard-changes guard. Saved entries autosave after a pause, on blur/background and when leaving; new drafts
+  recover after restarting, separately for each owner. Failures and revision conflicts retain the text and offer
+  retry/copy choices. Published and archived notes open read-only. Verse notes open their verse.
 - **Come, Follow Me.** The 2026 schedule, this week's lesson (or its reading when no guide is published),
   coming up and previous lessons with covers and painting credits, and each published guide as the web's
   scripture-first study page: introduction, every assigned verse with "Context for verses …" disclosures and
@@ -143,15 +145,19 @@ npm run brand:check      # launcher, splash and store graphics match their vecto
   changes), Explore, Add to journal (the selected words, linked to their place in the lesson), Share and Copy text.
   A span is saved against the website's own text of the guide (`GuideRoot`, below), so a span saved on either is
   found on the other; a link in the prose opens with a tap.
-- **Settings.** The web's phone Settings (`src/app/account/page.tsx`): a pill of sections, one open at a time
-  under its heading, and a Privacy policy link below (`app/settings.tsx`, `src/features/settings/`;
-  `/settings?tab=reading` opens a section). **Account**: Google sign-in with the website's account, copying this
-  device's study to it when asked, sign-out and account deletion (see "Account" below), and deleting this device's
-  study. **Reading**: a John 1:1–3 preview, text size, typeface and text width with Reset, and simple mode.
-  **Translations**: the bundled King James Bible and the remembered comparison translation (choose, change or
-  forget it). **Study tools**: quick marks (name, reorder, restyle, remove, add, restore defaults). **About**: the
-  build's version, help by email, the privacy policy and account deletion on the web. Not in the app, so not shown:
-  the web's faith tradition, comparison view, saved Bible library and default Bible, release notes and feedback form.
+- **Reader extras.** Saved/default Bibles, whole-chapter inline or side-by-side comparison (stacked on phones,
+  real columns on tablets while the primary chapter stays one selectable native text), JST passages with added
+  and omitted wording, cached study paths, and journal-note markers. Resources opens bundled lesson commentary
+  for selected verses offline. Custom-scheme share links open the reader at the shared passage.
+- **Study plans.** Native list, detail, new/edit builder, quick starts, scope, pace, reading days and dates; chapter
+  check-off/uncheck and confirmed deletion through the existing account APIs. Signed out, plans invite sign-in.
+- **Settings.** The web's phone settings sections, with a privacy link below. **Account**: Google sign-in, device
+  study import, display name, sign-in methods, sessions, sign-out and account deletion. **Reading**: faith tradition
+  (device-only), appearance and comparison view, and simple mode. **Translations**: saved Bibles, default Bible,
+  JST toggle, and selected-verses comparison. **Study tools**: named/reordered/restyled quick marks. Appearance and
+  quick marks use a separate account copy while signed in and wait for its first verified load before editing.
+  **Feedback**: the web's validated form. **About**: this app's version, help/privacy, and clearly labelled website
+  release history with bundled screenshots. Website 2.x versions do not describe the native 1.0.x build.
 
 ## Data and code shared with the web app
 
@@ -368,23 +374,31 @@ Before a release with sign-in:
    2.14.0; Android 1.0.4 is live in closed testing and UI-only 1.0.5 is submitted for review. The account-sync
    source in this checkout is newer than those builds. Step 4 still needs real-device testing before public release.
 
-## Not in the app yet (and why)
+## Remaining platform and verification differences
 
-- **Sync gaps.** The reading position (Continue reading) stays on the device; the lesson list's read chapters
-  (`LessonParts.tsx`) still come from this device's journal; weekly goals, guide annotations and opening a website
-  reading need a connection; the editor saves on Save (no autosave). Sync has been tested against an in-memory
-  account with the server's rules (`__tests__/accountSync.test.ts`, `accountJournal.test.tsx`,
-  `accountProvider.test.tsx`), not against a deployment or on a device.
-- **Account-only pages:** study plans (linked to the website), the community feed, published and shared
-  insights, talk pages, the resources manager, help and feedback.
-- **Reader extras:** footnotes and citations, Joseph Smith Translation excerpts, AI chapter study paths,
-  and inline whole-chapter translation comparison (the app compares the selected verses).
-- **Marks:** custom colors are typed as hex (the web uses the browser's color picker). In a study guide, a selection
-  can't run across a context block into the next passage (each passage is its own text), and a prose selection
-  can't run out of a run of paragraphs and headings into a list, quote, table or figure (each is its own text).
-  Guide prose marks are local while signed out and use the account's cached spans while signed in; changes
-  require a verified online connection. An unknown owner or pending deletion never falls back to device rows.
-  A span with only a note is underlined in a quiet solid line (the web's is dotted).
+The current linked web flows, implementation inventory, runtime screenshots and exact checks are documented in
+[the parity QA report](qa/PARITY-QA.md). The earlier [Android QA report](qa/ANDROID-QA.md) is the historical
+baseline, before this parity work. The [October 29 follow-up](qa/PARITY-FOLLOWUP-QA.md) covers authenticated
+research, HTTPS routing and durable reading positions. Footnotes and obsolete unlinked web pages are not current web features and
+were not added as new product scope.
+
+- **Signed-in verification remains pending.** Plans, cross-device settings/study sync, name/session management,
+  account switching and deletion have automated owner-boundary coverage, but no real Google test account was used.
+- **Network-dependent account operations.** Plans, goals and guide-annotation changes require a connection.
+  The account's Continue reading position and pending position updates are cached per owner across offline
+  restarts. Journal/verse outbox data remains durable. Account preferences stay disabled until first hydration.
+- **Study paths.** Cached paths remain public. For uncached chapters, the native app sends its session's Convex
+  token to the site's API, which verifies the reader with Convex before researching. This requires the updated
+  website route to be deployed; real signed-in acceptance is still pending.
+- **Platform choices.** Plan dates use YYYY-MM-DD entry and one-day buttons. Custom mark colors use hex input.
+  Native guide selections remain bounded by their text runs/context blocks. HTTPS intent filters and native
+  routing are implemented; automatic domain verification still needs the Play signing certificate and website
+  deployment ([setup](store/APP-LINKS.md)). `versetogether://share/...` routes work without it.
+- **Account methods.** Native sign-in is Google. Email/password management is deployment-dependent and off by
+  default on the backend; a native password flow was not added.
+- **Physical devices, accessibility and iOS.** TalkBack/VoiceOver, minimum Android API 24, long-account/long-plan
+  performance and physical-device testing remain unverified. iOS's matching native style shape was updated but
+  has not been compiled on macOS.
 
 ## The scripture text (`modules/scripture-text`)
 
@@ -415,20 +429,19 @@ A local Expo module (autolinked from `modules/`, so it survives `prebuild`), use
 
 ## Verification limits
 
-Native UI runtime remains unverified. The Android SDK, emulator and Android 15 image are installed, but this
-VM exposes no KVM acceleration. Software boot reached adb, then hit Android runtime suspension timeouts and
-system-service watchdog restarts without a reliable completed boot. The failed test emulator was stopped.
-There is no macOS environment for iOS: the iOS scripture view is written but has never been compiled or run.
-The Jest tests render the real routes and screens with React Native's test renderer; the scripture view's native
-bridge is mocked there (a host element with the same props and events), so they check the offset mapping, the
-selection state, marks and the menu's actions, not the platform's gestures. The Android view is compiled into the
-APK and its Robolectric tests check its read-only configuration, which selection changes it reports, that marks
-and restyling keep the selection, and its toolbar callback; they set the selection through Android's `Selection`
-spans rather than simulating a long press or handle drag. Still unverified on a device: long-press word selection
-and dragging the handles across verses, autoscroll while dragging near an edge, the emptied toolbar, the
-scroll view and chapter swipe yielding to a selection, how the drawn marks, fonts and note cards look, keyboard
-behaviour, and visual match with the website. The selection menu follows the web's `VerseActionBar` layout,
-labels, sizes and behaviour, but it is a native rebuild, not a pixel-identical copy.
+Android runtime QA now runs on `isaac-omarchy`, which exposes working KVM acceleration. Dedicated Android 15
+Pixel 7 and Pixel Tablet AVDs, a user-local SDK and Java 21, and a standalone development-signed APK were set up
+and exercised on 2026-10-28. See [the parity QA report](qa/PARITY-QA.md) for the current source/build identity,
+checks, screenshots and remaining gaps, and [the historical runtime report](qa/ANDROID-QA.md) for setup commands.
+This supersedes the earlier
+unsuccessful software-emulator attempt on the Ubuntu VM, which still has no `/dev/kvm`.
+
+Emulator runtime coverage includes native long-press selection and dragging across verses, word marks, exact journal
+quotes, reading logs, offline search and cold restarts, font/size preferences, dark/simple mode, CFM prose selection,
+and live translation comparison. Jest continues to mock the native selection bridge; Robolectric tests exercise
+the Android widget separately. Emulator results do not establish physical-device performance or accessibility.
+Google sign-in/account sync, edge-drag autoscroll, TalkBack, and physical-device QA remain unverified. There is
+no macOS environment for iOS: the iOS scripture view has not been compiled or run.
 
 
 ### Account study sync integration and verification (2026-10-28)

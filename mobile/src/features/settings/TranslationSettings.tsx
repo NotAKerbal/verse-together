@@ -1,8 +1,6 @@
-// Settings → Translations (the web's Bible translations section, BibleTranslationControls.tsx), for what the app
-// does: it reads the King James Bible, bundled and offline, and compares selected verses with one other translation
-// from the HelloAO Bible API (the selection menu's Translations). This shows that Bible and the remembered
-// comparison, and changes or forgets it. The web's saved library, default Bible and side-by-side chapters aren't in
-// the app.
+// Settings → Translations (the web's Bible translations section): Your Bibles (BibleTranslationControls.tsx: the
+// saved library, the default Bible and the Joseph Smith Translation choice), then the one translation the selection
+// menu's Translations compares selected verses with (from the HelloAO Bible API), which this changes or forgets.
 
 import { useEffect, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -11,6 +9,7 @@ import { useTheme } from "../../theme/theme";
 import { fonts, radii, REM } from "../../theme/tokens";
 import { errorMessage } from "../explore/network";
 import { loadTranslations, sortTranslations, type HelloaoTranslation } from "../explore/translations";
+import BibleTranslationControls from "./BibleTranslationControls";
 import { SmallIconButton, TextButton } from "./SettingsParts";
 
 /** The key the selection menu's Translations sheet remembers its choice under (ExploreSheet.tsx). */
@@ -40,7 +39,10 @@ function useCatalog(wanted: boolean) {
   useEffect(() => {
     if (!wanted) return;
     let live = true;
-    setCatalog({ status: "loading" });
+    // Queue the external request’s loading state so the effect does not synchronously cascade renders.
+    void Promise.resolve().then(() => {
+      if (live) setCatalog({ status: "loading" });
+    });
     loadTranslations().then(
       (list) => live && setCatalog({ status: "ready", list }),
       (error) => live && setCatalog({ status: "error", message: errorMessage(error) }),
@@ -93,18 +95,20 @@ export default function TranslationSettings({ active }: { active: boolean }) {
 
   return (
     <View style={{ gap: 0.75 * REM, paddingVertical: 0.25 * REM }}>
-      <View accessibilityLabel="Your Bible" style={border}>
-        <Row title="King James Bible (LDS edition)" meta="English · Available offline">
-          <Text style={{ fontFamily: fonts.sansMedium, fontSize: 0.75 * REM, color: colors.foreground, textDecorationLine: "underline" }}>Default</Text>
-        </Row>
-        <View style={{ borderTopWidth: 1, borderTopColor: colors.surfaceBorder }}>
+      <BibleTranslationControls />
+      <Text style={muted}>Open a Bible chapter and use Reader settings to show saved translations beside your default Bible.</Text>
+      <Text accessibilityRole="header" style={{ marginTop: 0.5 * REM, fontFamily: fonts.sansMedium, fontSize: 0.875 * REM, color: colors.foreground }}>
+        Selected verses
+      </Text>
+      <View accessibilityLabel="Selected verses comparison" style={border}>
+        <View>
           {current && saved ? (
             <Row title={current.title} meta={`Compare with · ${current.meta}`} testID="compare-translation">
               <TextButton label="Change" accessibilityLabel={`Change the comparison translation, ${current.title}`} onPress={() => setChoosing(!choosing)} />
               <SmallIconButton icon="trash" label={`Stop comparing with ${current.title}`} onPress={() => save(null)} />
             </Row>
           ) : (
-            <Row title="No comparison translation" meta="Choose one to read selected verses beside the King James text." testID="compare-translation-none" />
+            <Row title="No comparison translation" meta="Choose one to read selected verses beside the text you're reading." testID="compare-translation-none" />
           )}
         </View>
       </View>
@@ -175,7 +179,7 @@ export default function TranslationSettings({ active }: { active: boolean }) {
           {error}
         </Text>
       ) : null}
-      <Text style={muted}>Select verses in a Bible chapter and choose Translations to read them beside the King James text. Translations come from the HelloAO Free Use Bible API.</Text>
+      <Text style={muted}>Select verses in a Bible chapter and choose Translations to read them beside the text you’re reading. Translations come from the HelloAO Free Use Bible API.</Text>
     </View>
   );
 }

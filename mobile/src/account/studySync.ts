@@ -342,12 +342,13 @@ export class StudySync implements StudySyncPort {
   }
 
   /** Online-only calls (no outbox): refused offline, and given up on after a timeout. */
-  async call<T>(name: "openReadingEntry" | "saveJournalGoals" | "setGuideAnnotation" | "deleteGuideHighlight" | "getGuideHighlights", args: Record<string, unknown>): Promise<T> {
+  async call<T>(name: "openReadingEntry" | "saveJournalGoals" | "setGuideAnnotation" | "deleteGuideHighlight" | "getGuideHighlights" | "getMyProgressForBook", args: Record<string, unknown>): Promise<T> {
     const loadError = this.store.getSnapshot().loadError;
-    if (loadError && name !== "getGuideHighlights") throw new Error(loadError);
+    const read = name === "getGuideHighlights" || name === "getMyProgressForBook";
+    if (loadError && !read) throw new Error(loadError);
     if (!this.connected()) throw new Error("You're offline. Connect to the internet and try again.");
     const ref = studyApi[name];
-    const promise = name === "getGuideHighlights" ? this.client.query(ref, args) : this.client.mutation(ref, args);
+    const promise = read ? this.client.query(ref, args) : this.client.mutation(ref, args);
     const result = await withTimeout(promise, READ_TIMEOUT_MS);
     if (!this.live()) throw new Error("You signed out, so this change wasn't saved.");
     return result as T;

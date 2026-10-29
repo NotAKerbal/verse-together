@@ -1,15 +1,23 @@
 // A journal entry's editor (JournalEntryComposer.tsx and JournalNoteEditor.tsx): an optional reading chip naming
 // the passage or lesson (with Whole chapter / Verses and the day), the Markdown writer with a preview, and Save
-// entry. A new entry stores nothing until saved; an entry with neither note nor reading is refused. Saved entries
-// save with their revision (a change made elsewhere is reported, never overwritten) and can be deleted.
+// entry. An entry with neither note nor reading is refused.
 //
-// Signed in, the entry is the account's (journalData.ts): Save keeps the change on the device at once and sends it
-// when connected; the editor shows whether it has synced, and when the entry was also changed on the website, offers
-// the choice (keep mine, use the newer version, or save mine as a new entry) instead of overwriting either.
+// A new entry is one draft per study owner, kept on this device as it is written (entryDraftStore.ts): leaving can
+// keep it for later, and a draft the app was closed on comes back the next time a new entry is opened, for the same
+// owner only. Saving it makes one entry under the draft's request id, so a second Save (or a retry after the app
+// stopped mid-save) never makes a duplicate. Nothing is written for a session whose owner isn't known yet.
+//
+// A saved entry saves itself as it is edited (JournalNoteEditor's outbox): a pause in typing, leaving the field, the
+// app going to the background, or leaving the screen saves the text against the revision it was written on. A change
+// made elsewhere is reported, never overwritten: on this device the editor stops with the text kept and offers to
+// load the latest version or save this one over it; signed in, the entry is the account's (journalData.ts), kept on
+// the device at once and sent when connected, and a newer version on the website offers the choice (keep mine, use
+// the newer version, or save mine as a new entry). A save that fails says so, keeps the text, and can be retried.
 
+import * as Clipboard from "expo-clipboard";
 import { useNavigation, usePreventRemove, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AppState, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Blocks from "../../components/Blocks";
 import { Button, IconButton, Notice, Segmented, Txt } from "../../components/ui";
@@ -19,6 +27,7 @@ import {
   RevisionConflictError,
   dateFromKey,
   formatDayHeading,
+  formatTime,
   localDateKey,
   markdownExcerpt,
   newRequestId,
@@ -30,10 +39,22 @@ import {
 } from "../../shared/web";
 import type { NoteSync } from "../../storage/accountStudy";
 import { journalStudy, type EditableNote } from "../../storage/journalData";
-import { assertStudyIdentity, useStudyIdentity, type StudyMode } from "../../storage/studySession";
+import { assertStudyIdentity, getStudyIdentity, useStudyIdentity, type StudyMode } from "../../storage/studySession";
 import { useTheme } from "../../theme/theme";
 import { fonts } from "../../theme/tokens";
 import type { DraftIntent } from "./draftIntent";
+import {
+  clearEntryDraft,
+  draftOwner,
+  isRecoverable,
+  readEntryDraft,
+  savedEntryFor,
+  writeEntryDraft,
+  type EntryDraftFields,
+  type EntryRange,
+  type StoredEntryDraft,
+} from "./entryDraftStore";
+import { canDelete, isReadOnly, useNoteEditing, type NoteStatus } from "./noteStatus";
 import { markdownBlocks } from "./markdown";
 
 function chapterVerseCount(source: NoteSource): number | undefined {
@@ -187,6 +208,165 @@ function ConflictPanel({ sync, onResolved }: { sync: Extract<NoteSync, { state: 
   );
 }
 
+/** A pause in typing this long saves an entry being edited (the web's outbox waits the same). */
+const AUTOSAVE_MS = 900;
+/** A pause this long keeps a new entry's draft on the device. */
+const DRAFT_KEEP_MS = 400;
+
+const DRAFT_NOT_KEPT = "This draft couldn't be kept on this device. Save it as an entry, or copy your text, before leaving.";
+/** Only one unsaved entry is kept per study: this one waits while the earlier one does. */
+const DRAFT_WAITING =
+  "This entry isn’t kept on this device until you continue or discard the earlier one above. Save it as an entry, or copy your text, before leaving.";
+
+/** An edit's save on this device (signed in, the account's sync state says the rest). */
+type EditSave = { kind: "idle" } | { kind: "saved"; at: string } | { kind: "error"; message: string } | { kind: "conflict"; revision: number };
+
+/**
+ * A draft found for this owner when a new entry opened: "restored" is being shown in the editor; "waiting" was left
+ * where it is because the editor opened with something of its own, until the person chooses.
+ */
+type Recovery = { kind: "restored" | "waiting"; draft: StoredEntryDraft };
+
+function rangeOf(source: NoteSource | null | undefined): EntryRange | null {
+  return source?.verseStart ? { start: source.verseStart, end: source.verseEnd ?? source.verseStart } : null;
+}
+
+/**
+ * What an entry's reading saves, for telling whether it changed: whether it is logged, which passage or lesson (not
+ * how its label is written: the website's "1 Nephi 3:7-9" and this app's "1 Nephi 3:7–9" are the same reading), the
+ * verses read, and the day. Opening an entry unchanged never counts as a change, so it is never saved again.
+ */
+function readingKeyOf(reading: boolean, source: NoteSource | null | undefined, range: EntryRange | null, date: string): string {
+  const where = !source
+    ? null
+    : source.kind === "scripture" && source.volume && source.book && source.chapter
+      ? [source.kind, source.volume, source.book, source.chapter]
+      : [source.kind, source.href, source.label];
+  return JSON.stringify([reading, where, reading ? range : null, date]);
+}
+
+/**
+ * The source an entry saves: logged with other verses than its own, it names the verses chosen; otherwise it is the
+ * source exactly as it came (its own label and link, the website's included).
+ */
+function savedSource(source: NoteSource | null, reading: boolean, range: EntryRange | null): NoteSource | null {
+  if (!source || !reading) return source;
+  const own = rangeOf(source);
+  return own?.start === range?.start && own?.end === range?.end ? source : withRange(source, range);
+}
+
+function storedReadingKey(note: EditableNote): string {
+  return readingKeyOf(!!note.reading_at, note.source, rangeOf(note.source), note.journal_date);
+}
+
+function fieldsFromIntent(intent: DraftIntent): EntryDraftFields {
+  return {
+    requestId: newRequestId(),
+    text: intent.body,
+    source: intent.source,
+    reading: !!intent.reading,
+    journalDate: intent.journalDate ?? localDateKey(),
+    range: rangeOf(intent.source),
+    edited: false,
+    prompt: intent.prompt,
+    verseCount: intent.verseCount,
+  };
+}
+
+function fieldsFromStored(stored: StoredEntryDraft, intent?: DraftIntent): EntryDraftFields {
+  const { version: _version, updatedAt: _updatedAt, ...fields } = stored;
+  return { ...fields, prompt: fields.prompt ?? intent?.prompt };
+}
+
+/** The fields a new entry opens with, and the owner's earlier draft if there is one to offer. */
+function startNewEntry(intent: DraftIntent, owner: string | null): { fields: EntryDraftFields; recovery: Recovery | null } {
+  const fresh = fieldsFromIntent(intent);
+  let stored = readEntryDraft(owner);
+  // Saved just before the app stopped (its entry exists), or holding nothing to lose: not offered again.
+  if (stored && (!isRecoverable(stored) || savedEntryFor(stored.requestId))) {
+    clearEntryDraft(owner);
+    stored = null;
+  }
+  if (!stored) return { fields: fresh, recovery: null };
+  // A blank new entry continues the draft, as the web's composer keeps its own; one opened with something of its
+  // own (a quote, a reading to log) shows that, and asks about the draft rather than replacing either.
+  if (!intent.source && !intent.body.trim()) return { fields: fieldsFromStored(stored, intent), recovery: { kind: "restored", draft: stored } };
+  return { fields: fresh, recovery: { kind: "waiting", draft: stored } };
+}
+
+function draftWhen(draft: StoredEntryDraft) {
+  return `${formatDayHeading(localDateKey(new Date(draft.updatedAt)))}, ${formatTime(draft.updatedAt)}`;
+}
+
+function RecoveryNotice({ recovery, onContinue, onDiscard }: { recovery: Recovery; onContinue: () => void; onDiscard: () => void }) {
+  const { draft } = recovery;
+  const what = markdownExcerpt(draft.text) || draft.source?.label || "a reading";
+  return (
+    <View accessibilityRole="alert" style={{ gap: 8 }} testID="entry-recovery">
+      <Notice>
+        {recovery.kind === "restored"
+          ? `This is the entry you hadn’t saved yet, from ${draftWhen(draft)}.`
+          : `You have an entry you hadn’t saved yet, from ${draftWhen(draft)}: “${what}”`}
+      </Notice>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {recovery.kind === "waiting" ? <Button variant="secondary" label="Continue that entry" onPress={onContinue} testID="recovery-continue" /> : null}
+        <Button variant="secondary" label={recovery.kind === "restored" ? "Discard it and start over" : "Discard that entry"} onPress={onDiscard} testID="recovery-discard" />
+      </View>
+    </View>
+  );
+}
+
+/** A published or archived entry, as the website shows it: its text, and where it came from. */
+function ReadOnlyEntry({
+  note,
+  status,
+  unsaved,
+  onCopy,
+  copyNotice,
+}: {
+  note: EditableNote;
+  status: NoteStatus;
+  /** Text typed here before the entry stopped being a draft (it can't be saved), or null. */
+  unsaved: string | null;
+  onCopy: () => void;
+  copyNotice: string | null;
+}) {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const blocks = useMemo(() => markdownBlocks(note.markdown_body), [note.markdown_body]);
+  const source = note.source;
+  return (
+    <View style={{ gap: 12 }} testID="entry-read-only">
+      <Text style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: colors.accentMint, fontFamily: fonts.sansBold, fontSize: 12, color: colors.foreground }}>
+        {status === "published" ? "Published · read-only" : "Archived · read-only"}
+      </Text>
+      <Txt style={{ fontSize: 13, color: colors.foregroundSoft }}>
+        {`${note.reading_at && source ? `${sourceKindLabel(source)} read` : "Personal note"} · ${formatDayHeading(note.journal_date)}`}
+      </Txt>
+      {source ? (
+        <Text
+          accessibilityRole="link"
+          accessibilityHint="Opens the passage"
+          onPress={() => router.push(toAppHref(source.href) as never)}
+          style={{ fontFamily: fonts.serif, fontSize: 18, color: colors.foreground, textDecorationLine: "underline", textDecorationColor: colors.accentRubricLine }}
+        >
+          {source.label}
+        </Text>
+      ) : null}
+      {unsaved !== null ? (
+        <View accessibilityRole="alert" style={{ gap: 8 }}>
+          <Notice tone="warning">This entry was published or archived elsewhere, so it can no longer be edited and your changes weren’t saved. Copy them to keep them.</Notice>
+          <Button variant="secondary" label="Copy my text" onPress={onCopy} style={{ alignSelf: "flex-start" }} testID="read-only-copy" />
+          {copyNotice ? <Txt accessibilityLiveRegion="polite">{copyNotice}</Txt> : null}
+        </View>
+      ) : null}
+      <View style={{ minHeight: 120, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: colors.surfaceCard }}>
+        {blocks.length ? <Blocks blocks={blocks} size={16} onPath={(path) => router.push(path as never)} /> : <Txt style={{ color: colors.foregroundSoft }}>This note is empty.</Txt>}
+      </View>
+    </View>
+  );
+}
+
 export default function EntryEditor(props: Props) {
   const identity = useStudyIdentity();
   const [openedIdentity] = useState(identity);
@@ -194,31 +374,39 @@ export default function EntryEditor(props: Props) {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const initial = props.mode === "new" ? props.intent : null;
   const note = props.mode === "edit" ? props.note : null;
   const account = props.mode === "edit" ? props.study === "account" : false;
-  const requestId = useRef(newRequestId());
-  const [text, setText] = useState(note?.markdown_body ?? initial?.body ?? "");
-  const [source, setSource] = useState<NoteSource | null>(note?.source ?? initial?.source ?? null);
-  const [reading, setReading] = useState(note ? !!note.reading_at : !!initial?.reading);
-  const [date, setDate] = useState(note?.journal_date ?? initial?.journalDate ?? localDateKey());
-  const [range, setRange] = useState<{ start: number; end: number } | null>(
-    source?.verseStart ? { start: source.verseStart, end: source.verseEnd ?? source.verseStart } : null
-  );
+  // A new entry's owner is fixed when it opens: its draft is only ever kept for them.
+  const [owner] = useState(() => (props.mode === "new" ? draftOwner() : null));
+  const [start] = useState(() => (props.mode === "new" ? startNewEntry(props.intent, owner) : null));
+  const [recovery, setRecovery] = useState<Recovery | null>(start?.recovery ?? null);
+  const [requestId, setRequestId] = useState(start?.fields.requestId ?? "");
+  const [prompt, setPrompt] = useState(start?.fields.prompt);
+  const [verseCountHint, setVerseCountHint] = useState(start?.fields.verseCount);
+  const [edited, setEdited] = useState(start?.fields.edited ?? false);
+  const [text, setText] = useState(note?.markdown_body ?? start?.fields.text ?? "");
+  const [source, setSource] = useState<NoteSource | null>(note?.source ?? start?.fields.source ?? null);
+  const [reading, setReading] = useState(note ? !!note.reading_at : !!start?.fields.reading);
+  const [date, setDate] = useState(note?.journal_date ?? start?.fields.journalDate ?? localDateKey());
+  const [range, setRange] = useState<EntryRange | null>(note ? rangeOf(note.source) : (start?.fields.range ?? null));
   const [view, setView] = useState<"write" | "preview">("write");
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  // A new entry's Save that didn't save (it is offered again as Try again, under the same request id).
+  const [failed, setFailed] = useState(false);
+  const [draftProblem, setDraftProblem] = useState<string | null>(null);
+  const [editSave, setEditSave] = useState<EditSave>({ kind: "idle" });
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const [revision, setRevision] = useState(note?.revision ?? 0);
   const [savedText, setSavedText] = useState(note?.markdown_body ?? "");
-  const [savedReading, setSavedReading] = useState(note ? JSON.stringify([!!note.reading_at, note.source, note.journal_date]) : "");
+  const [savedReading, setSavedReading] = useState(note ? storedReadingKey(note) : "");
   const preview = useMemo(() => (view === "preview" ? markdownBlocks(text) : []), [view, text]);
 
-  const readingKey = JSON.stringify([reading, reading && source ? withRange(source, range) : note?.source ?? source, date]);
-  const dirty = props.mode === "new" ? text.trim().length > 0 || (!!initial?.source && reading) : text !== savedText || readingKey !== savedReading;
+  const readingKey = readingKeyOf(reading, source, range, date);
+  const dirty = props.mode === "new" ? text.trim().length > 0 || (!!source && reading) : text !== savedText || readingKey !== savedReading;
 
   // The note as stored changed (a sync finished, the website edited it, a conflict was settled). Text this editor
   // knows is saved takes the stored revision as its base; an editor with nothing unsaved shows the stored note.
-  const incomingReading = note ? JSON.stringify([!!note.reading_at, note.source, note.journal_date]) : "";
+  const incomingReading = note ? storedReadingKey(note) : "";
   useEffect(() => {
     if (!note) return;
     if (note.markdown_body === savedText) {
@@ -227,7 +415,7 @@ export default function EntryEditor(props: Props) {
         setReading(!!note.reading_at);
         setSource(note.source ?? null);
         setDate(note.journal_date);
-        setRange(note.source?.verseStart ? { start: note.source.verseStart, end: note.source.verseEnd ?? note.source.verseStart } : null);
+        setRange(rangeOf(note.source));
         setSavedReading(incomingReading);
       }
       return;
@@ -239,12 +427,110 @@ export default function EntryEditor(props: Props) {
     setReading(!!note.reading_at);
     setSource(note.source ?? null);
     setDate(note.journal_date);
-    setRange(note.source?.verseStart ? { start: note.source.verseStart, end: note.source.verseEnd ?? note.source.verseStart } : null);
+    setRange(rangeOf(note.source));
     setSavedReading(incomingReading);
     // Only the stored note's changes drive this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.markdown_body, note?.revision, incomingReading]);
   const changedElsewhere = !!note && dirty && note.markdown_body !== savedText;
+  const identityChanged = identity !== openedIdentity;
+  // Only a draft can be edited (convex/insights.ts): a published or archived entry is shown read-only, and nothing
+  // is saved or queued for it, even text typed before it was published elsewhere.
+  const editing = useNoteEditing(note?.id ?? null);
+  const readOnly = props.mode === "edit" && isReadOnly(editing);
+  const deletable = props.mode === "edit" && canDelete(editing);
+  // Saving by itself waits while a newer version is waiting to be looked at, or the entry is going away.
+  const autosavePaused = changedElsewhere || readOnly || editSave.kind === "conflict" || (props.mode === "edit" && props.deleting) || identityChanged;
+
+  // What the saves below read when they run (from a timer, the app going to the background, or unmounting), not
+  // what they were scheduled with. A save updates it at once, so a second save in the same moment sends nothing.
+  const latest = useRef({ text, savedText, revision, readingKey, savedReading, reading, source, range, date, autosavePaused, readOnly });
+  latest.current = { text, savedText, revision, readingKey, savedReading, reading, source, range, date, autosavePaused, readOnly };
+  // Deleted, discarded, or otherwise left on purpose: nothing more is saved from this editor.
+  const doneRef = useRef(false);
+
+  /** Saves the entry being edited. `auto` saves wait while a newer version needs a choice. True once nothing is unsaved. */
+  const flushEdit = (mode: "auto" | "explicit"): boolean => {
+    if (props.mode !== "edit" || !note || doneRef.current) return true;
+    const state = latest.current;
+    if (state.text === state.savedText && state.readingKey === state.savedReading) return true;
+    if (state.readOnly || getStudyIdentity() !== openedIdentity || (mode === "auto" && state.autosavePaused)) return false;
+    try {
+      assertStudyIdentity(openedIdentity);
+      if (state.text !== state.savedText) {
+        const result = journalStudy.save(note.id, state.text, state.revision);
+        if (result.revision !== null) {
+          state.revision = result.revision;
+          setRevision(result.revision);
+        }
+        state.savedText = state.text;
+        setSavedText(state.text);
+      }
+      if (state.readingKey !== state.savedReading) {
+        // As for a new entry: only the reading-range controls replace the source's own verse range.
+        const finalSource = savedSource(state.source, state.reading, state.range);
+        journalStudy.setReading(note.id, state.reading && finalSource ? { source: finalSource, journalDate: state.date } : null, state.text);
+        state.savedReading = state.readingKey;
+        setSavedReading(state.readingKey);
+      }
+      setEditSave(account ? { kind: "idle" } : { kind: "saved", at: new Date().toISOString() });
+      return true;
+    } catch (problem) {
+      if (problem instanceof RevisionConflictError) setEditSave({ kind: "conflict", revision: problem.currentRevision ?? note.revision });
+      else setEditSave({ kind: "error", message: problem instanceof Error && problem.message ? problem.message : "Couldn't save on this device." });
+      return false;
+    }
+  };
+
+  const draftFields: EntryDraftFields = { requestId, text, source, reading, journalDate: date, range, edited, prompt, verseCount: verseCountHint };
+  const draftRef = useRef({ fields: draftFields, recovery });
+  draftRef.current = { fields: draftFields, recovery };
+
+  /** Keeps the new entry's draft for its owner. False when it couldn't be kept. */
+  const persistDraft = (): boolean => {
+    if (props.mode !== "new" || !owner || doneRef.current) return true;
+    // An earlier draft is waiting for the person's choice: nothing replaces it until then.
+    if (draftRef.current.recovery?.kind === "waiting") return true;
+    if (getStudyIdentity() !== openedIdentity) return false;
+    try {
+      writeEntryDraft(owner, draftRef.current.fields);
+      setDraftProblem(null);
+      return true;
+    } catch {
+      setDraftProblem(DRAFT_NOT_KEPT);
+      return false;
+    }
+  };
+
+  const saves = useRef({ flushEdit, persistDraft });
+  saves.current = { flushEdit, persistDraft };
+
+  // A pause in typing saves an edit; a shorter one keeps a new entry's draft.
+  useEffect(() => {
+    if (props.mode !== "edit" || !dirty || autosavePaused) return;
+    const timer = setTimeout(() => saves.current.flushEdit("auto"), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [props.mode, dirty, autosavePaused, text, readingKey]);
+  const draftKey = props.mode === "new" ? JSON.stringify(draftFields) : "";
+  useEffect(() => {
+    if (props.mode !== "new") return;
+    const timer = setTimeout(() => saves.current.persistDraft(), DRAFT_KEEP_MS);
+    return () => clearTimeout(timer);
+  }, [props.mode, draftKey, recovery]);
+
+  // The app going to the background (where Android may end it) saves at once, and so does closing the editor.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") return;
+      saves.current.flushEdit("auto");
+      saves.current.persistDraft();
+    });
+    return () => {
+      subscription.remove();
+      saves.current.flushEdit("auto");
+      saves.current.persistDraft();
+    };
+  }, []);
 
   // Leaving on purpose (after Save or Delete, or a confirmed discard) first lifts the guard, then navigates once
   // that render has committed; navigating while the guard is still up would only re-trigger it.
@@ -254,18 +540,120 @@ export default function EntryEditor(props: Props) {
   }, [leave]);
 
   usePreventRemove(dirty && !leave, ({ data }) => {
-    Alert.alert("Discard changes?", props.mode === "new" ? "This entry hasn't been saved." : "Your changes to this entry haven't been saved.", [
+    const go = () => setLeave({ run: () => navigation.dispatch(data.action) });
+    if (props.mode === "edit") {
+      // Leaving saves what was typed; only a save that can't be made (or a newer version to look at first) asks.
+      if (!changedElsewhere && !readOnly && flushEdit("explicit")) return go();
+      Alert.alert(
+        "Discard changes?",
+        readOnly
+          ? "This entry was published or archived, so it can't be edited and your changes haven't been saved."
+          : changedElsewhere
+            ? "This entry was changed somewhere else while you were editing, so your changes haven't been saved."
+            : "Your changes to this entry couldn't be saved.",
+        [
+          { text: "Keep editing", style: "cancel" },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              doneRef.current = true;
+              go();
+            },
+          },
+        ],
+      );
+      return;
+    }
+    const waiting = recovery?.kind === "waiting";
+    // Keep draft only when keeping it would keep something (a reading opened to log, untouched, is not kept).
+    const keepable = !!owner && !waiting && isRecoverable(draftRef.current.fields);
+    const message = keepable
+      ? "This entry hasn't been saved. Keep it as a draft to finish later on this device, or discard it."
+      : waiting && text.trim()
+        ? "This entry hasn't been saved, and it can't be kept as a draft while your earlier one is waiting. Copy your text to keep it."
+        : "This entry hasn't been saved.";
+    Alert.alert("Discard changes?", message, [
       { text: "Keep editing", style: "cancel" },
-      { text: "Discard", style: "destructive", onPress: () => setLeave({ run: () => navigation.dispatch(data.action) }) },
+      ...(waiting && text.trim() ? [{ text: "Copy my text", onPress: () => void copyText() }] : []),
+      ...(keepable
+        ? [
+            {
+              text: "Keep draft",
+              onPress: () => {
+                if (persistDraft()) {
+                  doneRef.current = true;
+                  go();
+                }
+              },
+            },
+          ]
+        : []),
+      {
+        text: "Discard",
+        style: "destructive" as const,
+        onPress: () => {
+          doneRef.current = true;
+          // An earlier draft still waiting for a choice is not this one: it stays.
+          if (recovery?.kind !== "waiting") clearEntryDraft(owner);
+          go();
+        },
+      },
     ]);
   });
 
-  useEffect(() => setStatus(null), [text, reading, range, date]);
-
   const close = () => (router.canGoBack() ? router.back() : router.replace("/notes"));
 
+  const applyFields = (fields: EntryDraftFields) => {
+    setRequestId(fields.requestId);
+    setText(fields.text);
+    setSource(fields.source);
+    setReading(fields.reading);
+    setDate(fields.journalDate);
+    setRange(fields.range);
+    setEdited(fields.edited);
+    setPrompt(fields.prompt);
+    setVerseCountHint(fields.verseCount);
+    setError(null);
+    setFailed(false);
+  };
+
+  const continueDraft = () => {
+    if (props.mode !== "new" || recovery?.kind !== "waiting") return;
+    const draft = recovery.draft;
+    const take = () => {
+      applyFields(fieldsFromStored(draft, props.intent));
+      setRecovery(null);
+    };
+    if (text === props.intent.body && !edited) return take();
+    Alert.alert("Replace what’s here?", "What you’ve written in this entry will be replaced by the earlier one.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Replace", style: "destructive", onPress: take },
+    ]);
+  };
+
+  const discardDraft = () => {
+    if (props.mode !== "new" || !recovery) return;
+    const intent = props.intent;
+    const kind = recovery.kind;
+    Alert.alert("Discard that entry?", "What you wrote in it will be removed from this device. This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Discard",
+        style: "destructive",
+        onPress: () => {
+          clearEntryDraft(owner);
+          if (kind === "restored") applyFields(fieldsFromIntent(intent));
+          setRecovery(null);
+        },
+      },
+    ]);
+  };
+
   const saveNew = () => {
-    const finalSource = source ? withRange(source, reading ? range : null) : null;
+    // A quote's source is independent of whether the reader logs it as reading.
+    // Only the reading-range controls should replace its original verse range.
+    const finalSource = savedSource(source, reading, range);
     if (!text.trim() && !(reading && finalSource)) {
       setError("Write a note or log reading before saving.");
       return;
@@ -276,40 +664,54 @@ export default function EntryEditor(props: Props) {
     }
     try {
       assertStudyIdentity(openedIdentity);
+      // The draft's request id: saving again (a second press, or after the app stopped mid-save) names this entry.
       const { id } = journalStudy.create({
-        requestId: requestId.current,
+        requestId,
         markdownBody: text,
         journalDate: date,
         source: finalSource ?? null,
         logReading: reading && !!finalSource,
       });
+      doneRef.current = true;
+      // The draft became this entry; an earlier one still waiting for a choice is kept.
+      if (recovery?.kind !== "waiting") clearEntryDraft(owner);
       setError(null);
+      setFailed(false);
       setLeave({ run: () => router.replace(`/notes/entry/${encodeURIComponent(id)}` as never) });
     } catch (problem) {
+      setFailed(true);
       setError(problem instanceof Error ? problem.message : "Couldn't save on this device.");
+      // Kept at once, under the same request id, for Try again (now or after the app was closed).
+      persistDraft();
     }
   };
 
-  const saveEdit = () => {
+  const loadLatest = () => {
     if (!note) return;
+    setText(note.markdown_body);
+    setSavedText(note.markdown_body);
+    setRevision(note.revision);
+    latest.current = { ...latest.current, text: note.markdown_body, savedText: note.markdown_body, revision: note.revision };
+    setEditSave({ kind: "idle" });
+    setCopyNotice(null);
+  };
+
+  const keepMine = () => {
+    if (editSave.kind !== "conflict") return;
+    // Saved over the version that refused it, by explicit choice; a still newer one refuses it again.
+    latest.current.revision = editSave.revision;
+    setRevision(editSave.revision);
+    setEditSave({ kind: "idle" });
+    setCopyNotice(null);
+    flushEdit("explicit");
+  };
+
+  const copyText = async () => {
     try {
-      assertStudyIdentity(openedIdentity);
-      if (text !== savedText) {
-        const result = journalStudy.save(note.id, text, revision);
-        if (result.revision !== null) setRevision(result.revision);
-        setSavedText(text);
-      }
-      if (readingKey !== savedReading) {
-        const finalSource = source ? withRange(source, reading ? range : null) : null;
-        journalStudy.setReading(note.id, reading && finalSource ? { source: finalSource, journalDate: date } : null, text);
-        setSavedReading(readingKey);
-      }
-      setError(null);
-      setStatus(account ? null : "Saved on this device");
-    } catch (problem) {
-      if (problem instanceof RevisionConflictError) {
-        setError("This entry changed since you opened it. Copy your text, then reopen the entry to see the latest version.");
-      } else setError(problem instanceof Error ? problem.message : "Couldn't save on this device.");
+      await Clipboard.setStringAsync(latest.current.text);
+      setCopyNotice("Copied.");
+    } catch {
+      setCopyNotice("Couldn't copy. Select the text in the editor and copy it.");
     }
   };
 
@@ -329,9 +731,11 @@ export default function EntryEditor(props: Props) {
             run: () => {
               try {
                 assertStudyIdentity(openedIdentity);
+                doneRef.current = true;
                 journalStudy.remove(note.id);
                 close();
               } catch (problem) {
+                doneRef.current = false;
                 setLeave(null);
                 setError(problem instanceof Error ? problem.message : "Couldn't delete on this device.");
               }
@@ -341,12 +745,30 @@ export default function EntryEditor(props: Props) {
     ]);
   };
 
-  if (identity !== openedIdentity) return (
-    <View style={{ padding: 24, gap: 12 }}>
-      <Notice tone="warning">Your account changed. Close and reopen this editor to use the current study. Nothing from this editor was transferred.</Notice>
-      <Button label="Close editor" onPress={() => setLeave({ run: close })} />
-    </View>
-  );
+  if (identityChanged) {
+    // What was typed stays only on this screen: it can be copied before closing.
+    const unsaved = dirty && !!text.trim();
+    return (
+      <View style={{ padding: 24, gap: 12 }}>
+        <Notice tone="warning">
+          {`Your account changed. Close and reopen this editor to use the current study. Nothing from this editor was transferred.${unsaved ? " Copy your text first to keep it." : ""}`}
+        </Notice>
+        {unsaved ? <Button variant="secondary" label="Copy my text" onPress={() => void copyText()} testID="identity-copy" /> : null}
+        {unsaved && copyNotice ? <Txt accessibilityLiveRegion="polite">{copyNotice}</Txt> : null}
+        <Button label="Close editor" onPress={() => setLeave({ run: close })} />
+      </View>
+    );
+  }
+
+  const markEdited = props.mode === "new" ? () => setEdited(true) : () => {};
+  const saveLine =
+    props.mode !== "edit" || editSave.kind === "error" || editSave.kind === "conflict" || changedElsewhere
+      ? null
+      : dirty
+        ? "Unsaved changes"
+        : !account && editSave.kind === "saved"
+          ? `Saved on this device at ${formatTime(editSave.at)}`
+          : null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -355,89 +777,153 @@ export default function EntryEditor(props: Props) {
         <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1, fontFamily: fonts.serif, fontSize: 20, color: colors.foreground }}>
           {props.mode === "new" ? "New entry" : note?.title || "Untitled note"}
         </Text>
-        <Button label={props.mode === "new" ? "Save entry" : "Save"} onPress={props.mode === "new" ? saveNew : saveEdit} disabled={props.mode === "edit" && !dirty} testID="save-entry" />
+        {readOnly ? null : (
+          <Button
+            label={props.mode === "new" ? (failed ? "Try again" : "Save entry") : "Save"}
+            onPress={props.mode === "new" ? saveNew : () => flushEdit("explicit")}
+            disabled={props.mode === "edit" && !dirty}
+            testID="save-entry"
+          />
+        )}
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: insets.bottom + 40, width: "100%", maxWidth: 760, alignSelf: "center" }}>
-        {source ? (
-          <ReadingChip
-            source={reading ? withRange(source, range) : source}
-            reading={reading}
-            onReading={(value) => {
-              if (!value && props.mode === "edit" && !text.trim()) {
-                setError("Add a note before removing the reading.");
-                return;
+        {recovery ? <RecoveryNotice recovery={recovery} onContinue={continueDraft} onDiscard={discardDraft} /> : null}
+        {readOnly && note ? (
+          <ReadOnlyEntry note={note} status={editing.status} unsaved={dirty ? text : null} onCopy={() => void copyText()} copyNotice={copyNotice} />
+        ) : (
+          <>
+          {!editing.canonical ? (
+            <Txt style={{ fontSize: 13, color: colors.foregroundSoft }}>This older note is shown as text. Editing it saves it as text; its original pieces are kept.</Txt>
+          ) : null}
+          {source ? (
+            <ReadingChip
+              source={savedSource(source, reading, range)!}
+              reading={reading}
+              onReading={(value) => {
+                if (!value && props.mode === "edit" && !text.trim()) {
+                  setError("Add a note before removing the reading.");
+                  return;
+                }
+                setReading(value);
+                markEdited();
+              }}
+              date={date}
+              onDate={(next) => {
+                setDate(next);
+                markEdited();
+              }}
+              range={range}
+              onRange={(next) => {
+                setRange(next);
+                markEdited();
+              }}
+              verseCount={verseCountHint ?? chapterVerseCount(source)}
+              onRemoveSource={
+                props.mode === "new"
+                  ? () => {
+                      setSource(null);
+                      markEdited();
+                    }
+                  : undefined
               }
-              setReading(value);
-            }}
-            date={date}
-            onDate={setDate}
-            range={range}
-            onRange={setRange}
-            verseCount={initial?.verseCount ?? chapterVerseCount(source)}
-            onRemoveSource={props.mode === "new" ? () => setSource(null) : undefined}
-            dateEditable={props.mode === "new" || reading}
+              dateEditable={props.mode === "new" || reading}
+            />
+          ) : (
+            <Txt style={{ fontSize: 13, color: colors.foregroundSoft }}>{`Personal note · ${formatDayHeading(date)}`}</Txt>
+          )}
+          {prompt ? <Text style={{ fontFamily: fonts.serif, fontStyle: "italic", fontSize: 17, lineHeight: 25, color: colors.foregroundMuted }}>{prompt}</Text> : null}
+          <Segmented
+            label="Writer view"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "write", label: "Write" },
+              { value: "preview", label: "Preview" },
+            ]}
           />
-        ) : (
-          <Txt style={{ fontSize: 13, color: colors.foregroundSoft }}>{`Personal note · ${formatDayHeading(date)}`}</Txt>
+          {view === "write" ? (
+            <TextInput
+              testID="entry-text"
+              accessibilityLabel="Note text (Markdown)"
+              value={text}
+              onChangeText={setText}
+              onBlur={() => (props.mode === "edit" ? flushEdit("auto") : persistDraft())}
+              multiline
+              autoFocus={props.mode === "new" && !text}
+              placeholder="Write in Markdown: # heading, **bold**, *italic*, - lists, > quotes"
+              placeholderTextColor={colors.foregroundSoft}
+              textAlignVertical="top"
+              style={{
+                minHeight: 260,
+                padding: 14,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.surfaceBorder,
+                backgroundColor: colors.inputSurface,
+                color: colors.foreground,
+                fontFamily: fonts.sans,
+                fontSize: 16,
+                lineHeight: 24,
+              }}
+            />
+          ) : (
+            <View style={{ minHeight: 260, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: colors.surfaceCard }}>
+              {preview.length ? (
+                <Blocks blocks={preview} size={16} onPath={(path) => router.push(path as never)} />
+              ) : (
+                <Txt style={{ color: colors.foregroundSoft }}>Nothing written yet.</Txt>
+              )}
+            </View>
+          )}
+          {error ? <Notice tone="warning">{error}</Notice> : null}
+          {draftProblem ? <Notice tone="warning">{draftProblem}</Notice> : null}
+          {props.mode === "new" && recovery?.kind === "waiting" && dirty ? (
+            <View accessibilityRole="alert" style={{ gap: 8 }} testID="entry-not-kept">
+              <Notice tone="warning">{DRAFT_WAITING}</Notice>
+              {text.trim() ? <Button variant="secondary" label="Copy my text" onPress={() => void copyText()} style={{ alignSelf: "flex-start" }} testID="waiting-copy" /> : null}
+              {text.trim() && copyNotice ? <Txt accessibilityLiveRegion="polite">{copyNotice}</Txt> : null}
+            </View>
+          ) : null}
+          {editSave.kind === "conflict" ? (
+            <View accessibilityRole="alert" style={{ gap: 10 }} testID="entry-device-conflict">
+              <Notice tone="warning">This entry was changed somewhere else, so your edits weren’t saved. Your text is still here: load the latest version, or save yours over it.</Notice>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <Button variant="secondary" label="Copy my text" onPress={() => void copyText()} testID="conflict-copy" />
+                <Button variant="secondary" label="Load the latest version" onPress={loadLatest} testID="conflict-latest" />
+                <Button variant="secondary" label="Save mine over it" onPress={keepMine} testID="conflict-mine" />
+              </View>
+            </View>
+          ) : null}
+          {editSave.kind === "error" ? (
+            <View accessibilityRole="alert" style={{ gap: 8 }} testID="entry-save-error">
+              <Notice tone="warning">{`Not saved: ${editSave.message}`}</Notice>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <Button variant="secondary" icon="rotate" label="Retry" onPress={() => flushEdit("explicit")} testID="save-retry" />
+                <Button variant="secondary" label="Copy my text" onPress={() => void copyText()} testID="save-copy" />
+              </View>
+            </View>
+          ) : null}
+          {copyNotice && (editSave.kind === "conflict" || editSave.kind === "error") ? <Txt accessibilityLiveRegion="polite">{copyNotice}</Txt> : null}
+          </>
         )}
-        {initial?.prompt ? <Text style={{ fontFamily: fonts.serif, fontStyle: "italic", fontSize: 17, lineHeight: 25, color: colors.foregroundMuted }}>{initial.prompt}</Text> : null}
-        <Segmented
-          label="Writer view"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "write", label: "Write" },
-            { value: "preview", label: "Preview" },
-          ]}
-        />
-        {view === "write" ? (
-          <TextInput
-            testID="entry-text"
-            accessibilityLabel="Note text (Markdown)"
-            value={text}
-            onChangeText={setText}
-            multiline
-            autoFocus={props.mode === "new" && !initial?.body}
-            placeholder="Write in Markdown: # heading, **bold**, *italic*, - lists, > quotes"
-            placeholderTextColor={colors.foregroundSoft}
-            textAlignVertical="top"
-            style={{
-              minHeight: 260,
-              padding: 14,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: colors.surfaceBorder,
-              backgroundColor: colors.inputSurface,
-              color: colors.foreground,
-              fontFamily: fonts.sans,
-              fontSize: 16,
-              lineHeight: 24,
-            }}
-          />
-        ) : (
-          <View style={{ minHeight: 260, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: colors.surfaceCard }}>
-            {preview.length ? (
-              <Blocks blocks={preview} size={16} onPath={(path) => router.push(path as never)} />
-            ) : (
-              <Txt style={{ color: colors.foregroundSoft }}>Nothing written yet.</Txt>
-            )}
-          </View>
-        )}
-        {error ? <Notice tone="warning">{error}</Notice> : null}
-        {props.mode === "edit" && props.sync?.state === "conflict" ? <ConflictPanel sync={props.sync} onResolved={resolved} /> : null}
+        {props.mode === "edit" && !readOnly && props.sync?.state === "conflict" ? <ConflictPanel sync={props.sync} onResolved={resolved} /> : null}
         {props.mode === "edit" && props.sync?.state === "error" ? (
           <View accessibilityRole="alert" style={{ gap: 8 }}>
             <Notice tone="warning">{props.sync.error}</Notice>
             <Button variant="secondary" icon="rotate" label="Try sync again" style={{ alignSelf: "flex-start" }} onPress={() => journalStudy.retry()} />
           </View>
         ) : null}
-        {changedElsewhere && account && props.mode === "edit" && props.sync?.state !== "conflict" ? (
-          <Notice tone="warning">This entry was changed on the website or another device while you were editing. If you save, you’ll be asked which version to keep.</Notice>
+        {changedElsewhere && props.mode === "edit" && props.sync?.state !== "conflict" && editSave.kind !== "conflict" ? (
+          <Notice tone="warning">
+            {account
+              ? "This entry was changed on the website or another device while you were editing. If you save, you’ll be asked which version to keep."
+              : "This entry was changed somewhere else while you were editing. If you save, you’ll be asked which version to keep."}
+          </Notice>
         ) : null}
         {props.mode === "edit" && props.sync && !dirty && props.sync.state !== "conflict" && props.sync.state !== "error" ? <SyncLine sync={props.sync} /> : null}
-        {status ? (
-          <Text accessibilityLiveRegion="polite" style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: colors.readerRead }}>
-            {status}
+        {saveLine ? (
+          <Text accessibilityLiveRegion="polite" testID="entry-save-state" style={{ fontFamily: fonts.sansMedium, fontSize: 13, color: dirty ? colors.foregroundSoft : colors.readerRead }}>
+            {saveLine}
           </Text>
         ) : null}
         {props.mode === "edit" ? (
@@ -445,7 +931,9 @@ export default function EntryEditor(props: Props) {
             <Txt style={{ fontSize: 12, color: colors.foregroundSoft }}>
               {`Created ${new Date(note!.created_at).toLocaleString()} · ${account ? "In your account" : "Saved on this device"}`}
             </Txt>
-            <Button variant="danger" icon="trash" label={props.deleting ? "Deleting…" : "Delete entry"} disabled={props.deleting} style={{ alignSelf: "flex-start" }} onPress={remove} testID="delete-entry" />
+            {deletable ? (
+              <Button variant="danger" icon="trash" label={props.deleting ? "Deleting…" : "Delete entry"} disabled={props.deleting} style={{ alignSelf: "flex-start" }} onPress={remove} testID="delete-entry" />
+            ) : null}
           </View>
         ) : null}
       </ScrollView>

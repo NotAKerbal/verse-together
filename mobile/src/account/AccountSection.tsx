@@ -2,8 +2,8 @@
 // into it, sign-out, and account deletion (including finishing one that stopped partway). Signed in, the app's
 // study screens use the account's study (synced with the website); this device's own study waits on the device.
 
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Text, TextInput, View } from "react-native";
 import { openExternal } from "../components/Blocks";
 import { Button, Notice, Txt } from "../components/ui";
 import { WEB_ORIGIN } from "../navigation/hrefs";
@@ -13,7 +13,7 @@ import { useAccountSnapshot } from "../storage/journalData";
 import { useStudySession } from "../storage/studySession";
 import { useTheme } from "../theme/theme";
 import { fonts } from "../theme/tokens";
-import { useAccount } from "./AccountProvider";
+import { useAccount, type AccountLists, type ManageOutcome } from "./AccountProvider";
 import { copySummary, readLedger, type CopySummary } from "./guestCopy";
 
 function plural(count: number, one: string, many: string) {
@@ -86,6 +86,184 @@ function CopyStudyCard() {
           <Notice tone={result.tone}>{result.text}</Notice>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** "Chrome on Android", as the web's AccountManager names a session's device. */
+export function describeAgent(agent: string | null | undefined): string {
+  if (!agent) return "Unknown device";
+  const browser = /Edg\//.test(agent) ? "Edge" : /Chrome\//.test(agent) ? "Chrome" : /Firefox\//.test(agent) ? "Firefox" : /Safari\//.test(agent) ? "Safari" : /okhttp|Expo|Verse ?Together/i.test(agent) ? "Verse Together app" : "Browser";
+  const os = /iPhone|iPad/.test(agent) ? "iOS" : /Android/.test(agent) ? "Android" : /Mac OS X/.test(agent) ? "macOS" : /Windows/.test(agent) ? "Windows" : /Linux/.test(agent) ? "Linux" : "";
+  return os ? `${browser} on ${os}` : browser;
+}
+
+function Outcome({ outcome, success }: { outcome: ManageOutcome | null; success: string }) {
+  if (!outcome) return null;
+  return (
+    <View accessibilityRole={outcome.ok ? undefined : "alert"} accessibilityLiveRegion="polite">
+      <Notice tone={outcome.ok ? "muted" : "warning"}>{outcome.ok ? success : outcome.message}</Notice>
+    </View>
+  );
+}
+
+/** The web's profile editor: the account's display name, saved to the account (and shown on the website too). */
+function ProfileCard() {
+  const { colors } = useTheme();
+  const { user, updateName } = useAccount();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(user?.name ?? "");
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<ManageOutcome | null>(null);
+  const save = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setOutcome(null);
+    const result = await updateName(name);
+    setBusy(false);
+    setOutcome(result);
+    if (result.ok) setEditing(false);
+  };
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ gap: 2 }}>
+        <Txt style={{ fontFamily: fonts.sansSemiBold, fontSize: 16 }}>{user?.name ?? user?.email ?? "Signed in"}</Txt>
+        {user?.email && user.name ? <Txt style={{ fontSize: 13, color: colors.foregroundMuted }}>{user.email}</Txt> : null}
+      </View>
+      {editing ? (
+        <View style={{ gap: 8 }}>
+          <TextInput
+            accessibilityLabel="Display name"
+            autoComplete="name"
+            maxLength={100}
+            value={name}
+            onChangeText={setName}
+            style={{ borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 10, backgroundColor: colors.inputSurface, paddingHorizontal: 12, paddingVertical: 10, fontFamily: fonts.sans, fontSize: 15, color: colors.foreground }}
+          />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <Button variant="secondary" label={busy ? "Saving…" : "Save name"} busy={busy} disabled={busy || !name.trim()} onPress={() => void save()} />
+            <Button variant="quiet" label="Cancel" disabled={busy} onPress={() => { setEditing(false); setName(user?.name ?? ""); setOutcome(null); }} />
+          </View>
+        </View>
+      ) : (
+        <Button variant="secondary" icon="pen" label="Edit name" style={{ alignSelf: "flex-start" }} onPress={() => { setName(user?.name ?? ""); setOutcome(null); setEditing(true); }} />
+      )}
+      <Outcome outcome={outcome} success="Name saved." />
+    </View>
+  );
+}
+
+/**
+ * The web's "Sign-in methods" and "Sessions": loaded when asked for (each list on its own; one failing keeps the
+ * other), with Sign out other devices. A list that needs a fresh sign-in offers Google again rather than a retry loop.
+ */
+function SignInDetailsCard() {
+  const { colors } = useTheme();
+  const { loadAccountLists, revokeOtherSessions, signIn, signingIn } = useAccount();
+  const [lists, setLists] = useState<AccountLists | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [outcome, setOutcome] = useState<ManageOutcome | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const next = await loadAccountLists();
+    setLoading(false);
+    // Keep each list's last good answer when only the other one loaded.
+    setLists((previous) => (next ? { ...next, accounts: next.accounts ?? previous?.accounts, sessions: next.sessions ?? previous?.sessions } : previous));
+  }, [loadAccountLists]);
+  const revoke = async () => {
+    setRevoking(true);
+    setOutcome(null);
+    const result = await revokeOtherSessions();
+    setRevoking(false);
+    setOutcome(result);
+    if (result.ok) await load();
+  };
+  const confirmRevoke = () =>
+    Alert.alert("Sign out your other devices?", "Every other browser and device signed in to this account is signed out. This device stays signed in.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out other devices", style: "destructive", onPress: () => void revoke() },
+    ]);
+  const accounts = lists?.accounts;
+  const sessions = lists?.sessions;
+  const hasGoogle = accounts?.some((account) => account.providerId === "google") ?? false;
+  const hasPassword = accounts?.some((account) => account.providerId === "credential") ?? false;
+  const others = sessions?.filter((session) => session.id !== lists?.currentSessionId) ?? [];
+  return (
+    <View style={{ gap: 10, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.rule }}>
+      <Text accessibilityRole="header" style={{ fontFamily: fonts.sansSemiBold, fontSize: 15, color: colors.foreground }}>
+        Sign-in methods and devices
+      </Text>
+      {!open ? (
+        <Button
+          variant="secondary"
+          icon="list"
+          label="Show sign-in methods and devices"
+          style={{ alignSelf: "flex-start" }}
+          onPress={() => {
+            setOpen(true);
+            void load();
+          }}
+        />
+      ) : (
+        <>
+          {loading && !lists ? (
+            <View accessibilityRole="progressbar" accessibilityLabel="Loading sign-in methods and devices" style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <ActivityIndicator color={colors.accentRubric} />
+              <Txt>Loading…</Txt>
+            </View>
+          ) : null}
+          {lists?.problem ? (
+            <View accessibilityRole="alert" style={{ gap: 10 }}>
+              <Notice tone="warning">{lists.problem.message}</Notice>
+              {lists.problem.reauthenticate ? (
+                <Button
+                  variant="secondary"
+                  label={signingIn ? "Opening Google…" : "Sign in with Google again"}
+                  busy={signingIn}
+                  disabled={signingIn}
+                  style={{ alignSelf: "flex-start" }}
+                  onPress={() => void signIn().then((result) => (result?.kind === "signed-in" ? load() : undefined))}
+                />
+              ) : (
+                <Button variant="secondary" icon="rotate" label={loading ? "Reloading…" : "Reload sign-in methods and devices"} busy={loading} disabled={loading} style={{ alignSelf: "flex-start" }} onPress={() => void load()} />
+              )}
+            </View>
+          ) : null}
+          {accounts ? (
+            <View style={{ gap: 2 }}>
+              <Txt style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>Sign-in methods</Txt>
+              <Txt style={{ fontSize: 13.5, color: colors.foregroundMuted }}>{`Google: ${hasGoogle ? "connected" : "not connected"}`}</Txt>
+              {hasPassword ? <Txt style={{ fontSize: 13.5, color: colors.foregroundMuted }}>Email and password: set up (manage it on the website)</Txt> : null}
+            </View>
+          ) : lists && lists.failed.accounts ? (
+            <Txt style={{ fontSize: 13.5, color: colors.foregroundMuted }}>Sign-in methods couldn’t be loaded right now.</Txt>
+          ) : null}
+          {sessions ? (
+            <View style={{ gap: 6 }}>
+              <Txt style={{ fontFamily: fonts.sansSemiBold, fontSize: 14 }}>{`Sessions · ${plural(sessions.length, "device", "devices")}`}</Txt>
+              {sessions.map((session) => (
+                <Txt key={session.id} style={{ fontSize: 13.5, color: colors.foregroundMuted }}>
+                  {`${describeAgent(session.userAgent)}${session.id === lists?.currentSessionId ? " · This device" : ""}`}
+                </Txt>
+              ))}
+              <Button
+                variant="secondary"
+                icon="right-from-bracket"
+                label={revoking ? "Signing out other devices…" : "Sign out other devices"}
+                busy={revoking}
+                disabled={revoking || others.length === 0}
+                style={{ alignSelf: "flex-start" }}
+                onPress={confirmRevoke}
+              />
+              <Outcome outcome={outcome} success="Signed out of your other devices." />
+            </View>
+          ) : lists && lists.failed.sessions ? (
+            <Txt style={{ fontSize: 13.5, color: colors.foregroundMuted }}>Sessions couldn’t be loaded right now.</Txt>
+          ) : null}
+        </>
+      )}
     </View>
   );
 }
@@ -269,10 +447,7 @@ export function AccountSection() {
 
   return (
     <>
-      <View style={{ gap: 2 }}>
-        <Txt style={{ fontFamily: fonts.sansSemiBold, fontSize: 16 }}>{user?.name ?? user?.email ?? "Signed in"}</Txt>
-        {user?.email && user.name ? <Txt style={{ fontSize: 13, color: colors.foregroundMuted }}>{user.email}</Txt> : null}
-      </View>
+      <ProfileCard />
       <Txt style={{ fontSize: 13, lineHeight: 20, color: colors.foregroundMuted }}>
         Signed in with Google, the same account as on the website. Your journal, verse notes, marks and goals here are your account’s, kept in sync with the website and available offline. Study saved only on this device stays here and shows again when you sign out.
       </Txt>
@@ -282,6 +457,7 @@ export function AccountSection() {
       </View>
       {noticeView}
       <CopyStudyCard />
+      <SignInDetailsCard />
       <DeleteAccount />
     </>
   );
