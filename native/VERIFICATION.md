@@ -1,3 +1,13 @@
+# PR #73 dev refresh — October 28, 2026
+
+Merged dev's prepared 2.17 release (`e939ff8`) into this PR. The only conflict was website release notes:
+the prepared release is preserved exactly, and only the desktop polish remains Upcoming. Regenerated the native
+release data from that source. Rust UI, mobile and backend code are unchanged by this refresh. Prior 2.16 build
+and GUI evidence below remains historical. **Passed** on the refresh: the actual desktop check command
+(format, generator check, 205 tests; 2 optional exporters ignored), release metadata validation and six release
+tests. Log `/tmp/vt-pr73-dev-refresh-check.log`. The Rust UI was not changed, so its earlier live GUI checks
+were not repeated.
+
 # Monorepo integration of the audit corrections — October 28, 2026
 
 The desktop's native-only audit-correction commit `482e249` was cherry-picked onto dev `7b9f993` (which already
