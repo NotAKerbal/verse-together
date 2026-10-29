@@ -134,6 +134,9 @@ impl App {
         let spot = Spot { block, at };
         match phase {
             Phase::Press { clicks } => {
+                if area == Area::Reader && !self.modifiers.shift() {
+                    self.press_point = self.pointer.get();
+                }
                 let extend =
                     self.modifiers.shift() && self.drag.as_ref().is_some_and(|d| d.area == area);
                 if extend {
@@ -192,6 +195,17 @@ impl App {
             self.drag = None;
         }
         self.selection_changed(area, true);
+        if area == Area::Reader {
+            // A new selection opens its menu on the actions, beside where it was made.
+            self.annotating = false;
+            self.annotate_style = None;
+            self.annotate_custom = None;
+            self.copied_words = false;
+            let release = self.pointer.get();
+            self.word_anchor = (!self.word_selection.is_empty())
+                .then(|| release.map(|r| (self.press_point.unwrap_or(r), r, self.reader_scroll)))
+                .flatten();
+        }
         Task::none()
     }
     /// Recomputes what an area's selection takes from the drag.
@@ -219,7 +233,11 @@ impl App {
             self.drag = None;
         }
         match area {
-            Area::Reader => self.word_selection.clear(),
+            Area::Reader => {
+                self.word_selection.clear();
+                self.word_anchor = None;
+                self.annotating = false;
+            }
             Area::Lesson => self.lessons.words.clear(),
             Area::Guide => {
                 self.lessons.guide.selection = None;

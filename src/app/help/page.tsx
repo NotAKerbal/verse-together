@@ -1,15 +1,15 @@
+import PageHeader from "@/components/PageHeader";
 import Link from "next/link";
 
 export default function HelpPage() {
   return (
     <section className="page-shell py-4 sm:py-8">
-      <header className="page-hero space-y-3">
-        <div className="page-eyebrow">Guide</div>
-        <h1 className="page-title">Help</h1>
-        <p className="page-subtitle text-sm">
-          Use this guide to understand notes, folders, tags, sharing, and export.
-        </p>
-      </header>
+      <PageHeader
+        eyebrow="Guide"
+        title="Help"
+        subtitle="Use this guide to understand notes, folders, tags, sharing, and export."
+        subtitleSize="small"
+      />
 
       <div className="panel-card rounded-[1.35rem] p-4 space-y-3">
         <h2 className="text-base font-semibold">Core flow</h2>

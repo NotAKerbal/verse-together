@@ -37,6 +37,7 @@ mod note_links;
 mod parity_tests;
 mod plan_model;
 mod plans;
+mod pointer;
 mod popup;
 mod reader_tools;
 mod reader_tools_ui;
@@ -95,7 +96,8 @@ fn main() -> iced::Result {
         .window(window::Settings {
             platform_specific: platform_settings(),
             size: Size::new(1440., 960.),
-            min_size: Some(Size::new(920., 640.)),
+            // As small as the website's phone layout is tested (607px), so the app can share a small screen.
+            min_size: Some(Size::new(600., 640.)),
             exit_on_close_request: false,
             icon: app_icon(),
             ..Default::default()
@@ -209,8 +211,33 @@ enum Message {
     PresetRemove(usize),
     PresetUp(usize),
     PresetName(usize, String),
+    PresetDown(usize),
+    /// A new style for a quick mark (`QuickMarkSettings.edit`); its name stays.
+    PresetStyle(usize, MarkKind, MarkColor),
+    /// The add row's style and name, and adding it.
+    NewPresetStyle(MarkKind, MarkColor),
+    NewPresetName(String),
+    AddNewPreset,
+    /// Open (or close) the custom color under a quick mark, or under the add row (`None`).
+    PresetCustom(Option<usize>),
+    PresetCustomInput(String),
+    PresetCustomApply,
     ResetPresets,
     ClearWords,
+    /// The reader scrolled to this offset (the selection menu follows its words).
+    ReaderScrolled(f32),
+    /// Open or close the selection menu's Annotate panel.
+    Annotate(bool),
+    /// The Annotate panel's "Any style and color": the style chosen, its Custom color entry, and applying it.
+    AnnotateStyle(MarkKind, MarkColor),
+    AnnotateCustom,
+    AnnotateCustomInput(String),
+    AnnotateCustomApply,
+    AnnotateApply,
+    /// The Annotate panel's note: the note editor on the first selected verse.
+    NoteOnSelection,
+    /// Focus scripture: the selected words' verses, read and shared as a passage.
+    FocusSelection,
     /// Start a journal note quoting the selected words, linked to their verse.
     QuoteInJournal,
     CopySelectedWords,
@@ -285,6 +312,23 @@ struct App {
     styles_open: bool,
     style_kind: MarkKind,
     custom_color: String,
+    /// Settings → Study tools: the add row's style (until added), the custom color being typed for a row (or the
+    /// add row) and the last problem.
+    preset_adding: Option<MarkPreset>,
+    preset_custom: Option<(Option<usize>, String)>,
+    preset_error: Option<String>,
+    /// The pointer's window position (noted without messages), where the reader's selection was pressed, and
+    /// where it was let go with the reader's scroll then, so the menu stays beside the words.
+    pointer: pointer::Pointer,
+    press_point: Option<iced::Point>,
+    word_anchor: Option<(iced::Point, iced::Point, f32)>,
+    reader_scroll: f32,
+    /// The selection menu: its Annotate panel, the style chosen there (and a custom color being typed), and
+    /// whether Copy text just copied.
+    annotating: bool,
+    annotate_style: Option<(MarkKind, MarkColor)>,
+    annotate_custom: Option<String>,
+    copied_words: bool,
     screen: Screen,
     selected: BTreeSet<u32>,
     anchor: Option<u32>,
@@ -387,6 +431,17 @@ impl App {
             styles_open: false,
             style_kind: MarkKind::Highlight,
             custom_color: String::new(),
+            preset_adding: None,
+            preset_custom: None,
+            preset_error: None,
+            pointer: pointer::Pointer::default(),
+            press_point: None,
+            word_anchor: None,
+            reader_scroll: 0.0,
+            annotating: false,
+            annotate_style: None,
+            annotate_custom: None,
+            copied_words: false,
             screen: Screen::Reader,
             selected: BTreeSet::new(),
             anchor: None,
@@ -919,6 +974,50 @@ impl App {
         self.preferences.mark_presets = Some(marks::normalize_presets(presets));
         self.persist();
     }
+    /// The verses the reader's selected words are in, in order.
+    pub(crate) fn word_verses(&self) -> Vec<u32> {
+        let mut verses: Vec<u32> = self
+            .word_selection
+            .iter()
+            .filter_map(|(i, _)| Some(self.verses.get(*i)?.number))
+            .collect();
+        verses.dedup();
+        verses
+    }
+    /// The colors already on the selected words, so the Annotate panel offers their custom colors again.
+    pub(crate) fn word_selection_colors(&self) -> Vec<MarkColor> {
+        self.mark_targets(true)
+            .iter()
+            .flat_map(|t| {
+                [MarkKind::Highlight, MarkKind::Underline]
+                    .into_iter()
+                    .flat_map(|k| marks::colors_over(&t.marks(), &t.text, k, t.range.as_ref()))
+                    .flatten()
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+    /// The Annotate panel's style: as chosen, else the first quick mark's, else a yellow highlight.
+    pub(crate) fn annotate_choice(&self) -> (MarkKind, MarkColor) {
+        self.annotate_style.clone().unwrap_or_else(|| {
+            self.preferences
+                .presets()
+                .first()
+                .map(|p| (p.kind, p.color.clone()))
+                .unwrap_or((MarkKind::Highlight, MarkColor::Named("yellow")))
+        })
+    }
+    /// The add row's quick mark: the style chosen for it while still free, else the first free one.
+    pub(crate) fn new_preset(&self) -> Option<MarkPreset> {
+        let presets = self.preferences.presets();
+        if presets.len() >= marks::PRESETS_MAX {
+            return None;
+        }
+        self.preset_adding
+            .clone()
+            .filter(|a| !presets.iter().any(|p| p.same_mark(a)))
+            .or_else(|| marks::first_unused(&presets))
+    }
     fn clear_words(&mut self) {
         self.clear_text_selection(text_selection::Area::Reader);
     }
@@ -1212,7 +1311,87 @@ impl App {
             Message::Journal(message) => return self.update_journal(message),
             Message::CopySelectedWords => {
                 if !self.word_selection.is_empty() {
+                    self.copied_words = true;
                     return iced::clipboard::write(self.reader_selected_text());
+                }
+            }
+            Message::ReaderScrolled(y) => self.reader_scroll = y,
+            Message::Annotate(open) => {
+                self.annotating = open && !self.word_selection.is_empty();
+                self.annotate_custom = None;
+            }
+            Message::AnnotateStyle(kind, color) => {
+                self.annotate_style = Some((kind, color));
+            }
+            Message::AnnotateCustom => {
+                self.annotate_custom = match self.annotate_custom {
+                    Some(_) => None,
+                    None => Some(match self.annotate_choice().1 {
+                        MarkColor::Custom(hex) => hex,
+                        MarkColor::Named(_) => String::new(),
+                    }),
+                };
+            }
+            Message::AnnotateCustomInput(value) => {
+                if let Some(typed) = &mut self.annotate_custom {
+                    *typed = value.chars().filter(|c| *c != ' ').take(7).collect();
+                }
+            }
+            Message::AnnotateCustomApply => {
+                if let Some(color) = self
+                    .annotate_custom
+                    .as_deref()
+                    .and_then(MarkColor::parse_input)
+                {
+                    self.annotate_style = Some((self.annotate_choice().0, color));
+                    self.annotate_custom = None;
+                }
+            }
+            Message::AnnotateApply => {
+                let (kind, color) = self.annotate_choice();
+                let on = self.mark_applied(kind, &color, true);
+                self.apply_marks(MarksPatch::set(kind, (!on).then_some(color)), true);
+            }
+            Message::NoteOnSelection => {
+                let first = self
+                    .word_selection
+                    .first()
+                    .and_then(|(i, _)| self.verses.get(*i))
+                    .map(|v| v.number);
+                if let Some(first) = first
+                    && self.save_note()
+                {
+                    let reflows =
+                        self.selected.is_empty() && !self.log_open && self.panel_reflows();
+                    self.clear_words();
+                    // The passage's own panel (its note), not Resources or Explore left open over it.
+                    self.tools.panel = None;
+                    self.selected = BTreeSet::from([first]);
+                    self.anchor = Some(first);
+                    self.load_note();
+                    let focus = presented(iced::widget::operation::focus("verse-note"));
+                    return if reflows {
+                        Task::batch([presented(jump::to_verse(first)), focus])
+                    } else {
+                        focus
+                    };
+                }
+            }
+            Message::FocusSelection => {
+                let verses = self.word_verses();
+                if let Some(first) = verses.first().copied()
+                    && self.save_note()
+                {
+                    let reflows =
+                        self.selected.is_empty() && !self.log_open && self.panel_reflows();
+                    self.clear_words();
+                    self.tools.panel = None;
+                    self.selected = verses.into_iter().collect();
+                    self.anchor = Some(first);
+                    self.load_note();
+                    if reflows {
+                        return presented(jump::to_verse(first));
+                    }
                 }
             }
             Message::QuickMark(i, words) => {
@@ -1270,8 +1449,117 @@ impl App {
                     self.persist();
                 }
             }
+            Message::PresetDown(i) => {
+                let mut presets = self.preferences.presets();
+                if i + 1 < presets.len() {
+                    presets.swap(i, i + 1);
+                    self.set_presets(presets);
+                }
+            }
+            Message::PresetStyle(i, kind, color) => {
+                let mut presets = self.preferences.presets();
+                if i >= presets.len() {
+                    return Task::none();
+                }
+                if let Some(other) = marks::taken_by(&presets, Some(i), kind, &color) {
+                    self.preset_error = Some(format!(
+                        "{} is already quick mark {}.",
+                        MarkPreset::new(kind, color).label(),
+                        other + 1
+                    ));
+                    return Task::none();
+                }
+                self.preset_error = None;
+                presets[i].kind = kind;
+                presets[i].color = color;
+                self.set_presets(presets);
+            }
+            Message::NewPresetStyle(kind, color) => {
+                let name = self.new_preset().and_then(|p| p.name);
+                self.preset_adding = Some(MarkPreset {
+                    name,
+                    ..MarkPreset::new(kind, color)
+                });
+            }
+            Message::NewPresetName(name) => {
+                if let Some(preset) = self.new_preset() {
+                    let name: String = name.chars().take(marks::PRESET_NAME_MAX).collect();
+                    self.preset_adding = Some(MarkPreset {
+                        name: (!name.is_empty()).then_some(name),
+                        ..preset
+                    });
+                }
+            }
+            Message::AddNewPreset => {
+                let mut presets = self.preferences.presets();
+                if let Some(preset) = self.new_preset()
+                    && presets.len() < marks::PRESETS_MAX
+                {
+                    presets.push(preset);
+                    self.preset_adding = None;
+                    self.preset_error = None;
+                    self.set_presets(presets);
+                }
+            }
+            Message::PresetCustom(slot) => {
+                self.preset_custom = match &self.preset_custom {
+                    Some((open, _)) if *open == slot => None,
+                    _ => {
+                        let current = match slot {
+                            Some(i) => self.preferences.presets().get(i).map(|p| p.color.clone()),
+                            None => self.new_preset().map(|p| p.color),
+                        };
+                        let hex = match current {
+                            Some(MarkColor::Custom(hex)) => hex,
+                            _ => String::new(),
+                        };
+                        Some((slot, hex))
+                    }
+                };
+            }
+            Message::PresetCustomInput(value) => {
+                if let Some((_, typed)) = &mut self.preset_custom {
+                    *typed = value.chars().filter(|c| *c != ' ').take(7).collect();
+                }
+            }
+            Message::PresetCustomApply => {
+                let Some((slot, typed)) = self.preset_custom.clone() else {
+                    return Task::none();
+                };
+                let Some(color) = MarkColor::parse_input(&typed) else {
+                    self.preset_error =
+                        Some("Type a color as six hex digits, like #3a7bd5.".into());
+                    return Task::none();
+                };
+                let presets = self.preferences.presets();
+                let (kind, except) = match slot {
+                    Some(i) => match presets.get(i) {
+                        Some(p) => (p.kind, Some(i)),
+                        None => return Task::none(),
+                    },
+                    None => match self.new_preset() {
+                        Some(p) => (p.kind, None),
+                        None => return Task::none(),
+                    },
+                };
+                if let Some(other) = marks::taken_by(&presets, except, kind, &color) {
+                    self.preset_error = Some(format!(
+                        "{} is already quick mark {}.",
+                        MarkPreset::new(kind, color).label(),
+                        other + 1
+                    ));
+                    return Task::none();
+                }
+                self.preset_custom = None;
+                return self.update(match slot {
+                    Some(i) => Message::PresetStyle(i, kind, color),
+                    None => Message::NewPresetStyle(kind, color),
+                });
+            }
             Message::ResetPresets => {
                 self.preferences.mark_presets = None;
+                self.preset_custom = None;
+                self.preset_error = None;
                 self.persist();
             }
             Message::ClearSelection => {
@@ -1628,6 +1916,9 @@ impl App {
                                 && !self.lessons.words.is_empty()
                             {
                                 self.clear_text_selection(text_selection::Area::Lesson);
+                            } else if self.annotating && !self.word_selection.is_empty() {
+                                // As the website's Annotate panel: Escape steps back to the actions first.
+                                self.annotating = false;
                             } else if !self.word_selection.is_empty() {
                                 self.clear_words();
                             } else if !self.selected.is_empty() {
@@ -1926,6 +2217,142 @@ mod interaction_tests {
         assert_eq!(app.edge_scroll, 0.0);
         drop(app);
         let _ = std::fs::remove_dir_all(dir);
+    }
+    #[test]
+    fn the_selection_menu_sits_by_the_words_and_its_actions_work_on_them() {
+        use crate::reader_tools::Panel;
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        app.window_width = 1214.0;
+        app.window_height = 733.0;
+        // Pressed in verse 2 and let go in verse 3, as the pointer would.
+        app.pointer.set(iced::Point::new(300.0, 420.0));
+        let _ = app.update(Message::Pick(
+            Area::Reader,
+            1,
+            40,
+            Phase::Press { clicks: 1 },
+        ));
+        app.pointer.set(iced::Point::new(520.0, 470.0));
+        let _ = app.update(Message::Pick(Area::Reader, 2, 30, Phase::Drag));
+        let _ = app.update(Message::Pick(Area::Reader, 2, 30, Phase::Release));
+        let ranges = app.word_selection.clone();
+        assert_eq!(app.word_verses(), vec![2, 3]);
+        let height = app.selection_menu_height();
+        let (left, top) = app.selection_menu_position(view_marks::SELECTION_MENU_WIDTH, height);
+        // Centered on the words, above them (it fits below the header).
+        assert_eq!(left, 410.0 - view_marks::SELECTION_MENU_WIDTH / 2.0);
+        assert!((top - (420.0 - 14.0 - 12.0 - height)).abs() < 0.01 || top >= 80.0);
+        assert!(top + height <= 470.0 + 14.0 || top >= 470.0 + 14.0);
+        // Scrolling the page moves it with the words.
+        let _ = app.update(Message::ReaderScrolled(40.0));
+        let (_, moved) = app.selection_menu_position(view_marks::SELECTION_MENU_WIDTH, height);
+        assert!(moved <= top);
+        let _ = app.update(Message::ReaderScrolled(0.0));
+        assert!(app.selection_menu().is_some());
+        // Annotate: a custom underline on exactly the selected words.
+        let _ = app.update(Message::Annotate(true));
+        assert!(app.annotating);
+        let _ = app.view();
+        let _ = app.update(Message::AnnotateStyle(
+            MarkKind::Underline,
+            MarkColor::Named("blue"),
+        ));
+        let _ = app.update(Message::AnnotateCustom);
+        let _ = app.update(Message::AnnotateCustomInput("#2a9d8f".into()));
+        let _ = app.update(Message::AnnotateCustomApply);
+        let custom = MarkColor::parse("#2a9d8f").unwrap();
+        assert_eq!(app.annotate_choice(), (MarkKind::Underline, custom.clone()));
+        let _ = app.update(Message::AnnotateApply);
+        assert!(app.mark_applied(MarkKind::Underline, &custom, true));
+        assert_eq!(
+            app.word_selection, ranges,
+            "the selection's UTF-16 ranges stay"
+        );
+        let marked: Vec<_> = app
+            .annotations
+            .iter()
+            .filter(|a| !a.marks.text_marks.is_empty())
+            .map(|a| a.verse)
+            .collect();
+        assert_eq!(marked, vec![2, 3]);
+        // Back returns to the actions; Copy text says so.
+        let _ = app.update(Message::Annotate(false));
+        assert!(!app.annotating);
+        let _ = app.update(Message::CopySelectedWords);
+        assert!(app.copied_words);
+        // Resources opens for the words' verses.
+        app.selected = BTreeSet::from([9]);
+        let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::Resources));
+        assert_eq!(app.tools.panel, Some(Panel::Resources(vec![2, 3])));
+        let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::ClosePanel));
+        // Focus scripture: the words' verses become the selected passage (its text, copy and share link), in
+        // front of Resources if that was open.
+        let _ = app.update(Message::Tools(crate::reader_tools::ToolsMsg::Resources));
+        let _ = app.update(Message::FocusSelection);
+        assert_eq!(app.tools.panel, None);
+        assert!(app.word_selection.is_empty() && app.word_anchor.is_none());
+        assert_eq!(app.selected, BTreeSet::from([2, 3]));
+        assert!(
+            app.share_link().ends_with("/alma/32/2-3"),
+            "{}",
+            app.share_link()
+        );
+        let _ = app.update(Message::ClearSelection);
+        // Annotate's note: the first selected verse's note editor.
+        drag(&mut app, Area::Reader, (4, 3), (5, 10));
+        let _ = app.update(Message::Annotate(true));
+        let _ = app.update(Message::NoteOnSelection);
+        assert_eq!(app.selected, BTreeSet::from([5]));
+        assert!(app.word_selection.is_empty());
+        let _ = app.update(Message::ClearSelection);
+        // New Note quotes the words in a journal note.
+        drag(&mut app, Area::Reader, (6, 3), (6, 20));
+        let _ = app.update(Message::QuoteInJournal);
+        assert_eq!(app.screen, Screen::Journal);
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn the_selection_menu_fits_a_narrow_window() {
+        let (mut app, dir) = app();
+        let _ = app.navigate(alma_32(), None);
+        app.window_width = 607.0;
+        app.window_height = 733.0;
+        app.pointer.set(iced::Point::new(560.0, 120.0));
+        drag(&mut app, Area::Reader, (0, 3), (0, 30));
+        let width = view_marks::SELECTION_MENU_WIDTH.min(app.window_width - 24.0);
+        let height = app.selection_menu_height();
+        let (left, top) = app.selection_menu_position(width, height);
+        assert!(left >= 12.0 && left + width <= 607.0 - 12.0 + 0.01);
+        // No room above, under the header: below the words, above the bottom navigation.
+        assert!(top >= 88.0 && top + height <= 733.0 - 100.0 + 0.01 || top == 88.0);
+        // In a minimum-height window even the maximum quick-mark list scrolls above the dock.
+        app.window_height = 640.0;
+        app.preferences.mark_presets = Some(
+            [MarkKind::Highlight, MarkKind::Underline]
+                .into_iter()
+                .flat_map(|kind| {
+                    marks::PALETTE.map(|name| {
+                        let mut p = MarkPreset::new(kind, MarkColor::Named(name));
+                        p.name = Some("A long quick mark name for study".into());
+                        p
+                    })
+                })
+                .collect(),
+        );
+        let _ = app.update(Message::Annotate(true));
+        let height = app.selection_menu_height();
+        let (_, top) = app.selection_menu_position(width, height);
+        assert!(top >= 88.0 && top + height <= 540.01);
+        app.focus = true;
+        assert!(
+            app.selection_menu().is_some(),
+            "simple mode keeps selection actions"
+        );
+        let _ = app.view();
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn copied_words_never_include_the_verse_number_indent() {
@@ -2676,6 +3103,114 @@ mod interaction_tests {
         let app = App::from_directory(&dir);
         assert_eq!(app.preferences.presets().len(), 5);
         assert_eq!(app.preferences.presets()[3].kind, MarkKind::Underline);
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn quick_marks_change_style_and_custom_color_and_keep_them_after_restart() {
+        let (mut app, dir) = app();
+        // Mark 1 (yellow highlight) becomes an underline, keeping yellow (free as an underline).
+        let _ = app.update(Message::PresetStyle(
+            0,
+            MarkKind::Underline,
+            MarkColor::Named("yellow"),
+        ));
+        assert_eq!(app.preferences.presets()[0].kind, MarkKind::Underline);
+        // Mark 2 can't take a style mark 6 (red underline) has.
+        let _ = app.update(Message::PresetStyle(
+            1,
+            MarkKind::Underline,
+            MarkColor::Named("red"),
+        ));
+        assert_eq!(
+            app.preset_error.as_deref(),
+            Some("Red underline is already quick mark 6.")
+        );
+        assert_eq!(app.preferences.presets()[1].kind, MarkKind::Highlight);
+        // A custom color, typed in any case, for mark 2.
+        let _ = app.update(Message::PresetCustom(Some(1)));
+        let _ = app.update(Message::PresetCustomInput("3A7BD5".into()));
+        let _ = app.update(Message::PresetCustomApply);
+        assert_eq!(
+            app.preferences.presets()[1].color,
+            MarkColor::parse("#3a7bd5").unwrap()
+        );
+        assert!(app.preset_custom.is_none());
+        // The add row starts on the first free pair and takes a name.
+        let _ = app.update(Message::NewPresetStyle(
+            MarkKind::Underline,
+            MarkColor::Named("green"),
+        ));
+        let _ = app.update(Message::NewPresetName("Promises".into()));
+        let _ = app.update(Message::AddNewPreset);
+        let _ = app.update(Message::PresetDown(0));
+        let _ = app.view();
+        drop(app);
+        let app = App::from_directory(&dir);
+        let presets = app.preferences.presets();
+        assert_eq!(presets.len(), 7);
+        assert_eq!(presets[1].kind, MarkKind::Underline);
+        assert_eq!(presets[1].color, MarkColor::Named("yellow"));
+        assert_eq!(presets[0].color, MarkColor::parse("#3a7bd5").unwrap());
+        assert_eq!(presets[6].name.as_deref(), Some("Promises"));
+        assert_eq!(presets[6].kind, MarkKind::Underline);
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn lesson_contents_group_chapters_with_passages_that_open_on_their_own() {
+        use crate::lessons_ui::{ContentsGroup, LessonMsg, contents};
+        let (mut app, dir) = app();
+        let _ = app.update(Message::Lesson(LessonMsg::Open("2026-10-26".into())));
+        let open = app.lessons.open.as_ref().expect("lesson");
+        let items = contents(&open.sections, &open.companion);
+        let titles = |g: ContentsGroup| {
+            items
+                .iter()
+                .filter(|i| i.group == g)
+                .map(|i| i.title.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            titles(ContentsGroup::Introduction),
+            ["Historical and Literary Context", "Significant Insights"]
+        );
+        let chapters: Vec<_> = items
+            .iter()
+            .filter(|i| i.group == ContentsGroup::Chapters)
+            .collect();
+        assert_eq!(chapters.len(), 9);
+        assert_eq!(
+            chapters[0].chapter,
+            Some((
+                "Jeremiah 31".to_string(),
+                Some("Mourning Turned to Joy for All Israel".to_string())
+            ))
+        );
+        assert_eq!(chapters[8].chapter.as_ref().unwrap().0, "Lamentations 3");
+        let (first_passage, short, title) = chapters[0].passages[0].clone();
+        assert_eq!(short, "31:1–3");
+        assert_eq!(title, "Everlasting Love for All the Families of Israel");
+        assert_eq!(
+            titles(ContentsGroup::Closing),
+            ["Weekly Study and Discussion Plan", "Public Sources"]
+        );
+        // Every chapter starts closed, so the later chapters show at once; each opens on its own.
+        let (j31, j32) = (chapters[0].section, chapters[1].section);
+        let _ = app.update(Message::TogglePopover(Popover::Contents));
+        assert!(!app.contents_entry_open(j31) && !app.contents_entry_open(j32));
+        let _ = app.update(Message::Lesson(LessonMsg::ToggleContents(j32)));
+        assert!(app.contents_entry_open(j32) && !app.contents_entry_open(j31));
+        let _ = app.view();
+        // A passage jumps and closes the drawer; its chapter is the current entry and stays open.
+        let _ = app.update(Message::Lesson(LessonMsg::Jump(first_passage)));
+        assert_eq!(app.popover, None);
+        assert_eq!(app.lessons.contents_current, Some(j31));
+        assert!(app.contents_entry_open(j31));
+        // The backdrop (or ×) closes it without jumping.
+        let _ = app.update(Message::TogglePopover(Popover::Contents));
+        let _ = app.update(Message::ClosePopover);
+        assert_eq!(app.popover, None);
         drop(app);
         std::fs::remove_dir_all(dir).unwrap();
     }

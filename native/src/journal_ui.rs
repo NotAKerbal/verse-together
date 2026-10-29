@@ -939,6 +939,8 @@ impl App {
             JournalMsg::New(prompt) => {
                 let prompted = prompt.is_some();
                 self.show_composer(prompt);
+                // Narrow windows: the entry is written on its day's screen (the calendar's has no composer).
+                self.journal.phone_day = true;
                 let focus = crate::presented(iced::widget::operation::focus("journal-composer"));
                 if self.journal.open.is_some() {
                     return focus;

@@ -162,6 +162,13 @@ impl MarkPreset {
     pub fn same_mark(&self, other: &Self) -> bool {
         self.kind == other.kind && self.color == other.color
     }
+    /// `markPresetPhrase`, mid-sentence: "yellow highlight", or "Blessings (yellow highlight)" when named.
+    pub fn phrase(&self) -> String {
+        match &self.name {
+            Some(_) => self.label(),
+            None => self.label().to_lowercase(),
+        }
+    }
     /// "Yellow highlight", or "Blessings (yellow highlight)" when named.
     pub fn label(&self) -> String {
         let style = format!("{} {}", self.color.label(), self.kind.label());
@@ -209,6 +216,57 @@ pub fn normalize_presets(presets: Vec<MarkPreset>) -> Vec<MarkPreset> {
         out.push(preset);
         if out.len() == PRESETS_MAX {
             break;
+        }
+    }
+    out
+}
+
+/// The quick mark (its index) that already is this style, leaving out the one at `except` (`takenBy`).
+pub fn taken_by(
+    presets: &[MarkPreset],
+    except: Option<usize>,
+    kind: MarkKind,
+    color: &MarkColor,
+) -> Option<usize> {
+    presets
+        .iter()
+        .enumerate()
+        .position(|(i, p)| Some(i) != except && p.kind == kind && &p.color == color)
+}
+/// `MarkStylePicker.pickKind`: another kind keeps the color when that pair is free, else takes the kind's first
+/// free palette color; `None` when every color of that kind is taken.
+pub fn pick_kind(
+    taken: impl Fn(MarkKind, &MarkColor) -> bool,
+    color: &MarkColor,
+    kind: MarkKind,
+) -> Option<MarkColor> {
+    if !taken(kind, color) {
+        return Some(color.clone());
+    }
+    PALETTE
+        .iter()
+        .map(|n| MarkColor::Named(n))
+        .find(|c| !taken(kind, c))
+}
+/// The first kind-and-color pair not in the list, highlights first (the add row's start, `firstUnused`).
+pub fn first_unused(presets: &[MarkPreset]) -> Option<MarkPreset> {
+    [MarkKind::Highlight, MarkKind::Underline]
+        .into_iter()
+        .find_map(|kind| {
+            PALETTE
+                .iter()
+                .map(|n| MarkColor::Named(n))
+                .find(|c| taken_by(presets, None, kind, c).is_none())
+                .map(|c| MarkPreset::new(kind, c))
+        })
+}
+/// The custom colors among some colors, each once, in the order first seen (`customMarkColors`), so a picker can
+/// offer the reader's own colors again.
+pub fn custom_colors<'a>(colors: impl IntoIterator<Item = &'a MarkColor>) -> Vec<MarkColor> {
+    let mut out: Vec<MarkColor> = vec![];
+    for color in colors {
+        if matches!(color, MarkColor::Custom(_)) && !out.contains(color) {
+            out.push(color.clone());
         }
     }
     out
@@ -719,10 +777,49 @@ mod tests {
         assert_eq!(presets.len(), 2);
         assert_eq!(presets[0].name.as_deref(), Some("Blessings of God"));
         assert_eq!(presets[0].label(), "Blessings of God (yellow highlight)");
+        assert_eq!(presets[0].phrase(), "Blessings of God (yellow highlight)");
+        assert_eq!(presets[1].phrase(), "yellow underline");
         assert_eq!(presets[1].name, None);
         assert_eq!(
             normalize_preset_name(&"x".repeat(60)).unwrap().len(),
             PRESET_NAME_MAX
+        );
+    }
+    #[test]
+    fn quick_mark_pickers_skip_styles_other_marks_have() {
+        let presets = default_presets();
+        // Yellow highlight is mark 1; mark 2 (blue) can't take it.
+        assert_eq!(
+            taken_by(&presets, Some(1), MarkKind::Highlight, &yellow()),
+            Some(0)
+        );
+        assert_eq!(
+            taken_by(&presets, Some(0), MarkKind::Highlight, &yellow()),
+            None
+        );
+        // Blue highlight → underline keeps blue (free); red underline is taken, so red highlight → underline
+        // takes the first free underline color.
+        let blue = MarkColor::Named("blue");
+        let list = &presets;
+        let taken = |except| move |k, c: &MarkColor| taken_by(list, except, k, c).is_some();
+        assert_eq!(
+            pick_kind(taken(Some(1)), &blue, MarkKind::Underline),
+            Some(blue.clone())
+        );
+        let red = MarkColor::Named("red");
+        assert_eq!(
+            pick_kind(taken(None), &red, MarkKind::Underline),
+            Some(MarkColor::Named("yellow"))
+        );
+        // The add row starts on the first free pair: red highlight.
+        assert_eq!(
+            first_unused(&presets),
+            Some(MarkPreset::new(MarkKind::Highlight, red))
+        );
+        let custom = MarkColor::parse("#123456").unwrap();
+        assert_eq!(
+            custom_colors([&custom, &yellow(), &custom]),
+            vec![custom.clone()]
         );
     }
 }

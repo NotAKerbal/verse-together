@@ -1,0 +1,2801 @@
+{
+ "browse_library": {
+  "profile": "browse",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 846.2604370117188,
+     "y": 80,
+     "width": 383.73956298828125,
+     "height": 156
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 0
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 846.2604370117188,
+     "y": 335.4583435058594,
+     "width": 383.73956298828125,
+     "height": 113.33334350585938
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 24
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 578.7083740234375,
+     "y": 313.25,
+     "width": 122.58331298828125,
+     "height": 54.395843505859375
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 0
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "url": "http://127.0.0.1:3245/browse/bookofmormon/alma/32"
+  },
+  "error": null,
+  "at": "2026-10-29T03:05:18.307Z",
+  "frames": 55
+ },
+ "browse_grid": {
+  "profile": "browse",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 995.75,
+     "y": 24.25,
+     "width": 66.666748046875,
+     "height": 31.5
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 710.8854370117188,
+     "y": 313.25,
+     "width": 122.58331298828125,
+     "height": 54.395843505859375
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 0
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Alma 33:1",
+    "box": {
+     "x": 184,
+     "y": 80,
+     "width": 912,
+     "height": 100
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 1476
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "url": "http://127.0.0.1:3245/browse/bookofmormon/alma/33"
+  },
+  "error": null,
+  "at": "2026-10-29T03:05:42.631Z",
+  "frames": 23
+ },
+ "search_reference": {
+  "profile": "browse",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 829.75,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Moroni 10:4",
+    "box": {
+     "x": 184,
+     "y": 310,
+     "width": 912,
+     "height": 100
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 50,
+     "down": 2162
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "url": "http://127.0.0.1:3245/browse/bookofmormon/moroni/10#v-4"
+  },
+  "error": null,
+  "at": "2026-10-29T03:06:06.288Z",
+  "frames": 39
+ },
+ "search_phrase": {
+  "profile": "browse",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 920.6666870117188,
+     "y": 30,
+     "width": 290.66668701171875,
+     "height": 20
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "text": "SEARCH SCRIPTURE\nFind passages by reference or phrase.\n\nSearch the bundled local library for exact references and verse text, with offline support after the first load.\n\nVERSE TEXT MATCHES\nLocal full-text results\nBOOK OF MORMON\nAlma 32\n2 HITS\n\nVERSE 40And thus, if ye will not nourish the word, looking forward with an eye of faith to the fruit thereof, ye can never pluck of...\n\nVERSE 41But if ye wi"
+  },
+  "error": null,
+  "at": "2026-10-29T03:06:31.693Z",
+  "frames": 44
+ },
+ "reading_settings": {
+  "profile": "prefs",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "text size",
+    "got": 121,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1031,
+     "y": 243.70834350585938,
+     "width": 179,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 971.3333740234375,
+     "y": 321.04168701171875,
+     "width": 119.3333740234375,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "style": "color-scheme: light;"
+  },
+  "error": null,
+  "at": "2026-10-29T03:07:38.755Z",
+  "frames": 56
+ },
+ "reading_simple": {
+  "profile": "prefs",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1147.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "exit pill",
+    "box": {
+     "x": 1093.666748046875,
+     "y": 660,
+     "width": 170.333251953125,
+     "height": 44
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 1396,
+     "down": 2462
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1093.666748046875,
+     "y": 660,
+     "width": 170.333251953125,
+     "height": 44
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 1396,
+     "down": 2462
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:08:07.701Z",
+  "frames": 21
+ },
+ "bibles_add": {
+  "profile": "bible",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 70,
+     "y": 357.10418701171875,
+     "width": 600,
+     "height": 41.33331298828125
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 0
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1022.6666870117188,
+     "y": 161.6666717529297,
+     "width": 48.00006103515625,
+     "height": 29.333328247070312
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:13:10.102Z",
+  "frames": 25
+ },
+ "bibles_language": {
+  "profile": "bible",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 384.66668701171875,
+     "y": 435.3333435058594,
+     "width": 510.66668701171875,
+     "height": 41.333343505859375
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 192.6666717529297,
+     "y": 172,
+     "width": 272.00001525878906,
+     "height": 41.333343505859375
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 192.6666717529297,
+     "y": 118.66667175292969,
+     "width": 448.00001525878906,
+     "height": 41.33332824707031
+    },
+    "clip": {
+     "x": 160.6666717529297,
+     "y": 94.66667175292969,
+     "w": 958.6666870117188,
+     "h": 592.6666870117188,
+     "scroller": true,
+     "up": 0,
+     "down": 183
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 199.33334350585938,
+     "y": 178.6666717529297,
+     "width": 291.1041564941406,
+     "height": 40
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1022.6666870117188,
+     "y": 161.6666717529297,
+     "width": 48.00006103515625,
+     "height": 29.333328247070312
+    },
+    "clip": {
+     "x": 160.6666717529297,
+     "y": 94.66667175292969,
+     "w": 958.6666870117188,
+     "h": 592.6666870117188,
+     "scroller": true,
+     "up": 0,
+     "down": 12
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 840,
+     "y": 202,
+     "width": 67.3333740234375,
+     "height": 37.333343505859375
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "saved bibles",
+    "box": {
+     "x": 70,
+     "y": 257.7708435058594,
+     "width": 600,
+     "height": 176.66665649414062
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 0
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "list": [
+    "King James Bible (LDS edition)",
+    "",
+    "English \u00b7 Available offline",
+    "",
+    "Default",
+    "",
+    "Berean Standard Bible",
+    "",
+    "English \u00b7 BSB",
+    "",
+    "Make default",
+    "",
+    "La Biblia en Espa\u00f1ol Sencillo",
+    "",
+    "Spanish \u00b7 BES",
+    "",
+    "Make default"
+   ]
+  },
+  "error": null,
+  "at": "2026-10-29T03:13:26.970Z",
+  "frames": 62
+ },
+ "bibles_default": {
+  "profile": "bible",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "make default",
+    "box": {
+     "x": 1012.6666870117188,
+     "y": 504.04168701171875,
+     "width": 89.33331298828125,
+     "height": 28
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 156,
+     "down": 236
+    },
+    "pad": 6,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1012.6666870117188,
+     "y": 504.04168701171875,
+     "width": 89.33331298828125,
+     "height": 28
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 156,
+     "down": 236
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1108.666748046875,
+     "y": 502.7083435058594,
+     "width": 89.333251953125,
+     "height": 28.000030517578125
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 88.66666412353516,
+     "down": 283.33333587646484
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:14:33.499Z",
+  "frames": 49
+ },
+ "jst": {
+  "profile": "jst",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 852,
+     "y": 501.04168701171875,
+     "width": 358.666748046875,
+     "height": 32
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 227.3333282470703,
+     "down": 34.66667175292969
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "JST switch",
+    "box": {
+     "x": 1162.666748046875,
+     "y": 489.04168701171875,
+     "width": 48,
+     "height": 27.19793701171875
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 277.3333435058594,
+     "down": 42.666656494140625
+    },
+    "pad": 12,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "JST section",
+    "box": {
+     "x": 852,
+     "y": 451.04168701171875,
+     "width": 358.666748046875,
+     "height": 89.625
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 277.3333435058594,
+     "down": 42.666656494140625
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "JST v1",
+    "box": {
+     "x": 184,
+     "y": 96,
+     "width": 912,
+     "height": 72
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 1884
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "ins": [
+    "JST wording",
+    "Now these are the words which Jesus taught his disciples that they should say unto the people.",
+    "unrighteously,",
+    "but judge righteous judgment.",
+    "again, ye shall say unto them, Why is it that thou beholdest",
+    "canst not"
+   ]
+  },
+  "error": null,
+  "at": "2026-10-29T03:11:15.220Z",
+  "frames": 53
+ },
+ "faith": {
+  "profile": "faith",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "faith card",
+    "box": {
+     "x": 50,
+     "y": 451.4895935058594,
+     "width": 611.8021240234375,
+     "height": 243.68753051757812
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 13.333333015441895,
+     "down": 63.666666984558105
+    },
+    "pad": 6,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 70,
+     "y": 627.1771240234375,
+     "width": 571.8021240234375,
+     "height": 52
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 13.333333015441895,
+     "down": 63.666666984558105
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 204.58334350585938,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:11:43.978Z",
+  "frames": 28
+ },
+ "compare": {
+  "profile": "bible",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "show BSB switch",
+    "box": {
+     "x": 1110,
+     "y": 505.10418701171875,
+     "width": 48,
+     "height": 27.19793701171875
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 155.3333282470703,
+     "down": 236.6666717529297
+    },
+    "pad": 8,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1110,
+     "y": 505.10418701171875,
+     "width": 48,
+     "height": 27.19793701171875
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 155.3333282470703,
+     "down": 236.6666717529297
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "side by side",
+    "box": {
+     "x": 1031,
+     "y": 398.375,
+     "width": 179,
+     "height": 36
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 0,
+     "down": 392
+    },
+    "pad": 6,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1031,
+     "y": 398.375,
+     "width": 179,
+     "height": 36
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 0,
+     "down": 392
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 852.6666870117188,
+     "y": 398.375,
+     "width": 178.33331298828125,
+     "height": 36
+    },
+    "clip": {
+     "x": 840,
+     "y": 70.66667175292969,
+     "w": 382.66668701171875,
+     "h": 504,
+     "scroller": true,
+     "up": 0,
+     "down": 392
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "v3": "3\nLDS\nAll things were made by him; and without him was not any thing made that was made.\nBSB\nThrough Him all things were made, and without Him nothing was made that has been made."
+  },
+  "error": null,
+  "at": "2026-10-29T03:13:50.094Z",
+  "frames": 78
+ },
+ "marks_highlight": {
+  "profile": "marks",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "faith is not to have a perfect knowledge of things",
+    "got": "faith is not to have a perfect knowledge of things",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 438.4375,
+     "y": 114.32292175292969,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "v21": [
+    {
+     "attrs": [
+      "data-verse-highlight=yellow"
+     ],
+     "text": "faith is not to have a perfect knowledge of things"
+    }
+   ]
+  },
+  "error": null,
+  "at": "2026-10-29T03:15:08.105Z",
+  "frames": 40
+ },
+ "marks_underline": {
+  "profile": "marks",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "hope for things which are not seen, which are true",
+    "got": "hope for things which are not seen, which are true",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 376.1145935058594,
+     "y": 190.3229217529297,
+     "width": 206.33334350585938,
+     "height": 70.00001525878906
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 262.2395935058594,
+     "y": 277.25,
+     "width": 94.45834350585938,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 247.78125,
+     "y": 319.25,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "apply",
+    "box": {
+     "x": 167.78125,
+     "y": 362.25,
+     "width": 164,
+     "height": 40
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 167.78125,
+     "y": 362.25,
+     "width": 164,
+     "height": 40
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "v21": [
+    {
+     "attrs": [
+      "data-verse-highlight=yellow"
+     ],
+     "text": "faith is not to have a perfect knowledge of things"
+    },
+    {
+     "attrs": [
+      "data-verse-underline=blue"
+     ],
+     "text": "hope for things which are not seen, which are true"
+    }
+   ]
+  },
+  "error": null,
+  "at": "2026-10-29T03:15:30.843Z",
+  "frames": 69
+ },
+ "marks_remove": {
+  "profile": "marks",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "God is merciful unto all who believe on his name",
+    "got": "God is merciful unto all who believe on his name",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 771.5104370117188,
+     "y": 116.32292175292969,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "selection",
+    "want": "God is merciful unto all who believe on his name",
+    "got": "God is merciful unto all who believe on his name",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 771.5104370117188,
+     "y": 116.32292175292969,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "v21": [
+    {
+     "attrs": [
+      "data-verse-highlight=yellow"
+     ],
+     "text": "faith is not to have a perfect knowledge of things"
+    },
+    {
+     "attrs": [
+      "data-verse-underline=blue"
+     ],
+     "text": "hope for things which are not seen, which are true"
+    }
+   ],
+   "v22": []
+  },
+  "error": null,
+  "at": "2026-10-29T03:15:52.482Z",
+  "frames": 41
+ },
+ "quickmarks_name": {
+  "profile": "marks",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "first quick mark",
+    "box": {
+     "x": 70,
+     "y": 299.0208435058594,
+     "width": 1140,
+     "height": 90.91665649414062
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 343
+    },
+    "pad": 8,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "quick mark name",
+    "box": {
+     "x": 78.66667175292969,
+     "y": 346.07293701171875,
+     "width": 256.00001525878906,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 343
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "blank click target",
+    "x": 490.6666717529297,
+    "y": 207.61459350585938,
+    "interactive": false,
+    "text": "",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "named head",
+    "box": {
+     "x": 110.66667175292969,
+     "y": 313.1145935058594,
+     "width": 54,
+     "height": 18.71875
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 343
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "value": "Promises"
+  },
+  "error": null,
+  "at": "2026-10-29T03:16:46.686Z",
+  "frames": 18
+ },
+ "quickmarks_use": {
+  "profile": "marks",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "if ye will nourish the word",
+    "got": "if ye will nourish the word",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 345.34375,
+     "y": 162.3229217529297,
+     "width": 206.3333740234375,
+     "height": 70
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Promises button",
+    "box": {
+     "x": 137.0104217529297,
+     "y": 266.03125,
+     "width": 198.00001525878906,
+     "height": 40
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 137.0104217529297,
+     "y": 266.03125,
+     "width": 198.00001525878906,
+     "height": 40
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "marks": [
+    {
+     "attrs": [
+      "data-verse-highlight=yellow"
+     ],
+     "text": "if ye will nourish the word"
+    }
+   ]
+  },
+  "error": null,
+  "at": "2026-10-29T03:17:03.769Z",
+  "frames": 52
+ },
+ "explore_helps": {
+  "profile": "explore",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "faith",
+    "got": "faith",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 240.8125,
+     "y": 162.3229217529297,
+     "width": 206.33334350585938,
+     "height": 70
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 129.33334350585938,
+     "y": 171.125,
+     "width": 188,
+     "height": 22.5
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 1508,
+     "down": 2588
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 85.33333587646484,
+     "y": 248.625,
+     "width": 315.3333511352539,
+     "height": 16.5
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 1508,
+     "down": 2588
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "BD definition",
+    "box": {
+     "x": 85.33333587646484,
+     "y": 298.125,
+     "width": 341.3333511352539,
+     "height": 240
+    },
+    "clip": {
+     "x": 50.66666793823242,
+     "y": 154.45834350585938,
+     "w": 410.66668701171875,
+     "h": 556.875,
+     "scroller": true,
+     "up": 0,
+     "down": 312
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:17:41.542Z",
+  "frames": 97
+ },
+ "explore_languages": {
+  "profile": "explore",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "Word",
+    "got": "Word",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 208.375,
+     "y": 180.6666717529297,
+     "width": 206.33334350585938,
+     "height": 70
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 129.33334350585938,
+     "y": 271.9583435058594,
+     "width": 178,
+     "height": 22.5
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 3200
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "possibilities note",
+    "box": {
+     "x": 108.33333587646484,
+     "y": 343.4583435058594,
+     "width": 279.3333511352539,
+     "height": 16
+    },
+    "clip": {
+     "x": 50.66666793823242,
+     "y": 162.45834350585938,
+     "w": 410.66668701171875,
+     "h": 556.875,
+     "scroller": true,
+     "up": 0,
+     "down": 554
+    },
+    "pad": 6,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 75.33333587646484,
+     "y": 487.75,
+     "width": 361.3333511352539,
+     "height": 61.5
+    },
+    "clip": {
+     "x": 50.66666793823242,
+     "y": 162.45834350585938,
+     "w": 410.66668701171875,
+     "h": 556.875,
+     "scroller": true,
+     "up": 0,
+     "down": 554
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:18:14.866Z",
+  "frames": 115
+ },
+ "study_paths": {
+  "profile": "explore",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1056,
+     "y": 372,
+     "width": 28,
+     "height": 28
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 1508,
+     "down": 1984
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "sources",
+    "box": {
+     "x": 804.6666870117188,
+     "y": 499.09375,
+     "width": 61.39581298828125,
+     "height": 16
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 6,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "ai note",
+    "box": {
+     "x": 804.6666870117188,
+     "y": 551.09375,
+     "width": 446.66668701171875,
+     "height": 40
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:18:41.887Z",
+  "frames": 14
+ },
+ "notes_new": {
+  "profile": "notes",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "hope for things which are not seen, which are true",
+    "got": "hope for things which are not seen, which are true",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "new note",
+    "box": {
+     "x": 163.78125,
+     "y": 190.3229217529297,
+     "width": 206.33334350585938,
+     "height": 70.00001525878906
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 163.78125,
+     "y": 190.3229217529297,
+     "width": 206.33334350585938,
+     "height": 70.00001525878906
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "add to note",
+    "box": {
+     "x": 163.78125,
+     "y": 190.3229217529297,
+     "width": 206.33334350585938,
+     "height": 70.00001525878906
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 163.78125,
+     "y": 190.3229217529297,
+     "width": 206.33334350585938,
+     "height": 70.00001525878906
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "body": "**[Alma 32:21](</browse/bookofmormon/alma/32#v-21>)**\n> hope for things which are not seen, which are true\n\nHope reaches toward what is true, even before I can see it."
+  },
+  "error": null,
+  "at": "2026-10-29T03:27:14.730Z",
+  "frames": 106
+ },
+ "log": {
+  "profile": "notes",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1075.0833740234375,
+     "y": 22,
+     "width": 68.25,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1075.0833740234375,
+     "y": 22,
+     "width": 68.25,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "add a note",
+    "box": {
+     "x": 784.6666870117188,
+     "y": 189.33334350585938,
+     "width": 446.66668701171875,
+     "height": 64
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 784.6666870117188,
+     "y": 189.33334350585938,
+     "width": 446.66668701171875,
+     "height": 64
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1130,
+     "y": 651.3333740234375,
+     "width": 101.3333740234375,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "saved entry",
+    "box": {
+     "x": 784.6666870117188,
+     "y": 217.33334350585938,
+     "width": 446.66668701171875,
+     "height": 57.791656494140625
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "entry": {
+    "body": "Read the whole chapter slowly. Planting the seed is a choice I can make today.",
+    "keys": [
+     "id",
+     "owner",
+     "title",
+     "status",
+     "visibility",
+     "tags",
+     "blocks",
+     "markdown_body",
+     "markdown_revision",
+     "markdown_canonical",
+     "journal_date",
+     "source",
+     "reading_at",
+     "created_at",
+     "updated_at",
+     "last_active_at"
+    ]
+   }
+  },
+  "error": null,
+  "at": "2026-10-29T03:27:52.073Z",
+  "frames": 117
+ },
+ "journal_goals": {
+  "profile": "notes",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 317.34375,
+     "y": 394.04168701171875,
+     "width": 77.98959350585938,
+     "height": 44
+    },
+    "clip": {
+     "x": 32,
+     "y": 80,
+     "w": 384,
+     "h": 606.3958740234375,
+     "scroller": true,
+     "up": 0,
+     "down": 158
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 824.2708740234375,
+     "y": 286.72918701171875,
+     "width": 44,
+     "height": 44
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 757.875,
+     "y": 499.6458435058594,
+     "width": 111.0625,
+     "height": 44.000030517578125
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "saved goal",
+    "box": {
+     "x": 116.66667175292969,
+     "y": 480.04168701171875,
+     "width": 278.6666717529297,
+     "height": 22.84375
+    },
+    "clip": {
+     "x": 32,
+     "y": 80,
+     "w": 384,
+     "h": 606.3958740234375,
+     "scroller": true,
+     "up": 0,
+     "down": 160
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:28:26.894Z",
+  "frames": 28
+ },
+ "journal_prompts": {
+  "profile": "notes",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 704.1875,
+     "y": 324.38543701171875,
+     "width": 164.66668701171875,
+     "height": 44
+    },
+    "clip": {
+     "x": 436,
+     "y": 80,
+     "w": 812,
+     "h": 606.3958740234375,
+     "scroller": true,
+     "up": 0,
+     "down": 106
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "prompt changed",
+    "ok": true,
+    "q0": "Make room for a little light.\n\nWhat is one thing you want to carry with you from your study?\n\nWrite a reflection\nChoose ",
+    "q1": "Make room for a little light.\n\nWhere did you notice a little light in your day?\n\nWrite a reflection\nChoose another promp"
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 496.0625,
+     "y": 324.38543701171875,
+     "width": 184.125,
+     "height": 44
+    },
+    "clip": {
+     "x": 436,
+     "y": 80,
+     "w": 812,
+     "h": 606.3958740234375,
+     "scroller": true,
+     "up": 0,
+     "down": 106
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": null,
+  "error": null,
+  "at": "2026-10-29T03:28:44.647Z",
+  "frames": 26
+ },
+ "journal_day": {
+  "profile": "notes",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 537,
+     "y": 522.4583740234375,
+     "width": 674,
+     "height": 26.39581298828125
+    },
+    "clip": {
+     "x": 436,
+     "y": 80,
+     "w": 812,
+     "h": 606.3958740234375,
+     "scroller": true,
+     "up": 0,
+     "down": 106
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:29:14.947Z",
+  "frames": 18
+ },
+ "cfm_week": {
+  "profile": "cfm",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 717.1146240234375,
+     "y": 566.6979370117188,
+     "width": 202.39581298828125,
+     "height": 44
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 1251
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 1043.0833740234375,
+     "y": 22,
+     "width": 106,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "url": "http://127.0.0.1:3245/come-follow-me/2026-10-26"
+  },
+  "error": null,
+  "at": "2026-10-29T03:23:09.017Z",
+  "frames": 16
+ },
+ "cfm_context": {
+  "profile": "cfm",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 272.66668701171875,
+     "y": 536.6041870117188,
+     "width": 734.6666870117188,
+     "height": 48
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 6055.33349609375,
+     "down": 52452.66650390625
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "context card",
+    "box": {
+     "x": 272,
+     "y": 427.2708435058594,
+     "width": 736,
+     "height": 267.6979064941406
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 6164,
+     "down": 52563
+    },
+    "pad": 8,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 546.3646240234375,
+     "y": 562.5521240234375,
+     "width": 109.4478759765625,
+     "height": 17.33331298828125
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 6164,
+     "down": 52563
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:23:31.256Z",
+  "frames": 16
+ },
+ "cfm_note": {
+  "profile": "cfm",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 272,
+     "y": 488.3333435058594,
+     "width": 126.91668701171875,
+     "height": 44.000030517578125
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 380.6666564941406,
+     "down": 58127.33334350586
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": null,
+  "error": null,
+  "at": "2026-10-29T03:24:01.243Z",
+  "frames": 27
+ },
+ "focus_share": {
+  "profile": "share",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "selection",
+    "want": "faith is not to have a perfect knowledge of things",
+    "got": "faith is not to have a perfect knowledge of things",
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 650.7708740234375,
+     "y": 238.3229217529297,
+     "width": 206.33331298828125,
+     "height": 70.00001525878906
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "click target",
+    "box": {
+     "x": 264,
+     "y": 540.34375,
+     "width": 62.520843505859375,
+     "height": 44
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true,
+   "clipboard": "http://127.0.0.1:3245/share/bookofmormon/alma/32/21"
+  },
+  "error": null,
+  "at": "2026-10-29T03:24:30.949Z",
+  "frames": 38
+ },
+ "settings_tour": {
+  "profile": "settings",
+  "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+  "base": "http://127.0.0.1:3245",
+  "ok": true,
+  "checks": [
+   {
+    "check": "visible",
+    "label": "tabs",
+    "box": {
+     "x": 909.2083740234375,
+     "y": 16,
+     "width": 320.7916259765625,
+     "height": 48
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 6,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Reading tab",
+    "box": {
+     "x": 1019.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Translations tab",
+    "box": {
+     "x": 1061.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Study tools tab",
+    "box": {
+     "x": 1103.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Release notes tab",
+    "box": {
+     "x": 1145.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "Feedback tab",
+    "box": {
+     "x": 1187.3333740234375,
+     "y": 22,
+     "width": 36,
+     "height": 36
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "fixed": true
+    },
+    "pad": 4,
+    "ok": true
+   },
+   {
+    "check": "visible",
+    "label": "feedback field",
+    "box": {
+     "x": 70,
+     "y": 276.6458435058594,
+     "width": 632,
+     "height": 144
+    },
+    "clip": {
+     "x": 0,
+     "y": 0,
+     "w": 1280,
+     "h": 720,
+     "scroller": false,
+     "up": 0,
+     "down": 0
+    },
+    "pad": 6,
+    "ok": true
+   }
+  ],
+  "verify": {
+   "ok": true
+  },
+  "error": null,
+  "at": "2026-10-29T03:24:58.869Z",
+  "frames": 81
+ }
+}

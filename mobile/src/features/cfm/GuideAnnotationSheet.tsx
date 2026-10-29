@@ -4,64 +4,19 @@
 // but never an edited one. Leaving with unsaved changes asks first, and Delete asks before removing a saved span.
 
 import { useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Text, TextInput, View } from "react-native";
 import Sheet from "../../components/Sheet";
 import { Button } from "../../components/ui";
-import { ANNOTATION_BODY_MAX, MARK_COLORS, annotationProblem, isCustomMarkColor, markColorLabel, type MarkColor, type MarkKind } from "../../shared/web";
+import { ANNOTATION_BODY_MAX, annotationProblem } from "../../shared/web";
 import { useTheme } from "../../theme/theme";
 import { fonts } from "../../theme/tokens";
 import type { GuideHighlight } from "@/features/comeFollowMe/guideAnchors";
 import type { GuideAnnotationPatch } from "../../../../convex/annotationRules";
-import MarkSample from "../reader/MarkSample";
-import { CustomMarkColor } from "../reader/MarkStylePicker";
+import MarkColorChoice from "../reader/MarkColorChoice";
 
 const QUOTE_SHOWN = 280;
 
 type Draft = Required<GuideAnnotationPatch>;
-type Choice = MarkColor | "none";
-
-function MarkColorChoice({ kind, value, disabled, onChange }: { kind: MarkKind; value: Choice; disabled: boolean; onChange: (color: Choice) => void }) {
-  const { colors } = useTheme();
-  const title = kind === "highlight" ? "Highlight" : "Underline";
-  const options: Choice[] = ["none", ...MARK_COLORS, ...(isCustomMarkColor(value) ? [value] : [])];
-  return (
-    <View style={{ gap: 6, opacity: disabled ? 0.6 : 1 }}>
-      <Text style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundMuted }}>{title}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={title} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
-        {options.map((option) => {
-          const active = option === value;
-          const label = option === "none" ? "None" : markColorLabel(option);
-          return (
-            <Pressable
-              key={option}
-              testID={`guide-note-${kind}-${option}`}
-              accessibilityRole="radio"
-              accessibilityLabel={option === "none" ? `No ${kind}` : `${label} ${kind}`}
-              accessibilityState={{ checked: active, disabled }}
-              disabled={disabled}
-              onPress={() => onChange(option)}
-              style={{
-                minHeight: 36,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingHorizontal: 8,
-                borderRadius: 8,
-                borderWidth: active ? 2 : 1,
-                borderColor: active ? colors.foreground : colors.surfaceBorder,
-                backgroundColor: active ? colors.surfaceCardSoft : colors.surfaceButton,
-              }}
-            >
-              {option === "none" ? <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: colors.surfaceBorder }} /> : <MarkSample preset={{ kind, color: option }} size={12} />}
-              <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.foreground }}>{label}</Text>
-            </Pressable>
-          );
-        })}
-        <CustomMarkColor value={value} kind={kind} label={title} disabled={disabled} onChange={onChange} />
-      </View>
-    </View>
-  );
-}
 
 type Props = {
   /** The selected passage's text. */
@@ -176,8 +131,8 @@ function Editor({ quote, current, onDelete, state }: Pick<Props, "quote" | "curr
       <Text style={{ alignSelf: "flex-end", marginTop: -10, fontFamily: fonts.sans, fontSize: 11, color: colors.foregroundSoft }}>
         {draft.body.length}/{ANNOTATION_BODY_MAX}
       </Text>
-      <MarkColorChoice kind="highlight" value={draft.highlightColor ?? "none"} disabled={busy} onChange={(color) => edit({ highlightColor: color === "none" ? null : color })} />
-      <MarkColorChoice kind="underline" value={draft.underlineColor ?? "none"} disabled={busy} onChange={(color) => edit({ underlineColor: color === "none" ? null : color })} />
+      <MarkColorChoice testIDPrefix="guide-note" kind="highlight" value={draft.highlightColor ?? "none"} disabled={busy} onChange={(color) => edit({ highlightColor: color === "none" ? null : color })} />
+      <MarkColorChoice testIDPrefix="guide-note" kind="underline" value={draft.underlineColor ?? "none"} disabled={busy} onChange={(color) => edit({ underlineColor: color === "none" ? null : color })} />
       {error ? (
         <Text accessibilityRole="alert" style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.accentRubric }}>
           {error}

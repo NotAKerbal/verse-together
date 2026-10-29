@@ -12,7 +12,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import AccountControl from "@/components/AccountControl";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
-import { useMyReadingLog } from "@/features/plans/useReadingProgress";
+import { useMyReadingLog } from "@/features/reading/useReadingProgress";
 import JournalWorkspace from "./JournalWorkspace";
 import JournalNoteEditor from "./JournalNoteEditor";
 import JournalEntryComposer from "./JournalEntryComposer";

@@ -3,68 +3,6 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { nextConferenceRefresh } from "./utils";
 
-export const getVerseChapter = query({
-  args: { volume: v.string(), book: v.string(), chapter: v.number() },
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("verseCache")
-      .withIndex("by_ref", (q: any) => q.eq("volume", args.volume).eq("book", args.book).eq("chapter", args.chapter))
-      .unique();
-    if (!row) return null;
-    return {
-      reference: row.reference,
-      verses: row.verses,
-      fetchedAt: row.fetchedAt,
-    };
-  },
-});
-
-export const upsertVerseChapter = mutation({
-  args: {
-    volume: v.string(),
-    book: v.string(),
-    chapter: v.number(),
-    reference: v.string(),
-    verses: v.array(
-      v.object({
-        verse: v.number(),
-        text: v.string(),
-        footnotes: v.optional(
-          v.array(
-            v.object({
-              footnote: v.string(),
-              start: v.optional(v.number()),
-              end: v.optional(v.number()),
-            })
-          )
-        ),
-      })
-    ),
-    fetchedAt: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("verseCache")
-      .withIndex("by_ref", (q: any) => q.eq("volume", args.volume).eq("book", args.book).eq("chapter", args.chapter))
-      .unique();
-    const payload = {
-      volume: args.volume,
-      book: args.book,
-      chapter: args.chapter,
-      reference: args.reference,
-      verses: args.verses,
-      fetchedAt: args.fetchedAt,
-      updatedAt: Date.now(),
-    };
-    if (existing) {
-      await ctx.db.patch(existing._id, payload);
-      return { ok: true };
-    }
-    await ctx.db.insert("verseCache", payload);
-    return { ok: true };
-  },
-});
-
 export const getChapterBundle = query({
   args: { volume: v.string(), book: v.string(), chapter: v.number() },
   handler: async (ctx, args) => {
@@ -192,23 +130,6 @@ export const upsertChapterBundle = mutation({
         });
       }
     }
-
-    // Keep legacy table in sync during migration.
-    const legacy = await ctx.db
-      .query("verseCache")
-      .withIndex("by_ref", (q: any) => q.eq("volume", args.volume).eq("book", args.book).eq("chapter", args.chapter))
-      .unique();
-    const legacyPayload = {
-      volume: args.volume,
-      book: args.book,
-      chapter: args.chapter,
-      reference: args.reference,
-      verses: args.verses,
-      fetchedAt: args.fetchedAt,
-      updatedAt: now,
-    };
-    if (legacy) await ctx.db.patch(legacy._id, legacyPayload);
-    else await ctx.db.insert("verseCache", legacyPayload);
 
     return { ok: true };
   },

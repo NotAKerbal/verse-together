@@ -1,3 +1,4 @@
+import PageHeader from "@/components/PageHeader";
 import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./page.module.css";
@@ -21,14 +22,15 @@ function ContactLink() {
 export default function PrivacyPage() {
   return (
     <article className={`page-shell ${styles.policy}`}>
-      <header className="page-hero space-y-3">
-        <div className="page-eyebrow">Verse Together</div>
-        <h1 className="page-title">Privacy policy</h1>
-        <p className="page-subtitle">How the Verse Together website and app handle your information.</p>
+      <PageHeader
+        eyebrow="Verse Together"
+        title="Privacy policy"
+        subtitle="How the Verse Together website and app handle your information."
+      >
         <p className={styles.updated}>
           Last updated <time dateTime={LAST_UPDATED.iso}>{LAST_UPDATED.label}</time>
         </p>
-      </header>
+      </PageHeader>
 
       <div className={styles.body}>
         <p>

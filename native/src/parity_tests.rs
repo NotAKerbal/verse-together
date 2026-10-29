@@ -1356,6 +1356,15 @@ fn narrow_windows_show_the_journals_stages_one_at_a_time_like_the_websites_phone
     let mut ui = crate::ui_tests::simulator_for(&app);
     assert!(ui.find("Weekly goals").is_ok());
     drop(ui);
+    // Write a reflection from the calendar's invitation opens the day's screen with the new entry.
+    let _ = app.update(Message::Journal(JournalMsg::New(Some(
+        "What is one thing you want to carry with you from your study?".into(),
+    ))));
+    assert!(app.journal.phone_day);
+    let mut ui = crate::ui_tests::simulator_for(&app);
+    assert!(ui.find("New entry").is_ok() && ui.find("Calendar").is_ok());
+    drop(ui);
+    let _ = app.update(Message::Journal(JournalMsg::ShowCalendar));
 }
 
 #[test]

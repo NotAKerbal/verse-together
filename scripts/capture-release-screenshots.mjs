@@ -98,6 +98,18 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.18.0-feature-guide",
+    viewport: { width: 1280, height: 1100 },
+    async run(page, viewport) {
+      await open(page, "/feature-guide");
+      const title = await page.getByRole("heading", { name: "Feature guide", exact: true }).boundingBox();
+      const topics = page.getByRole("navigation", { name: "Topics", exact: true });
+      const first = await topics.locator("li").first().boundingBox();
+      const sixth = await topics.locator("li").nth(5).boundingBox();
+      return pad(union(title, first, sixth), 12, viewport);
+    },
+  },
+  {
     name: "2.17.0-tester-signup",
     viewport: { width: 1000, height: 1200 },
     async run(page, viewport) {

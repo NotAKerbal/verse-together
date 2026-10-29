@@ -1,12 +1,10 @@
 import { useRouter } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { openExternal } from "../../../src/components/Blocks";
 import Grid from "../../../src/components/Grid";
 import { Button, IconButton, Page, SectionHeading, softShadow } from "../../../src/components/ui";
 import { PUBLISHED_GUIDES } from "../../../src/cfm/guides";
 import { LessonCard, LessonChapters, LessonCoverImage, PaintingCaption } from "../../../src/features/cfm/LessonParts";
-import { webUrl } from "../../../src/navigation/hrefs";
 import { getLessonOverview, localDateKey, weekReading, type Lesson, type ScheduleStatus } from "../../../src/shared/web";
 import { useTheme } from "../../../src/theme/theme";
 import { fonts } from "../../../src/theme/tokens";
@@ -127,14 +125,6 @@ export default function ComeFollowMeScreen() {
         <Text style={{ paddingHorizontal: 4, fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, color: colors.foregroundSoft }}>
           Landscape and still-life covers are illustrations generated with AI and show no people.
           {hasPaintings ? " Paintings of the Savior are historical public-domain works, credited on each cover and in full on each lesson." : ""}
-        </Text>
-        <Text
-          accessibilityRole="link"
-          accessibilityHint="Study plans need an account; opens the website"
-          onPress={() => void openExternal(webUrl("/plans"))}
-          style={{ paddingHorizontal: 4, fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundSoft, textDecorationLine: "underline", textDecorationColor: colors.ruleStrong }}
-        >
-          Your study plans (on the website)
         </Text>
       </View>
     </Page>

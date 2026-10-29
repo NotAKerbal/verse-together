@@ -1,3 +1,158 @@
+# PR #73 dev refresh — October 28, 2026
+
+Merged dev's prepared 2.17 release (`e939ff8`) into this PR. The only conflict was website release notes:
+the prepared release is preserved exactly, and only the desktop polish remains Upcoming. Regenerated the native
+release data from that source. Rust UI, mobile and backend code are unchanged by this refresh. Prior 2.16 build
+and GUI evidence below remains historical. **Passed** on the refresh: the actual desktop check command
+(format, generator check, 205 tests; 2 optional exporters ignored), release metadata validation and six release
+tests. Log `/tmp/vt-pr73-dev-refresh-check.log`. The Rust UI was not changed, so its earlier live GUI checks
+were not repeated.
+
+# Monorepo integration of the audit corrections — October 28, 2026
+
+The desktop's native-only audit-correction commit `482e249` was cherry-picked onto dev `7b9f993` (which already
+holds `native/` from `3b39252`, `mobile/`, `apps.json` and `docs/monorepo.md`) as `b1d778a` on
+`t3/desktop-monorepo-integration`, without conflicts and without the rest of the desktop branch. `native/src/` now
+equals `482e249` except `parity_tests.rs`, which keeps dev's data-driven "Earlier releases" range. The selection
+menu in simple mode, Annotate's viewport/footer/bottom-navigation clamps, Resources preferring the selected words
+and the UTF-16 selection mapping are unchanged from the reviewed commit. The embedded Release notes now come from
+this repository's website source: 2.16.0 plus the upcoming items, regenerated with
+`native/scripts/generate-release-notes.mjs` (dev's copy predated its tester-signup item). The 2.14-only release-note
+caveats in the entries below are resolved by this integration. Production source (`origin/master` `c964037`) includes
+desktop approval and sync since 2.15.0; live production sign-in was not verified.
+
+**Passed** (`/tmp/verse-native-tools/env.sh`, `CARGO_BUILD_JOBS=4`): `npm run app -- desktop check` (format,
+release-note generator check, 205 native tests passed, 2 ignored), strict all-target clippy, locked release build
+(binary SHA-256 `0288299670cefba4eb8e51a7e916b59145fa65400c1078a360c6f4d343261b77`), root `release:check`,
+`test:release`, `next typegen` + `tsc --noEmit`, and the apps dispatcher listing and dry run. Logs:
+`/tmp/vt-integration-{check,clippy,release,releasecheck,testrelease,tsc}.log`.
+**Independent parent review:** checked the native source against `482e249` (only the preserved, data-driven release-history test differs), reviewed the generated release-note and documentation edits, and confirmed that mobile, backend, web runtime, package scripts and deployment configuration are unchanged against the dev base. Parent re-ran the desktop check (205 passed, 2 ignored), release validation, 53 deployment guard tests and 6 release tests. Logs `/tmp/vt-integration-root-check.log`.
+
+**Passed in a real window** (that release binary, `--no-account`, scratch `--data-dir /tmp/vt-integration-qa/profile`):
+Settings → Release notes names website 2.16.0, shows the upcoming items with the desktop audit item, the 2.16.0
+screenshot decodes, and "Earlier releases" reads 2.0.0–2.13.0. Evidence `/tmp/vt-integration-qa/0{1,2}-*.png`; the
+window was closed normally. The audit-correction GUI checks below were not repeated: their code is unchanged.
+
+# Independent audit-correction review — October 28, 2026
+
+Reviewed the native-only audit correction diff on base `3b39252`, including quick-mark duplicate/style rules,
+selection range preservation and action routing, nested Bible modal handling, grouped lesson navigation,
+narrow layouts and settings routes. The parent corrected three review findings: selection actions remain
+available in simple mode; Annotate's scroll area and placement reserve space for its header, Copy footer
+and bottom navigation even at 600×640 with twelve quick marks; Resources prefers the current selected words
+over an older verse selection. Regression checks are part of the 205 native tests.
+
+**Passed independently:** 205 native tests (2 optional render exporters ignored), strict all-target clippy,
+format, whitespace and the local release-notes generator check. The generator is consistent with this branch's
+2.14 website source; it does not establish current 2.16 release-history parity. Source inspection confirms
+production master now includes desktop auth/sync; live production account acceptance was not run in this pass.
+The implementation pass's real-window evidence below was inspected directly. No web/backend/account writes.
+Logs: `/tmp/vt-audit-root-{tests,clippy,release}.log`.
+**Passed:** locked release build, SHA-256 `2a80a1e6c993ab8e263066016e89fe0105be3e2f8d8bf7b639c6ecd1f7a6d675`.
+**Passed in the final release window:** own fresh `--no-account` profile
+`/tmp/vt-audit-root-final-profile`, cross-verse selection in simple mode shows all actions; after tiling to
+607px and leaving simple mode, Annotate opens with header, controls and Copy footer clear of the navigation.
+Screenshot `/tmp/vt-audit-root-annotate.png`. The parent QA window was closed normally, shared service preserved.
+Twelve presets at minimum height are regression-tested, not exercised in this final GUI spot check.
+**Not run by parent:** clipboard inspection, policy browser launch, production account QA, macOS/Windows,
+screen-reader testing and dark mode. Child runtime coverage is recorded below. The final package is rebuilt
+from this binary with these review notes; use its `.sha256` sidecar for the archive digest.
+
+# Audit corrections VT-A01–A07 (quick marks, contents, selection menu, small windows, Bibles, settings) — October 28, 2026
+
+Implemented the seven gaps of the independent native experience audit
+(`/tmp/verse-native-experience-audit-20261028-fresh/report.md`) on `t3/rust-desktop-app` at `3b39252`, uncommitted
+for review. Web reference: production sources at `origin/master` `c964037` (website 2.16.0), read with `git show`;
+the relevant files (`VerseActionBar.tsx`, `ContentsNav.tsx`, `cfmGuide.ts`, `QuickMarkSettings.tsx`,
+`MarkStylePicker.tsx`, `CustomMarkColor.tsx`, `BibleTranslationControls.tsx`, `TranslationCatalogPicker.tsx`,
+`ReaderSettings.tsx`, `account/page.tsx`, `MobileBottomNav.tsx`, `lessons.module.css`, `globals.css`) plus the audit's
+web captures. No web, Convex, mobile, auth or environment file changed; no account, sign-in, backend write,
+feedback or goal was used.
+
+## What changed
+
+- **VT-A01 Study tools** (`view_marks.rs` `preset_settings`/`mark_style_picker`, `marks.rs`, `main.rs`): each quick
+  mark edits its name, Highlight/Underline and preset or custom color (`MarkStylePicker`), with ↑ ↓ ×, a dashed
+  "New quick mark" row, "Restore defaults" and "N of 12 · This device"; styles another mark has are refused
+  (`takenBy`, `pickKind`). The selection menus' tooltips use the web's phrase ("Remove Promises (yellow underline)").
+- **VT-A02 Lesson contents** (`lessons_ui.rs` `contents`/`contents_drawer`): a left drawer over a dimmed page,
+  grouped Introduction / Chapter by chapter / After the chapters, compact chapter rows whose passages open on their
+  own; jump closes it; backdrop, × and Escape close it; the last-jumped entry stays open.
+- **VT-A04 Selection menu** (`view_marks.rs` `selection_menu`/`annotate_panel`, `pointer.rs`, `text_selection.rs`):
+  the reader's bottom word bar became the web's card beside the words: quick marks and Clear; New Note (or Explore
+  for one word), Annotate, Resources (Latter-day Saint tradition), Focus scripture; Copy text and the reference.
+  Annotate: Back/Escape, named quick marks, any style and color with Custom, Apply/Remove, note on the first verse.
+  Resources and Focus scripture use the existing resources loader and passage panel. UTF-16 range mapping unchanged.
+- **VT-A03 Small windows** (`main.rs`, `header.rs`, `view.rs`, `settings_ui.rs`, `lessons_ui.rs`, `journal_ui.rs`):
+  minimum 600×640 (was 920×640); below 768px the phone layout (docked bottom navigation, page controls or a
+  Settings pill at the top right, chapter-only reader trail, study panel floating over the text, popovers clamped,
+  stacked featured lesson card and a one-column lesson grid, Settings page from the top, Write a reflection showing
+  the day screen with its new entry). Drawers and dialogs cover the docked navigation.
+- **VT-A05 Bibles dialog** (`reader_tools_ui.rs`): from 768px a centered panel over the page dimmed 40%, catalog
+  min(60rem)×min(48rem) with search/language in a 272px column beside the results, language chooser in 2–3 columns;
+  backdrop click closes it; narrow windows keep the full-window dialog.
+- **VT-A06** Reader settings ends with **All settings** (Settings → Reading). **VT-A07** a **Privacy policy** link
+  below every Settings section opens `https://www.versetogether.org/privacy` through the existing `OpenLink` handling.
+
+## Checks (final tree, `native/`, Rust env `/tmp/verse-native-tools/env.sh`, `CARGO_BUILD_JOBS=4`)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Native tests | `cargo test` | **Passed**: 205 passed, 2 ignored (the existing `snapshots` exporter and the new `width_snapshots` review renderer) |
+| New/affected tests | `quick_mark*`, `lesson_contents_*`, `the_selection_menu_*`, `reader_settings_end_with_all_settings_*`, `the_contents_drawer_*`, `your_bibles_opens_as_the_websites_dialog`, `new_parity_screens_draw_*`, `narrow_windows_show_*` | **Passed** (in the full run) |
+| Strict clippy | `cargo clippy --all-targets -- -D warnings` | **Passed** |
+| Format / whitespace | `cargo fmt --check`, `git diff --check` | **Passed** |
+| Release build | `cargo build --release --locked` | **Passed**; binary SHA-256 `4eeb2981b3e880d3b17c0547066f568b5718cbc5f5f8d69d765e2413a2771e4f` |
+| Package | `native/package-linux.sh` | **Passed**: `dist/verse-together-native-linux-x86_64.tar.gz` SHA-256 `68581cca3f887d6a58486b7b657776733cf4fed95934c9092ab33b57aeaf30d5`; holds only the binary (`4eeb2981…`, same as tested), README/PARITY/VERIFICATION (this copy without this row), icon, installer and licenses; no database, profile or credential |
+| Renderer tests | `cargo test -p iced_tiny_skia` | **Not run**: `vendor/iced_tiny_skia` unchanged |
+| Headless width renders | `VERSE_SNAPSHOTS=… cargo test width_snapshots -- --ignored` (607/920/1214, 22 screens each) | **Passed** (review aid only, not GUI evidence); found and fixed a renderer panic (an unbounded dashed outline gave a NaN/∞ rounded rectangle) before any GUI run |
+
+## Real desktop check (release builds, Linux Computer Use, `--no-account`, scratch `--data-dir /tmp/vt-native-qa-20261028/profile`)
+
+Evidence: `/tmp/vt-native-qa-20261028/shots/` (01–48). Monitor 1280×800; maximized client ≈1214×733, GNOME left
+tile ≈607×733, and that window dragged to ≈920 wide. Builds in order: `1f2aa357…` (01–23), `f6f8772e…` (24–37),
+`c1ca3e2b…` (48), final `4eeb2981…` (38–47); each later build only added the fixes noted below, and the final build's
+checks are 38–47. Scratch data only (synthetic notes, marks and quick marks).
+
+- **Passed — selection menu (1214):** dragging 1 Nephi 1:2→3 opened the card above the words with the labeled actions
+  (01); Annotate → Underline → Custom `#2a9d8f` → Apply underlined exactly the selected words in both verses (02–04);
+  Escape returned to the actions; Copy text showed "Copied"; Resources opened for 1:2–3 (05); Focus scripture opened
+  the passage panel (06; build 1 left Resources in front, fixed, re-checked in 26). Clipboard contents themselves
+  **Not verified** (no clipboard reader on this desktop).
+- **Passed — quick marks (1214):** mark 1 renamed "Promises" and made a yellow underline; mark 2 given custom
+  `#3a7bd5` (07–08); after quitting and relaunching both persisted, appeared in the menu, and Promises applied as a
+  yellow underline (09–11); persisted again across two later relaunches (24, 29).
+- **Passed — contents (1214, 607):** drawer grouped and compact with all chapters and both closing sections (12);
+  Jeremiah 32 expanded alone (13); 32:9–10 jumped to its commentary and closed the drawer (14); reopening kept
+  Jeremiah 32 current and open (15); a backdrop click closed it without jumping (16); at 607 the drawer covers the
+  docked navigation (42; build 3 drew the dock over it, fixed).
+- **Passed — All settings / privacy:** Reader settings ends with All settings (17) and opens Settings → Reading (18);
+  Privacy policy shows under Account and Translations (19, 34, 46); the simulated-click test checks Translations and
+  Feedback send the canonical URL. The link was **not clicked** in the GUI (it would open the shared desktop browser).
+- **Passed — Bibles dialog:** 1214 centered panel with search beside results (20), language chooser grid (21),
+  Escape back to the catalog (22), backdrop click closed it and reached nothing behind (23; no browser or Settings tab
+  change); 920 centered panel (47); 607 full window and Done (36–37).
+- **Passed — narrow 607:** reader phone layout (27, 38), selection menu below the words and clear of the dock (28),
+  Annotate fits (29), its note opens in the floating panel and takes typing (30), Journal calendar (32), Write a
+  reflection on the day screen with its entry (39; build 1–3 left the composer off-screen, 33, fixed), Come Follow Me
+  stacked featured card, chips and one-column lessons (40–41; before 31), Study tools stacked rows (35).
+- **Passed — 920:** desktop header and lesson pill (43), selection menu (44), New Note created a journal note from
+  1 Nephi 1:4 quoting the selected words (45), Translations (46), Bibles panel (47). 1214 lesson overview unchanged (48).
+- **Not run:** keyboard-only traversal and screen-reader names of the new controls; dark theme of the new screens;
+  window widths between 607 and 768 other than ≈607; minimizing to exactly 600px; lesson and guide-prose selection
+  bars (unchanged, still bottom bars); Explore from the menu; web side-by-side re-capture.
+
+## Remaining / for review
+
+- Release notes are still the website's through 2.14.0: this branch's `package.json`, `src/lib/releaseNotes.ts` and
+  `public/release-notes/` predate 2.15–2.16, `build.rs` reads the root `package.json` version and
+  `generate-release-notes.mjs --check` compares with local web source, so a truthful refresh needs master's web files
+  merged into this branch (an unrelated merge, not done).
+- Not ports of 2.15–2.16 features (lesson word exploration placement, centered Journal/Log panel, chapter keys).
+- Known differences recorded in `PARITY.md`: hex custom color, names save as typed, phone layout up to 768px (the
+  website from 640px), no contents rail, the menu placed from pointer positions and without its arrow, New Note always a
+  new note. No accessibility certification is claimed.
+
 # Independent date-picker and entry-recovery acceptance — October 28, 2026
 
 Reviewed the native follow-up on `d985baa`: migration/backup, transactional note creation and draft removal,

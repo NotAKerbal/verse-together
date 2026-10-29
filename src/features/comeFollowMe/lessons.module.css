@@ -38,23 +38,6 @@
   color: var(--rule-strong);
 }
 
-/* Study plans left the main navigation; this keeps them one tap from the lessons. */
-.plansLink {
-  padding-inline: 0.25rem;
-  font-size: 0.875rem;
-}
-
-.plansLink a {
-  color: var(--foreground-soft);
-  text-decoration: underline;
-  text-decoration-color: var(--rule-strong);
-  text-underline-offset: 4px;
-}
-
-.plansLink a:hover {
-  color: var(--foreground);
-}
-
 /* Sections */
 
 .section {
