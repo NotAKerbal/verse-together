@@ -44,6 +44,7 @@ export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
     { kind: "improved", text: "Account settings uses clear sign-in and device cards with icons, connection badges and sign-in dates, puts this device first, and separates account deletion from everyday controls." },
+    { kind: "improved", text: "Removed the old study plans pages; the journal and reading progress remain available." },
     { kind: "improved", text: "Settings tabs slide smoothly between sections, matching the main navigation and respecting reduced motion." },
     { kind: "improved", text: "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows." },
   ],

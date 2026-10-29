@@ -7,7 +7,6 @@ import BrowseCard from "@/components/BrowseCard";
 import { formatChapterLabel, getChapterDelineation, getChapterHref } from "./scriptureCatalog";
 import { useLastPosition } from "./useReadingProgress";
 
-/** Renders nothing until there is a saved position, so the Library grid has no empty slot. */
 export default function ContinueReadingCard({ className }: { className?: string }) {
   const { showLdsContent } = useFaithTradition();
   const position = useLastPosition();
