@@ -90,3 +90,9 @@ test("the sign-up page's Google error lands back on sign-up", () => {
     errorCallbackURL: `${ORIGIN}/sign-up?redirect=%2Fplans%23today`,
   });
 });
+
+ test("passkeys make the sign-in page reachable on Google deployments", () => {
+  assert.deepEqual(chooseSignInRoute({ google: true, emailPassword: false, passkey: true }, "/notes"), {
+    kind: "page", href: "/sign-in?redirect=%2Fnotes",
+  });
+});

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import PasskeysPanel from "./PasskeysPanel";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { type IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { faArrowRightFromBracket, faChevronDown, faCircleCheck, faDesktop, faEnvelope, faKey, faLaptop, faMobileScreenButton, faPenToSquare, faShieldHalved, faTabletScreenButton, faTrashCan } from "@fortawesome/free-solid-svg-icons";
@@ -288,6 +289,8 @@ function AccountDetails() {
             )}
             {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
           </Section>
+
+          {capabilities?.passkey ? <Section title="Passkeys" description="Sign in with your device or security key" icon={faKey} defaultOpen><PasskeysPanel /></Section> : null}
 
           {emailPassword ? (
             <Section title="Password" description="Update your sign-in password" icon={faKey}>

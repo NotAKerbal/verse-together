@@ -42,7 +42,9 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    { kind: "new", text: "Add a passkey in Account settings, then sign in with your device or security key. Google sign-in remains available." },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [

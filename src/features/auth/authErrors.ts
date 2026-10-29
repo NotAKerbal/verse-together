@@ -2,6 +2,17 @@
 // Unknown codes get a generic message so internal details never reach the page.
 
 const MESSAGES: Record<string, string> = {
+  REGISTRATION_CANCELLED: "Passkey setup cancelled. Try again when you're ready.",
+  PREVIOUSLY_REGISTERED: "This passkey is already registered. Try a different device or security key.",
+  AUTHENTICATION_FAILED: "We couldn't verify that passkey. Try again or use another sign-in method.",
+  AUTH_CANCELLED: "Passkey request cancelled. Try again or use another sign-in method.",
+  ERROR_CEREMONY_ABORTED: "Passkey request cancelled. Try again or use another sign-in method.",
+  ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY: "Passkey request wasn't completed. Try again or use another sign-in method.",
+  PASSKEY_NOT_FOUND: "No matching passkey was found. Use another sign-in method, then add a passkey in your account.",
+  CHALLENGE_NOT_FOUND: "Your passkey request expired. Try again.",
+  FAILED_TO_VERIFY_AUTHENTICATION: "We couldn't verify that passkey. Try again or use another sign-in method.",
+  FAILED_TO_VERIFY_REGISTRATION: "We couldn't set up that passkey. Try again.",
+  YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY: "That passkey couldn't be added to this account.",
   INVALID_EMAIL_OR_PASSWORD: "That email and password don't match an account.",
   INVALID_PASSWORD: "That password isn't right.",
   INVALID_EMAIL: "Enter a valid email address.",

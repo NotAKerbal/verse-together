@@ -23,16 +23,18 @@ import type * as crons from "../crons.js";
 import type * as feedCache from "../feedCache.js";
 import type * as feedEpisodes from "../feedEpisodes.js";
 import type * as feedback from "../feedback.js";
+import type * as feedbackRules from "../feedbackRules.js";
 import type * as http from "../http.js";
 import type * as insights from "../insights.js";
 import type * as markValidators from "../markValidators.js";
 import type * as nativeAuth from "../nativeAuth.js";
 import type * as nativeAuthRules from "../nativeAuthRules.js";
-import type * as nativeSync from "../nativeSync.js";
 import type * as nativeSignIn from "../nativeSignIn.js";
 import type * as nativeSignInPlugin from "../nativeSignInPlugin.js";
+import type * as nativeSync from "../nativeSync.js";
 import type * as noteFolders from "../noteFolders.js";
 import type * as noteJournal from "../noteJournal.js";
+import type * as noteScriptureLinks from "../noteScriptureLinks.js";
 import type * as ownership from "../ownership.js";
 import type * as preferences from "../preferences.js";
 import type * as readingPlans from "../readingPlans.js";
@@ -66,16 +68,18 @@ declare const fullApi: ApiFromModules<{
   feedCache: typeof feedCache;
   feedEpisodes: typeof feedEpisodes;
   feedback: typeof feedback;
+  feedbackRules: typeof feedbackRules;
   http: typeof http;
   insights: typeof insights;
   markValidators: typeof markValidators;
   nativeAuth: typeof nativeAuth;
   nativeAuthRules: typeof nativeAuthRules;
-  nativeSync: typeof nativeSync;
   nativeSignIn: typeof nativeSignIn;
   nativeSignInPlugin: typeof nativeSignInPlugin;
+  nativeSync: typeof nativeSync;
   noteFolders: typeof noteFolders;
   noteJournal: typeof noteJournal;
+  noteScriptureLinks: typeof noteScriptureLinks;
   ownership: typeof ownership;
   preferences: typeof preferences;
   readingPlans: typeof readingPlans;
@@ -115,5 +119,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  betterAuth: import("../betterAuth/_generated/component.js").ComponentApi<"betterAuth">;
 };

@@ -16,6 +16,7 @@ import {
   FormMessage,
   GoogleButton,
   PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS,
   SignInUnavailableNotice,
   TextField,
   useAuthCapabilities,
@@ -37,16 +38,13 @@ function SignInFormInner() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [pending, setPending] = useState<"email" | "google" | null>(null);
+  const [pending, setPending] = useState<"email" | "google" | "passkey" | null>(null);
   const [error, setError] = useState<string | null>(redirectError ? authErrorMessage(redirectError) : null);
   const [info, setInfo] = useState<string | null>(null);
-  // Signed in with Better Auth; waiting for Convex to verify the session and load the app account.
   const [finishing, setFinishing] = useState(false);
-  // A session exists but can't be used (Convex rejected it, or provisioning failed).
   const sessionError = authUser ? accountError : null;
   const waiting = finishing && !sessionError;
 
-  // Navigate only once the app user is ready, so server-rendered pages see a provisioned account.
   useEffect(() => {
     if (user) router.replace(returnTo);
   }, [user, returnTo, router]);
@@ -80,6 +78,29 @@ function SignInFormInner() {
     }
   }
 
+  async function handlePasskey() {
+    if (pending || waiting) return;
+    setError(null);
+    setInfo(null);
+    setPending("passkey");
+    try {
+      if (!window.isSecureContext || !window.PublicKeyCredential) {
+        setError("Passkeys aren't supported in this browser. Use another sign-in method.");
+        return;
+      }
+      const { error: passkeyError } = await authClient.signIn.passkey();
+      if (passkeyError) {
+        setError(authErrorMessage(passkeyError));
+        return;
+      }
+      setFinishing(true);
+    } catch {
+      setError(authErrorMessage(null));
+    } finally {
+      setPending(null);
+    }
+  }
+
   async function handleGoogle() {
     if (pending || waiting) return;
     setError(null);
@@ -93,7 +114,6 @@ function SignInFormInner() {
         setError(authErrorMessage(socialError));
         setPending(null);
       }
-      // On success the browser is navigating to Google; keep the pending state.
     } catch {
       setError(authErrorMessage(null));
       setPending(null);
@@ -113,17 +133,23 @@ function SignInFormInner() {
         ) : (
           <>
             {capabilities.google ? (
-              <GoogleButton onClick={handleGoogle} pending={pending === "google"} disabled={pending === "email" || waiting} />
+              <GoogleButton onClick={handleGoogle} pending={pending === "google"} disabled={(pending !== null && pending !== "google") || waiting} />
             ) : null}
+            {capabilities.passkey ? (
+              <button type="button" className={`${SECONDARY_BUTTON_CLASS} w-full`} onClick={handlePasskey}
+                disabled={pending !== null || waiting} aria-busy={pending === "passkey" || waiting}>
+                {waiting ? "Opening your account…" : pending === "passkey" ? "Signing in…" : "Sign in with a passkey"}
+              </button>
+            ) : null}
+            {capabilities.passkey ? <p className="text-sm text-[color:var(--foreground-muted)]">Already added a passkey? Use your fingerprint, face, device PIN, or security key.</p> : null}
             {capabilities.google && capabilities.emailPassword ? <Divider /> : null}
-            {!capabilities.google && !capabilities.emailPassword ? <SignInUnavailableNotice /> : null}
+            {!capabilities.google && !capabilities.emailPassword && !capabilities.passkey ? <SignInUnavailableNotice /> : null}
             {capabilities.google && !capabilities.emailPassword ? (
               <p className="text-sm text-[color:var(--foreground-muted)]">
                 New to Verse Together? Continuing with Google creates your account.
               </p>
             ) : null}
             {capabilities.emailPassword ? (
-              // Dormant until AUTH_EMAIL_PASSWORD_ENABLED=true on the Convex deployment.
               <>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <TextField
