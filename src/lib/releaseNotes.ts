@@ -42,15 +42,23 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "Settings groups the feature guide and privacy policy as quiet footer links." },
-    { kind: "improved", text: "Scripture links can open in the Android app, and signed-in Android readers can research study paths for uncached chapters." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.19.0",
+    date: "2026-10-29",
+    title: "Android links and study paths",
+    items: [
+    { kind: "improved", text: "Settings groups the feature guide and privacy policy as quiet footer links." },
+    { kind: "improved", text: "Scripture links can open in the Android app, and signed-in Android readers can research study paths for uncached chapters." },
+    ],
+    commits: ["812ec0f", "e121122", "6114994"],
+  },
+  {
     version: "2.18.0",
+    masterCommit: "9682a2e",
     date: "2026-10-28",
     title: "Feature guide and desktop study tools",
     items: [
