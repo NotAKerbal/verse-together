@@ -42,18 +42,36 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "new", text: "Open the feature guide from Settings for a visual catalog of short demos, written steps and shareable links to each topic." },
-    { kind: "improved", text: "Account settings uses clear sign-in and device cards with icons, connection badges and sign-in dates, puts this device first, and separates account deletion from everyday controls." },
-    { kind: "improved", text: "Removed the old study plans pages; the journal and reading progress remain available." },
-    { kind: "improved", text: "Settings tabs slide smoothly between sections, matching the main navigation and respecting reduced motion." },
-    { kind: "improved", text: "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.18.0",
+    date: "2026-10-28",
+    title: "Feature guide and desktop study tools",
+    items: [
+      {
+        kind: "new",
+        text: "Open the feature guide from Settings for a visual catalog of short demos, written steps and shareable links to each topic.",
+        screenshot: {
+          src: "/release-notes/2.18.0-feature-guide.webp",
+          width: 1600,
+          height: 1044,
+          alt: "The feature guide's visual topic cards for reading, search, Bibles, comparisons and scripture marks.",
+          caption: "Find a topic, watch its short demos, and follow the written steps.",
+        },
+      },
+      { kind: "improved", text: "Account settings uses clear sign-in and device cards with icons, connection badges and sign-in dates, puts this device first, and separates account deletion from everyday controls." },
+      { kind: "improved", text: "Removed the old study plans pages; the journal and reading progress remain available." },
+      { kind: "improved", text: "Settings tabs slide smoothly between sections, matching the main navigation and respecting reduced motion." },
+      { kind: "improved", text: "The Rust desktop app adds the website's menu beside selected words, named and reorderable quick marks with any style or color, grouped lesson contents, a centered Bibles dialog, links to All settings and the privacy policy, and a compact layout for small windows." },
+    ],
+    commits: ["3ec0cfc", "77b63ad", "250ba26", "a7bf851", "8cd93f1", "9b9de9b", "b1d778a", "25f09ca"],
+  },
+  {
     version: "2.17.0",
+    masterCommit: "48584b6",
     date: "2026-10-28",
     title: "Mobile testing and account recovery",
     items: [
