@@ -15,10 +15,11 @@
 
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
-import { useEffect, useEffectEvent, useMemo, useRef, useState, type ComponentRef, type Ref } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ComponentRef } from "react";
 import { AccessibilityInfo, BackHandler, Keyboard, Platform, Pressable, ScrollView, Share, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, liftShadow, useBottomClearance, withAlpha, type IconName } from "../../components/ui";
+import RoundButton from "../../components/RoundButton";
 import { webUrl } from "../../navigation/hrefs";
 import {
   annotationChapter,
@@ -120,22 +121,6 @@ export function PresetButton({ preset, state, onPress, showName = false }: { pre
     >
       <MarkSample preset={preset} />
       {showName ? <Text style={{ flexShrink: 1, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16, color: colors.foreground }}>{label}</Text> : null}
-    </Pressable>
-  );
-}
-
-function RoundButton({ icon, label, onPress, testID, size = 15, buttonRef }: { icon: IconName; label: string; onPress: () => void; testID?: string; size?: number; buttonRef?: Ref<ComponentRef<typeof Pressable>> }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      ref={buttonRef}
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: pressed ? colors.surfaceCardSoft : "transparent" })}
-    >
-      <Icon name={icon} size={size} color={colors.foregroundSoft} />
     </Pressable>
   );
 }

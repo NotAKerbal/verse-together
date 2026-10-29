@@ -9,7 +9,7 @@ import StudyCompanion, { type CompanionChapter } from "@/features/comeFollowMe/S
 import type { NoteSource } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import styles from "@/features/comeFollowMe/studyCompanion.module.css";
-import { getBookLabel, getChapterHref } from "@/features/plans/scriptureCatalog";
+import { getBookLabel, getChapterHref } from "@/features/reading/scriptureCatalog";
 import { readGuide, readGuides, type Guide } from "@/lib/cfm/cfmGuide";
 import {
   COME_FOLLOW_ME_WEEKS,

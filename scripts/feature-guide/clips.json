@@ -1,0 +1,51 @@
+{
+  "source": {
+    "app": "Verse Together production build (next build, then next start) of dev at the revision below, public Convex development URLs only",
+    "revision": "7b9f9933711f1d00948f57d11143404cfce212d4",
+    "capturedOn": "2026-10-28",
+    "viewport": "1280x720 CSS px at device scale 1.5 (1920x1080 frames), light theme, headless Chromium 1208 via Playwright 1.58.2",
+    "profiles": "Fresh guest profiles per capture.mjs; nothing signed in, nothing sent; feedback form shown empty",
+    "notes": "cut lists [from, to] scene seconds left out of a clip (a page still loading). Scene times below are capture marks (see capture.mjs) or p<n>, the n-th real mouse press of the scene"
+  },
+  "output": {
+    "width": 1280,
+    "height": 720,
+    "fps": 24,
+    "encode": { "preset": "slow", "crf": 28, "tune": "animation" },
+    "poster": { "width": 960, "quality": 72 }
+  },
+  "clips": [
+    { "id": "browse-library", "scene": "browse_library", "from": "rec", "to": "end", "cut": [[2.97, 3.45], [8.2, 8.72]] },
+    { "id": "browse-chapter-grid", "scene": "browse_grid", "from": "rec", "to": "end" },
+    { "id": "search-reference", "scene": "search_reference", "from": "rec", "to": "end" },
+    { "id": "search-phrase", "scene": "search_phrase", "from": "rec", "to": "end" },
+    { "id": "reading-settings", "scene": "reading_settings", "from": "rec", "to": "end" },
+    { "id": "reading-simple-mode", "scene": "reading_simple", "from": "rec", "to": "end", "poster": "simple+1" },
+    { "id": "bibles-add", "scene": "bibles_add", "from": "rec", "to": "end" },
+    { "id": "bibles-language", "scene": "bibles_language", "from": "rec", "to": "end" },
+    { "id": "compare-inline", "scene": "compare", "from": "rec", "to": "sbs_start" },
+    { "id": "compare-side-by-side", "scene": "compare", "from": "sbs_start", "to": "end" },
+    { "id": "bibles-default", "scene": "bibles_default", "from": "rec", "to": "end" },
+    { "id": "jst", "scene": "jst", "from": "rec", "to": "end" },
+    { "id": "faith-tradition", "scene": "faith", "from": "rec", "to": "end" },
+    { "id": "marks-highlight", "scene": "marks_highlight", "from": "rec", "to": "end" },
+    { "id": "marks-underline", "scene": "marks_underline", "from": "rec", "to": "end" },
+    { "id": "marks-remove", "scene": "marks_remove", "from": "rec", "to": "end" },
+    { "id": "quick-marks-name", "scene": "quickmarks_name", "from": "rec", "to": "end" },
+    { "id": "quick-marks-use", "scene": "quickmarks_use", "from": "rec", "to": "end" },
+    { "id": "explore-study-helps", "scene": "explore_helps", "from": "rec", "to": "end" },
+    { "id": "explore-languages", "scene": "explore_languages", "from": "rec", "to": "end" },
+    { "id": "study-paths", "scene": "study_paths", "from": "rec", "to": "end" },
+    { "id": "notes-quote", "scene": "notes_new", "from": "rec", "to": "write" },
+    { "id": "notes-write", "scene": "notes_new", "from": "write-0.4", "to": "end" },
+    { "id": "log-reading", "scene": "log", "from": "rec", "to": "end" },
+    { "id": "journal-goals", "scene": "journal_goals", "from": "rec", "to": "end" },
+    { "id": "journal-prompts", "scene": "journal_prompts", "from": "rec", "to": "end" },
+    { "id": "journal-day", "scene": "journal_day", "from": "rec", "to": "end" },
+    { "id": "cfm-week", "scene": "cfm_week", "from": "rec", "to": "end" },
+    { "id": "cfm-context", "scene": "cfm_context", "from": "rec", "to": "end" },
+    { "id": "cfm-note", "scene": "cfm_note", "from": "rec", "to": "end" },
+    { "id": "focus-share", "scene": "focus_share", "from": "rec", "to": "end", "cut": [[7.74, 8.17]], "poster": "copied+0.3" },
+    { "id": "settings-tour", "scene": "settings_tour", "from": "rec", "to": "end" }
+  ]
+}
