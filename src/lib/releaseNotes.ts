@@ -42,14 +42,32 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "new", text: "Add a passkey in Account settings, then sign in with your device or security key. Google sign-in remains available." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.0",
+    date: "2026-10-29",
+    title: "Sign in with a passkey",
+    items: [
+      {
+        kind: "new",
+        text: "Add a passkey in Account settings, then sign in with your fingerprint, face, device PIN, or security key. You can name and remove your passkeys, and Google sign-in remains available.",
+        screenshot: {
+          src: "/release-notes/2.20.0-passkey-sign-in.webp",
+          width: 876,
+          height: 630,
+          alt: "The sign-in screen with Continue with Google and Sign in with a passkey buttons, followed by supported device options.",
+          caption: "Use a passkey you've added to sign in with your device or security key.",
+        },
+      },
+    ],
+    commits: ["7273400"],
+  },
+  {
     version: "2.19.0",
+    masterCommit: "ddd553c",
     date: "2026-10-29",
     title: "Android links and study paths",
     items: [
