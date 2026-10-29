@@ -54,7 +54,7 @@ export {
   serializeVerseSpec,
 } from "@/lib/passageShare";
 export { getQuickNavSuggestions, parseScriptureReferenceQuery, type QuickNavSuggestion } from "@/lib/scriptureQuickNav";
-export { getBookLabel, getChapterHref, formatChapterLabel } from "@/features/plans/scriptureCatalog";
+export { getBookLabel, getChapterHref, formatChapterLabel } from "@/features/reading/scriptureCatalog";
 export {
   ANNOTATION_BODY_MAX,
   DEFAULT_MARK_PRESETS,
