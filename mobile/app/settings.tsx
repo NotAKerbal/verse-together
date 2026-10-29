@@ -11,6 +11,7 @@ import { AccountSection } from "../src/account/AccountSection";
 import { openExternal } from "../src/components/Blocks";
 import { Button, IconButton } from "../src/components/ui";
 import AboutSettings, { PRIVACY_URL } from "../src/features/settings/AboutSettings";
+import FeedbackSettings from "../src/features/settings/FeedbackSettings";
 import QuickMarkSettings from "../src/features/settings/QuickMarkSettings";
 import ReadingSettings from "../src/features/settings/ReadingSettings";
 import { CardHeader, QuietLink, SettingsCard } from "../src/features/settings/SettingsParts";
@@ -126,8 +127,11 @@ export default function SettingsScreen() {
               <QuickMarkSettings />
             </SettingsCard>
           </Panel>
+          <Panel tab="feedback" selected={selected === "feedback"}>
+            <FeedbackSettings />
+          </Panel>
           <Panel tab="about" selected={selected === "about"}>
-            <AboutSettings onOpenAccount={() => select("account")} />
+            <AboutSettings onOpenAccount={() => select("account")} onOpenFeedback={() => select("feedback")} />
           </Panel>
         </View>
         <View style={{ marginTop: 0.75 * REM }}>

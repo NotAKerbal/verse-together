@@ -88,7 +88,7 @@ public class ScriptureTextView: ExpoView, UITextViewDelegate, UIGestureRecognize
   }
 
   func setContent(_ record: ContentRecord) {
-    let key = ([record.text] + record.runs.map { "\($0.start),\($0.end),\($0.font),\($0.size),\($0.color),\($0.letterSpacing),\($0.style ?? "")" }
+    let key = ([record.text] + record.runs.map { "\($0.start),\($0.end),\($0.font),\($0.size),\($0.color),\($0.letterSpacing),\($0.style ?? ""),\($0.strikethrough)" }
       + record.paragraphs.map { "\($0.start),\($0.end),\($0.lineHeight),\($0.spacingAfter)" }).joined(separator: "|")
     if key == contentKey { return }
     contentKey = key
@@ -98,11 +98,15 @@ public class ScriptureTextView: ExpoView, UITextViewDelegate, UIGestureRecognize
     for run in record.runs {
       guard let range = clamp(run.start, run.end, length) else { continue }
       let font = Self.styled(Self.font(named: run.font, size: run.size), run.style)
+      let runColor = color(fromARGB: run.color)
       attributed.addAttributes([
         .font: font,
-        .foregroundColor: color(fromARGB: run.color),
+        .foregroundColor: runColor,
         .kern: run.letterSpacing * font.pointSize,
       ], range: range)
+      if run.strikethrough {
+        attributed.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: runColor.withAlphaComponent(0.7)], range: range)
+      }
     }
     for paragraph in record.paragraphs {
       guard let range = clamp(paragraph.start, paragraph.end, length) else { continue }

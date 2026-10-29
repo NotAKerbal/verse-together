@@ -4,11 +4,23 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, Vi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, IconButton, Notice } from "../src/components/ui";
 import { VOLUME_IDS, type VolumeId } from "../src/data/scripture";
-import { searchScriptures, type SearchResults } from "../src/data/search";
+import { MAX_VERSE_RESULTS, searchScriptures, type SearchResults } from "../src/data/search";
 import { chapterPath } from "../src/navigation/hrefs";
 import { getScriptureVolumeLabel } from "../src/shared/web";
+import { isLdsVolume, useFaithTradition } from "../src/storage/faithTradition";
 import { useTheme } from "../src/theme/theme";
 import { fonts } from "../src/theme/tokens";
+
+/**
+ * Results this device shows: Other denominations keeps only the Bible's (the web filters its results the same way).
+ * The Bible is searched first, so verse matches past the limit can only be the Bible's when all 40 shown are.
+ */
+export function visibleResults(results: SearchResults, showLdsContent: boolean): SearchResults {
+  if (showLdsContent) return results;
+  const verses = results.verses.filter((group) => !isLdsVolume(group.volume));
+  const shown = verses.reduce((sum, group) => sum + group.matchedVerses.length, 0);
+  return { references: results.references.filter((item) => !isLdsVolume(item.volume)), verses, truncated: results.truncated && shown >= MAX_VERSE_RESULTS };
+}
 
 type Row =
   | { kind: "heading"; id: string; text: string }
@@ -20,7 +32,10 @@ export default function SearchScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
-  const [volume, setVolume] = useState<VolumeId | undefined>();
+  const { showLdsContent } = useFaithTradition();
+  const [chosenVolume, setVolume] = useState<VolumeId | undefined>();
+  const volumes = VOLUME_IDS.filter((id) => showLdsContent || !isLdsVolume(id));
+  const volume = chosenVolume && volumes.includes(chosenVolume) ? chosenVolume : undefined;
   const [results, setResults] = useState<SearchResults | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +57,7 @@ export default function SearchScreen() {
     setBusy(true);
     const timer = setTimeout(() => {
       try {
-        const next = searchScriptures(trimmed, { volume });
+        const next = visibleResults(searchScriptures(trimmed, { volume }), showLdsContent);
         if (id === run.current) {
           setResults(next);
           setError(null);
@@ -54,7 +69,7 @@ export default function SearchScreen() {
       }
     }, 280);
     return () => clearTimeout(timer);
-  }, [query, volume]);
+  }, [query, volume, showLdsContent]);
 
   const rows: Row[] = [];
   if (results?.references.length) {
@@ -92,7 +107,7 @@ export default function SearchScreen() {
             autoFocus
             value={query}
             onChangeText={setQuery}
-            placeholder="Alma 32, 1 Ne 3:7, or words like faith"
+            placeholder={showLdsContent ? "Alma 32, 1 Ne 3:7, or words like faith" : "John 3:16, Genesis 1, or words like faith"}
             placeholderTextColor={colors.foregroundSoft}
             returnKeyType="search"
             autoCorrect={false}
@@ -103,7 +118,7 @@ export default function SearchScreen() {
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="radiogroup" accessibilityLabel="Search in" contentContainerStyle={{ gap: 8 }}>
           {chip(undefined, "All")}
-          {VOLUME_IDS.map((id) => chip(id, getScriptureVolumeLabel(id)))}
+          {volumes.map((id) => chip(id, getScriptureVolumeLabel(id)))}
         </ScrollView>
       </View>
       {error ? (
@@ -124,11 +139,13 @@ export default function SearchScreen() {
             </View>
           ) : results && rows.length === 0 ? (
             <Text accessibilityLiveRegion="polite" style={{ fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundMuted }}>
-              No matches. Try a reference like “Mosiah 2” or fewer words.
+              {`No matches. Try a reference like “${showLdsContent ? "Mosiah 2" : "Psalm 23"}” or fewer words.`}
             </Text>
           ) : !results ? (
             <Text style={{ fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: colors.foregroundSoft }}>
-              Search the standard works on this device: go to a reference, or find verses by their words.
+              {showLdsContent
+                ? "Search the standard works on this device: go to a reference, or find verses by their words."
+                : "Search the Bible on this device: go to a reference, or find verses by their words."}
             </Text>
           ) : undefined
         }

@@ -23,7 +23,7 @@ export type StudySyncPort = {
   connected(): boolean;
   subscribeConnection(listener: () => void): () => void;
   /** Calls made only online, with no outbox: they reject offline or after a timeout. */
-  call<T>(name: "openReadingEntry" | "saveJournalGoals" | "setGuideAnnotation" | "deleteGuideHighlight" | "getGuideHighlights", args: Record<string, unknown>): Promise<T>;
+  call<T>(name: "openReadingEntry" | "saveJournalGoals" | "setGuideAnnotation" | "deleteGuideHighlight" | "getGuideHighlights" | "getMyProgressForBook", args: Record<string, unknown>): Promise<T>;
 };
 
 export type StudySession =

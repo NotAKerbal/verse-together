@@ -26,8 +26,10 @@ class RunRecord : Record {
   @Field val letterSpacing: Double = 0.0
   /** "bold", "italic" or "boldItalic"; absent (or anything else): the face as named. */
   @Field val style: String? = null
+  /** Struck through (KJV wording the JST leaves out); absent: not. */
+  @Field val strikethrough: Boolean = false
 
-  fun toRun() = TextRun(start, end, font, size.toFloat(), argb(color), letterSpacing.toFloat(), typefaceStyle(style))
+  fun toRun() = TextRun(start, end, font, size.toFloat(), argb(color), letterSpacing.toFloat(), typefaceStyle(style), strikethrough)
 }
 
 class ParagraphRecord : Record {

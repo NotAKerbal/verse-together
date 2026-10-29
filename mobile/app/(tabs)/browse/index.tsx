@@ -12,7 +12,9 @@ import {
   getComeFollowMeWeek,
   scriptureCatalog,
 } from "../../../src/shared/web";
-import { useLastPosition, useSimpleMode } from "../../../src/storage/preferences";
+import { isLdsVolume, useFaithTradition } from "../../../src/storage/faithTradition";
+import { useSimpleMode } from "../../../src/storage/preferences";
+import { useContinueReadingPosition, type ReadingPosition } from "../../../src/storage/readingPosition";
 
 // Original generated scenery, with no people or figures (docs/browse-art-provenance.md).
 const VOLUME_ART: Record<string, string> = {
@@ -43,10 +45,8 @@ function ComeFollowMeCard() {
   );
 }
 
-function ContinueReadingCard() {
+function ContinueReadingCard({ position }: { position: ReadingPosition }) {
   const router = useRouter();
-  const position = useLastPosition();
-  if (!position) return null;
   const label = formatChapterLabel(position);
   const delineation = position.volume === "doctrineandcovenants" || position.volume === "dnc" ? "section" : "chapter";
   return (
@@ -65,12 +65,17 @@ function ContinueReadingCard() {
 export default function LibraryScreen() {
   const router = useRouter();
   const [simple] = useSimpleMode();
+  // This device's last chapter signed out, the account's signed in (readingPosition.ts); never one for the other.
+  const position = useContinueReadingPosition();
+  // Other denominations: the Bible and the journal, without Latter-day Saint volumes or Come, Follow Me (BrowseSelector.tsx).
+  const { showLdsContent } = useFaithTradition();
+  const continueAt = position && (showLdsContent || !isLdsVolume(position.volume)) ? position : null;
   return (
     <Page gap={16}>
       {simple ? null : <SearchPill onPress={() => router.push("/search")} />}
       <Grid>
-        {simple ? null : <ComeFollowMeCard />}
-        {simple ? null : <ContinueReadingCard />}
+        {simple || !showLdsContent ? null : <ComeFollowMeCard />}
+        {simple || !continueAt ? null : <ContinueReadingCard position={continueAt} />}
         {simple ? null : (
           <BrowseCard
             image="/art/browse-notes.webp"
@@ -80,7 +85,7 @@ export default function LibraryScreen() {
             onPress={() => router.navigate("/notes")}
           />
         )}
-        {LIBRARY_VOLUMES.map((volume) => (
+        {LIBRARY_VOLUMES.filter((volume) => showLdsContent || !isLdsVolume(volume.id)).map((volume) => (
           <BrowseCard
             key={volume.id}
             image={VOLUME_ART[volume.id]}

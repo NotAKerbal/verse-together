@@ -407,6 +407,24 @@ export class AccountStudyStore {
   }
 
   /**
+   * A note's status as the account last reported it (its document, else its journal row). A note created here is a
+   * draft. The server refuses to edit anything but a draft and to delete a published note (convex/insights.ts); the
+   * outbox refuses the same changes up front, so they never wait in it to fail.
+   */
+  private noteStatus(id: string): string {
+    if (this.pendingCreate(id)) return "draft";
+    const doc = this.snapshot.docs.get(id);
+    if (doc) return doc.status ?? "draft";
+    const row = this.snapshot.cache.journal?.find((entry): entry is JournalNoteEntry => entry.kind === "note" && entry.id === id);
+    return row?.status ?? "draft";
+  }
+
+  private assertEditable(id: string) {
+    const status = this.noteStatus(id);
+    if (status !== "draft") throw new Error(`This entry is ${status === "published" ? "published" : "archived"}, so it can't be edited.`);
+  }
+
+  /**
    * Saves a note's text against the revision the editor loaded. A change already waiting for the note keeps its
    * own base (the editor loaded that text), so typing on never moves the base past a change made elsewhere.
    */
@@ -420,6 +438,7 @@ export class AccountStudyStore {
       return;
     }
     if (this.snapshot.outbox.ops.some((op) => op.kind === "delete" && this.resolveId(op.noteId) === id)) throw new Error("This entry is being deleted.");
+    this.assertEditable(id);
     const existing = this.snapshot.outbox.ops.find((op): op is SaveOp => op.kind === "save" && this.resolveId(op.noteId) === id);
     if (existing) {
       if (existing.text !== text) this.replaceOp(existing.opId, { ...existing, text, status: existing.status === "error" ? "pending" : existing.status, retryAt: null });
@@ -443,6 +462,7 @@ export class AccountStudyStore {
       });
       return;
     }
+    this.assertEditable(id);
     const existing = this.snapshot.outbox.ops.find((op): op is ReadingOp => op.kind === "reading" && this.resolveId(op.noteId) === id);
     const doc = this.snapshot.docs.get(id);
     const next: ReadingOp = {
@@ -464,6 +484,8 @@ export class AccountStudyStore {
   enqueueDelete(noteId: string) {
     const id = this.resolveId(noteId);
     const create = this.pendingCreate(id);
+    // Published notes may be shared; archived ones may be deleted, as on the website.
+    if (!create && this.noteStatus(id) === "published") throw new Error("This entry is published, so it can't be deleted.");
     this.updateOps((ops) => {
       const rest = ops.filter((op) => !((op.kind === "save" || op.kind === "reading") && this.resolveId(op.noteId) === id));
       if (create) {

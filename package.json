@@ -11,6 +11,7 @@
     "build": "next build --turbopack",
     "build:vercel": "node scripts/vercel-build.mjs",
     "test:deploy": "node --test scripts/vercel-build.test.mjs",
+    "check:android-app-links": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-android-app-links.mjs",
     "test:release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/release-version.test.mjs",
     "release:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.mjs check",
     "release:next": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.mjs next",

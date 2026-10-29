@@ -20,15 +20,23 @@ import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { ConvexReactClient, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { deviceStudy } from "../storage/study";
+import { forgetAccountEntryDraft } from "../features/journal/entryDraftStore";
+import { startPreferencesSync } from "../features/settings/preferencesSync";
+import { purgeAccountPrefs } from "../storage/preferences";
+import { forgetAccountReadingPosition } from "../storage/readingPosition";
 import { accountStore, purgeAccountCache, readLastOwner, readRecordedOwner, writeLastOwner } from "../storage/accountStudy";
 import { sessionBinding } from "./sessionBinding";
 import { setStudySession, type StudySession } from "../storage/studySession";
 import { StudySync, convexSyncClient } from "./studySync";
+import { AccountCalls, publishAccountCalls } from "./accountCalls";
+import { SiteAuth, convexTokenSource, publishSiteAuth } from "./siteAuth";
 import { storage as studyStorage } from "../storage/kv";
 import { accountApi, type PendingDeletion, type Viewer } from "./api";
 import { cookieJar, createNativeAuthClient, hasStoredSession, type NativeAuthClient, type SecureStorage } from "./client";
 import { readAccountConfig, type AccountConfig } from "./config";
 import { copyDeviceStudy, releaseAccountCopies, type CopyResult } from "./guestCopy";
+import { loadAccountLists, needsReauthentication, type AccountListsOutcome } from "@/features/auth/accountLists";
+import { authErrorMessage } from "@/features/auth/authErrors";
 import {
   OFFLINE_MESSAGE,
   base64Url,
@@ -74,6 +82,15 @@ export type AccountStatus =
 
 export type DeleteOutcome = { ok: true } | { ok: false; reauthenticate: boolean; message: string };
 
+/** A Settings → Account change through Better Auth: done, or why not (and whether signing in again would fix it). */
+export type ManageOutcome = { ok: true } | { ok: false; reauthenticate: boolean; message: string };
+
+export type LinkedAccount = { providerId: string };
+export type SessionRow = { id: string; userAgent?: string | null; createdAt: Date | string; expiresAt: Date | string };
+
+/** The account's sign-in methods and sessions (the web's AccountManager lists), each loaded on its own. */
+export type AccountLists = AccountListsOutcome<LinkedAccount, SessionRow> & { currentSessionId: string | null };
+
 type AccountContextValue = {
   status: AccountStatus;
   user: AccountUser | null;
@@ -86,6 +103,12 @@ type AccountContextValue = {
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<DeleteOutcome>;
   copyStudy: () => Promise<CopyResult>;
+  /** Renames the signed-in account (Better Auth /update-user), then has the app user pick the name up. */
+  updateName: (name: string) => Promise<ManageOutcome>;
+  /** Better Auth /list-accounts and /list-sessions, for the signed-in account; null when nobody is signed in. */
+  loadAccountLists: () => Promise<AccountLists | null>;
+  /** Better Auth /revoke-other-sessions: every other device signs out; this one stays signed in. */
+  revokeOtherSessions: () => Promise<ManageOutcome>;
   /** For the auth-callback route; null when the link isn't this device's sign-in. */
   completeReturn: (params: ReturnParams) => Promise<SignInOutcome> | null;
   clearNotice: () => void;
@@ -133,10 +156,13 @@ function loadDefaultRuntime(): AccountRuntime | null {
   const config = readAccountConfig();
   if (!config) return (defaultRuntime = null);
   // Required here so a build (or test) without sign-in never loads the native modules.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Native modules load only when this build configures sign-in.
   const SecureStore = require("expo-secure-store") as typeof import("expo-secure-store");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Native modules load only when this build configures sign-in.
   const WebBrowser = require("expo-web-browser") as typeof import("expo-web-browser");
   // Hermes has no Web Crypto: the attempt id and verifier come from the platform's secure random generator, and the
   // S256 challenge from its SHA-256.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Native modules load only when this build configures sign-in.
   const Crypto = require("expo-crypto") as typeof import("expo-crypto");
   const crypto: SignInCrypto = {
     randomToken: () => base64Url(Crypto.getRandomBytes(32)),
@@ -279,6 +305,11 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
   const [generation, setGeneration] = useState(0);
   const ownerRef = useRef<string | null>(null);
   const syncRef = useRef<StudySync | null>(null);
+  /**
+   * Stops the account's reader-preference sync and closes its other calls (plans, reading position; set while they
+   * run), at the same moments StudySync is disposed.
+   */
+  const stopAccountRef = useRef<(() => void) | null>(null);
   // The account this very saved session was last verified as (kept on the device with the session's fingerprint), so
   // its study shows offline. Any other session, including one stored by a sign-in that hasn't been checked yet, gets none.
   const [lastOwner, setLastOwner] = useState<string | null>(() => (runtime && hasStoredSession(runtime.storage) ? readLastOwner(sessionBinding(runtime.storage)) : null));
@@ -303,11 +334,16 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
   const forgetSession = useCallback(async ({ owner = ownerRef.current ?? readRecordedOwner(), deleted = false }: { owner?: string | null; deleted?: boolean } = {}): Promise<boolean> => {
     ownerRef.current = null;
     syncRef.current?.dispose();
+    stopAccountRef.current?.();
     setWatched(null);
     setStudySession({ mode: "device" });
     // The account's cached study leaves the device with its session. Changes it hasn't received yet stay, for that
     // account only (sent if it signs in here again), unless the account itself was deleted.
-    if (owner) purgeAccountCache(owner, { keepOutbox: !deleted });
+    if (owner) {
+      purgeAccountCache(owner, { keepOutbox: !deleted });
+      purgeAccountPrefs(owner, { keepPending: !deleted });
+      forgetAccountReadingPosition(owner, { keepPending: !deleted });
+    }
     writeLastOwner(null);
     setLastOwner(null);
     setHasSession(false);
@@ -343,6 +379,7 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
   const sessionStored = useCallback(() => {
     // Invalidate the old owner immediately, before another callback or render can use it.
     syncRef.current?.dispose();
+    stopAccountRef.current?.();
     ownerRef.current = null;
     setWatched(null);
     setClient(null);
@@ -435,6 +472,7 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
       void request.then(() => { endingSession.current = false; }, () => { endingSession.current = false; });
       // Capture the request's cookie first; then leave account study immediately, even if the network hangs.
       syncRef.current?.dispose();
+      stopAccountRef.current?.();
       setWatched(null);
       setHasSession(false);
       setStudySession({ mode: "device" });
@@ -474,10 +512,12 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
       if (!error.status) return { ok: false, reauthenticate: false, message: OFFLINE_MESSAGE };
       return { ok: false, reauthenticate: false, message: "Your account couldn't be deleted. Try again in a moment." };
     }
-    // Its copies went with it: this device's study may be copied to an account again.
+    // Its copies went with it: this device's study may be copied to an account again. An unsaved new entry written
+    // for it goes too (signing out keeps it, for the account's return).
     try {
       releaseAccountCopies(studyStorage(), owner);
     } catch {}
+    forgetAccountEntryDraft(owner);
     const recorded = await endPendingSignIn();
     const forgotten = await forgetSession({ owner, deleted: true });
     setNotice({
@@ -509,6 +549,75 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
     }
   }, [client, user]);
 
+  /**
+   * Runs one Better Auth account change for the account signed in now. Its answer is reported only if that account is
+   * still the one signed in: a change that finishes after signing out (or into another account) says so instead.
+   */
+  const manage = useCallback(
+    async (run: (authClient: NativeAuthClient) => Promise<{ error?: { code?: string | null; status?: number | null } | null } | null | undefined>): Promise<ManageOutcome> => {
+      const owner = ownerRef.current;
+      if (!runtime || !owner || !user) return { ok: false, reauthenticate: false, message: "Sign in to change your account." };
+      let result: Awaited<ReturnType<typeof run>>;
+      try {
+        result = await withTimeout(run(runtime.authClient), ACCOUNT_CALL_TIMEOUT_MS);
+      } catch {
+        return { ok: false, reauthenticate: false, message: OFFLINE_MESSAGE };
+      }
+      if (ownerRef.current !== owner) return { ok: false, reauthenticate: false, message: "Your account changed, so this wasn't saved here." };
+      const error = result?.error ?? null;
+      if (error) {
+        if (needsReauthentication(error)) return { ok: false, reauthenticate: true, message: "For your security, sign in with Google again, then try this again." };
+        if (!error.status) return { ok: false, reauthenticate: false, message: OFFLINE_MESSAGE };
+        return { ok: false, reauthenticate: false, message: authErrorMessage(error) };
+      }
+      return { ok: true };
+    },
+    [runtime, user],
+  );
+
+  const updateName = useCallback(
+    async (name: string): Promise<ManageOutcome> => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false, reauthenticate: false, message: "Enter a name." };
+      const owner = ownerRef.current;
+      const outcome = await manage((authClient) => authClient.updateUser({ name: trimmed }) as never);
+      if (!outcome.ok) return outcome;
+      // As the web's refresh: the app user takes the new name (users:ensureCurrentUser), which shows it everywhere.
+      runtime?.authClient.$store.notify("$sessionSignal");
+      if (client && owner && ownerRef.current === owner) {
+        try {
+          await withTimeout(client.mutation(accountApi.ensureCurrentUser, {}), ACCOUNT_CALL_TIMEOUT_MS);
+        } catch {
+          return { ok: false, reauthenticate: false, message: "Your name was saved, but it may take a moment to show here." };
+        }
+      }
+      return { ok: true };
+    },
+    [manage, runtime, client],
+  );
+
+  const loadLists = useCallback(async (): Promise<AccountLists | null> => {
+    const owner = ownerRef.current;
+    if (!runtime || !owner) return null;
+    const authClient = runtime.authClient;
+    const timed = <T,>(promise: Promise<T>) => withTimeout(promise, ACCOUNT_CALL_TIMEOUT_MS);
+    const [outcome, current] = await Promise.all([
+      loadAccountLists<LinkedAccount, SessionRow>({
+        accounts: () => timed(authClient.listAccounts() as never),
+        sessions: () => timed(authClient.listSessions() as never),
+      }),
+      timed(authClient.getSession()).then(
+        (result) => (result as { data?: { session?: { id?: string } } | null }).data?.session?.id ?? null,
+        () => null,
+      ),
+    ]);
+    // Lists asked for one account are never shown for another.
+    if (ownerRef.current !== owner) return null;
+    return { ...outcome, currentSessionId: current };
+  }, [runtime]);
+
+  const revokeOtherSessions = useCallback(() => manage((authClient) => authClient.revokeOtherSessions() as never), [manage]);
+
   // Which study the screens show: published before paint, so a signed-in app never flashes this device's study.
   const verifiedOwner = user?.appUserId ?? null;
   useEffect(() => {
@@ -522,14 +631,30 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
   useEffect(() => {
     if (!client || !verifiedOwner) return;
     const engine = new StudySync(verifiedOwner, accountStore(verifiedOwner), convexSyncClient(client)).start();
+    // The account's reader preferences, kept in step beside its study (features/settings/preferencesSync.ts).
+    const stopPreferences = startPreferencesSync(verifiedOwner, convexSyncClient(client));
+    // Its plans, read chapters and reading position (accountCalls.ts), for this owner only.
+    const closeCalls = publishAccountCalls(new AccountCalls(verifiedOwner, convexSyncClient(client)));
+    // Its requests to the site's own routes as this account (siteAuth.ts), sent only to its own site, for this session only.
+    const closeSiteAuth = runtime
+      ? publishSiteAuth(new SiteAuth(verifiedOwner, runtime.config.siteOrigin, convexTokenSource(runtime.authClient), () => sessionBinding(runtime.storage)))
+      : () => {};
+    const stopAccount = () => {
+      stopPreferences();
+      closeCalls();
+      closeSiteAuth();
+    };
     syncRef.current = engine;
+    stopAccountRef.current = stopAccount;
     setSync(engine);
     return () => {
       engine.dispose();
+      stopAccount();
+      if (stopAccountRef.current === stopAccount) stopAccountRef.current = null;
       if (syncRef.current === engine) syncRef.current = null;
       setSync((current) => (current === engine ? null : current));
     };
-  }, [client, verifiedOwner]);
+  }, [client, verifiedOwner, runtime]);
   const studySession = useMemo<StudySession>(() => {
     if (!runtime || !hasSession) return { mode: "device" };
     if (base.status === "deletion-pending") return { mode: "blocked", reason: "deletion-pending" };
@@ -555,9 +680,24 @@ export function AccountProvider({ children, runtime: injected }: { children: Rea
   const retry = useCallback(() => setCheckKey((key) => key + 1), []);
 
   const value = useMemo<AccountContextValue>(
-    () => ({ ...base, user, notice, signingIn, signIn, signOut, deleteAccount, copyStudy, completeReturn, clearNotice, retry }),
+    () => ({
+      ...base,
+      user,
+      notice,
+      signingIn,
+      signIn,
+      signOut,
+      deleteAccount,
+      copyStudy,
+      updateName,
+      loadAccountLists: loadLists,
+      revokeOtherSessions,
+      completeReturn,
+      clearNotice,
+      retry,
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [base.status, base.sessionEmail, user, notice, signingIn, signIn, signOut, deleteAccount, copyStudy, completeReturn, clearNotice, retry],
+    [base.status, base.sessionEmail, user, notice, signingIn, signIn, signOut, deleteAccount, copyStudy, updateName, loadLists, revokeOtherSessions, completeReturn, clearNotice, retry],
   );
 
   return (

@@ -143,6 +143,11 @@ export const studyApi = {
   >("annotations:setVerseMarks"),
   deleteVerseAnnotation: makeFunctionReference<"mutation", { annotationId: string }, unknown>("annotations:deleteVerseAnnotation"),
   getGuideHighlights: makeFunctionReference<"query", { guide: string }, unknown[]>("annotations:getGuideHighlights"),
+  getMyProgressForBook: makeFunctionReference<
+    "query",
+    { volume: string; book: string },
+    { readChapters: number[]; latestReadChapter: number | null; currentChapter: number | null } | null
+  >("readingProgress:getMyProgressForBook"),
   setGuideAnnotation: makeFunctionReference<"mutation", GuideAnnotationArgs, { id: string | null }>("annotations:setGuideAnnotation"),
   deleteGuideHighlight: makeFunctionReference<"mutation", { highlightId: string }, unknown>("annotations:deleteGuideHighlight"),
 };

@@ -22,6 +22,8 @@ struct RunRecord: Record {
   @Field var letterSpacing: Double = 0
   /// "bold", "italic" or "boldItalic"; nil (or anything else): the font as named.
   @Field var style: String? = nil
+  /// Struck through (KJV wording the JST leaves out); absent: not.
+  @Field var strikethrough: Bool = false
 }
 
 struct ParagraphRecord: Record {
