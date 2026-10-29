@@ -10,6 +10,7 @@ import { authClient } from "@/lib/auth-client";
 import { SIGN_OUT_FAILED, useAuth } from "@/lib/auth";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../../convex/authEnvironment";
 import { authErrorMessage } from "./authErrors";
+import { loadAccountLists, type ListProblem } from "./accountLists";
 import {
   FormMessage,
   GoogleButton,
@@ -161,27 +162,34 @@ function AccountDetails() {
 
   const [accounts, setAccounts] = useState<LinkedAccount[] | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
+  const [listProblem, setListProblem] = useState<ListProblem | null>(null);
+  const [listFailed, setListFailed] = useState({ accounts: false, sessions: false });
+  const [reloading, setReloading] = useState(false);
 
-  // Never rejects. A list that fails to load keeps its last good value (null before the first load,
-  // which the sections show as unavailable rather than as "not set up").
+  // Never rejects. Each list loads on its own: one that fails keeps its last good value (null before the
+  // first load, which the sections show as unavailable rather than as "not set up") without discarding the other.
   const loadLists = useCallback(async () => {
-    setListError(null);
-    try {
-      const [accountResult, sessionResult] = await Promise.all([authClient.listAccounts(), authClient.listSessions()]);
-      if (accountResult.error || sessionResult.error) {
-        setListError(authErrorMessage(accountResult.error ?? sessionResult.error));
-      }
-      if (!accountResult.error) setAccounts((accountResult.data as LinkedAccount[] | null) ?? []);
-      if (!sessionResult.error) setSessions((sessionResult.data as SessionRow[] | null) ?? []);
-    } catch {
-      setListError(authErrorMessage(null));
-    }
+    const outcome = await loadAccountLists<LinkedAccount, SessionRow>({
+      accounts: () => authClient.listAccounts(),
+      sessions: () => authClient.listSessions(),
+    });
+    if (outcome.accounts) setAccounts(outcome.accounts);
+    if (outcome.sessions) setSessions(outcome.sessions);
+    setListFailed(outcome.failed);
+    setListProblem(outcome.problem);
   }, []);
+
+  const reloadLists = useCallback(async () => {
+    setReloading(true);
+    try {
+      await loadLists();
+    } finally {
+      setReloading(false);
+    }
+  }, [loadLists]);
 
   useEffect(() => {
     // Fetching external (Better Auth) state on mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadLists();
   }, [loadLists]);
 
@@ -205,12 +213,30 @@ function AccountDetails() {
       </div>
       <div className={styles.settingsColumn}>
         <div className={styles.settingsCard}>
-          {listError ? (
+          {listProblem ? (
             <div className="space-y-2">
-              <FormMessage tone="error">{listError}</FormMessage>
-              <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={() => void loadLists()}>
-                Reload sign-in methods and sessions
-              </button>
+              <FormMessage tone="error">{listProblem.message}</FormMessage>
+              {listProblem.reauthenticate ? (
+                <button
+                  type="button"
+                  className={SECONDARY_BUTTON_CLASS}
+                  disabled={auth.signingIn}
+                  aria-busy={auth.signingIn || undefined}
+                  onClick={() => auth.promptSignIn("/account")}
+                >
+                  {auth.signingIn ? "Signing in…" : "Sign in again"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={SECONDARY_BUTTON_CLASS}
+                  disabled={reloading}
+                  aria-busy={reloading || undefined}
+                  onClick={() => void reloadLists()}
+                >
+                  {reloading ? "Reloading…" : "Reload sign-in methods and sessions"}
+                </button>
+              )}
             </div>
           ) : null}
           {!authUser.emailVerified ? <Section title="Email" summary="Not confirmed">
@@ -228,9 +254,9 @@ function AccountDetails() {
             ) : null}
           </Section> : null}
 
-          <Section title="Sign-in methods" summary={accounts === null ? (listError ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
+          <Section title="Sign-in methods" summary={accounts === null ? (listFailed.accounts ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
             {accounts === null ? (
-              <ListPlaceholder failed={!!listError} />
+              <ListPlaceholder failed={listFailed.accounts} />
             ) : (
               <ul className="space-y-1 text-sm">
                 {emailPassword ? <li>Email and password: {hasPassword ? "set up" : "not set up"}</li> : null}
@@ -259,8 +285,8 @@ function AccountDetails() {
             </Section>
           ) : null}
 
-          <Section title="Sessions" summary={sessions === null ? (listError ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
-            <SessionsPanel sessions={sessions} failed={!!listError} onChanged={loadLists} />
+          <Section title="Sessions" summary={sessions === null ? (listFailed.sessions ? "Unavailable" : "Loading…") : `${sessions.length} ${sessions.length === 1 ? "device" : "devices"}`}>
+            <SessionsPanel sessions={sessions} failed={listFailed.sessions} onChanged={loadLists} />
           </Section>
 
           <Section title="Delete account">

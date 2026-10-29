@@ -65,6 +65,27 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.17.0",
+    date: "2026-10-28",
+    title: "Mobile testing and account recovery",
+    items: [
+      {
+        kind: "new",
+        text: "Volunteer for Android app testing or join the iOS waiting list through a shared signup link.",
+        screenshot: {
+          src: "/release-notes/2.17.0-tester-signup.webp",
+          width: 1292,
+          height: 1176,
+          alt: "The mobile testing signup form with Android and iOS choices, empty name and email fields, and email consent.",
+          caption: "Join Android testing or the iOS waiting list without an account.",
+        },
+      },
+      { kind: "improved", text: "Account settings asks you to sign in again when your session is too old to load devices, and shows progress when retrying sign-in methods and sessions." },
+      { kind: "improved", text: "The privacy policy link stays at the bottom of Settings on short pages and follows the content on longer pages." },
+    ],
+    commits: ["202964b", "ea79c3a", "b6075c8"],
+  },
+  {
     version: "2.16.0",
     date: "2026-10-28",
     title: "Explore beside the lesson scripture",
@@ -81,6 +102,7 @@ export const RELEASES: readonly Release[] = [
         },
       },
     ],
+    masterCommit: "c964037",
     commits: ["a8be363"],
   },
   {

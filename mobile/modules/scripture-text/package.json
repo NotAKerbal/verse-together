@@ -1,0 +1,10 @@
+{
+  "name": "scripture-text",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Verse Together's selectable scripture text: word and phrase selection with exact-range marks",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "author": "Verse Together",
+  "homepage": "https://www.versetogether.org"
+}

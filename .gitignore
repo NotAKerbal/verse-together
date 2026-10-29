@@ -57,3 +57,8 @@ data/dictionary/
 
 # auth migration mapping files and reports (contain email addresses)
 /.auth-migration/
+
+# Native desktop build outputs and local profiles
+/native/target/
+/native/dist/
+/native/.local-data/

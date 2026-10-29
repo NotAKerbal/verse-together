@@ -265,6 +265,22 @@ export default function PrivacyPage() {
           </p>
         </section>
 
+        <section className={styles.section} aria-labelledby="testing">
+          <h2 id="testing">Volunteering to test the app</h2>
+          <p>
+            If you volunteer through our tester signup form, we store your name, contact email,
+            Android or iOS interest, Google Play email for Android, and when and how
+            you agreed to be contacted. These details are stored privately in Convex and used to manage testing and
+            contact you about invitations. Android tester emails may be added to Google Play; iOS invitations may
+            be sent through Apple TestFlight when testing is ready. Signing up does not enroll you automatically.
+          </p>
+          <p>
+            We keep your signup while managing the testing program or until you ask to leave. To stop testing emails
+            and have your signup deleted, write to <ContactLink />. The tester list is separate from app accounts,
+            so deleting an app account does not remove a tester signup.
+          </p>
+        </section>
+
         <section className={styles.section} aria-labelledby="sharing">
           <h2 id="sharing">Who receives your information</h2>
           <p>

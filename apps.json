@@ -1,0 +1,188 @@
+{
+  "web": {
+    "name": "Verse Together web",
+    "directory": ".",
+    "commands": {
+      "dev": [
+        [
+          "npm",
+          "run",
+          "dev"
+        ]
+      ],
+      "build": [
+        [
+          "npm",
+          "run",
+          "build"
+        ]
+      ],
+      "test": [
+        [
+          "npm",
+          "run",
+          "test:convex",
+          "--",
+          "--maxWorkers=2"
+        ]
+      ],
+      "check": [
+        [
+          "npm",
+          "run",
+          "release:check"
+        ],
+        [
+          "npm",
+          "exec",
+          "--no",
+          "--",
+          "next",
+          "typegen"
+        ],
+        [
+          "npm",
+          "exec",
+          "--no",
+          "--",
+          "tsc",
+          "--noEmit"
+        ],
+        [
+          "npm",
+          "run",
+          "test:convex",
+          "--",
+          "--maxWorkers=2"
+        ],
+        [
+          "npm",
+          "run",
+          "test:deploy"
+        ],
+        [
+          "npm",
+          "run",
+          "test:release"
+        ]
+      ]
+    }
+  },
+  "mobile": {
+    "name": "Verse Together Android and iOS",
+    "directory": "mobile",
+    "commands": {
+      "dev": [
+        [
+          "npm",
+          "start"
+        ]
+      ],
+      "android": [
+        [
+          "npm",
+          "run",
+          "android"
+        ]
+      ],
+      "ios": [
+        [
+          "npm",
+          "run",
+          "ios"
+        ]
+      ],
+      "test": [
+        [
+          "npm",
+          "test",
+          "--",
+          "--runInBand"
+        ]
+      ],
+      "check": [
+        [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        [
+          "npm",
+          "test",
+          "--",
+          "--runInBand"
+        ],
+        [
+          "npm",
+          "run",
+          "generate:check"
+        ]
+      ],
+      "export:android": [
+        [
+          "npm",
+          "run",
+          "export:android"
+        ]
+      ],
+      "build:android:store": [
+        [
+          "npm",
+          "run",
+          "build:android:store"
+        ]
+      ]
+    }
+  },
+  "desktop": {
+    "name": "Verse Together native Rust desktop",
+    "directory": "native",
+    "commands": {
+      "dev": [
+        [
+          "cargo",
+          "run",
+          "--locked"
+        ]
+      ],
+      "build": [
+        [
+          "cargo",
+          "build",
+          "--release",
+          "--locked"
+        ]
+      ],
+      "test": [
+        [
+          "cargo",
+          "test",
+          "--locked"
+        ]
+      ],
+      "check": [
+        [
+          "cargo",
+          "fmt",
+          "--check"
+        ],
+        [
+          "node",
+          "scripts/generate-release-notes.mjs",
+          "--check"
+        ],
+        [
+          "cargo",
+          "test",
+          "--locked"
+        ]
+      ],
+      "package:linux": [
+        [
+          "bash",
+          "package-linux.sh"
+        ]
+      ]
+    }
+  }
+}
