@@ -34,7 +34,13 @@ not claimed.
   a value that is the upload certificate or the public debug key (`FA:C6:17:…:3B:9C`), and never lists the debug
   key: anyone can sign an app with it.
 
-## Turning it on (owner)
+## Deployment status — October 29, 2026
+
+`ANDROID_APP_SIGNING_CERT_SHA256` is configured for Production and Preview. Website 2.19.0 (master
+`ddd553c`) serves the association, and the live check plus Google's Digital Asset Links API both passed.
+Android 1.1.0 contains the required intent filters; Play-installed runtime verification awaits that update.
+
+## Setup and future certificate changes
 
 ### Confirmed Play signing certificate
 

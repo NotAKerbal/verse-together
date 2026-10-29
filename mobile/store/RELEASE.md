@@ -1,7 +1,7 @@
 # Releasing Verse Together on Google Play
 
-App id `org.versetogether.app`. Live closed-test release: **1.0.4, versionCode 5**. Submitted UI update:
-**1.0.5, versionCode 6** (iOS build 6); see `CONSOLE-STATUS.md` for current review status. Google Play App Signing
+App id `org.versetogether.app`. Serving closed-test release: **1.0.5, versionCode 6**. New parity update:
+**1.1.0, versionCode 7** (iOS build configuration 7); see `CONSOLE-STATUS.md` for current submission status. Google Play App Signing
 holds the app signing key; we sign uploads with our own **upload key**.
 
 ## 1. The upload key (private)
