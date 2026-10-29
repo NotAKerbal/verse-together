@@ -13,8 +13,8 @@ import LibrarySearch from "@/components/LibrarySearch";
 import SelectionHeader from "@/components/SelectionHeader";
 import VolumeBookBrowser from "@/components/VolumeBookBrowser";
 import ComeFollowMeCard from "@/features/comeFollowMe/ComeFollowMeCard";
-import ChapterGrid from "@/features/plans/ChapterGrid";
-import ContinueReadingCard from "@/features/plans/ContinueReadingCard";
+import ChapterGrid from "@/features/reading/ChapterGrid";
+import ContinueReadingCard from "@/features/reading/ContinueReadingCard";
 import {
   buildBookView,
   buildLibraryVolumes,

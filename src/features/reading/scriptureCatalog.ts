@@ -1,22 +1,9 @@
-import { QUICK_NAV_BOOKS, type QuickNavBook } from "@/lib/scriptureQuickNav";
+import { QUICK_NAV_BOOKS } from "@/lib/scriptureQuickNav";
 import { normalizeScriptureVolume, toScriptureVolumeUrlSlug } from "@/lib/scriptureVolumes";
-
-export const PLAN_VOLUME_IDS = [
-  "bookofmormon",
-  "oldtestament",
-  "newtestament",
-  "doctrineandcovenants",
-  "pearl",
-] as const;
 
 export type ChapterRef = { volume: string; book: string; chapter: number };
 
-export function getCatalogBooks(volume: string): QuickNavBook[] {
-  const canonical = normalizeScriptureVolume(volume);
-  return QUICK_NAV_BOOKS.filter((entry) => entry.volume === canonical);
-}
-
-export function findCatalogBook(volume: string, book: string): QuickNavBook | null {
+export function findCatalogBook(volume: string, book: string) {
   const canonical = normalizeScriptureVolume(volume);
   return QUICK_NAV_BOOKS.find((entry) => entry.volume === canonical && entry.book === book) ?? null;
 }

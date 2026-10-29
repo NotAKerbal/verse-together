@@ -20,13 +20,11 @@ export default function ChapterGrid({ volume, book, chapterCount, delineation, c
   const currentChapter = progress?.currentChapter ?? progress?.latestReadChapter ?? null;
   const router = useRouter();
   const chapterHref = (chapterNumber: number) => `/browse/${volume}/${book}/${chapterNumber}`;
-  // Chapter routes are fetched on intent (hover, focus, touch), not for every number on screen; the router
-  // dedupes repeat prefetches of one route itself.
+
   const prefetchChapter = (href: string) => router.prefetch(href);
   const likelyChapter = chapterCount > 0 ? Math.min(Math.max(currentChapter ?? 1, 1), chapterCount) : null;
 
   useEffect(() => {
-    // The chapter a reader most likely opens next (where they left off, else the first) is warmed while idle.
     if (likelyChapter === null) return;
     const href = `/browse/${volume}/${book}/${likelyChapter}`;
     return scheduleIdleTask(() => router.prefetch(href));
