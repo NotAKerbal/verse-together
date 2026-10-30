@@ -98,6 +98,17 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.20.3-testing-wordmark",
+    viewport: { width: 1000, height: 1200 },
+    async run(page, viewport) {
+      await open(page, "/testing");
+      const title = await page.getByRole("heading", { name: "Help test Verse Together", exact: true }).boundingBox();
+      const form = page.locator("form");
+      await form.waitFor();
+      return pad(union(title, await form.boundingBox()), 16, viewport);
+    },
+  },
+  {
     name: "2.20.1-testing-signup",
     viewport: { width: 1000, height: 1200 },
     async run(page, viewport) {
