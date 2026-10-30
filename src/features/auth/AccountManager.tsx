@@ -268,7 +268,7 @@ function AccountDetails() {
             ) : null}
           </Section> : null}
 
-          <Section title="Sign-in methods" description="How you access your account" icon={faShieldHalved} defaultOpen summary={accounts === null ? (listFailed.accounts ? "Unavailable" : "Loading…") : [hasGoogle ? "Google" : null, emailPassword && hasPassword ? "Password" : null].filter(Boolean).join(" · ") || "None connected"}>
+          <Section title="Sign-in methods" description="How you access your account" icon={faShieldHalved} defaultOpen>
             {accounts === null ? (
               <ListPlaceholder failed={listFailed.accounts} />
             ) : (
@@ -288,9 +288,13 @@ function AccountDetails() {
               </ul>
             )}
             {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
+            {capabilities?.passkey ? (
+              <div className="space-y-4 border-t border-[color:var(--surface-border)] pt-4">
+                <h4 className="text-sm font-semibold">Passkeys</h4>
+                <PasskeysPanel />
+              </div>
+            ) : null}
           </Section>
-
-          {capabilities?.passkey ? <Section title="Passkeys" description="Sign in with your device or security key" icon={faKey} defaultOpen><PasskeysPanel /></Section> : null}
 
           {emailPassword ? (
             <Section title="Password" description="Update your sign-in password" icon={faKey}>
