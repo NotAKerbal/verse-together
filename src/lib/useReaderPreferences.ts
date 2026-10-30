@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   getDefaultPreferences,
@@ -32,14 +32,18 @@ export function useReaderPreferences(): {
   const userId = user?.id ?? null;
   const [prefs, setPrefs] = useState<ReaderPreferences>(getDefaultPreferences);
   const [loaded, setLoaded] = useState(false);
+  const editRevision = useRef(0);
 
   useEffect(() => {
     let alive = true;
+    const revision = editRevision.current;
     (async () => {
       const token = userId ? await getToken({ template: "convex" }) : null;
       const next = await loadPreferences(userId, token);
       if (!alive) return;
-      setPrefs((current) => (samePreferences(current, next) ? current : next));
+      if (revision === editRevision.current) {
+        setPrefs((current) => (samePreferences(current, next) ? current : next));
+      }
       setLoaded(true);
     })();
     return () => {
@@ -58,6 +62,7 @@ export function useReaderPreferences(): {
 
   const update = useCallback(
     (next: ReaderPreferences) => {
+      editRevision.current += 1;
       setPrefs(next);
       // Enqueue before token retrieval resolves so rapid changes keep their interaction order.
       const token = userId ? getToken({ template: "convex" }).catch(() => null) : null;
