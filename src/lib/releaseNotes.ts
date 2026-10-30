@@ -43,6 +43,7 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "improved", text: "The testing signup page uses the VerseTogether wordmark in its heading." },
     { kind: "improved", text: "On mobile, tap outside the selected scripture text or action bar to clear the selection, including unselected words in the same verse." },
     { kind: "improved", text: "Google and passkeys share one list in account settings, with compact passkey setup and a sign-in-again action that returns you to finish." },
   ],
