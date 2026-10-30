@@ -42,15 +42,23 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "The mobile journal editor uses compact reading controls, with the verse range and date available in an expandable summary." },
-    { kind: "improved", text: "Desktop sync preserves journal notes when removing older readings and avoids duplicate notes after a retried save. Reader settings keep your latest changes when account preferences finish loading." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.4",
+    date: "2026-10-30",
+    title: "Safer journal sync and compact mobile controls",
+    items: [
+      { kind: "improved", text: "The mobile journal editor uses compact reading controls, with the verse range and date available in an expandable summary." },
+      { kind: "improved", text: "Desktop sync preserves journal notes when removing older readings and avoids duplicate notes after a retried save. Reader settings keep your latest changes when account preferences finish loading." },
+    ],
+    commits: ["3d5d996e", "0f9e6bf3"],
+  },
+  {
     version: "2.20.3",
+    masterCommit: "e228e376",
     date: "2026-10-29",
     title: "Smoother mobile account and selection controls",
     items: [
