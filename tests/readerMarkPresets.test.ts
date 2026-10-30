@@ -101,6 +101,44 @@ describe("reader preferences on this device", () => {
     expect(readLocalPreferences()?.markPresets).toEqual([{ ...greenUnderline, name: "Promises" }]);
   });
 
+  test("an account read cannot replace a setting changed while it was in flight", async () => {
+    const stale = getDefaultPreferences();
+    let finishRead!: (value: typeof stale) => void;
+    remote.getReaderPreferences.mockImplementationOnce(() => new Promise<typeof stale>((resolve) => { finishRead = resolve; }));
+    const loading = loadPreferences("user", "token");
+    await vi.waitFor(() => expect(remote.getReaderPreferences).toHaveBeenCalledOnce());
+    const changed = { ...stale, fontScale: 1.2 };
+    await savePreferences("user", changed, "token");
+    finishRead(stale);
+    expect(await loading).toEqual(changed);
+    expect(readLocalPreferences()).toEqual(changed);
+  });
+
+  test("an account read cannot replace presets changed while it was in flight", async () => {
+    const stale = getDefaultPreferences();
+    let finishRead!: (value: typeof stale) => void;
+    remote.getReaderPreferences.mockImplementationOnce(() => new Promise<typeof stale>((resolve) => { finishRead = resolve; }));
+    const loading = loadPreferences("user", "token");
+    await vi.waitFor(() => expect(remote.getReaderPreferences).toHaveBeenCalledOnce());
+    writeLocalMarkPresets([greenUnderline]);
+    finishRead(stale);
+    expect((await loading).markPresets).toEqual([greenUnderline]);
+    expect(readLocalPreferences()?.markPresets).toEqual([greenUnderline]);
+  });
+
+  test("an account read cannot replace settings written by another tab", async () => {
+    const stale = getDefaultPreferences();
+    let finishRead!: (value: typeof stale) => void;
+    remote.getReaderPreferences.mockImplementationOnce(() => new Promise<typeof stale>((resolve) => { finishRead = resolve; }));
+    const loading = loadPreferences("user", "token");
+    await vi.waitFor(() => expect(remote.getReaderPreferences).toHaveBeenCalledOnce());
+    const changed = { ...stale, fontScale: 1.25 };
+    storage.setItem("reader_prefs_v1", JSON.stringify(changed));
+    finishRead(stale);
+    expect(await loading).toEqual(changed);
+    expect(readLocalPreferences()).toEqual(changed);
+  });
+
   test("loading from the account reads its presets", async () => {
     remote.getReaderPreferences.mockResolvedValue({
       showFootnotes: true,

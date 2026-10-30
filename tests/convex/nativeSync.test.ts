@@ -112,6 +112,52 @@ describe("desktop journal sync", () => {
     expect(saved.markdownRevision).toBe(2);
   });
 
+  test("a committed update can be retried without another revision or a conflict", async () => {
+    const { alice } = await setup();
+    const { id } = await alice.mutation(api.insights.createJournalEntry, create);
+    const input = {
+      draftId: id as Id<"insightDrafts">,
+      markdownBody: "Updated from the desktop",
+      expectedRevision: 0,
+      journalDate: "2026-10-26",
+      source: { kind: "guide" as const, label: "Jeremiah", href: "/come-follow-me/2026-10-26" },
+      logged: true,
+    };
+    const saved = await alice.mutation(api.nativeSync.saveJournalNote, input);
+    expect(await alice.mutation(api.nativeSync.saveJournalNote, input)).toEqual(saved);
+    expect(saved.markdownRevision).toBe(1);
+    expect(await alice.query(api.insights.listMyJournal, {})).toHaveLength(1);
+    await alice.mutation(api.insights.setJournalReading, { draftId: input.draftId, logged: true, journalDate: "2026-10-25" });
+    await expect(alice.mutation(api.nativeSync.saveJournalNote, input)).rejects.toMatchObject({ data: { code: "REVISION_CONFLICT" } });
+    expect((await alice.query(api.insights.getDraft, { draftId: input.draftId }))!.journal_date).toBe("2026-10-25");
+  });
+
+  test("a retry cannot overwrite later text even if it returns to the same body", async () => {
+    const { alice } = await setup();
+    const { id } = await alice.mutation(api.insights.createJournalEntry, create);
+    const draftId = id as Id<"insightDrafts">;
+    const input = { draftId, markdownBody: "Updated", expectedRevision: 0 };
+    await alice.mutation(api.nativeSync.saveJournalNote, input);
+    await alice.mutation(api.insights.saveJournalNote, { draftId, markdownBody: "Other text", expectedRevision: 1 });
+    await alice.mutation(api.insights.saveJournalNote, { draftId, markdownBody: "Updated", expectedRevision: 2 });
+    await expect(alice.mutation(api.nativeSync.saveJournalNote, input)).rejects.toMatchObject({ data: { code: "REVISION_CONFLICT", currentRevision: 3 } });
+  });
+
+  test("removing a stale reading preserves the journal entry it became", async () => {
+    const { alice } = await setup();
+    const { id: readingId } = await alice.mutation(api.readingProgress.logReading, {
+      source: { kind: "guide", label: "Jeremiah", href: "/come-follow-me/2026-10-26" },
+      journalDate: "2026-10-26",
+      requestId: "stale-reading-0001",
+    });
+    const { id: draftId } = await alice.mutation(api.insights.openReadingEntry, { readingId });
+    await alice.mutation(api.insights.saveJournalNote, { draftId, markdownBody: "New writing on the website", expectedRevision: 0 });
+    await alice.mutation(api.nativeSync.removeReading, { readingId });
+    await alice.mutation(api.nativeSync.removeReading, { readingId });
+    expect((await alice.query(api.insights.getDraft, { draftId }))!.markdown_body).toBe("New writing on the website");
+    expect(await alice.query(api.readingProgress.listMyReadingLog, {})).toMatchObject([{ note_id: draftId }]);
+  });
+
   test("text based on an older revision is refused; metadata alone is applied", async () => {
     const { alice } = await setup();
     const { id } = await alice.mutation(api.insights.createJournalEntry, create);

@@ -511,6 +511,14 @@ describe("opening an entry the website saved changes nothing", () => {
     expect(screen.getByTestId("save-entry").props.accessibilityState).toMatchObject({ disabled: true });
 
     // Changing only the day keeps the website's source exactly as it was.
+    expect(screen.queryByLabelText("Previous day")).toBeNull();
+    await press(screen.getByRole("button", { name: "Edit reading details" }));
+    expect(screen.getByLabelText("Previous day")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit reading details" }).props.accessibilityValue.text).toContain("Verses 7–9");
+    await press(screen.getByRole("button", { name: "Edit reading details" }));
+    expect(screen.queryByLabelText("Previous day")).toBeNull();
+    expect(store.getSnapshot().outbox.ops).toEqual([]);
+    await press(screen.getByRole("button", { name: "Edit reading details" }));
     await press(screen.getByLabelText("Previous day"));
     await advance(1000);
     expect(store.getSnapshot().outbox.ops).toMatchObject([{ source: { label: "1 Nephi 3:7-9", verseStart: 7, verseEnd: 9 }, journalDate: "2026-10-19" }]);
