@@ -42,7 +42,9 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    { kind: "improved", text: "Desktop sync preserves journal notes when removing older readings and avoids duplicate notes after a retried save. Reader settings keep your latest changes when account preferences finish loading." },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [
