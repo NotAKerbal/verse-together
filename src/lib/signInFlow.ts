@@ -64,3 +64,12 @@ export function socialErrorCode(error: { code?: string | null; status?: number |
   if (error?.status === 429) return "TOO_MANY_REQUESTS";
   return "sign_in_failed";
 }
+
+export function reauthenticationHref(returnTo: string): string {
+  const href = signInHref(returnTo);
+  return `${href}${href.includes("?") ? "&" : "?"}reauthenticate=true`;
+}
+
+export function shouldReturnAfterSignIn(hasUser: boolean, reauthenticating: boolean, completed: boolean): boolean {
+  return hasUser && (!reauthenticating || completed);
+}

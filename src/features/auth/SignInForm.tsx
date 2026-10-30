@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/lib/auth";
-import { safeReturnPath, signInHref } from "@/lib/safeRedirect";
-import { socialCallbackURLs } from "@/lib/signInFlow";
+import { appURL, safeReturnPath, signInHref } from "@/lib/safeRedirect";
+import { reauthenticationHref, shouldReturnAfterSignIn, socialCallbackURLs } from "@/lib/signInFlow";
 import { authErrorMessage } from "./authErrors";
 import {
   AuthOptionsLoading,
@@ -34,6 +34,7 @@ function SignInFormInner() {
   const { user, authUser, error: accountError } = useAuth();
   const capabilities = useAuthCapabilities();
   const returnTo = safeReturnPath(searchParams.get("redirect"));
+  const reauthenticating = searchParams.get("reauthenticate") === "true";
   const redirectError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
@@ -46,8 +47,8 @@ function SignInFormInner() {
   const waiting = finishing && !sessionError;
 
   useEffect(() => {
-    if (user) router.replace(returnTo);
-  }, [user, returnTo, router]);
+    if (shouldReturnAfterSignIn(!!user, reauthenticating, finishing)) router.replace(returnTo);
+  }, [user, returnTo, router, reauthenticating, finishing]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,6 +110,7 @@ function SignInFormInner() {
       const { error: socialError } = await authClient.signIn.social({
         provider: "google",
         ...socialCallbackURLs(returnTo, window.location.origin),
+        ...(reauthenticating ? { errorCallbackURL: appURL(reauthenticationHref(returnTo), window.location.origin) } : {}),
       });
       if (socialError) {
         setError(authErrorMessage(socialError));
@@ -123,7 +125,9 @@ function SignInFormInner() {
   const signUpHref = signInHref(returnTo, "/sign-up");
 
   return (
-    <AuthShell title="Sign in" subtitle="Welcome back. Sign in to keep your notes, highlights, and plans in sync.">
+    <AuthShell title={reauthenticating ? "Sign in again" : "Sign in"} subtitle={reauthenticating
+      ? "Confirm your identity to continue. Use the same account; we'll bring you back when you're done."
+      : "Welcome back. Sign in to keep your notes, highlights, and plans in sync."}>
       <div className="space-y-4">
         <FormMessage tone="error">{error ?? sessionError}</FormMessage>
         <FormMessage tone="info">{info}</FormMessage>
@@ -144,7 +148,7 @@ function SignInFormInner() {
             {capabilities.passkey ? <p className="text-sm text-[color:var(--foreground-muted)]">Already added a passkey? Use your fingerprint, face, device PIN, or security key.</p> : null}
             {capabilities.google && capabilities.emailPassword ? <Divider /> : null}
             {!capabilities.google && !capabilities.emailPassword && !capabilities.passkey ? <SignInUnavailableNotice /> : null}
-            {capabilities.google && !capabilities.emailPassword ? (
+            {capabilities.google && !capabilities.emailPassword && !reauthenticating ? (
               <p className="text-sm text-[color:var(--foreground-muted)]">
                 New to Verse Together? Continuing with Google creates your account.
               </p>
