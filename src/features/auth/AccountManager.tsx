@@ -13,6 +13,7 @@ import { SIGN_OUT_FAILED, useAuth } from "@/lib/auth";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../../convex/authEnvironment";
 import { authErrorMessage } from "./authErrors";
 import { loadAccountLists, type ListProblem } from "./accountLists";
+import { reauthenticationHref } from "@/lib/signInFlow";
 import {
   FormMessage,
   GoogleButton,
@@ -231,15 +232,9 @@ function AccountDetails() {
             <div className="space-y-2">
               <FormMessage tone="error">{listProblem.message}</FormMessage>
               {listProblem.reauthenticate ? (
-                <button
-                  type="button"
-                  className={SECONDARY_BUTTON_CLASS}
-                  disabled={auth.signingIn}
-                  aria-busy={auth.signingIn || undefined}
-                  onClick={() => auth.promptSignIn("/account")}
-                >
-                  {auth.signingIn ? "Signing in…" : "Sign in again"}
-                </button>
+                <Link href={reauthenticationHref("/account")} className={SECONDARY_BUTTON_CLASS}>
+                  Sign in again
+                </Link>
               ) : (
                 <button
                   type="button"
@@ -269,31 +264,28 @@ function AccountDetails() {
           </Section> : null}
 
           <Section title="Sign-in methods" description="How you access your account" icon={faShieldHalved} defaultOpen>
-            {accounts === null ? (
-              <ListPlaceholder failed={listFailed.accounts} />
-            ) : (
-              <ul className={styles.accountRows}>
-                {emailPassword ? <li className={styles.accountRow}>
-                  <span className={styles.rowIcon}><FontAwesomeIcon icon={faKey} aria-hidden="true" /></span>
-                  <span className={styles.rowTitle}>Email and password</span>
-                  <ConnectionStatus connected={hasPassword} label={hasPassword ? "Set up" : "Not set up"} />
-                </li> : null}
-                {!emailPassword || capabilities?.google || hasGoogle ? (
-                  <li className={styles.accountRow}>
-                    <span className={`${styles.rowIcon} ${styles.googleIcon}`}><GoogleMark /></span>
-                    <span className={styles.rowTitle}>Google</span>
-                    <ConnectionStatus connected={hasGoogle} label={hasGoogle ? "Connected" : "Not connected"} />
-                  </li>
-                ) : null}
-              </ul>
-            )}
+            <ul className={styles.accountRows}>
+              {accounts === null ? (
+                <li className={styles.accountRow}><ListPlaceholder failed={listFailed.accounts} /></li>
+              ) : (
+                <>
+                  {emailPassword ? <li className={styles.accountRow}>
+                    <span className={styles.rowIcon}><FontAwesomeIcon icon={faKey} aria-hidden="true" /></span>
+                    <span className={styles.rowTitle}>Email and password</span>
+                    <ConnectionStatus connected={hasPassword} label={hasPassword ? "Set up" : "Not set up"} />
+                  </li> : null}
+                  {!emailPassword || capabilities?.google || hasGoogle ? (
+                    <li className={styles.accountRow}>
+                      <span className={`${styles.rowIcon} ${styles.googleIcon}`}><GoogleMark /></span>
+                      <span className={styles.rowTitle}>Google</span>
+                      <ConnectionStatus connected={hasGoogle} label={hasGoogle ? "Connected" : "Not connected"} />
+                    </li>
+                  ) : null}
+                </>
+              )}
+              {capabilities?.passkey ? <PasskeysPanel /> : null}
+            </ul>
             {capabilities?.google && accounts !== null && !hasGoogle ? <ConnectGoogle /> : null}
-            {capabilities?.passkey ? (
-              <div className="space-y-4 border-t border-[color:var(--surface-border)] pt-4">
-                <h4 className="text-sm font-semibold">Passkeys</h4>
-                <PasskeysPanel />
-              </div>
-            ) : null}
           </Section>
 
           {emailPassword ? (

@@ -1354,3 +1354,39 @@
 .resources a:hover {
   color: var(--foreground);
 }
+
+.passkeySetup {
+  width: 100%;
+  min-width: 0;
+}
+
+.passkeySetup:target {
+  scroll-margin-top: 6rem;
+}
+
+.passkeyAdd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  min-height: 2.75rem;
+  padding: .5rem .75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.passkeyAdd::-webkit-details-marker {
+  display: none;
+}
+
+.passkeyAdd:hover {
+  background: var(--surface-card-soft);
+}
+
+.passkeyAdd:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 2px;
+}

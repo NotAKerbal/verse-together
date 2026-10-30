@@ -96,3 +96,21 @@ test("the sign-up page's Google error lands back on sign-up", () => {
     kind: "page", href: "/sign-in?redirect=%2Fnotes",
   });
 });
+
+
+test("reauthentication keeps an existing session on the sign-in form until confirmation succeeds", async () => {
+  const { shouldReturnAfterSignIn } = await import("./signInFlow.ts");
+  assert.equal(shouldReturnAfterSignIn(true, true, false), false);
+  assert.equal(shouldReturnAfterSignIn(true, true, true), true);
+  assert.equal(shouldReturnAfterSignIn(false, true, true), false);
+  assert.equal(shouldReturnAfterSignIn(true, false, false), true);
+});
+
+test("reauthentication returns to passkey setup and only accepts local destinations", async () => {
+  const { reauthenticationHref } = await import("./signInFlow.ts");
+  const href = new URL(reauthenticationHref("/account#add-passkey"), "https://verse.example");
+  assert.equal(href.pathname, "/sign-in");
+  assert.equal(href.searchParams.get("redirect"), "/account#add-passkey");
+  assert.equal(href.searchParams.get("reauthenticate"), "true");
+  assert.equal(reauthenticationHref("https://evil.example"), "/sign-in?reauthenticate=true");
+});

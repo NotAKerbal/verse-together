@@ -47,7 +47,29 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.3",
+    date: "2026-10-29",
+    title: "Smoother mobile account and selection controls",
+    items: [
+      {
+        kind: "improved",
+        text: "The testing signup page uses the VerseTogether wordmark in its heading.",
+        screenshot: {
+          src: "/release-notes/2.20.3-testing-wordmark.webp",
+          width: 1392,
+          height: 1378,
+          alt: "The testing signup page with the VerseTogether wordmark in its heading above an empty signup form.",
+          caption: "The testing signup heading uses the VerseTogether wordmark.",
+        },
+      },
+      { kind: "improved", text: "On mobile, tap outside the selected scripture text or action bar to clear the selection, including unselected words in the same verse." },
+      { kind: "improved", text: "Google and passkeys share one list in account settings, with compact passkey setup and a sign-in-again action that returns you to finish." },
+    ],
+    commits: ["7a7bb2c", "800772c", "2b81a64"],
+  },
+  {
     version: "2.20.2",
+    masterCommit: "92e18ee",
     date: "2026-10-29",
     title: "Sign-in methods together",
     items: [
