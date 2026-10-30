@@ -43,6 +43,7 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "improved", text: "The mobile journal editor uses compact reading controls, with the verse range and date available in an expandable summary." },
     { kind: "improved", text: "Desktop sync preserves journal notes when removing older readings and avoids duplicate notes after a retried save. Reader settings keep your latest changes when account preferences finish loading." },
   ],
 };

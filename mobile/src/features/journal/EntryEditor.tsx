@@ -17,16 +17,17 @@
 import * as Clipboard from "expo-clipboard";
 import { useNavigation, usePreventRemove, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppState, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { Alert, AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Blocks from "../../components/Blocks";
-import { Button, IconButton, Notice, Segmented, Txt } from "../../components/ui";
+import { Button, Icon, IconButton, Notice, Segmented, Txt } from "../../components/ui";
 import { toAppHref } from "../../navigation/hrefs";
 import {
   NOTE_MARKDOWN_MAX,
   RevisionConflictError,
   dateFromKey,
   formatDayHeading,
+  formatShortDayHeading,
   formatTime,
   localDateKey,
   markdownExcerpt,
@@ -107,60 +108,80 @@ function ReadingChip({
   const { colors } = useTheme();
   const router = useRouter();
   const scripture = source.kind === "scripture" && !!source.chapter;
+  const [expanded, setExpanded] = useState(false);
+  const verseLabel = range
+    ? range.start === range.end ? `Verse ${range.start}` : `Verses ${range.start}–${range.end}`
+    : "Whole chapter";
+  const rangeLabel = scripture ? verseLabel : "Reading logged";
+  const summary = `${reading ? rangeLabel : "Not logged"} · ${formatShortDayHeading(date)}`;
   return (
-    <View style={{ gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: reading ? colors.accentMint : colors.surfaceCard }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.foregroundSoft }}>{sourceKindLabel(source)}</Text>
-          <Text
-            accessibilityRole="link"
-            accessibilityHint="Opens the passage"
-            onPress={() => router.push(toAppHref(source.href) as never)}
-            style={{ fontFamily: fonts.serif, fontSize: 18, color: colors.foreground, textDecorationLine: "underline", textDecorationColor: colors.accentRubricLine }}
-          >
+    <View style={{ gap: 0, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: reading ? colors.accentMint : colors.surfaceCard }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={source.label}
+          accessibilityHint="Opens the passage"
+          onPress={() => router.push(toAppHref(source.href) as never)}
+          style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: "center" }}
+        >
+          <Text style={{ fontFamily: fonts.serif, fontSize: 17, color: colors.foreground, textDecorationLine: "underline", textDecorationColor: colors.accentRubricLine }}>
             {source.label}
           </Text>
-        </View>
+        </Pressable>
+        <Switch accessibilityLabel={`Log reading of ${source.label}`} value={reading} onValueChange={onReading} trackColor={{ true: colors.readerRead, false: colors.surfaceBorder }} thumbColor={colors.background} />
         {onRemoveSource ? <IconButton icon="xmark" label={`Remove ${source.label} from this entry`} onPress={onRemoveSource} /> : null}
       </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Text style={{ flex: 1, fontFamily: fonts.sansMedium, fontSize: 14, color: colors.foreground }}>Log reading</Text>
-        <Switch accessibilityLabel={`Log reading of ${source.label}`} value={reading} onValueChange={onReading} trackColor={{ true: colors.readerRead, false: colors.surfaceBorder }} thumbColor={colors.background} />
-      </View>
-      {reading && scripture && verseCount ? (
-        <View style={{ gap: 8 }}>
-          <Segmented
-            label="Reading range"
-            value={range ? "verses" : "chapter"}
-            onChange={(value) => onRange(value === "chapter" ? null : { start: source.verseStart ?? 1, end: source.verseEnd ?? source.verseStart ?? verseCount })}
-            options={[
-              { value: "chapter", label: "Whole chapter" },
-              { value: "verses", label: "Verses" },
-            ]}
-          />
-          {range ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-              <Txt>From</Txt>
-              <IconButton icon="minus" label="Earlier first verse" disabled={range.start <= 1} onPress={() => onRange({ ...range, start: range.start - 1 })} />
-              <Txt accessibilityLabel={`First verse ${range.start}`} style={{ fontFamily: fonts.sansBold, minWidth: 24, textAlign: "center" }}>{range.start}</Txt>
-              <IconButton icon="plus" label="Later first verse" disabled={range.start >= range.end} onPress={() => onRange({ ...range, start: range.start + 1 })} />
-              <Txt>to</Txt>
-              <IconButton icon="minus" label="Earlier last verse" disabled={range.end <= range.start} onPress={() => onRange({ ...range, end: range.end - 1 })} />
-              <Txt accessibilityLabel={`Last verse ${range.end}`} style={{ fontFamily: fonts.sansBold, minWidth: 24, textAlign: "center" }}>{range.end}</Txt>
-              <IconButton icon="plus" label="Later last verse" disabled={range.end >= verseCount} onPress={() => onRange({ ...range, end: range.end + 1 })} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Edit reading details"
+        accessibilityState={{ expanded }}
+        accessibilityValue={{ text: summary }}
+        onPress={() => setExpanded((value) => !value)}
+        style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 }}
+      >
+        <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 13, color: colors.foregroundMuted }}>
+          {summary}
+        </Text>
+        <Icon name={expanded ? "chevron-up" : "chevron-down"} size={12} color={colors.foregroundMuted} />
+      </Pressable>
+      {expanded ? (
+        <View style={{ gap: 8, paddingBottom: 4 }}>
+          {reading && scripture && verseCount ? (
+            <View style={{ gap: 8 }}>
+              <Segmented
+                label="Reading range"
+                value={range ? "verses" : "chapter"}
+                onChange={(value) => onRange(value === "chapter" ? null : { start: source.verseStart ?? 1, end: source.verseEnd ?? source.verseStart ?? verseCount })}
+                options={[
+                  { value: "chapter", label: "Whole chapter" },
+                  { value: "verses", label: "Verses" },
+                ]}
+              />
+              {range ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                  <Txt>From</Txt>
+                  <IconButton icon="minus" label="Earlier first verse" disabled={range.start <= 1} onPress={() => onRange({ ...range, start: range.start - 1 })} />
+                  <Txt accessibilityLabel={`First verse ${range.start}`} style={{ fontFamily: fonts.sansBold, minWidth: 24, textAlign: "center" }}>{range.start}</Txt>
+                  <IconButton icon="plus" label="Later first verse" disabled={range.start >= range.end} onPress={() => onRange({ ...range, start: range.start + 1 })} />
+                  <Txt>to</Txt>
+                  <IconButton icon="minus" label="Earlier last verse" disabled={range.end <= range.start} onPress={() => onRange({ ...range, end: range.end - 1 })} />
+                  <Txt accessibilityLabel={`Last verse ${range.end}`} style={{ fontFamily: fonts.sansBold, minWidth: 24, textAlign: "center" }}>{range.end}</Txt>
+                  <IconButton icon="plus" label="Later last verse" disabled={range.end >= verseCount} onPress={() => onRange({ ...range, end: range.end + 1 })} />
+                </View>
+              ) : null}
             </View>
           ) : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundMuted }}>{formatDayHeading(date)}</Text>
+            {dateEditable ? (
+              <>
+                <IconButton icon="chevron-left" label="Previous day" onPress={() => onDate(shiftDay(date, -1))} />
+                <IconButton icon="chevron-right" label="Next day" disabled={date >= localDateKey()} onPress={() => onDate(shiftDay(date, 1))} />
+              </>
+            ) : null}
+          </View>
         </View>
       ) : null}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-        <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 14, color: colors.foregroundMuted }}>{formatDayHeading(date)}</Text>
-        {dateEditable ? (
-          <>
-            <IconButton icon="chevron-left" label="Previous day" onPress={() => onDate(shiftDay(date, -1))} />
-            <IconButton icon="chevron-right" label="Next day" disabled={date >= localDateKey()} onPress={() => onDate(shiftDay(date, 1))} />
-          </>
-        ) : null}
-      </View>
     </View>
   );
 }
