@@ -1118,13 +1118,27 @@ export default function ChapterReader({
   useEffect(() => {
     if (!hasSelection || overlayOpen) return;
 
+    function isInsideSelection(clientX: number, clientY: number) {
+      const customRange = customWordRangeRef.current;
+      const nativeSelection = window.getSelection();
+      const range = customRange
+        ? createRangeFromWordRange(customRange)
+        : nativeSelection?.rangeCount ? nativeSelection.getRangeAt(0) : null;
+      if (!range) return false;
+      return Array.from(range.getClientRects()).some((rect) => (
+        clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+      ));
+    }
+
     function onPointerDown(event: PointerEvent) {
       if (isCustomTouchSelecting || activeHandleRef.current || customSelectionActiveRef.current) return;
       const target = event.target as HTMLElement | null;
       if (!target) return;
       if (target.closest("[data-selection-popover='true']")) return;
       if (target.closest("[data-selection-handle='true']")) return;
-      if (target.closest("[data-verse-selectable='true']")) return;
+      if (customMobileSelectionEnabled || event.pointerType === "touch") {
+        if (isInsideSelection(event.clientX, event.clientY)) return;
+      } else if (target.closest("[data-verse-selectable='true']")) return;
       clearSelection();
     }
 
@@ -1134,7 +1148,8 @@ export default function ChapterReader({
       if (!target) return;
       if (target.closest("[data-selection-popover='true']")) return;
       if (target.closest("[data-selection-handle='true']")) return;
-      if (target.closest("[data-verse-selectable='true']")) return;
+      const touch = event.changedTouches[0];
+      if (touch && isInsideSelection(touch.clientX, touch.clientY)) return;
       clearSelection();
     }
 
@@ -1162,7 +1177,7 @@ export default function ChapterReader({
       window.removeEventListener("scroll", onScrollDismiss);
       window.removeEventListener("resize", onScrollDismiss);
     };
-  }, [hasSelection, isCustomTouchSelecting, overlayOpen]);
+  }, [hasSelection, isCustomTouchSelecting, overlayOpen, customMobileSelectionEnabled]);
 
   useEffect(() => {
     function syncTopState() {
@@ -1432,6 +1447,7 @@ export default function ChapterReader({
   const endHandleRect = customSelectionRects[customSelectionRects.length - 1] ?? null;
 
   function clearSelection() {
+    selectionRestoreRef.current = null;
     if (typeof window !== "undefined") {
       window.getSelection?.()?.removeAllRanges();
     }
