@@ -71,7 +71,10 @@ export function readLocalPreferences(): ReaderPreferences | null {
   }
 }
 
+let localPreferencesRevision = 0;
+
 export function writeLocalPreferences(prefs: ReaderPreferences): boolean {
+  localPreferencesRevision += 1;
   try {
     if (typeof window === "undefined") return false;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
@@ -155,13 +158,13 @@ export async function loadPreferences(
   userId: string | null | undefined,
   token?: string | null
 ): Promise<ReaderPreferences> {
-  // Prefer Convex for signed-in users; fall back to localStorage, then defaults
   if (userId && token) {
-    // A change made just before (in Settings, say) is read back, not the account's older copy.
     await remoteSaveChain;
+    const revision = localPreferencesRevision;
+    const localBeforeRead = JSON.stringify(readLocalPreferences());
     try {
       const data = await getReaderPreferences(token);
-      if (data) {
+      if (data && revision === localPreferencesRevision && localBeforeRead === JSON.stringify(readLocalPreferences())) {
         const prefs = normalizePreferences({
           showFootnotes: !!data.showFootnotes,
           fontScale: typeof data.fontScale === "number" ? data.fontScale : 1,

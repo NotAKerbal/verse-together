@@ -112,10 +112,6 @@ export const applyVerse = mutation({
   },
 });
 
-/**
- * An existing journal note's changes from the app, in one transaction: its Markdown (checked against the revision
- * the app's copy is based on), and its day, source and whether it logs reading. Omitted parts are left as they are.
- */
 export const saveJournalNote = mutation({
   args: {
     draftId: v.id("insightDrafts"),
@@ -141,6 +137,16 @@ export const saveJournalNote = mutation({
     if (args.markdownBody !== undefined) {
       if (args.markdownBody.length > NOTE_MARKDOWN_MAX) throw new ConvexError({ code: "INVALID", message: "This note is too long" });
       if (args.expectedRevision === undefined || args.expectedRevision !== revision) {
+        const source = args.source === null ? undefined : args.source === undefined ? draft.source : normalizeNoteSource(args.source);
+        const matchesSavedUpdate = args.expectedRevision !== undefined &&
+          Number.isInteger(args.expectedRevision) && args.expectedRevision >= 0 &&
+          revision === args.expectedRevision + 1 && markdown === args.markdownBody &&
+          (args.journalDate === undefined || args.journalDate === draft.journalDate) &&
+          (args.source === undefined || JSON.stringify(source) === JSON.stringify(draft.source ? normalizeNoteSource(draft.source) : undefined)) &&
+          (args.logged === undefined || args.logged === (draft.readingAt !== undefined));
+        if (matchesSavedUpdate) {
+          return { markdownRevision: revision, updatedAt: new Date(draft.updatedAt).toISOString() };
+        }
         throw new ConvexError({ code: "REVISION_CONFLICT", message: "This note changed since it was opened", currentRevision: revision });
       }
       revision += 1;
@@ -200,10 +206,6 @@ async function tombstone(ctx: MutationCtx, clerkId: string, key: string) {
   if (!existing) await ctx.db.insert("journalEntryDeletions", { clerkId, key, deletedAt: Date.now() });
 }
 
-/**
- * Removes a reading from the history, as opening it as an entry and deleting that entry does on the website: the
- * reading row itself stays for chapter progress and plans, and listMyReadingLog stops listing it.
- */
 export const removeReading = mutation({
   args: { readingId: v.string() },
   handler: async (ctx, args) => {
@@ -212,18 +214,6 @@ export const removeReading = mutation({
     const row = id ? await ctx.db.get(id) : null;
     if (!row || row.clerkId !== clerkId) return { removed: false };
     const key = "requestId" in row ? readingLogHistoryKey(row) : chapterReadHistoryKey(row);
-    const entry = await ctx.db
-      .query("insightDrafts")
-      .withIndex("by_clerk_entry_request", (q) => q.eq("clerkId", clerkId).eq("entryRequestId", key))
-      .first();
-    if (entry && entry.status !== "published") {
-      const folder = await ctx.db
-        .query("noteFolderAssignments")
-        .withIndex("by_clerk_draft", (q) => q.eq("clerkId", clerkId).eq("draftId", entry._id))
-        .unique();
-      if (folder) await ctx.db.delete(folder._id);
-      await ctx.db.delete(entry._id);
-    }
     await tombstone(ctx, clerkId, key);
     return { removed: true };
   },
