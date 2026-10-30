@@ -42,14 +42,22 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "Account settings groups passkeys with your other sign-in methods in one section." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.2",
+    date: "2026-10-29",
+    title: "Sign-in methods together",
+    items: [
+      { kind: "improved", text: "Account settings groups passkeys with your other sign-in methods in one section." },
+    ],
+    commits: ["49b47a5"],
+  },
+  {
     version: "2.20.1",
+    masterCommit: "1749eda",
     date: "2026-10-29",
     title: "Simpler signup and account spacing",
     items: [
