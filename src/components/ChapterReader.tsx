@@ -49,7 +49,7 @@ import type { JournalEntry, ReadingLogRow } from "@/features/notes/journal";
 import NoteSourceRegistrar from "@/features/notes/NoteSourceRegistrar";
 import type { ReadingLogOption } from "@/features/notes/ReadingChip";
 import { useConvexSignedIn } from "@/features/notes/useConvexSignedIn";
-import { usePassagePreview } from "@/features/comeFollowMe/PassagePreview";
+import { usePassagePreview } from "@/features/comeFollowMe/PassagePreview.tsx";
 import type { PassageTarget } from "@/features/comeFollowMe/passagePreview";
 import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef } from "@/features/insights/VerseInsightMarker";
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";

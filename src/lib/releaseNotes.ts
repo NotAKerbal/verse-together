@@ -42,14 +42,32 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "Hebrew and Greek word exploration uses outlined word cards, clearer language groups, and full-width controls to show more words." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.20.5",
+    date: "2026-10-30",
+    title: "Clearer Hebrew and Greek word exploration",
+    items: [
+      {
+        kind: "improved",
+        text: "Hebrew and Greek word exploration uses outlined word cards, clearer language groups, and full-width controls to show more words.",
+        screenshot: {
+          src: "/release-notes/2.20.5-biblical-languages.webp",
+          width: 856,
+          height: 2256,
+          alt: "Explore for God in Genesis 1, with Hebrew and Greek words grouped in outlined cards and controls to show all matching words.",
+          caption: "Hebrew and Greek word cards in Explore.",
+        },
+      },
+    ],
+    commits: ["cf55016"],
+  },
+  {
     version: "2.20.4",
+    masterCommit: "9e1f969",
     date: "2026-10-30",
     title: "Safer journal sync and compact mobile controls",
     items: [

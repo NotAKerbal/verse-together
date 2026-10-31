@@ -98,6 +98,28 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.20.5-biblical-languages",
+    viewport: { width: 1440, height: 1200 },
+    async run(page, viewport) {
+      await open(page, "/browse/oldtestament/genesis/1");
+      const point = await wordPoint(page, page.locator(".reader-verse").first(), "God");
+      await page.mouse.dblclick(point.x, point.y);
+      await page.getByRole("button", { name: /^Explore/ }).first().click();
+      const panel = page.locator("#word-study-panel-desktop");
+      await panel.waitFor();
+      const languages = panel.getByRole("button", { name: /Biblical languages/ });
+      await languages.getByText(/matches/).waitFor();
+      if (await languages.getAttribute("aria-expanded") !== "true") await languages.click();
+      await panel.getByRole("heading", { name: "Hebrew", exact: true }).waitFor();
+      await panel.getByRole("button", { name: /Show all .* Hebrew words/ }).click();
+      await panel.getByRole("button", { name: "Show fewer Hebrew words", exact: true }).click();
+      await panel.getByRole("button", { name: /Show all .* Greek words/ }).click();
+      await panel.getByRole("button", { name: "Show fewer Greek words", exact: true }).click();
+      await panel.getByRole("region", { name: "Sources for god", exact: true }).evaluate((element) => element.scrollTo(0, 0));
+      return pad(await panel.boundingBox(), 8, viewport);
+    },
+  },
+  {
     name: "2.20.3-testing-wordmark",
     viewport: { width: 1000, height: 1200 },
     async run(page, viewport) {
