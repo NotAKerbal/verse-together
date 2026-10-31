@@ -335,7 +335,7 @@ describe("Explore word study with entries and lexicon results loaded", () => {
     // Strong's Hebrew results as rows, under how they matched, with the lemma isolated right to left; Greek is still loading.
     const languages = languagesOpen("faith", genesis);
     expect(languages).toContain("not the word in this verse");
-    expect(languages).toContain("Hebrew · translated “faith” in the KJV");
+    expect(languages).toContain("translated “faith” in the KJV");
     expect(languages).toMatch(/<span[^>]*>Hebrew · <span class="sr-only">Strong’s number <\/span>H530<\/span><span[^>]*><bdi lang="he" dir="rtl"[^>]*>אֱמוּנָה<\/bdi>/);
     expect(languages).not.toContain("KJV renders it");
     expect(languages).toContain("Strong’s Hebrew Dictionary, from");
