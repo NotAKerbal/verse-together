@@ -32,14 +32,14 @@ const sha256 = (file) => createHash("sha256").update(fs.readFileSync(path.join(r
 // Pinned from the verified source bundle (NotAKerbal/isaac-stuff-homepage@52975b1c4b78c34a1c0d7af365422455b71148e4).
 // Isaiah 58–66 guide and updated manifest from NotAKerbal/isaac-stuff-homepage@d7dd5c3edf5dc620d07de41909fd8eac563a32ef.
 // Jeremiah guide (October 19), matching its isaacstuff publication.
-// Jeremiah 31–33; 36–39; Lamentations 1; 3 guide (October 26) and the current five-guide manifest, imported byte-identically from isaacstuff.
 const SOURCE_FILES = {
   "content/cfm/2026-09-28-isaiah-40-49.md": ["714cfbaa5b5bc1c55a938d530b077f8008f0f886c455e6aee2156c51c04e5604", 75234],
   "content/cfm/2026-10-05-isaiah-50-57.md": ["b94def284cb09ac079a1831a30aa83a0ec45832efb8c9483e9a910f187ac10e5", 145604],
   "content/cfm/2026-10-12-isaiah-58-66.md": ["3b961a70aa9deb9af3f04ae266193ad5af0f3062e426932acf44bd48ea1f2c5d", 74659],
   "content/cfm/2026-10-19-jeremiah-1-3-7-16-18-20.md": ["e2a55290b045c2786a64daed1bcbbed822d734e16997b636cbcfa78e293b5880", 85627],
   "content/cfm/2026-10-26-jeremiah-31-33-36-39-lamentations-1-3.md": ["e6c3e669c181420edafae9da5ba1a5fc9ed38deaff921d7c7008e5806f43b237", 133565],
-  "content/cfm/guides.json": ["f06a33c380a472955d31986e62beaf85a251deb9df3311f364c73b4caff85752", 2740],
+  "content/cfm/2026-11-02-ezekiel-1-3-33-34-36-37-47.md": ["4c8ddfa97630f9ac74461fa66e3cc2d58fb7b3c5e30782a71688e95d9e50644d", 123421],
+  "content/cfm/guides.json": ["2ace1e3aa539c7e48011a1a665c5fbcc6894ba227bd6f397d2ded074a67551ed", 3365],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
@@ -51,6 +51,7 @@ const late = parsed.get("2026-10-05-isaiah-50-57");
 const latest = parsed.get("2026-10-12-isaiah-58-66");
 const jeremiah = parsed.get("2026-10-19-jeremiah-1-3-7-16-18-20");
 const mixed = parsed.get("2026-10-26-jeremiah-31-33-36-39-lamentations-1-3");
+const ezekiel = parsed.get("2026-11-02-ezekiel-1-3-33-34-36-37-47");
 
 test("scripture-first fragments retain every reader byte, anchor, source, and artwork in source order", () => {
   for (const guide of parsed.values()) {
@@ -185,7 +186,7 @@ test("every guide splits into introduction, reader, and closing sections, losing
   const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
   const opens = (guide, chapter, item) =>
     `<section class="cfm-section" data-kind="chapter" data-chapter="${chapter}" aria-labelledby="${item.id}">`;
-  assert.equal(parsed.size, 5);
+  assert.equal(parsed.size, 6);
   for (const guide of parsed.values()) {
     const name = guide.title;
     const parts = { introduction: guide.introductionHtml, reader: guide.readerHtml, closing: guide.closingHtml };
@@ -1003,4 +1004,56 @@ test("the October 26 guide pairs Jeremiah 31–33, 36–39 and Lamentations 1, 3
   for (const [anchor, key] of locals) {
     if (anchor.startsWith("scripture-jeremiah-")) assert.ok(key < lam1, anchor);
   }
+});
+
+test("the November 2 guide pairs Ezekiel 1–3, 33–34, 36–37, and 47, covering each of their 218 verses once", () => {
+  const bundle = oldTestament();
+  const chapters = [1, 2, 3, 33, 34, 36, 37, 47];
+  const { entries } = ezekiel.range;
+  assert.equal(guides.find((guide) => guide.slug === "2026-11-02-ezekiel-1-3-33-34-36-37-47").scripture, "Ezekiel 1–3; 33–34; 36–37; 47");
+  assert.deepEqual(guideRange("Ezekiel 1–3; 33–34; 36–37; 47").chapters, chapters);
+  assert.deepEqual(entries.map((entry) => [entry.book, entry.slug, entry.volume, entry.chapter]), chapters.map((chapter) => ["Ezekiel", "ezekiel", "oldtestament", chapter]));
+  assert.deepEqual(ezekiel.range.chapters, chapters);
+  assert.deepEqual(entries.map((entry) => entry.key), chapters);
+  assert.deepEqual(ezekiel.readerSections.filter((section) => section.chapter != null).map((section) => section.chapter), chapters);
+  for (const section of ezekiel.readerSections) {
+    for (const block of section.blocks) {
+      if (block.passage) assert.equal(block.passage.chapter, section.chapter, block.id);
+    }
+  }
+  for (const chapter of chapters) {
+    const item = ezekiel.toc.find((toc) => toc.kind === "chapter" && toc.book === "Ezekiel" && Number(toc.number) === chapter);
+    assert.ok(item, `Ezekiel ${chapter}`);
+    assert.equal(item.part, "reader", `Ezekiel ${chapter}`);
+  }
+  const paired = Array.from(ezekiel.html.matchAll(/<section class="cfm-section" data-kind="chapter" data-chapter="(\d+)"/g), (match) => Number(match[1]));
+  assert.deepEqual(paired, chapters);
+  assert.equal(ezekiel.html, ezekiel.introductionHtml + ezekiel.readerHtml + ezekiel.closingHtml);
+  for (const outside of [ezekiel.introductionHtml, ezekiel.closingHtml]) {
+    assert.ok(!/data-chapter="\d+" aria-labelledby/.test(outside));
+    assert.ok(!outside.includes("data-cfm-passage"));
+  }
+  assert.equal(ezekiel.passages.length, 86);
+  const counts = chapters.map((chapter) => verseCount(bundle, "Ezekiel", chapter));
+  assert.deepEqual(counts, [28, 10, 27, 33, 31, 38, 28, 23]);
+  assert.equal(counts.reduce((sum, count) => sum + count, 0), 218);
+  const covered = new Map();
+  for (const passage of ezekiel.passages) {
+    const index = chapters.indexOf(passage.chapter);
+    assert.ok(index >= 0, passage.id);
+    assert.ok(passage.first >= 1 && passage.last >= passage.first && passage.last <= counts[index], passage.id);
+    assert.ok(ezekiel.readerHtml.includes(` id="${passage.id}"`), passage.id);
+    for (let verse = passage.firstHalf === "b" ? passage.first + 1 : passage.first; verse <= passage.last; verse += 1) {
+      covered.set(`${passage.chapter}:${verse}`, (covered.get(`${passage.chapter}:${verse}`) ?? 0) + 1);
+    }
+  }
+  chapters.forEach((chapter, index) => {
+    for (let verse = 1; verse <= counts[index]; verse += 1) {
+      assert.equal(covered.get(`${chapter}:${verse}`), 1, `Ezekiel ${chapter}:${verse}`);
+    }
+  });
+  assert.equal(covered.size, 218);
+  const local = new Set(Array.from(ezekiel.html.matchAll(/href="#scripture-ezekiel-(\d+)/g), (match) => Number(match[1])));
+  assert.deepEqual([...local].sort((a, b) => a - b), chapters);
+  assert.equal(rangeLabel(entries), "Ezekiel 1, 2, 3, 33, 34, 36, 37, 47");
 });

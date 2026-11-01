@@ -10,6 +10,7 @@ Never generate or AI-edit a depiction of Jesus Christ/the Savior. Use verified h
 
 - `/cfm/art/bloch-gethsemane.webp`: Carl Bloch, *Christ in Gethsemane*, 1873. [Wikimedia Commons source](https://commons.wikimedia.org/wiki/File:Carl_Heinrich_Bloch_-_Gethsemane.jpg). Public Domain Mark 1.0; source identifies the painting and faithful reproduction as public domain. Used for October 5, 2026. No generative edits.
 - `/cfm/art/tissot-good-shepherd.webp`: James Tissot, *The Good Shepherd (Le bon pasteur)*, 1886–1894, Brooklyn Museum. [Wikimedia Commons source](https://commons.wikimedia.org/wiki/File:Brooklyn_Museum_-_The_Good_Shepherd_(Le_bon_pasteur)_-_James_Tissot_-_overall.jpg). Public Domain Mark 1.0; source identifies the painting and faithful reproduction as public domain. Used for September 28, 2026. No generative edits.
+- `/cfm/art/tissot-good-shepherd.webp` (reused): Also used for November 2, 2026, for the Ezekiel 34 shepherd theme. Same existing painting and asset; alt text, full credit, and CSS focus 50% 12% preserved. No generation, AI edits, or new asset. Public-domain metadata reverified at the existing Wikimedia Commons source.
 
 Both source pages independently checked during this redesign. The original files remain intact; CSS may frame them in cover cards.
 

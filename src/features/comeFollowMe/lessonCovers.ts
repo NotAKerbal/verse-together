@@ -49,6 +49,24 @@ export const FALLBACK_COVER: GeneratedCover = {
 };
 
 const LESSON_COVERS: Readonly<Record<string, LessonCover>> = {
+  "2026-11-02": {
+    kind: "painting",
+    src: "/cfm/art/tissot-good-shepherd.webp",
+    width: 382,
+    height: 713,
+    focus: "50% 12%",
+    alt: "Jesus carries a sheep on His shoulders along a rocky path, in James Tissot’s The Good Shepherd.",
+    credit: {
+      title: "The Good Shepherd",
+      artist: "James Tissot",
+      date: "1886–1894",
+      collection: "Brooklyn Museum",
+      license: "Public domain",
+      sourceLabel: "Wikimedia Commons",
+      sourceUrl:
+        "https://commons.wikimedia.org/wiki/File:Brooklyn_Museum_-_The_Good_Shepherd_(Le_bon_pasteur)_-_James_Tissot_-_overall.jpg",
+    },
+  },
   "2026-10-26": {
     kind: "painting",
     src: "/cfm/covers/rembrandt-jeremiah.webp",
