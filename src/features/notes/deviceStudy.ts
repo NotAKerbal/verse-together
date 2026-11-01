@@ -1,3 +1,5 @@
+import { ConvexError } from "convex/values";
+import type { entryDraftInput } from "./entryDraft";
 import type { InsightDraft } from "../../lib/appData";
 import type {
   AnnotationChapter,
@@ -27,7 +29,11 @@ import { journalGoalsProblem, type JournalGoals } from "../../lib/journalGoals";
 
 export const DEVICE_STUDY_KEY = "vt_device_study_v1";
 type Owned = { owner: string | null };
-export type DeviceNote = InsightDraft & Owned;
+export type DeviceNote = InsightDraft & Owned & { entry_snapshot?: string };
+function entryFingerprint(note: DeviceNote): string {
+  return JSON.stringify([note.markdown_body, note.markdown_revision, note.journal_date, note.source, note.reading_at]);
+}
+
 export type DeviceAnnotation = VerseAnnotation & AnnotationVerse & Owned;
 /** A guest's annotated guide span: rows saved before guide underlines and notes have a highlight alone. */
 export type DeviceHighlight = GuideHighlightRecord & Owned;
@@ -96,7 +102,7 @@ export class DeviceStudyStore {
     journalDate?: string;
     source?: NoteSource;
     logReading?: boolean;
-  }) {
+  }, autosave = false) {
     const id = `device-${input.requestId ?? newRequestId()}`;
     this.write((data) => {
       if (data.notes.some((note) => note.id === id)) return data;
@@ -121,10 +127,42 @@ export class DeviceStudyStore {
         updated_at: now,
         last_active_at: now,
       };
+      if (autosave) note.entry_snapshot = entryFingerprint(note);
       return { ...data, notes: [note, ...data.notes] };
     });
     return { id };
   }
+  private readonly entryRequests = new Set<string>();
+
+  createEntry(input: ReturnType<typeof entryDraftInput>): { id: string | null } {
+    const id = `device-${input.requestId}`;
+    this.refresh();
+    const existing = this.snapshot.notes.find(note => note.id === id && note.owner === null);
+    if (!existing && this.entryRequests.has(id)) return { id: null };
+    if (!existing) this.createNote(input, true);
+    this.entryRequests.add(id);
+    this.write(data => {
+      const note = data.notes.find(row => row.id === id && row.owner === null);
+      if (!note) throw new Error("Note not found on this device.");
+      if (existing && note.entry_snapshot !== entryFingerprint(note)) {
+        throw new ConvexError({ code: "ENTRY_CONFLICT", id, journalDate: note.journal_date });
+      }
+      if (input.markdownBody.length > NOTE_MARKDOWN_MAX) throw new Error("This note is too long.");
+      const next: DeviceNote = {
+        ...note,
+        markdown_body: input.markdownBody,
+        title: deriveNoteTitle(input.markdownBody),
+        markdown_revision: (note.markdown_revision ?? 0) + (note.markdown_body === input.markdownBody ? 0 : 1),
+        journal_date: input.journalDate,
+        source: input.source ?? null,
+        reading_at: input.logReading ? note.reading_at ?? note.created_at : null,
+      };
+      next.entry_snapshot = entryFingerprint(next);
+      return { ...data, notes: data.notes.map(row => row.id === id ? next : row) };
+    });
+    return { id };
+  }
+
   saveNote(id: string, text: string, expectedRevision: number) {
     let revision = 0;
     this.write((data) => {

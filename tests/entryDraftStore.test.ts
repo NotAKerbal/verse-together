@@ -147,3 +147,91 @@ describe("the entry draft's save, shared by every composer", () => {
     expect(entryConflictOf(new Error("ENTRY_CONFLICT"))).toBeNull();
   });
 });
+
+describe("journal draft autosave", () => {
+  test("keeps the editor open, saves repeatedly under one identity, and finalizes the same entry", async () => {
+    const create = vi.fn<CreateJournalEntry>().mockResolvedValue({ id: "current" });
+    const { store, activate } = storeWith(create);
+    store.change(draft => ({ ...draft, text: "My thoughts" }));
+    const requestId = store.getSnapshot().draft.requestId;
+    await store.autosave();
+    expect(store.getSnapshot().draft.text).toBe("My thoughts");
+    expect(store.getSnapshot().save.status).toBe("autosaved");
+    expect(store.hasUnsaved()).toBe(false);
+    expect(activate).not.toHaveBeenCalled();
+    await store.autosave();
+    expect(create).toHaveBeenCalledTimes(1);
+    await store.appendExcerpt("> Jeremiah 36:5");
+    expect(store.getSnapshot().draft.text).toBe("My thoughts\n\n> Jeremiah 36:5");
+    expect(store.hasUnsaved()).toBe(true);
+    await store.autosave();
+    expect(create.mock.calls[1][0]).toMatchObject({ requestId, markdownBody: "My thoughts\n\n> Jeremiah 36:5", source: chapter2, logReading: true });
+    await store.save();
+    expect(create.mock.calls[2][0].requestId).toBe(requestId);
+    expect(activate).toHaveBeenCalledWith("current");
+    expect(store.getSnapshot().draft.text).toBe("");
+    expect(store.hasUnsaved()).toBe(false);
+  });
+
+  test("a passage added during autosave stays in the draft for the next save", async () => {
+    const { create, calls } = slowCreate();
+    const { store } = storeWith(create);
+    store.change(draft => ({ ...draft, text: "My thoughts" }));
+    const saving = store.autosave();
+    expect(store.getSnapshot().save.status).toBe("autosaving");
+    expect(await store.appendExcerpt("> Selected verse")).toBeNull();
+    calls[0].resolve("current");
+    await saving;
+    expect(store.getSnapshot().save.status).toBe("idle");
+    expect(store.hasUnsaved()).toBe(true);
+    const next = store.autosave();
+    expect(calls[1].input.markdownBody).toBe("My thoughts\n\n> Selected verse");
+    expect(calls[1].input.requestId).toBe(calls[0].input.requestId);
+    calls[1].resolve("current");
+    await next;
+    expect(store.hasUnsaved()).toBe(false);
+  });
+
+  test("adding during a manual save targets the newly saved entry", async () => {
+    const { create, calls } = slowCreate();
+    const { store } = storeWith(create);
+    store.change(draft => ({ ...draft, text: "Current note" }));
+    const saving = store.save();
+    const target = store.appendExcerpt("> Verse");
+    calls[0].resolve("current");
+    await saving;
+    expect(await target).toBe("current");
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot().draft.text).toBe("");
+  });
+
+  test("reading alone never autosaves; failed autosave retains text and stops automatic retries", async () => {
+    const create = vi.fn<CreateJournalEntry>().mockRejectedValue(new Error("offline"));
+    const { store } = storeWith(create);
+    await store.autosave();
+    expect(create).not.toHaveBeenCalled();
+    store.change(draft => ({ ...draft, text: "Keep me" }));
+    await store.autosave();
+    await store.autosave();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot().save.status).toBe("failed");
+    expect(store.getSnapshot().draft.text).toBe("Keep me");
+    expect(store.hasUnsaved()).toBe(true);
+  });
+
+  test("an account change cancels a manual save waiting on autosave", async () => {
+    const { create, calls } = slowCreate();
+    const { store, activate } = storeWith(create);
+    store.change(draft => ({ ...draft, text: "Alice" }));
+    const automatic = store.autosave();
+    const manual = store.save();
+    store.reset();
+    store.change(draft => ({ ...draft, text: "Bob" }));
+    calls[0].resolve("alice-note");
+    await automatic;
+    expect(await manual).toEqual({ id: null });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(activate).not.toHaveBeenCalled();
+    expect(store.getSnapshot().draft.text).toBe("Bob");
+  });
+});

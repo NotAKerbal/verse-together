@@ -327,3 +327,29 @@ describe("device imports", () => {
     ]);
   });
 });
+
+describe("device journal autosave", () => {
+  test("updates the same persisted entry and refuses to overwrite another tab's edits", () => {
+    const disk = storage();
+    const store = new DeviceStudyStore(() => disk);
+    const input = { requestId: "autosave", markdownBody: "Thoughts", journalDate: "2026-11-01", source, logReading: true };
+    const { id } = store.createEntry(input);
+    store.createEntry({ ...input, markdownBody: "Thoughts\n\n> Verse" });
+    expect(store.getSnapshot().notes).toHaveLength(1);
+    const reopened = new DeviceStudyStore(() => disk);
+    reopened.refresh();
+    expect(reopened.getSnapshot().notes[0]).toMatchObject({ markdown_body: "Thoughts\n\n> Verse", journal_date: input.journalDate });
+    reopened.saveNote(id!, "Changed elsewhere", 1);
+    expect(() => store.createEntry({ ...input, markdownBody: "More thoughts" })).toThrow();
+    expect(store.getSnapshot().notes[0].markdown_body).toBe("Changed elsewhere");
+  });
+
+  test("does not recreate an autosaved entry deleted in another tab", () => {
+    const disk = storage();
+    const store = new DeviceStudyStore(() => disk);
+    const input = { requestId: "deleted-autosave", markdownBody: "Thoughts", journalDate: "2026-11-01", source, logReading: true };
+    const { id } = store.createEntry(input);
+    new DeviceStudyStore(() => disk).remove("notes", id!);
+    expect(store.createEntry(input)).toEqual({ id: null });
+  });
+});

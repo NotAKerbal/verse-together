@@ -1,5 +1,7 @@
 "use client";
 
+import { blockToMarkdown } from "../../convex/noteJournal";
+import { useAddToNote } from "@/features/comeFollowMe/useAddToNote";
 import { useFaithTradition } from "@/lib/useFaithTradition";
 
 import { faGear } from "@fortawesome/free-solid-svg-icons";
@@ -582,7 +584,7 @@ export default function ChapterReader({
   const [showJstOmitted, setShowJstOmitted] = useState(false);
   const { user } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
-  const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
+  const { openBuilder, activeDraftId, switchDraft, drafts, setSheetOpen } = useInsightBuilder();
   const readingLog = useMyReadingLog();
   const { openReadingEntry } = useJournalEntryActions();
   const [readingOpenError, setReadingOpenError] = useState<string | null>(null);
@@ -1467,11 +1469,12 @@ export default function ChapterReader({
   }
 
 
-  async function onAddToNote() {
-    const passages = selectedVersePassages(selectionState?.ranges ?? []);
-    if (passages.length === 0) return;
-    for (const passage of passages) {
-      await appendScriptureBlock({
+  const addToNote = useAddToNote(
+    JSON.stringify(selectionState?.ranges ?? []),
+    () => selectedVersePassages(selectionState?.ranges ?? []).map(passage => blockToMarkdown({
+      type: "scripture",
+      text: passage.text,
+      scriptureRef: {
         volume,
         book,
         chapter,
@@ -1482,19 +1485,10 @@ export default function ChapterReader({
           chapter,
           Array.from({ length: passage.verseEnd - passage.verseStart + 1 }, (_, index) => passage.verseStart + index)
         ),
-        text: passage.text,
-      });
-    }
-    openBuilder();
-    clearSelection();
-  }
-
-  async function onNewNoteFromActions() {
-    const createdId = await createDraft("New note");
-    if (!createdId) return;
-    await switchDraft(createdId);
-    openBuilder();
-  }
+      },
+    })).join("\n\n"),
+    clearSelection
+  );
 
   function onOpenExplore() {
     if (!canExploreWord) return;
@@ -2130,12 +2124,10 @@ export default function ChapterReader({
         targetLabel="Note"
         actionsEnabled={true}
         onClear={clearSelection}
-        onInsight={() => {
-          void onAddToNote();
-        }}
-        onNewInsight={() => {
-          void onNewNoteFromActions();
-        }}
+        onInsight={addToNote.onInsight}
+        onNewInsight={addToNote.onNewInsight}
+        insightPending={addToNote.insightPending}
+        insightError={addToNote.insightError}
         onAnnotation={onOpenAnnotation}
         onResources={showLdsContent ? () => { setOpenExplorer(false); setOpenResources(true); } : undefined}
         onExplore={onOpenExplore}
