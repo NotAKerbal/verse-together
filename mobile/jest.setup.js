@@ -43,3 +43,21 @@ jest.mock("./modules/scripture-text", () => {
   });
   return { NativeScriptureText, nativeCalls };
 });
+
+jest.mock("./src/features/journal/LiveMarkdownEditorDOM", () => {
+  const React = require("react");
+  const { TextInput } = require("react-native");
+  return {
+    __esModule: true,
+    default: (props) => {
+      const sequence = React.useRef(props.acknowledgedSequence);
+      return React.createElement(TextInput, {
+        testID: "entry-text",
+        accessibilityLabel: "Note text (Markdown)",
+        value: props.value,
+        onChangeText: (value) => { void props.onEdit(value, ++sequence.current); },
+        onBlur: () => { void props.onBlur(); },
+      });
+    },
+  };
+});

@@ -57,6 +57,7 @@ import {
 } from "./entryDraftStore";
 import { canDelete, isReadOnly, useNoteEditing, type NoteStatus } from "./noteStatus";
 import { markdownBlocks } from "./markdown";
+import LiveMarkdownEditor from "./LiveMarkdownEditor";
 
 function chapterVerseCount(source: NoteSource): number | undefined {
   if (source.kind !== "scripture" || !source.volume || !source.book || !source.chapter) return undefined;
@@ -863,29 +864,15 @@ export default function EntryEditor(props: Props) {
             ]}
           />
           {view === "write" ? (
-            <TextInput
-              testID="entry-text"
-              accessibilityLabel="Note text (Markdown)"
+            <LiveMarkdownEditor
               value={text}
-              onChangeText={setText}
-              onBlur={() => (props.mode === "edit" ? flushEdit("auto") : persistDraft())}
-              multiline
-              autoFocus={props.mode === "new" && !text}
-              placeholder="Write in Markdown: # heading, **bold**, *italic*, - lists, > quotes"
-              placeholderTextColor={colors.foregroundSoft}
-              textAlignVertical="top"
-              style={{
-                minHeight: 260,
-                padding: 14,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.surfaceBorder,
-                backgroundColor: colors.inputSurface,
-                color: colors.foreground,
-                fontFamily: fonts.sans,
-                fontSize: 16,
-                lineHeight: 24,
+              onChangeText={(next) => {
+                latest.current.text = next;
+                draftRef.current.fields.text = next;
+                setText(next);
               }}
+              onBlur={() => (props.mode === "edit" ? flushEdit("auto") : persistDraft())}
+              autoFocus={props.mode === "new" && !text}
             />
           ) : (
             <View style={{ minHeight: 260, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.surfaceBorder, backgroundColor: colors.surfaceCard }}>

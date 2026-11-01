@@ -1,0 +1,20 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cm-editor {
+  height: 100dvh;
+  padding: 12px;
+}
+
+.cm-scroller {
+  overscroll-behavior: contain;
+}
