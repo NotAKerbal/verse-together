@@ -1,10 +1,5 @@
 "use client";
 
-// The unsaved journal entry: a blank note, ready to write in, with its reading chip above it and its day and Save
-// entry below. It can be saved as a note, a reading, or both, as one entry (the provider's saveEntryDraft); the
-// draft and its save live in the provider, so closing the panel or sheet keeps what was typed, and reopening it
-// mid-save shows that save (read-only) until it settles.
-
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { EntryDraftProblem, followEntrySource, withLiveHref, type EntrySaveState } from "./entryDraft";
@@ -64,7 +59,6 @@ export default function JournalEntryComposer({
   const [noteStarted, setNoteStarted] = useState(false);
   const noteMode = !readingFirst || noteStarted || draft.text !== "" || !draft.logReading;
   const saveLabel = readingFirst ? (noteMode ? "Save note" : "Log reading") : "Save entry";
-  // Shared with every composer (and outliving this one), so a reopened sheet shows a save already in flight.
   const saving = entrySave.status === "saving";
   // Problems found before anything was sent; the provider's outcome otherwise.
   const [problem, setProblem] = useState<string | null>(null);
@@ -114,6 +108,11 @@ export default function JournalEntryComposer({
       }}
     >
       {heading}
+      {entrySave.status === "autosaving" || entrySave.status === "autosaved" ? (
+        <p role="status" className="text-xs text-[color:var(--foreground-muted)]">
+          {entrySave.status === "autosaving" ? "Saving…" : "Saved automatically"}
+        </p>
+      ) : null}
       <fieldset disabled={saving} className={`flex min-w-0 flex-col gap-3 ${noteMode ? "flex-1" : ""}`}>
         <legend className="sr-only">New entry</legend>
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">

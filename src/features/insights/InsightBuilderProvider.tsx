@@ -144,13 +144,6 @@ type InsightBuilderContextValue = {
   ) => Promise<void>;
   addDictionaryBlock: (payload: DictionaryPayload) => Promise<void>;
   appendScriptureBlock: (payload: ScripturePayload) => Promise<void>;
-  /**
-   * A selection's Add to note: puts `markdown` (an excerpt, see noteExcerpts) at the end of the active note, or with
-   * none active saves it as a new note linked to the page in view and makes that note active (a retry with the same
-   * `requestId` is the same note). Text typed in the active note and not yet saved stays, with the excerpt after it.
-   * Rejects with a message to show, having added nothing, when the note has a save conflict to settle or the write
-   * fails; the unsaved Log entry is never touched.
-   */
   addExcerptToNote: (markdown: string, requestId: string) => Promise<void>;
   updateBlock: (
     blockId: string,
@@ -195,7 +188,7 @@ type BlockId = Id<"insightDraftBlocks">;
 
 export function InsightBuilderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const { ready: convexReady } = useConvexSignedIn();
+  const { ready: convexReady, loading: authLoading } = useConvexSignedIn();
   const canUseInsights = true;
   const device = useDeviceStudy();
   const localNotes = useMemo(() => device.data.notes.filter(note => note.owner === null), [device.data]);
@@ -496,7 +489,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
 
   const createEntry = useCallback<CreateJournalEntry>(
     async (input) => {
-      const result = await tracked<{ id: string | null }>(!user ? Promise.resolve(deviceStudy.createNote(input)) : createJournalEntryMutation(input));
+      const result = await tracked<{ id: string | null }>(!user ? Promise.resolve(deviceStudy.createEntry(input)) : createJournalEntryMutation(input));
       return { id: result.id === null ? null : String(result.id) };
     },
     [user, createJournalEntryMutation, tracked]
@@ -510,17 +503,17 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
   );
   const {
     entryDraft,
-    getEntryDraft,
+    hasUnsavedEntry,
+    addExcerptToEntry,
     changeEntryDraft: updateEntryDraft,
     entrySave,
     saveEntryDraft,
     openSavedEntry,
-  } = useEntryDraftStore({ ownerId: userId, create: createEntry, activate: activateEntry });
+  } = useEntryDraftStore({ ownerId: userId, create: createEntry, activate: activateEntry, autosaveReady: !authLoading && (!user ? device.loaded : convexReady) });
 
-  // Unsaved note text lives only in this tab, so leaving with some still pending asks first.
   useEffect(() => {
     function onBeforeUnload(event: BeforeUnloadEvent) {
-      const unsavedEntry = getEntryDraft().text.trim() !== "";
+      const unsavedEntry = hasUnsavedEntry();
       if (!journalOutbox.hasUnsaved() && !unsavedEntry) return;
       journalOutbox.flushAll();
       event.preventDefault();
@@ -528,7 +521,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [journalOutbox, getEntryDraft]);
+  }, [journalOutbox, hasUnsavedEntry]);
 
   const startEntry = useCallback(
     (defaults: EntryDefaults) => {
@@ -687,7 +680,16 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
     async (markdown: string, requestId: string) => {
       const excerpt = markdown.trim();
       if (!excerpt) throw new Error("Select some text to add.");
-      const noteId = activeDraftId;
+      let noteId = activeDraftId;
+      if (panelView === "log") {
+        noteId = await addExcerptToEntry(excerpt);
+        if (!noteId) {
+          setPanelView("log");
+          setIsPanelOpen(true);
+          setIsMobileOpen(true);
+          return;
+        }
+      }
       if (!noteId) {
         const input = { journalDate: localDateKey(), source: captureCurrentSource() ?? undefined, markdownBody: excerpt, logReading: false };
         let created: { id: string | null };
@@ -720,7 +722,7 @@ export function InsightBuilderProvider({ children }: { children: React.ReactNode
       }
       openBuilder();
     },
-    [user, activeDraftId, captureCurrentSource, createEntry, activateEntry, openBuilder, journalOutbox, addBlockMutation, tracked]
+    [user, activeDraftId, panelView, addExcerptToEntry, captureCurrentSource, createEntry, activateEntry, openBuilder, journalOutbox, addBlockMutation, tracked]
   );
 
   const addDictionaryBlock = useCallback(

@@ -86,3 +86,20 @@ describe("reading-first entries", () => {
     expect(html).toContain("Save note");
   });
 });
+
+
+describe("autosave feedback", () => {
+  test("saving automatically leaves the note editable", () => {
+    const html = render({ status: "autosaving" });
+    expect(html).toContain("Saving…");
+    expect(html).not.toMatch(/<fieldset disabled=""/);
+    expect(html).toContain("Kept text");
+  });
+
+  test("confirms automatic saves without replacing the composer", () => {
+    const html = render({ status: "autosaved", id: "current", journalDate: "2026-11-01" });
+    expect(html).toContain("Saved automatically");
+    expect(html).toContain("Kept text");
+    expect(html).toContain("Save entry");
+  });
+});

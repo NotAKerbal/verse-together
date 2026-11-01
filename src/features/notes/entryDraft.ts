@@ -33,6 +33,8 @@ export class EntryDraftProblem extends Error {}
 export type EntrySaveState =
   | { status: "idle" }
   | { status: "saving" }
+  | { status: "autosaving" }
+  | { status: "autosaved"; id: string; journalDate: string }
   | { status: "failed" }
   | { status: "deleted" }
   | { status: "conflict"; id: string; journalDate: string }
