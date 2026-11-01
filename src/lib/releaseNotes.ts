@@ -44,6 +44,7 @@ export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
     { kind: "improved", text: "Journal notes save automatically while you write. Add to Note keeps selected passages in the note you are currently composing, including a new reading log note." },
+    { kind: "improved", text: "The mobile journal formats headings, bold, links, quotes, lists, and code while you write, just like the website." },
   ],
 };
 
