@@ -42,7 +42,9 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    { kind: "improved", text: "The mobile journal formats headings, bold, links, quotes, lists, and code while you write, just like the website." },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [
