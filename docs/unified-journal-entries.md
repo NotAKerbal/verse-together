@@ -22,8 +22,9 @@ This combines two efforts on the same base (`10c1936`):
 ## Behavior
 
 **Log** (reader header and Come, Follow Me header) opens the Log panel immediately on the one unsaved entry. Phones
-get the bottom sheet and desktop the nonmodal right panel, with the reader keeping room beside it. Nothing is stored
-until **Save entry**. The entry starts with:
+get the bottom sheet and desktop the nonmodal right panel, with the reader keeping room beside it. Opening alone
+stores nothing. Once the entry has note text, it saves automatically after 800 ms without edits, keeping the
+writer open and editable. Reading-only entries still require **Log reading**. The entry starts with:
 
 - a reading chip naming the chapter the header shows (`logOptions[0]`), passed explicitly so it is right while the
   chapter text is still loading;
@@ -43,17 +44,25 @@ entry.
 - The Log panel shows no chapter-completion card (no **Mark chapter as read** there). Chapter completion and plans
   stay separate from an entry's reading, so editing or deleting an entry never changes them; chapter progress and
   its server functions are unchanged, and plans still mark their steps read.
-- The unsaved entry lives in `InsightBuilderProvider`. Closing the sheet or panel keeps its text, and unloading the
-  page with text in it asks first. It is cleared when the account changes. While untouched it follows the chapter
+- The composing entry lives in `InsightBuilderProvider`. Closing the sheet or panel keeps its text and autosave
+  continues. Unloading with changes that have not saved asks first. It is cleared when the account changes. While untouched it follows the chapter
   in view (desktop navigation with the panel open). Once it has text or a chosen reading it stays as it is.
-- One request id lasts for the whole unsaved entry, so every retry names the same entry. A retry made after editing
+- **Add to Note** appends to the composing entry while the panel is on Log, ahead of any previously selected saved
+  note. The excerpt keeps the entry’s reading and day and is included in its next autosave. If a manual save is
+  already running, the excerpt goes to the entry that save creates.
+- Automatic saves keep the same request id and never clear the writer or activate another note. Changes typed
+  during a save remain in the writer and are sent by the next autosave. A failed save stops automatic retries,
+  keeps the text, and offers **Try again**; conflicts require an explicit choice. The status reports **Saving…**
+  and **Saved automatically**. These rules also apply to device-only notes, including protection against edits
+  from another tab.
+- One request id lasts for the whole composing entry, so every retry names the same entry. A retry made after editing
   replaces the entry's content only while nothing has touched the entry since; it never overwrites later edits.
   Replacing the text bumps the entry's revision (`entryRequestRevision` records the one the request left), so an
   editor opened on the earlier text, in another window, gets a revision conflict instead of saving over the
   retry. Repeating the same request, or changing only its reading or day, keeps the revision.
 - The save lives in the provider too (`EntryDraftStore` in `useEntryDraftStore.ts`), not in the composer. One
-  save runs at a time; closing and reopening the sheet mid-save shows it still in flight, with the entry
-  read-only, and a second Save joins it rather than sending again. When it lands, only the exact content that was
+  save runs at a time. A manual save makes the entry read-only; a second manual Save joins it. A manual save
+  requested during autosave waits, then saves the latest text to the same entry. When it lands, only the exact content that was
   sent is cleared. If the draft changed meanwhile, the entry is saved and the changes stay in the draft under a
   new request id, with a notice offering **Save as new entry** or **Open saved entry**.
 - If the entry was edited elsewhere (another window) after an earlier attempt landed and this retry brings other

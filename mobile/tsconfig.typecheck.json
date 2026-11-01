@@ -10,7 +10,9 @@
       "convex/browser": ["./node_modules/convex/browser"],
       "convex/server": ["./node_modules/convex/server"],
       "marked": ["./node_modules/marked"],
+      "@codemirror/*": ["./node_modules/@codemirror/*"],
       "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
       "csstype": ["./node_modules/csstype"]
     }
   }

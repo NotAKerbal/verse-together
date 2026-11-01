@@ -47,7 +47,20 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.21.0",
+    date: "2026-11-01",
+    title: "Smoother journal writing and scripture study",
+    items: [
+      { kind: "improved", text: "Journal notes save automatically while you write. Add to Note keeps selected passages in the note you are currently composing, including a new reading log note." },
+      { kind: "improved", text: "The mobile journal formats headings, bold, links, quotes, lists, and code while you write, just like the website." },
+      { kind: "improved", text: "Scripture has more reading room when both desktop side panels are open." },
+      { kind: "improved", text: "Highlighting scripture reopens the selection menu while Resources or word study stays open, including when you select the same word again." },
+    ],
+    commits: ["4782b3cb", "9a98aa40", "9cbb2d33"],
+  },
+  {
     version: "2.20.5",
+    masterCommit: "578748d7",
     date: "2026-10-30",
     title: "Clearer Hebrew and Greek word exploration",
     items: [

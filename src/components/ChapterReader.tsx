@@ -1,5 +1,7 @@
 "use client";
 
+import { blockToMarkdown } from "../../convex/noteJournal";
+import { useAddToNote } from "@/features/comeFollowMe/useAddToNote";
 import { useFaithTradition } from "@/lib/useFaithTradition";
 
 import { faGear } from "@fortawesome/free-solid-svg-icons";
@@ -582,7 +584,7 @@ export default function ChapterReader({
   const [showJstOmitted, setShowJstOmitted] = useState(false);
   const { user } = useAuth();
   const { ready: convexReady } = useConvexSignedIn();
-  const { appendScriptureBlock, openBuilder, activeDraftId, switchDraft, createDraft, drafts, setSheetOpen } = useInsightBuilder();
+  const { openBuilder, activeDraftId, switchDraft, drafts, setSheetOpen } = useInsightBuilder();
   const readingLog = useMyReadingLog();
   const { openReadingEntry } = useJournalEntryActions();
   const [readingOpenError, setReadingOpenError] = useState<string | null>(null);
@@ -630,6 +632,7 @@ export default function ChapterReader({
   const [openResources, setOpenResources] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
   const [isPointerSelecting, setIsPointerSelecting] = useState(false);
+  const [dismissedSelectionKey, setDismissedSelectionKey] = useState<string | null>(null);
   const [isAtTop, setIsAtTop] = useState(true);
   const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
   const [annotationEditorVerse, setAnnotationEditorVerse] = useState<number | null>(null);
@@ -905,7 +908,9 @@ export default function ChapterReader({
   const selectedText = selectionState?.selectedText ?? "";
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
-  const showMobileActionBar = !overlayOpen && hasSelection && !isPointerSelecting && !isCustomTouchSelecting;
+  const selectedVerseKey = selectionState?.ranges.map(range => `${range.verse}:${range.start}:${range.end}`).join(",") ?? "";
+  const showSelectionActions = hasSelection && !isPointerSelecting && !isCustomTouchSelecting &&
+    (!overlayOpen || selectedVerseKey !== dismissedSelectionKey);
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
   const wordStudyContext = useMemo(() => ({ volume, book, chapter }), [volume, book, chapter]);
@@ -1012,7 +1017,6 @@ export default function ChapterReader({
   }, [chapterAnnotationData, customMobileSelectionEnabled]);
   const selectionVerses = selectionState?.selectedVerses;
   const selectedVerseNumbers = useMemo(() => (selectionVerses ?? []).map((verse) => verse.verse), [selectionVerses]);
-  const selectedVerseKey = selectionState?.ranges.map(range => `${range.verse}:${range.start}:${range.end}`).join(",") ?? "";
   const selectedMarks = useMemo(
     () => selectionMarks(selectedVerseNumbers.map((verse) => myAnnotationByVerse.get(verse)), selectionState?.ranges),
     [selectedVerseNumbers, myAnnotationByVerse, selectionState?.ranges]
@@ -1116,7 +1120,7 @@ export default function ChapterReader({
 
 
   useEffect(() => {
-    if (!hasSelection || overlayOpen) return;
+    if (!hasSelection) return;
 
     function isInsideSelection(clientX: number, clientY: number) {
       const customRange = customWordRangeRef.current;
@@ -1139,7 +1143,8 @@ export default function ChapterReader({
       if (customMobileSelectionEnabled || event.pointerType === "touch") {
         if (isInsideSelection(event.clientX, event.clientY)) return;
       } else if (target.closest("[data-verse-selectable='true']")) return;
-      clearSelection();
+      if (overlayOpen) setDismissedSelectionKey(selectedVerseKey);
+      else clearSelection();
     }
 
     function onTouchStartOutside(event: TouchEvent) {
@@ -1150,18 +1155,19 @@ export default function ChapterReader({
       if (target.closest("[data-selection-handle='true']")) return;
       const touch = event.changedTouches[0];
       if (touch && isInsideSelection(touch.clientX, touch.clientY)) return;
-      clearSelection();
+      if (overlayOpen) setDismissedSelectionKey(selectedVerseKey);
+      else clearSelection();
     }
 
     function onEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") clearSelection();
+      if (event.key !== "Escape") return;
+      if (overlayOpen) setDismissedSelectionKey(selectedVerseKey);
+      else clearSelection();
     }
 
-    let dismissedByScroll = false;
     function onScrollDismiss() {
-      if (dismissedByScroll) return;
-      dismissedByScroll = true;
-      clearSelection();
+      if (overlayOpen) setDismissedSelectionKey(selectedVerseKey);
+      else clearSelection();
     }
 
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -1177,7 +1183,7 @@ export default function ChapterReader({
       window.removeEventListener("scroll", onScrollDismiss);
       window.removeEventListener("resize", onScrollDismiss);
     };
-  }, [hasSelection, isCustomTouchSelecting, overlayOpen, customMobileSelectionEnabled]);
+  }, [hasSelection, isCustomTouchSelecting, overlayOpen, customMobileSelectionEnabled, selectedVerseKey]);
 
   useEffect(() => {
     function syncTopState() {
@@ -1467,11 +1473,12 @@ export default function ChapterReader({
   }
 
 
-  async function onAddToNote() {
-    const passages = selectedVersePassages(selectionState?.ranges ?? []);
-    if (passages.length === 0) return;
-    for (const passage of passages) {
-      await appendScriptureBlock({
+  const addToNote = useAddToNote(
+    JSON.stringify(selectionState?.ranges ?? []),
+    () => selectedVersePassages(selectionState?.ranges ?? []).map(passage => blockToMarkdown({
+      type: "scripture",
+      text: passage.text,
+      scriptureRef: {
         volume,
         book,
         chapter,
@@ -1482,22 +1489,14 @@ export default function ChapterReader({
           chapter,
           Array.from({ length: passage.verseEnd - passage.verseStart + 1 }, (_, index) => passage.verseStart + index)
         ),
-        text: passage.text,
-      });
-    }
-    openBuilder();
-    clearSelection();
-  }
-
-  async function onNewNoteFromActions() {
-    const createdId = await createDraft("New note");
-    if (!createdId) return;
-    await switchDraft(createdId);
-    openBuilder();
-  }
+      },
+    })).join("\n\n"),
+    clearSelection
+  );
 
   function onOpenExplore() {
     if (!canExploreWord) return;
+    setDismissedSelectionKey(selectedVerseKey);
     setOpenResources(false);
     setOpenExplorer(true);
   }
@@ -1580,6 +1579,7 @@ export default function ChapterReader({
 
       <div
         ref={layoutGridRef}
+        data-sidebar-open={hasSidebarPanelOpen}
         className={`reader-layout lg:grid lg:items-start ${
           hasSidebarPanelOpen
             ? "lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)] 2xl:grid-cols-[28rem_minmax(0,1fr)] lg:gap-6 xl:gap-8"
@@ -1769,7 +1769,12 @@ export default function ChapterReader({
                         const target = event.target as HTMLElement | null;
                         if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
                         if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+                        setDismissedSelectionKey(selectedVerseKey);
                         setIsPointerSelecting(true);
+                      }}
+                      onPointerUp={() => {
+                        const selection = getChapterSelectionState(window.getSelection(), verseListRef.current, verses);
+                        if (selection) setDismissedSelectionKey(null);
                       }}
                       className={`reader-verses ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
                       style={{ fontSize: `${prefs.fontScale}rem` }}
@@ -2111,12 +2116,14 @@ export default function ChapterReader({
       ) : null}
 
       {simpleMode ? null : (
+      <div className={overlayOpen ? "hidden lg:contents" : "contents"}>
       <VerseActionBar
-        visible={showMobileActionBar}
+        visible={showSelectionActions}
         anchorRect={selectionPopoverAnchor}
         hasSelection={hasSelection}
         hasActiveInsight={hasActiveNote}
         selectionReference={formatPassageReference(getBookLabel(volume, book), chapter, selectedVerseNumbers)}
+        selectionKey={selectedVerseKey}
         selectedText={selectedText}
         selectedWord={singleSelectedWord}
         quickMarks={quickMarks}
@@ -2130,17 +2137,16 @@ export default function ChapterReader({
         targetLabel="Note"
         actionsEnabled={true}
         onClear={clearSelection}
-        onInsight={() => {
-          void onAddToNote();
-        }}
-        onNewInsight={() => {
-          void onNewNoteFromActions();
-        }}
+        onInsight={addToNote.onInsight}
+        onNewInsight={addToNote.onNewInsight}
+        insightPending={addToNote.insightPending}
+        insightError={addToNote.insightError}
         onAnnotation={onOpenAnnotation}
-        onResources={showLdsContent ? () => { setOpenExplorer(false); setOpenResources(true); } : undefined}
+        onResources={showLdsContent ? () => { setDismissedSelectionKey(selectedVerseKey); setOpenExplorer(false); setOpenResources(true); } : undefined}
         onExplore={onOpenExplore}
         shareHref={shareHref}
       />
+      </div>
       )}
     </section>
     </>

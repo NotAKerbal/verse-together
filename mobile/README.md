@@ -130,7 +130,8 @@ npm run brand:check      # launcher, splash and store graphics match their vecto
   with the web's rules (40 verse matches, grouped by chapter, ranked).
 - **Journal.** Reflection invitation with the web's prompts, month calendar, weekly goals with an editor, this
   month's study days, a thought worth revisiting, a day view, full-text search, and an entry editor: Markdown
-  with preview, a reading chip (whole chapter or verses, day), Save, revision-checked edits, Delete, and a
+  with live formatting in Write and a separate linked preview, a reading chip (whole chapter or verses, day),
+  Save, revision-checked edits, Delete, and a
   discard-changes guard. Saved entries autosave after a pause, on blur/background and when leaving; new drafts
   recover after restarting, separately for each owner. Failures and revision conflicts retain the text and offer
   retry/copy choices. Published and archived notes open read-only. Verse notes open their verse.
@@ -475,3 +476,15 @@ auth request's cookie cleanup settles. The saved cache owner is bound to the ver
 Automated checks use an in-memory server and real native routes under Jest; they do not establish authenticated
 production round trips or real-device Google/keyboard/gesture behavior. Android export is held until the parent
 explicitly sends `export ok` after its separate UI-only 1.0.5 Gradle release build.
+
+### Journal live Markdown editor
+
+The Write tab embeds the website's `src/features/notes/MarkdownEditor.tsx` through an Expo DOM component.
+Its CodeMirror bundle is packaged in the app for offline use. Formatting follows the same rules as the
+website: headings, emphasis, links, lists, quotes and code are styled while typing; syntax is revealed
+on the selected line. Preview still provides tappable links. The Markdown document remains the saved
+source, with native draft recovery, revision checks and account syncing unchanged.
+
+The DOM editor keeps immediate local edits while the native bridge acknowledges changes in sequence,
+so an older echo cannot replace newer typing. The native Jest suites mock only that DOM boundary;
+physical keyboard, selection handles and on-screen keyboard behavior require iOS/Android device QA.
