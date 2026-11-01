@@ -45,6 +45,8 @@ export const UNRELEASED: UnreleasedNotes = {
   items: [
     { kind: "improved", text: "Journal notes save automatically while you write. Add to Note keeps selected passages in the note you are currently composing, including a new reading log note." },
     { kind: "improved", text: "The mobile journal formats headings, bold, links, quotes, lists, and code while you write, just like the website." },
+    { kind: "improved", text: "Scripture has more reading room when both desktop side panels are open." },
+    { kind: "improved", text: "Highlighting scripture reopens the selection menu while Resources or word study stays open, including when you select the same word again." },
   ],
 };
 
