@@ -38,8 +38,8 @@ const SOURCE_FILES = {
   "content/cfm/2026-10-12-isaiah-58-66.md": ["3b961a70aa9deb9af3f04ae266193ad5af0f3062e426932acf44bd48ea1f2c5d", 74659],
   "content/cfm/2026-10-19-jeremiah-1-3-7-16-18-20.md": ["e2a55290b045c2786a64daed1bcbbed822d734e16997b636cbcfa78e293b5880", 85627],
   "content/cfm/2026-10-26-jeremiah-31-33-36-39-lamentations-1-3.md": ["e6c3e669c181420edafae9da5ba1a5fc9ed38deaff921d7c7008e5806f43b237", 133565],
-  "content/cfm/2026-11-02-ezekiel-1-3-33-34-36-37-47.md": ["4c8ddfa97630f9ac74461fa66e3cc2d58fb7b3c5e30782a71688e95d9e50644d", 123421],
-  "content/cfm/guides.json": ["2ace1e3aa539c7e48011a1a665c5fbcc6894ba227bd6f397d2ded074a67551ed", 3365],
+  "content/cfm/2026-11-02-ezekiel-1-3-33-34-36-37-47.md": ["da21527882a9cfc600caf3364c1b07242be74bcf10bc5ba3bea3581795146f1c", 123572],
+  "content/cfm/guides.json": ["0282d9c89b93f7f723e38eade761dec6edeaa97b24ed54fa36e88c1d4c95ffcd", 3365],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
