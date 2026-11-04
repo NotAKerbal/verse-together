@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { LocalBrowseBook, LocalVolumeSummary } from "@/lib/ldsLocalData.server";
@@ -362,6 +363,10 @@ export default function ResourceManagerWorkspace({ volumes, booksByVolume }: Pro
             </div>
             <div className="page-meta">{books.length} books</div>
           </div>
+
+          <Link href="/resources/manage/chapter-guides" className="surface-button inline-flex w-fit rounded-full border px-3 py-2 text-sm font-medium">
+            AI chapter guide controls
+          </Link>
 
           <div className="space-y-1.5">
             <div className="flex flex-wrap gap-2">

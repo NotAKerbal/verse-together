@@ -107,8 +107,8 @@ The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/rou
 ### Optional environment variables
 
 - `MERRIAM_WEBSTER_API_KEY` (or `MW_DICTIONARY_API_KEY`)
-- Chapter study paths were generated once with the batch scripts below and are served from the Convex cache; reading them needs no API key.
-- `OPENAI_API_KEY` is only needed for regenerating a chapter that has no cache entry. Chapter research runs server-side with `gpt-5.6-luna`, searches only the configured LDS and Mormon studies sources, and caches grounded results in Convex. The key is never sent to the browser.
+- Chapter study paths were generated once with the batch scripts below and are served from the Convex cache; reading them needs no API key, and the site never generates them on request. `OPENAI_API_KEY` in the local environment is only for those batch scripts.
+- AI chapter guides are requested from the Resources panel, which shows only the groups matching the selected verses, and read in full at `/chapter-guides/<volume>/<book>/<chapter>`. They're generated in Convex under an application-enforced $100 monthly spending ledger, which isn't a limit the providers enforce. Setup, keys, and limits are in `docs/chapter-guides.md`.
 
 If no Merriam-Webster key is configured, only Free Dictionary API entries will be returned.
 

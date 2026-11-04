@@ -1,0 +1,195 @@
+# AI chapter guides
+
+Signed-in readers can request a substantial, passage-by-passage guide for any chapter from the Resources panel.
+Once written, a guide is saved for everyone: anyone can read it without an account, and nobody pays for it again.
+Editorial Come, Follow Me guides are separate and unchanged. The chapter guide page says in its footer that the guide was prepared with AI.
+
+## How readers see a guide
+
+A guide is written once, for the whole chapter, and broken into small verse groups. It's then read at two levels,
+following Come, Follow Me:
+
+- **Resources.** Selecting verses in the reader shows only the groups that overlap those exact verses, as cards like
+  the lessons'. A disjoint selection (verses 1 and 20) doesn't pull in the groups between them. Changing the selection
+  never starts a job or re-reads anything but the saved guide, and each card has **Open chapter guide**.
+- **The full guide**, at `/chapter-guides/<volume>/<book>/<chapter>`. It uses the Come, Follow Me study companion:
+  scripture first, contents, **Context for verses N–M** disclosures, reading controls, and scripture previews. A link
+  ending in `#passage-<first>-<last>` opens that group's context. The page is public and only reads what's saved.
+
+`src/lib/chapterGuideCompanion.ts` builds both levels from the saved guide. It writes HTML directly from the structured
+fields and escapes every generated string, so no generated text passes through Markdown or reaches the page as markup.
+Highlights on a guide are stored under `ai-guide-<volume>-<book>-<chapter>`, which can't equal a lesson's date key. Notes
+link to the guide as a page, not as a Come, Follow Me lesson.
+
+A guide saved before these rules can still hold wording the current prompts would reject. The page removes an opening
+AI disclaimer and an `Application:` prefix when showing it, but doesn't change the saved text.
+
+Merging this feature spends nothing. Generation stays off until the steps below are done.
+
+## Turning it on
+
+Set these yourself. Never put a key in the repository, a command argument, a chat, or a log.
+
+| Where | Variable | Purpose |
+| --- | --- | --- |
+| Convex environment | `OPENAI_API_KEY` | Research and review (`gpt-5.6-luna`, `gpt-5.6-terra`) |
+| Convex environment | `ANTHROPIC_API_KEY` | Writing and repair (`claude-opus-5-5`) |
+| Convex environment | `CHAPTER_GUIDE_SERVICE_SECRET` | Long random value; must match the Vercel value |
+| Vercel (server only) | `CHAPTER_GUIDE_SERVICE_SECRET` | Lets the site vouch for the scripture text it sends to Convex |
+
+Generation also reads `SITE_URL`, which the Convex deployment already sets for sign-in, to look up scripture text (see
+below). Without it, guides still generate, but cited scripture isn't checked against its text.
+
+Do not give the secret a `NEXT_PUBLIC_` prefix. Generate it with `openssl rand -hex 32`. Use separate values and
+separate provider keys for the development and production deployments.
+
+Then, as an admin, open the resource manager at `/resources/manage` and follow **AI chapter guide controls** to
+`/resources/manage/chapter-guides`. Check that the keys and both copies of the secret show as set, and choose
+**Resume generation**. A deployment with no settings saved starts paused. With a key or either copy of the secret
+missing, readers see that guides aren't set up, and no spending is reserved.
+
+## How spending is limited
+
+The application cap is **$100 per UTC month**, set by `HARD_MONTHLY_CAP_MICROS` in `convex/chapterGuideBudget.ts`. An
+owner can lower it on the admin page but can't raise it above that value without a code change.
+
+This cap is the application's own ledger, not a limit the providers enforce. It stops new calls based on what it has
+reserved and counted, so it can't stop a charge it doesn't know about: the search usage described below, a price that
+changed, or a provider billing something it doesn't report. Set a spending limit in each provider's console if you need
+one that holds regardless.
+
+- **Reservation before any call.** `chapterGuides:requestGeneration` is one serializable Convex mutation. It reserves
+  the job's maximum in `chapterGuideBudgetPeriods`, and rejects the request if spent + reserved + the new reservation +
+  a $2 margin would pass the cap. Concurrent requests can't both take the last of the budget.
+- **What the maximum covers.** `jobReservationMicros` covers every stage at its maximum attempts, including the second
+  review after a repair: output token caps, web search calls, and an input bound for each stage, including the cited
+  scripture below. It comes to about $6.92 for a 43-verse chapter, and that amount is held only while the job runs. SDK retries are off (`maxRetries: 0`), so each
+  retry is a counted attempt.
+- **How input is bounded.** `requestInputBytes` measures the system prompt, the user message, the JSON schema, and any
+  tool definition, and adds a fixed allowance for provider framing. A request over its stage's bound isn't sent. The cost
+  calculation treats each byte as at most one token. That is a conservative estimate rather than a tokenizer guarantee,
+  and hidden provider framing isn't documented, so reported usage above the maximum pauses generation (below).
+- **Research is held at its maximum.** OpenAI bills web search content at model rates. Its [pricing
+  page](https://developers.openai.com/api/docs/pricing), its web search guide, and the `openai` SDK's `tool_usage` type
+  don't say whether `usage.input_tokens` includes that content, so a research attempt is never reduced to its reported usage. It
+  stays spent at its maximum (`held_at_maximum`, with the reported usage kept on the attempt row), which is about $0.50
+  per attempt. That maximum assumes one full 128K search context on each of the 7 possible model turns; OpenAI documents
+  the 128K limit and the 6-call `max_tool_calls` cap, but not that bound as a guaranteed ceiling.
+- **Each call has a ledger row first.** `beginStage` writes a `chapterGuideAttempts` row and checks that the job is
+  still allowed to run before any provider is contacted. Pausing or lowering the cap stops a running job at its next
+  stage. A worker that starts too late to finish inside its lease makes no call.
+- **Fails closed.** When a call times out, returns a 5xx, reports malformed usage (anything other than non-negative
+  whole numbers, or cached tokens above input tokens), or its worker disappears, the cost is unknown, so the attempt
+  keeps its full maximum as spent. `sweepStaleJobs` does this for lost workers every 5 minutes. Unused reservation is
+  released only when a job finishes.
+- **Automatic pauses.** Generation pauses after 4 failed guides in a row, or if a call's reported cost ever exceeds
+  its reserved maximum, which would mean the prices or bounds here are out of date.
+
+### Across a month boundary
+
+Each month's ledger has to cover whatever could land in that month, so spending never depends on a job's starting month:
+
+- **Next stage, next month.** `beginStage` moves the job's remaining reservation into the current month before any call.
+  If the new month can't hold it, including the $2 margin, the job stops as `budget_stopped` and its reservation is
+  released.
+- **A call running across midnight.** If a call's lease reaches the next month, `beginStage` also holds that call's
+  maximum in the next month before starting it, and refuses to start if the next month can't hold it.
+- **Settling.** A call that finishes before midnight releases that hold and charges only its own month. A call that
+  finishes after midnight, or whose worker is swept after midnight, is charged to both months and its hold released,
+  because which month the provider bills it to isn't known. The two months' ledgers can therefore overlap by a few calls
+  at each boundary, and the job's own `spentMicros` counts them once.
+
+Other limits, in `convex/chapterGuideBudget.ts`: one job per chapter (a repeat request joins it), 2 running jobs,
+20 jobs a day overall, 2 a day and 8 per 30 days per reader, and a 12-hour wait before retrying a chapter whose guide
+failed.
+
+### Prices
+
+Verified on 2026-11-04 from each provider's pricing and model pages. Recheck them and update `MODEL_PRICES` and
+`PRICES_VERIFIED_ON` when models or prices change. The ledger is only as accurate as this table and each provider's
+reported usage, so compare it with the providers' billing pages.
+
+| Model | Used for | Input / cached / 30-minute cache write / output per 1M tokens |
+| --- | --- | --- |
+| `gpt-5.6-luna` | Research | $0.20 / $0.02 / $0.25 / $1.20 ($0.40 / $0.04 / $0.50 / $1.80 above 272K input tokens) |
+| `gpt-5.6-terra` | Review, second review | $2.00 / $0.20 / $2.50 / $12.00 ($4.00 / $0.40 / $5.00 / $18.00 above 272K input tokens) |
+| `claude-opus-5-5` | Writing, repair | $4.00 / $0.20 / $5.00 / $20.00 |
+| OpenAI web search | Research | $10 per 1,000 calls, plus search content tokens at the model's input rate |
+
+These sources give the figures: [OpenAI pricing](https://developers.openai.com/api/docs/pricing),
+[`gpt-5.6-luna`](https://developers.openai.com/api/docs/models/gpt-5.6-luna),
+[`gpt-5.6-terra`](https://developers.openai.com/api/docs/models/gpt-5.6-terra),
+[Claude pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+
+OpenAI requests set `prompt_cache_options.mode` to `explicit` with no breakpoints, which by [OpenAI's
+guide](https://developers.openai.com/api/docs/guides/prompt-caching) neither writes nor reads the cache, because these
+prompts aren't reused. Claude requests set no `cache_control`. Any cache tokens a provider still reports are charged at
+the rates above.
+
+Two test guides have been generated to completion on an isolated local deployment, both for 1 Nephi 1 (20 verses). The
+original run, before canonical cited scripture was added as evidence, came to $0.842402 on the ledger. The revised run,
+at `promptVersion` 2, came to $0.775452, for $1.617854 combined. Two runs of one chapter don't establish a typical cost
+or a monthly guide count, so check the first few on the admin page and against each provider's billing page.
+
+## How a guide is made
+
+Each stage is its own scheduled Convex action, so a failure loses one stage rather than the job. The research step
+chooses its own searches, within the limits below. Everything after it is a fixed sequence, not an open-ended agent.
+
+1. **Research.** OpenAI web search, limited to the Church's site and named Latter-day Saint scholarship, writes short
+   attributed notes tied to verses. A note is kept only if its URL came back from that search. It also lists passages
+   of other scriptures worth comparing, as coordinates only.
+2. **Writing.** Claude picks the significant insights and writes the guide from the chapter's text, the notes, and the
+   text of those passages, with no web access. Every verse must fall in exactly one passage, each passage covers at most
+   12 verses and needs its original meaning and a question. Later readings go in a separate, labeled application field.
+3. **Review.** A different model checks the draft against the chapter, the notes, and the text of the scriptures it
+   cites. Each required correction must
+   name a real section (`overview`, `historical_context`, `limitations`, `insight:<index>`, or `passage:<start>-<end>`).
+   A review that names anything else is retried and then fails. Too many required corrections fails the job.
+4. **Repair.** If needed, Claude replaces the flagged sections, once. The job fails without publishing if the repair
+   leaves a flagged section unchanged (`repair_noop`), replaces a section nobody flagged (`repair_out_of_scope`), or no
+   longer validates (`repair_invalid`).
+5. **Second review.** The same review model checks the repaired guide, with the earlier findings as data. The guide is
+   published only if no required correction remains. Anything remaining fails the job as `repair_unresolved`, with no
+   second repair. A published guide's provenance records the first review's correction count and that it was repaired.
+
+### Cited scripture
+
+The writing, review, repair, and second review stages get the canonical text of other scriptures, so a model doesn't
+have to judge them from memory. `convex/chapterGuideEvidence.ts` takes the coordinates and any exact references in the
+prose, validates them against the canon, and fetches only `<SITE_URL origin>/api/scriptures/lds-chapter`, with a query
+built from the validated coordinates and redirects refused. A model can't choose a URL.
+
+Input is limited to 40 references, 24 chapters, 30 verses per reference, and 24 KiB in all, and that bound is part of
+each stage's reservation. Each entry says whether its text was supplied. If it wasn't, the reviewer is told to abstain
+and list it as unverifiable rather than judge it from memory; a reference to verses that don't exist is a real problem to
+report. Lookups cost nothing, and a failed lookup doesn't stop the job. The guide's footer says how many cited scriptures
+the reviewer could read.
+
+The prompts also tell both models that a chapter's silence doesn't prove a negative, and to check negatives against the
+research notes and mark inference. These are instructions to a model, not guarantees, so wrong claims can still get
+through.
+
+### Validation
+
+Validation checks verse coverage, that sources come from the research packet, length, and that any quotation of six
+words or more matches the chapter. A guide that fails isn't published.
+
+Headings and Resources cards call it a chapter guide, in the same style as Come, Follow Me resources, with no AI badge.
+The page's footer says what was and wasn't done: AI writing, no human review, and that the writer saw research notes rather than the source pages. No source is described as read in full, because the search API doesn't report that reliably.
+
+## Security
+
+- Provider keys exist only in the Convex environment and are read only in the worker.
+- `requestGeneration` needs both the service secret and a live signed-in session, because it trusts the scripture text
+  it's given. Only the site's server has the secret.
+- Every function that records spending or publishes a guide is internal, so a client can't call it.
+- Study paths no longer generate anything: `/api/insights/chapter` only reads the batch cache, so opening a chapter
+  never costs money, and the public `upsertChapterInsight` mutation is gone.
+
+To remove a bad guide, run `npx convex run chapterGuides:retireGuide` with its volume, book, chapter, and scripture
+hash. A new request for that chapter will then generate it again.
+
+Source titles: when a search returned no page title, the stored title is the hostname, and the site shows a label read
+from the URL instead (for example "Guide to the Scriptures: Zedekiah"). That label describes the address only, not what the
+page says.

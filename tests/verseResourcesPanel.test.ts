@@ -41,6 +41,12 @@ const sourceLink = (html: string, url: string) => {
   return new RegExp(`<a href="${url.replace(/[.?]/g, "\\$&")}"[^>]*>[\\s\\S]*?</a>`).exec(sources)?.[0] ?? "";
 };
 
+describe("the lesson line on a resource card", () => {
+  test("a Come, Follow Me resource shows its lesson and dates", () => {
+    expect(render()).toContain(">Isaiah 40–49 · September 28–October 4</p>");
+  });
+});
+
 describe("cited sources in the reader's Resources", () => {
   test("a cited scripture opens in the scripture preview, not a new Gospel Library tab", () => {
     const link = sourceLink(render(() => {}), scripture);

@@ -45,6 +45,7 @@
     "apps:check": "node scripts/apps.mjs --all check"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "@better-auth/core": "~1.6.33",
     "@better-auth/expo": "~1.6.33",
     "@better-auth/passkey": "~1.6.33",
