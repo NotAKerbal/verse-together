@@ -8,6 +8,7 @@ import { JST_SOURCE_DOCS_URL } from "@/lib/jst";
 import { useFaithTradition } from "@/lib/useFaithTradition";
 import { useDefaultBible } from "@/lib/useDefaultBible";
 import { useJstPreference } from "@/lib/jstPreference";
+import { removeSavedComparison } from "@/lib/bibleComparisons";
 import {
   readFavoriteTranslations, useFavoriteTranslations, writeFavoriteTranslations, type FavoriteTranslation,
 } from "@/lib/translationFavorites";
@@ -224,6 +225,7 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
     event.currentTarget.closest("[data-bible-list]")?.querySelector<HTMLElement>("[data-add-bible]")?.focus();
     const remove = () => {
       writeFavoriteTranslations(readFavoriteTranslations().filter((item) => !sameId(item.id, row.id)));
+      removeSavedComparison(row.id);
       if (row.shown) onShownChange?.(row.id, false);
     };
     if (sameId(defaultBible, row.id)) {
