@@ -190,7 +190,10 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 ],
             },
         ],
-        notes: ["Add the Bibles you want to compare first (see Add Bibles above)."],
+        notes: [
+            "Add the Bibles you want to compare first (see Add Bibles above).",
+            "The Bibles you turn on stay on in every Bible chapter on this device until you turn them off.",
+        ],
         cover: { clip: "compare-inline", center: [0.33, 0.36], zoom: 1.7 },
         tryIt: { href: "/browse/newtestament/john/1", label: "Open John 1" },
     },

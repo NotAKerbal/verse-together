@@ -18,6 +18,7 @@ import {
   chapterChromeForHref,
   chapterNavigationTarget,
   chapterOverlayTranslations,
+  chapterQueryChoosesTranslations,
   describeChapterTarget,
   isBrowseSelectionHref,
   isPendingChapterVisible,
@@ -341,6 +342,14 @@ test("a one-chapter book redirect keeps the page's query, in order", () => {
   assert.equal(toSearchSuffix({ translation: undefined }), "");
   assert.equal(toSearchSuffix({ translation: "kjv", compare: ["nrsv", "esv"] }), "?translation=kjv&compare=nrsv&compare=esv");
   assert.equal(toSearchSuffix({ q: "a b&c" }), "?q=a+b%26c");
+});
+
+test("a chapter URL chooses its own translations only when it names one", () => {
+  assert.equal(chapterQueryChoosesTranslations({}), false);
+  assert.equal(chapterQueryChoosesTranslations({ translation: "", compare: [] }), false);
+  assert.equal(chapterQueryChoosesTranslations({ translation: "BSB" }), true);
+  assert.equal(chapterQueryChoosesTranslations({ compare: ["eng_net"] }), true);
+  assert.equal(chapterQueryChoosesTranslations({ translation: "lds" }), true);
 });
 
 test("only selection views are shown in place by the selector; chapters always go through the router", () => {
