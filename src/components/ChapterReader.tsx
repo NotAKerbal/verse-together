@@ -714,18 +714,13 @@ export default function ChapterReader({
   }, [textReady]);
 
   useEffect(() => {
-    // The current study paths are written from a Latter-day Saint perspective.
     if (!textReady || !showLdsContent) return;
     const controller = new AbortController();
     setChapterStudyPaths([]);
     setOpenInsightVerse(null);
 
-    void fetch("/api/insights/chapter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ volume, book, chapter }),
-      signal: controller.signal,
-    })
+    const params = new URLSearchParams({ volume, book, chapter: String(chapter) });
+    void fetch(`/api/insights/chapter?${params}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) return null;
         return (await response.json()) as ChapterInsightResult;
@@ -742,7 +737,7 @@ export default function ChapterReader({
       });
 
     return () => controller.abort();
-  }, [textReady, volume, book, chapter, user?.id, showLdsContent]);
+  }, [textReady, volume, book, chapter, showLdsContent]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

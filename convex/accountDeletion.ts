@@ -109,6 +109,9 @@ export const DELETION_STEPS: Record<string, Step> = {
   feedEpisodeWatches: async (ctx, owner, budget) => {
     await remove(ctx, budget, (await ctx.db.query("feedEpisodeWatches").withIndex("by_clerk_id", (q) => q.eq("clerkId", owner)).take(budget.left)).map((row) => row._id));
   },
+  chapterGuideRequests: async (ctx, owner, budget) => {
+    await remove(ctx, budget, (await ctx.db.query("chapterGuideRequests").withIndex("by_clerk_created", (q) => q.eq("clerkId", owner)).take(budget.left)).map((row) => row._id));
+  },
   deviceStudyImports: async (ctx, owner, budget) => {
     await remove(ctx, budget, (await ctx.db.query("deviceStudyImports").withIndex("by_owner_device", (q) => q.eq("clerkId", owner)).take(budget.left)).map((row) => row._id));
   },

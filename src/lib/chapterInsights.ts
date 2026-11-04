@@ -53,7 +53,7 @@ export type ChapterStudyPath = {
 export type ChapterInsightResult = {
   reference: string;
   paths: ChapterStudyPath[];
-  generated_at: string;
+  generated_at: string | null;
   cached: boolean;
 };
 

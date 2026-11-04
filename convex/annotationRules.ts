@@ -348,7 +348,7 @@ export function readMarkPresets(saved: { markPresets?: unknown; quickMarks?: unk
   it is ambiguous or gone.
 */
 
-export const GUIDE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export const GUIDE_KEY_PATTERN = /^(?:\d{4}-\d{2}-\d{2}|ai-guide-[a-z]{1,40}-[a-z0-9]{1,40}-\d{1,3})$/;
 /** Element ids usable as block anchors (the guide parser's heading and lead ids all are). */
 export const GUIDE_BLOCK_PATTERN = /^[A-Za-z0-9_-]{0,120}$/;
 export const GUIDE_QUOTE_MAX = 4000;

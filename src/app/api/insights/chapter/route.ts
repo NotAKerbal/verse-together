@@ -1,20 +1,8 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  CHAPTER_INSIGHT_PROMPT_VERSION,
-  extractChapterInsightResponse,
-  parseChapterStudyPaths,
-  stableJsonStringify,
-  type ChapterStudyPath,
-  type OpenAiChapterInsightResponse,
-} from "@/lib/chapterInsights";
-import { buildChapterInsightResponseBody } from "@/lib/chapterInsightRequest";
-import { convexMutation, convexQuery } from "@/lib/convexHttp";
+import { CHAPTER_INSIGHT_PROMPT_VERSION, type ChapterInsightResult, type ChapterStudyPath } from "@/lib/chapterInsights";
+import { convexQuery } from "@/lib/convexHttp";
 import { getLocalLdsChapter } from "@/lib/ldsLocalData.server";
-import { getRequestViewer } from "@/lib/requestViewer";
-
-// Allow the 45-second research request plus authentication and cache work to finish.
-export const maxDuration = 90;
 
 type ChapterRequest = {
   volume?: unknown;
@@ -28,7 +16,6 @@ type CachedChapterInsight = {
   promptVersion: number;
   paths: ChapterStudyPath[];
   generatedAt: number;
-  signature: string;
 };
 
 function boundedSlug(value: unknown): string | null {
@@ -37,29 +24,10 @@ function boundedSlug(value: unknown): string | null {
   return normalized && normalized.length <= 100 ? normalized : null;
 }
 
-function cacheSignature(
-  apiKey: string,
-  payload: Omit<CachedChapterInsight, "signature">
-): string {
-  return createHmac("sha256", apiKey).update(stableJsonStringify(payload)).digest("hex");
-}
-
-export async function POST(request: NextRequest) {
-  // Study paths were generated once in a batch and cached in Convex. Reads never need an
-  // API key or an account; the key only enables on-demand generation for a chapter that has no cache entry.
-  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
-
-  let payload: ChapterRequest;
-  try {
-    payload = (await request.json()) as ChapterRequest;
-  } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-  }
-
-  const volume = boundedSlug(payload.volume);
-  const book = boundedSlug(payload.book);
-  const chapter = typeof payload.chapter === "number" && Number.isInteger(payload.chapter) ? payload.chapter : null;
-  if (!volume || !book || chapter === null || chapter < 1 || chapter > 250) {
+async function cachedStudyPaths({ volume: rawVolume, book: rawBook, chapter }: ChapterRequest) {
+  const volume = boundedSlug(rawVolume);
+  const book = boundedSlug(rawBook);
+  if (!volume || !book || typeof chapter !== "number" || !Number.isInteger(chapter) || chapter < 1 || chapter > 250) {
     return NextResponse.json({ error: "Invalid chapter." }, { status: 400 });
   }
 
@@ -71,111 +39,36 @@ export async function POST(request: NextRequest) {
   const chapterText = scripture.verses.map((verse) => `${verse.verse}. ${verse.text}`).join("\n");
   const scriptureHash = createHash("sha256").update(chapterText).digest("hex");
 
+  let cached: CachedChapterInsight | null;
   try {
-    const cached = await convexQuery<CachedChapterInsight | null>("chapterInsights:getChapterInsight", {
-      volume,
-      book,
-      chapter,
-    });
-    if (
-      cached &&
-      cached.scriptureHash === scriptureHash &&
-      cached.promptVersion === CHAPTER_INSIGHT_PROMPT_VERSION
-    ) {
-      return NextResponse.json({
-        reference: cached.reference,
-        paths: cached.paths,
-        generated_at: new Date(cached.generatedAt).toISOString(),
-        cached: true,
-      });
-    }
+    cached = await convexQuery<CachedChapterInsight | null>("chapterInsights:getChapterInsight", { volume, book, chapter });
   } catch (error) {
     console.warn("Chapter insight cache read failed", error);
+    return NextResponse.json({ error: "Chapter insights are temporarily unavailable." }, { status: 503 });
   }
 
-  if (!apiKey) {
-    return NextResponse.json({ error: "AI insights are not configured yet." }, { status: 503 });
-  }
+  const usable = cached && cached.scriptureHash === scriptureHash && cached.promptVersion === CHAPTER_INSIGHT_PROMPT_VERSION;
+  const result: ChapterInsightResult = usable
+    ? { reference: cached!.reference, paths: cached!.paths, generated_at: new Date(cached!.generatedAt).toISOString(), cached: true }
+    : { reference: scripture.reference, paths: [], generated_at: null, cached: false };
+  return NextResponse.json(result);
+}
 
-  // Generating costs a paid research call, so it is for a verified, signed-in reader only: the browser's session
-  // cookie, or the native app's Convex token for its own session (src/lib/requestViewer.ts).
-  const { viewer, token: convexToken } = await getRequestViewer(request);
-  if (!viewer) {
-    return NextResponse.json({ error: "Sign in to generate chapter insights." }, { status: 401 });
-  }
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams;
+  return await cachedStudyPaths({
+    volume: params.get("volume"),
+    book: params.get("book"),
+    chapter: Number(params.get("chapter")),
+  });
+}
 
+export async function POST(request: NextRequest) {
+  let payload: ChapterRequest;
   try {
-    const openAiResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(buildChapterInsightResponseBody(scripture.reference, scripture.verses)),
-      cache: "no-store",
-      signal: AbortSignal.timeout(45000),
-    });
-
-    const response = (await openAiResponse.json()) as OpenAiChapterInsightResponse;
-    if (!openAiResponse.ok) {
-      console.error("OpenAI chapter insight request failed", openAiResponse.status, response.error?.message ?? "Unknown error");
-      return NextResponse.json({ error: "Chapter insights could not finish researching." }, { status: 502 });
-    }
-
-    const extracted = extractChapterInsightResponse(response);
-    const parsedPaths = parseChapterStudyPaths(
-      extracted.text,
-      new Set(scripture.verses.map((verse) => verse.verse)),
-      extracted.sources
-    );
-    const paths = await Promise.all(
-      parsedPaths.map(async (path) => ({
-        ...path,
-        scripture_links: (
-          await Promise.all(
-            path.scripture_links.map(async (link) => {
-              const linkedChapter = await getLocalLdsChapter(link.volume, link.book, link.chapter);
-              const lastVerse = linkedChapter?.verses.at(-1)?.verse ?? 0;
-              return linkedChapter && link.verse_start <= lastVerse && link.verse_end <= lastVerse ? link : null;
-            })
-          )
-        ).filter((link): link is NonNullable<typeof link> => link !== null),
-      }))
-    );
-    if (paths.length === 0) {
-      return NextResponse.json({ error: "No well-supported study paths were found." }, { status: 502 });
-    }
-
-    const generatedAt = Date.now();
-    const unsignedCache = {
-      reference: scripture.reference,
-      scriptureHash,
-      promptVersion: CHAPTER_INSIGHT_PROMPT_VERSION,
-      paths,
-      generatedAt,
-    };
-    const signature = cacheSignature(apiKey, unsignedCache);
-
-    if (convexToken) {
-      try {
-        await convexMutation(
-          "chapterInsights:upsertChapterInsight",
-          { volume, book, chapter, ...unsignedCache, signature },
-          convexToken
-        );
-      } catch (error) {
-        console.warn("Chapter insight cache write failed", error);
-      }
-    }
-
-    return NextResponse.json({
-      reference: scripture.reference,
-      paths,
-      generated_at: new Date(generatedAt).toISOString(),
-      cached: false,
-    });
-  } catch (error) {
-    console.error("OpenAI chapter insight request failed", error);
-    return NextResponse.json({ error: "Chapter insights are temporarily unavailable." }, { status: 502 });
+    payload = (await request.json()) as ChapterRequest;
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
+  return await cachedStudyPaths(payload ?? {});
 }

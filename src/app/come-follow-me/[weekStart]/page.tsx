@@ -197,7 +197,7 @@ export default async function ComeFollowMeWeekPage({ params }: Params) {
         closingHtml={parsed.closingHtml}
         toc={parsed.toc}
         chapters={chapters}
-        weekStart={week.start}
+        guideId={week.start}
         guideSource={guideSource}
         footer={
           <footer className={styles.footer}>
