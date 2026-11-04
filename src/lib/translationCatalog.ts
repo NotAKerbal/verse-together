@@ -135,3 +135,29 @@ export function comparisonQuery(search: string, selected: string[]): string {
   selected.slice(1).forEach((id) => params.append("compare", id));
   return params.toString();
 }
+
+export function parseSavedComparisons(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const ids = parsed
+      .filter((id): id is string => typeof id === "string")
+      .map((id) => id.trim())
+      .filter((id) => id && id.toLowerCase() !== "lds");
+    return ids.filter((id, index) => ids.findIndex((other) => other.toLowerCase() === id.toLowerCase()) === index);
+  } catch {
+    return [];
+  }
+}
+
+export function resolveChapterComparisons(urlChoice: string[] | null, saved: string[], primary: string): string[] {
+  return (urlChoice ?? saved).filter((id) => id.toLowerCase() !== primary.toLowerCase());
+}
+
+export function hrefAfterComparisonChange(pathname: string, search: string, shown: string[], saved: boolean): string | null {
+  const params = new URLSearchParams(search);
+  if (saved && !params.has("translation") && !params.has("compare")) return null;
+  const query = comparisonQuery(search, saved ? [] : shown);
+  return query ? `${pathname}?${query}` : pathname;
+}
