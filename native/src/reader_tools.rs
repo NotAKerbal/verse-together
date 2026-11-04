@@ -1,9 +1,3 @@
-// The reader's study tools, after the website's ChapterReader: study paths beside verses (`/api/insights/chapter`),
-// Explore a word (`WordStudyPanel`: the scripture study helps, Strong's Hebrew and Greek, English dictionaries),
-// lesson Resources for the selected verses (`/api/resources`), and for the Bible the reader's other Bibles shown
-// verse by verse beside the KJV (`BibleTranslationToolbar`, HelloAO) and Joseph Smith Translation passages. The
-// scripture text itself stays embedded; these are the website's own public endpoints, called off the UI thread.
-// Every result is for the chapter or word it was asked for; a late one for anything else is dropped.
 use crate::account::background;
 use crate::store::{Location, Verse};
 use crate::{App, Message};
@@ -14,53 +8,6 @@ use std::time::Duration;
 use unicode_normalization::UnicodeNormalization;
 
 // ---------- The website's payloads ----------
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct StudyPath {
-    pub kind: String,
-    #[serde(default)]
-    pub verse_numbers: Vec<u32>,
-    pub title: String,
-    #[serde(default)]
-    pub direction: String,
-    #[serde(default)]
-    pub why: String,
-    #[serde(default)]
-    pub look_for: Vec<String>,
-    #[serde(default)]
-    pub sources: Vec<PathSource>,
-    #[serde(default)]
-    pub scripture_links: Vec<ScriptureLink>,
-}
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct PathSource {
-    pub title: String,
-    pub url: String,
-    #[serde(default)]
-    pub format: String,
-}
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct ScriptureLink {
-    pub reference: String,
-    pub volume: String,
-    pub book: String,
-    pub chapter: u32,
-    pub verse_start: u32,
-    #[serde(default)]
-    pub verse_end: u32,
-}
-/// `KIND_LABELS` in VerseStudyPaths.
-pub fn kind_label(kind: &str) -> &'static str {
-    match kind {
-        "cross_reference" => "Cross-reference",
-        "doctrinal_context" => "Doctrinal context",
-        "historical_context" => "Historical context",
-        "word_or_phrase" => "Word or phrase",
-        "textual_pattern" => "Textual pattern",
-        "open_question" => "Open question",
-        _ => "Study path",
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -649,18 +596,6 @@ fn encode(value: &str) -> String {
         })
         .collect()
 }
-pub fn fetch_study_paths(site: &str, l: &Location) -> Result<Vec<StudyPath>, String> {
-    let mut response = agent()
-        .post(&format!("{site}/api/insights/chapter"))
-        .send_json(serde_json::json!({ "volume": l.volume, "book": l.book, "chapter": l.chapter }))
-        .map_err(|e| e.to_string())?;
-    let status = response.status().as_u16();
-    let value: serde_json::Value = response.body_mut().read_json().map_err(|e| e.to_string())?;
-    if !(200..300).contains(&status) {
-        return Err(value["error"].as_str().unwrap_or("unavailable").to_string());
-    }
-    Ok(serde_json::from_value(value["paths"].clone()).unwrap_or_default())
-}
 pub fn fetch_resources(site: &str, l: &Location, verses: &[u32]) -> Result<Vec<Resource>, String> {
     let spec = verses
         .iter()
@@ -895,8 +830,6 @@ pub enum Load<T> {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Panel {
-    /// Study paths for a verse.
-    Paths(u32),
     /// Explore a word.
     Explore,
     /// Lesson resources for the verses selected when it opened.
@@ -946,7 +879,6 @@ pub struct ToolsState {
     pub site: String,
     /// The chapter the extras below belong to.
     pub chapter: Option<Location>,
-    pub paths: Load<Vec<StudyPath>>,
     pub panel: Option<Panel>,
     pub explore: Option<Explore>,
     /// Each resource with its lesson text parsed for display.
@@ -984,7 +916,6 @@ impl ToolsState {
                 .map(|e| e.site)
                 .unwrap_or_else(|_| crate::cloud::DEFAULT_SITE.into()),
             chapter: None,
-            paths: Load::Ready(vec![]),
             panel: None,
             explore: None,
             resources: None,
@@ -1022,22 +953,10 @@ impl ToolsState {
         self.primary_cache.insert(0, entry);
         self.primary_cache.truncate(PRIMARY_CACHE);
     }
-    /// The study paths that tag a verse.
-    pub fn paths_for(&self, verse: u32) -> Vec<&StudyPath> {
-        match &self.paths {
-            Load::Ready(paths) => paths
-                .iter()
-                .filter(|p| p.verse_numbers.contains(&verse))
-                .collect(),
-            _ => vec![],
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
 pub enum ToolsMsg {
-    Paths(Location, Result<Vec<StudyPath>, String>),
-    OpenPaths(u32),
     ClosePanel,
     /// Explore this word (the one selected when the action was shown).
     Explore(String),
@@ -1182,8 +1101,6 @@ impl App {
             && is_bible(&self.preferences.last.volume)
             && self.primary_is_bundled()
     }
-    /// Starts the chapter's extras after its text is on screen: the default Bible's text, study paths, other Bibles,
-    /// JST.
     pub(crate) fn load_chapter_tools(&mut self) -> Task<Message> {
         let primary = self.load_primary();
         let l = self.preferences.last.clone();
@@ -1194,22 +1111,7 @@ impl App {
         self.tools.panel = None;
         self.tools.explore = None;
         self.tools.resources = None;
-        let site = self.tools.site.clone();
         let mut tasks = vec![primary];
-        // Study paths are Latter-day Saint study content (`ChapterReader`: none for other denominations).
-        if self.show_lds() {
-            self.tools.paths = Load::Loading;
-            let (site, l) = (site.clone(), l.clone());
-            tasks.push(Task::perform(
-                background(move || {
-                    let r = fetch_study_paths(&site, &l);
-                    (l, r)
-                }),
-                |(l, r)| msg(ToolsMsg::Paths(l, r)),
-            ));
-        } else {
-            self.tools.paths = Load::Ready(vec![]);
-        }
         self.tools.compare.clear();
         self.tools.jst = None;
         self.tools.jst_reading = Default::default();
@@ -1366,20 +1268,6 @@ impl App {
     pub(crate) fn update_tools(&mut self, message: ToolsMsg) -> Task<Message> {
         let here = self.preferences.last.clone();
         match message {
-            ToolsMsg::Paths(l, r) if l == here => {
-                // As on the website, a chapter whose paths can't be loaded simply shows none.
-                self.tools.paths = match r {
-                    Ok(paths) => Load::Ready(paths),
-                    Err(e) => Load::Failed(e),
-                };
-            }
-            ToolsMsg::OpenPaths(verse) => {
-                self.tools.panel = if self.tools.panel == Some(Panel::Paths(verse)) {
-                    None
-                } else {
-                    Some(Panel::Paths(verse))
-                };
-            }
             ToolsMsg::ClosePanel => {
                 self.tools.panel = None;
                 self.tools.explore = None;
@@ -1710,7 +1598,6 @@ impl App {
                 }
                 return self.update(Message::OpenLink(href));
             }
-            ToolsMsg::Paths(..) => {}
         }
         Task::none()
     }
@@ -1874,8 +1761,6 @@ mod tests {
         );
         let excerpt: JstExcerpt = serde_json::from_value(serde_json::json!({"id":"jst-mark-9#0","label":"JST, Mark 9:3","compareReference":"Mark 9:4","anchorVerse":4,"comparedSpans":[{"start":4,"end":4}],"verses":[{"number":"3","text":"And there appeared"}]})).unwrap();
         assert_eq!(excerpt.anchor_verse, Some(4));
-        let paths: Vec<StudyPath> = serde_json::from_value(serde_json::json!([{"kind":"doctrinal_context","verse_numbers":[9,10],"title":"Worship","direction":"Explore","why":"Because","look_for":["x"],"sources":[{"format":"article","title":"t","url":"https://x"}],"scripture_links":[]}])).unwrap();
-        assert_eq!(kind_label(&paths[0].kind), "Doctrinal context");
     }
     #[test]
     fn lesson_html_becomes_markdown() {

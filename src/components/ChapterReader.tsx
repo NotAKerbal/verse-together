@@ -42,7 +42,6 @@ import { useSimpleMode } from "@/lib/simpleMode";
 import { hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
-import VerseStudyPaths, { VerseStudyPathMarker } from "@/features/insights/VerseStudyPaths";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/reading/useReadingProgress";
 import { scriptureLinksForChapter } from "../../convex/noteScriptureLinks";
 import { chapterReadPassages, hasReaderNote } from "@/features/notes/chapterReadStatus";
@@ -57,11 +56,6 @@ import VerseInsightMarker, { groupVerseInsightRefsByVerse, type VerseInsightRef 
 import { BIBLE_TRANSLATION_OPTIONS } from "@/lib/bibleCanon";
 import { FEATURED_BIBLES } from "@/lib/translationCatalog";
 import type { ChapterChrome } from "@/lib/browseRoutes";
-import {
-  groupChapterStudyPathsByVerse,
-  type ChapterInsightResult,
-  type ChapterStudyPath,
-} from "@/lib/chapterInsights";
 import { ensureBrowserScriptureStorage } from "@/lib/browserScriptureStorage";
 import { buildShareUrl, formatPassageReference } from "@/lib/passageShare";
 import { getBookLabel } from "@/features/reading/scriptureCatalog";
@@ -636,8 +630,6 @@ export default function ChapterReader({
   const [isAtTop, setIsAtTop] = useState(true);
   const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
   const [annotationEditorVerse, setAnnotationEditorVerse] = useState<number | null>(null);
-  const [chapterStudyPaths, setChapterStudyPaths] = useState<ChapterStudyPath[]>([]);
-  const [openInsightVerse, setOpenInsightVerse] = useState<number | null>(null);
   const [customMobileSelectionSupported, setCustomMobileSelectionSupported] = useState(false);
   const [simpleMode] = useSimpleMode();
   const customMobileSelectionEnabled = customMobileSelectionSupported && !simpleMode;
@@ -651,14 +643,6 @@ export default function ChapterReader({
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
   const verseListRef = useRef<HTMLOListElement | null>(null);
   const [desktopScriptureOffset, setDesktopScriptureOffset] = useState(0);
-  const studyPathsByVerse = useMemo(
-    () => groupChapterStudyPathsByVerse(showLdsContent ? chapterStudyPaths : []),
-    [chapterStudyPaths, showLdsContent]
-  );
-  const openStudyPaths = useMemo(
-    () => (openInsightVerse === null ? [] : studyPathsByVerse.get(openInsightVerse) ?? []),
-    [openInsightVerse, studyPathsByVerse]
-  );
   const myInsightRefs = useQuery(
     api.insights.listMyScriptureRefsForChapter,
     convexReady ? { volume, book, chapter } : "skip"
@@ -712,32 +696,6 @@ export default function ChapterReader({
       void ensureBrowserScriptureStorage();
     });
   }, [textReady]);
-
-  useEffect(() => {
-    if (!textReady || !showLdsContent) return;
-    const controller = new AbortController();
-    setChapterStudyPaths([]);
-    setOpenInsightVerse(null);
-
-    const params = new URLSearchParams({ volume, book, chapter: String(chapter) });
-    void fetch(`/api/insights/chapter?${params}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as ChapterInsightResult;
-      })
-      .then((result) => {
-        if (result && Array.isArray(result.paths)) {
-          setChapterStudyPaths(result.paths);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          console.warn("Chapter insights could not be loaded", error);
-        }
-      });
-
-    return () => controller.abort();
-  }, [textReady, volume, book, chapter, showLdsContent]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1779,10 +1737,8 @@ export default function ChapterReader({
                         // Read with the JST, this verse shows the JST's wording, which isn't the KJV text marks are saved on.
                         const jstRow = jstReading.rows.get(v.verse);
                         const myVerseAnnotation = myAnnotationByVerse.get(v.verse);
-                        const verseStudyPaths = studyPathsByVerse.get(v.verse) ?? [];
                         const verseInsightRefs = insightRefsByVerse.get(v.verse) ?? [];
                         const readPassage = readPassages.get(v.verse);
-                        const isInsightOpen = openStudyPaths.some((path) => path.verse_numbers.includes(v.verse));
                         const verseComparisons = Array.from(compareByTranslation.entries())
                           .map(([translationId, byVerse]) => {
                             const text = byVerse.get(v.verse);
@@ -1918,19 +1874,6 @@ export default function ChapterReader({
                                 )}
                               </div>
                               )}
-                              {verseStudyPaths.length > 0 ? (
-                                <VerseStudyPathMarker
-                                  verse={v.verse}
-                                  open={isInsightOpen}
-                                  onToggle={() => {
-                                    if (isInsightOpen) {
-                                      setOpenInsightVerse(null);
-                                      return;
-                                    }
-                                    setOpenInsightVerse(v.verse);
-                                  }}
-                                />
-                              ) : null}
                               {verseInsightRefs.length > 0 ? (
                                 <span className="contents simple-hide">
                                 <VerseInsightMarker
@@ -1971,16 +1914,12 @@ export default function ChapterReader({
           <ChapterDesktopNav
             prevHref={prevHref}
             nextHref={nextHref}
-            shortcutsBlocked={pageCovered || settingsOpen || overlayOpen || hasSelection || isPointerSelecting || annotationEditorVerse !== null || openInsightVerse !== null || isDragging || animTargetX !== null}
+            shortcutsBlocked={pageCovered || settingsOpen || overlayOpen || hasSelection || isPointerSelecting || annotationEditorVerse !== null || isDragging || animTargetX !== null}
           />
           <ChapterSimpleNav prevHref={prevHref} nextHref={nextHref} />
           </div>
         </div>
       </div>
-
-      {openStudyPaths.length > 0 ? (
-        <VerseStudyPaths paths={openStudyPaths} onClose={() => setOpenInsightVerse(null)} />
-      ) : null}
 
       {customMobileSelectionEnabled && customSelectionRects.length > 0 && !selectionCoversWholeVerses ? (
         <div className="pointer-events-none fixed inset-0 z-30">

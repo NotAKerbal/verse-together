@@ -35,7 +35,6 @@
     { "id": "quick-marks-use", "scene": "quickmarks_use", "from": "rec", "to": "end" },
     { "id": "explore-study-helps", "scene": "explore_helps", "from": "rec", "to": "end" },
     { "id": "explore-languages", "scene": "explore_languages", "from": "rec", "to": "end" },
-    { "id": "study-paths", "scene": "study_paths", "from": "rec", "to": "end" },
     { "id": "notes-quote", "scene": "notes_new", "from": "rec", "to": "write" },
     { "id": "notes-write", "scene": "notes_new", "from": "write-0.4", "to": "end" },
     { "id": "log-reading", "scene": "log", "from": "rec", "to": "end" },

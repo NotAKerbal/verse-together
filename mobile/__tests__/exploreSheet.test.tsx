@@ -38,7 +38,6 @@ function installFetch() {
 
 const callsTo = (path: string) => calls.filter((call) => call.url.pathname === `/api/tools/${path}`);
 const param = (call: Call, name: string) => call.url.searchParams.get(name);
-/** Explore's own lookups, not the reader's (its chapter study paths, /api/insights/chapter). */
 const toolCalls = () => calls.filter((call) => call.url.pathname.startsWith("/api/tools/"));
 
 const EMPTY_DICTIONARY = (term: string) => ({

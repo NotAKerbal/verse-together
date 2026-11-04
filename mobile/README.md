@@ -148,7 +148,7 @@ npm run brand:check      # launcher, splash and store graphics match their vecto
   found on the other; a link in the prose opens with a tap.
 - **Reader extras.** Saved/default Bibles, whole-chapter inline or side-by-side comparison (stacked on phones,
   real columns on tablets while the primary chapter stays one selectable native text), JST passages with added
-  and omitted wording, cached study paths, and journal-note markers. Resources opens bundled lesson commentary
+  and omitted wording, and journal-note markers. Resources opens bundled lesson commentary
   for selected verses offline. Custom-scheme share links open the reader at the shared passage.
 - **Study plans.** Native list, detail, new/edit builder, quick starts, scope, pace, reading days and dates; chapter
   check-off/uncheck and confirmed deletion through the existing account APIs. Signed out, plans invite sign-in.
@@ -388,9 +388,6 @@ were not added as new product scope.
 - **Network-dependent account operations.** Plans, goals and guide-annotation changes require a connection.
   The account's Continue reading position and pending position updates are cached per owner across offline
   restarts. Journal/verse outbox data remains durable. Account preferences stay disabled until first hydration.
-- **Study paths.** Cached paths remain public. For uncached chapters, the native app sends its session's Convex
-  token to the site's API, which verifies the reader with Convex before researching. This requires the updated
-  website route, deployed in website 2.19.0; real signed-in acceptance is still pending.
 - **Platform choices.** Plan dates use YYYY-MM-DD entry and one-day buttons. Custom mark colors use hex input.
   Native guide selections remain bounded by their text runs/context blocks. HTTPS intent filters and native
   routing are implemented; the production association and Google Digital Asset Links check pass. Verification

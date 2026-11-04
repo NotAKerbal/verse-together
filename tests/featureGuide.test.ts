@@ -101,6 +101,7 @@ describe("feature guide topics", () => {
     test("teaches nothing about the features being retired", () => {
         const text = JSON.stringify(GUIDE_SECTIONS);
         expect(text).not.toMatch(/study plans?|reading plans?/i);
+        expect(text).not.toMatch(/study paths?|light bulb/i);
         expect(text).not.toMatch(/verse notes?|single-verse|Write a note|Your annotation|Add annotation/i);
     });
 });

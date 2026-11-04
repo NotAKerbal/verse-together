@@ -266,13 +266,3 @@ export function parseChapterStudyPaths(
   }
   return paths;
 }
-
-export function groupChapterStudyPathsByVerse(paths: ChapterStudyPath[]): Map<number, ChapterStudyPath[]> {
-  const grouped = new Map<number, ChapterStudyPath[]>();
-  for (const path of paths) {
-    const firstVerse = path.verse_numbers[0];
-    if (firstVerse === undefined) continue;
-    grouped.set(firstVerse, [...(grouped.get(firstVerse) ?? []), path]);
-  }
-  return grouped;
-}
