@@ -1,0 +1,7 @@
+.section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-border); }
+.message { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: var(--foreground-soft); }
+.message a { color: var(--accent-rubric); text-decoration: underline; text-underline-offset: 3px; }
+.request { min-height: 42px; border: 1px solid var(--surface-border); border-radius: 8px; background: var(--surface-card); padding: 9px 12px; color: var(--foreground); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.request:hover:not(:disabled) { background: var(--surface-card-soft); }
+.request:disabled { opacity: .6; cursor: progress; }
+.request:focus-visible { outline: 2px solid var(--accent-rubric); outline-offset: 3px; }

@@ -1,7 +1,5 @@
-// @ts-nocheck
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
-import { requireClerkId } from "./utils";
+import { internalMutation, query } from "./_generated/server";
 
 const insightSource = v.object({
   title: v.string(),
@@ -51,41 +49,11 @@ export const getChapterInsight = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("chapterInsightCache")
-      .withIndex("by_ref", (q: any) => q.eq("volume", args.volume).eq("book", args.book).eq("chapter", args.chapter))
+      .withIndex("by_ref", (q) => q.eq("volume", args.volume).eq("book", args.book).eq("chapter", args.chapter))
       .unique();
   },
 });
 
-export const upsertChapterInsight = mutation({
-  args: {
-    volume: v.string(),
-    book: v.string(),
-    chapter: v.number(),
-    reference: v.string(),
-    scriptureHash: v.string(),
-    promptVersion: v.number(),
-    paths: v.array(insightPath),
-    generatedAt: v.number(),
-    signature: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await requireClerkId(ctx);
-    const existing = await ctx.db
-      .query("chapterInsightCache")
-      .withIndex("by_ref", (q: any) => q.eq("volume", args.volume).eq("book", args.book).eq("chapter", args.chapter))
-      .unique();
-    const payload = { ...args, updatedAt: Date.now() };
-    if (existing) {
-      await ctx.db.patch(existing._id, payload);
-      return { ok: true };
-    }
-    await ctx.db.insert("chapterInsightCache", payload);
-    return { ok: true };
-  },
-});
-
-// Operator-only bulk import (scripts/processChapterInsightsBatch.mjs via `npx convex run`). Internal, so
-// it needs deployment access rather than a user session.
 export const upsertChapterInsightBatch = internalMutation({
   args: { entries: v.array(chapterInsightEntry) },
   handler: async (ctx, { entries }) => {
@@ -93,7 +61,7 @@ export const upsertChapterInsightBatch = internalMutation({
     for (const entry of entries) {
       const existing = await ctx.db
         .query("chapterInsightCache")
-        .withIndex("by_ref", (q: any) =>
+        .withIndex("by_ref", (q) =>
           q.eq("volume", entry.volume).eq("book", entry.book).eq("chapter", entry.chapter)
         )
         .unique();

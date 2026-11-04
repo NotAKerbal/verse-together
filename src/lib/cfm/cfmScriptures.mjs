@@ -136,6 +136,21 @@ export function exactReference(text) {
   return { valid: true, book, chapter: Number(chapter), first: a, last: b }
 }
 
+/**
+ * @param {string} text
+ * @returns {Array<{ reference: string, volume: string, book: string, chapter: number, first: number, last: number }>}
+ */
+export function namedVersePassages(text) {
+  const passages = []
+  for (const match of text.matchAll(NAMED_SPAN)) {
+    if (/[\w:]/.test(text[match.index + match[0].length] ?? '')) continue
+    const found = exactReference(match[0])
+    if (!found?.valid || found.first == null) continue
+    passages.push({ reference: match[0], volume: found.book.canonicalVolume, book: found.book.slug, chapter: found.chapter, first: found.first, last: found.last })
+  }
+  return passages
+}
+
 const SITE = ''
 
 /**

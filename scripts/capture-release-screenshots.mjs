@@ -98,6 +98,23 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.22.0-chapter-guides",
+    viewport: { width: 1280, height: 1200 },
+    async run(page) {
+      await open(page, "/chapter-guides/bookofmormon/1nephi/1");
+      await page.locator("[data-generated-guide]").waitFor();
+      const invitation = page.getByText("Read the scriptures. Open the context as you go.");
+      await invitation.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 96));
+      await page.waitForTimeout(600);
+      const context = page.locator("details[data-context]").first();
+      await context.locator("> summary").click();
+      await page.waitForTimeout(500);
+      const start = await invitation.boundingBox();
+      const end = await context.boundingBox();
+      return { x: start.x - 24, y: start.y - 12, width: end.width + 48, height: end.y + end.height + 16 - (start.y - 12) };
+    },
+  },
+  {
     name: "2.20.5-biblical-languages",
     viewport: { width: 1440, height: 1200 },
     async run(page, viewport) {

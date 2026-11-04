@@ -16,6 +16,6 @@ export function isLdsVolume(volume: string): boolean {
 export function isLdsContentPath(href: string): boolean {
   const [path] = href.split(/[?#]/);
   const parts = path.split("/").filter(Boolean);
-  return ["come-follow-me", "feed", "talk", "resources"].includes(parts[0]) ||
+  return ["come-follow-me", "chapter-guides", "feed", "talk", "resources"].includes(parts[0]) ||
     (["browse", "share"].includes(parts[0]) && isLdsVolume(parts[1] ?? ""));
 }

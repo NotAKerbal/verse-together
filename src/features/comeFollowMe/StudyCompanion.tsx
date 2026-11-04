@@ -30,8 +30,8 @@ type Props = {
   closingHtml: string;
   toc: TocItem[];
   chapters: CompanionChapter[];
-  weekStart: string;
-  guideSource: NoteSource & { kind: "guide" };
+  guideId: string;
+  guideSource: NoteSource;
   footer?: ReactNode;
 };
 
@@ -86,7 +86,7 @@ function LaterBookScripture({ chapters, layerHost, render }: {
   return <><div ref={docRef}>{render(chapters, annotations)}</div>{layerHost ? createPortal(annotations.layer, layerHost) : null}</>;
 }
 
-export default function StudyCompanion({ introductionHtml, readerHtml, readerSections, closingHtml, toc, chapters, weekStart, guideSource, footer }: Props) {
+export default function StudyCompanion({ introductionHtml, readerHtml, readerSections, closingHtml, toc, chapters, guideId, guideSource, footer }: Props) {
   const introRef = useRef<HTMLDivElement>(null);
   const closingRef = useRef<HTMLDivElement>(null);
   const fallbackRef = useRef<HTMLDivElement>(null);
@@ -107,7 +107,7 @@ export default function StudyCompanion({ introductionHtml, readerHtml, readerSec
   // saved text anchors. Keep chapter headings and context fragments in the original source order.
   const guideRoots = useMemo(() => new Map(readerSections.flatMap((section) => [section.id, ...section.blocks.flatMap((block) => block.previewEnd ? [block.id, `${block.id}-more`] : [block.id])]).map((id) => [id, createRef<HTMLDivElement>()])), [readerSections]);
   const highlightReader = useMemo(() => [...guideRoots.values(), fallbackRef, closingRef], [guideRoots]);
-  const guideHighlights = useGuideHighlights(weekStart, introRef, highlightReader, "scripture-first", guideSource);
+  const guideHighlights = useGuideHighlights(guideId, introRef, highlightReader, "scripture-first", guideSource);
   const annotations = useScriptureAnnotations(book, chapterNumbers, mixed ? firstBookRef : scriptureDocRef);
   const tocIds = useMemo(() => toc.flatMap((item) => [item.id, ...item.verses.map((verse) => verse.id)]), [toc]);
 

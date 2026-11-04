@@ -2,6 +2,17 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { noteSourceValidator } from "./noteJournal";
 import { legacyQuickMarkValidator, markColorValidator, verseTextMarkValidator, markPresetValidator } from "./markValidators";
+import {
+  chapterGuideContentValidator,
+  chapterGuideCostSourceValidator,
+  chapterGuideJobStatusValidator,
+  chapterGuidePauseReasonValidator,
+  chapterGuideProvenanceValidator,
+  chapterGuideSourceValidator,
+  chapterGuideStageValidator,
+  chapterGuideUsageValidator,
+  chapterVerseValidator,
+} from "./chapterGuideValidators";
 
 const scriptureResourceCoverage = v.object({
   book: v.string(),
@@ -628,6 +639,87 @@ export default defineSchema({
     refreshAfter: v.number(),
     lastAccessedAt: v.number(),
   }).index("by_ref", ["bookByuId", "chapter", "verseSpec"]),
+
+  chapterGuides: defineTable({
+    volume: v.string(),
+    book: v.string(),
+    chapter: v.number(),
+    reference: v.string(),
+    scriptureHash: v.string(),
+    content: chapterGuideContentValidator,
+    sources: v.array(chapterGuideSourceValidator),
+    provenance: chapterGuideProvenanceValidator,
+    generatedAt: v.number(),
+  }).index("by_chapter_hash", ["volume", "book", "chapter", "scriptureHash"]),
+
+  chapterGuideJobs: defineTable({
+    volume: v.string(),
+    book: v.string(),
+    chapter: v.number(),
+    reference: v.string(),
+    scriptureHash: v.string(),
+    verses: v.array(chapterVerseValidator),
+    chapterBytes: v.number(),
+    status: chapterGuideJobStatusValidator,
+    stage: chapterGuideStageValidator,
+    stageAttempts: v.object({ research: v.number(), write: v.number(), review: v.number(), repair: v.number(), recheck: v.number() }),
+    periodKey: v.string(),
+    reservedInitialMicros: v.number(),
+    reservedRemainingMicros: v.number(),
+    spentMicros: v.number(),
+    activeAttemptId: v.optional(v.id("chapterGuideAttempts")),
+    leaseExpiresAt: v.number(),
+    research: v.optional(v.any()),
+    draft: v.optional(v.any()),
+    review: v.optional(v.any()),
+    writerFeedback: v.optional(v.array(v.string())),
+    failureCode: v.optional(v.string()),
+    createdAt: v.number(),
+    finishedAt: v.optional(v.number()),
+  })
+    .index("by_chapter_created", ["volume", "book", "chapter", "createdAt"])
+    .index("by_status_lease", ["status", "leaseExpiresAt"])
+    .index("by_created", ["createdAt"]),
+
+  chapterGuideAttempts: defineTable({
+    jobId: v.id("chapterGuideJobs"),
+    stage: chapterGuideStageValidator,
+    attempt: v.number(),
+    model: v.string(),
+    maxCostMicros: v.number(),
+    periodKey: v.string(),
+    carryoverPeriodKey: v.optional(v.string()),
+    carryoverMicros: v.optional(v.number()),
+    status: v.union(v.literal("started"), v.literal("settled")),
+    costSource: v.optional(chapterGuideCostSourceValidator),
+    actualMicros: v.optional(v.number()),
+    usage: v.optional(chapterGuideUsageValidator),
+    errorCode: v.optional(v.string()),
+    startedAt: v.number(),
+    settledAt: v.optional(v.number()),
+  }).index("by_job", ["jobId"]),
+
+  chapterGuideRequests: defineTable({
+    clerkId: v.string(),
+    jobId: v.id("chapterGuideJobs"),
+    createdAt: v.number(),
+  }).index("by_clerk_created", ["clerkId", "createdAt"]),
+
+  chapterGuideBudgetPeriods: defineTable({
+    periodKey: v.string(),
+    spentMicros: v.number(),
+    reservedMicros: v.number(),
+    updatedAt: v.number(),
+  }).index("by_period", ["periodKey"]),
+
+  chapterGuideSettings: defineTable({
+    key: v.literal("global"),
+    paused: v.boolean(),
+    pauseReason: v.optional(chapterGuidePauseReasonValidator),
+    monthlyCapMicros: v.optional(v.number()),
+    consecutiveFailures: v.number(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 
   chapterInsightCache: defineTable({
     volume: v.string(),

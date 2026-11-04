@@ -47,7 +47,28 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.22.0",
+    date: "2026-11-04",
+    title: "AI-written guides to whole chapters",
+    items: [
+      { kind: "new", text: "Signed-in readers can request an AI-written guide to a whole chapter from Resources, shared with everyone once it's saved." },
+      {
+        kind: "new",
+        text: "Selecting verses shows the guide's matching verse groups, and each opens the guide in a reader laid out like Come, Follow Me lessons.",
+        screenshot: {
+          src: "/release-notes/2.22.0-chapter-guides.webp",
+          width: 1568,
+          height: 1908,
+          alt: "The chapter guide for 1 Nephi 1, with verses 1 through 3 above their opened context, headed Nephi introduces himself and his record.",
+          caption: "A chapter guide's verse group with its context open.",
+        },
+      },
+    ],
+    commits: ["47932f88"],
+  },
+  {
     version: "2.21.0",
+    masterCommit: "c2e53e73",
     date: "2026-11-01",
     title: "Smoother journal writing and scripture study",
     items: [

@@ -15,6 +15,8 @@ export type VerseLessonResource = {
   lessonTitle: string;
   dateLabel: string;
   href: string;
+  linkLabel?: string;
+  generated?: boolean;
   bodyHtml: string;
   sources: Array<{ title: string; url: string }>;
 };

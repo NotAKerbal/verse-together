@@ -1,9 +1,12 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { passageFromLink, resourcePassageFromLink, type PassageTarget } from "@/features/comeFollowMe/passagePreview";
+import ChapterGuideSection from "@/features/chapterGuides/ChapterGuideSection";
+import { useChapterGuideSelection } from "@/features/chapterGuides/useChapterGuideSelection";
+import { resourcePassageFromLink, type PassageTarget } from "@/features/comeFollowMe/passagePreview";
 import type { VerseLessonResource } from "@/lib/cfm/verseResources";
+import VerseResourceItem from "./VerseResourceItem";
 import styles from "./VerseResourcesPanel.module.css";
 
 // Keep the presentation aligned with the reader's Tailwind lg sidebar breakpoint.
@@ -22,15 +25,6 @@ function desktopSnapshot() {
   return window.matchMedia(DESKTOP_QUERY).matches;
 }
 
-/**
- * A resource's insight. React sets innerHTML again whenever the element re-renders, which would replace the
- * link a scripture preview opened from (and returns focus to) each time the reader re-renders.
- */
-const ResourceInsight = memo(function ResourceInsight({ html }: { html: string }) {
-  // HTML comes from the validated, escaped lesson renderer on the server.
-  return <div className={styles.insight} dangerouslySetInnerHTML={{ __html: html }} />;
-});
-
 type ResultsProps = {
   reference: string;
   /** The reader's book: the lessons' own scripture anchors name passages of it. */
@@ -40,9 +34,11 @@ type ResultsProps = {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  chapterGuide?: ReactNode;
+  hasGeneratedResources?: boolean;
 };
 
-export function VerseResourcesResults({ reference, lessonBook, onPreviewPassage, resources, loading, error, onRetry }: ResultsProps) {
+export function VerseResourcesResults({ reference, lessonBook, onPreviewPassage, resources, loading, error, onRetry, chapterGuide, hasGeneratedResources = false }: ResultsProps) {
   const searchHref = `https://www.google.com/search?${new URLSearchParams({ q: `Come Follow Me ${reference}` })}`;
   // One handler for every link in the results, the lessons' own HTML included. New tabs and windows stay the browser's.
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -64,38 +60,16 @@ export function VerseResourcesResults({ reference, lessonBook, onPreviewPassage,
             <button type="button" className={styles.link} onClick={onRetry}>Try again</button>
           </div>
         ) : null}
-        {!loading && !error && resources.length === 0 ? (
+        {!loading && !error && resources.length === 0 && !hasGeneratedResources ? (
           <p className={styles.message}>No resources for these verses in our published lessons yet. Search the web for more Come, Follow Me resources.</p>
         ) : null}
         {!loading && !error && resources.length > 0 ? (
           <ul className={styles.resourceList}>
-            {resources.map((resource) => (
-              <li key={resource.id} className={styles.resource}>
-                <p className={styles.reference}>{resource.reference}</p>
-                <h2 className={styles.resourceTitle}><a href={resource.href}>{resource.title}</a></h2>
-                <p className={styles.lesson}>{resource.lessonTitle} · {resource.dateLabel}</p>
-                {resource.bodyHtml ? <ResourceInsight html={resource.bodyHtml} /> : null}
-                <a className={styles.link} href={resource.href}>Read in lesson <span aria-hidden="true">→</span></a>
-                {resource.sources.length > 0 ? (
-                  <div className={styles.sources}>
-                    <h3>Cited in this section</h3>
-                    <ul>
-                      {resource.sources.map((source) => (
-                        <li key={source.url}>
-                          {/* A cited scripture opens in the preview here; its link text must name it alone. */}
-                          {onPreviewPassage && passageFromLink(source.url, null, undefined, source.title)
-                            ? <a href={source.url} className={styles.passageSource}>{source.title}</a>
-                            : <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title} <span aria-label="opens in a new tab">↗</span></a>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </li>
-            ))}
+            {resources.map((resource) => <VerseResourceItem key={resource.id} resource={resource} previewsPassages={Boolean(onPreviewPassage)} />)}
           </ul>
         ) : null}
       </section>
+      {chapterGuide}
       {!loading ? (
         <section className={styles.webSearch} aria-label="Search for more resources">
           <p>Find more resources for {reference}</p>
@@ -121,6 +95,7 @@ export default function VerseResourcesPanel({ volume, book, chapter, verseSpec, 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ resources: VerseLessonResource[]; error: string | null } | null>(null);
+  const chapterGuide = useChapterGuideSelection({ volume, book, chapter }, verseSpec);
 
   useEffect(() => {
     if (desktop !== false) return;
@@ -160,7 +135,7 @@ export default function VerseResourcesPanel({ volume, book, chapter, verseSpec, 
   const content = (
     <div className={styles.panel}>
       <button type="button" className={styles.close} onClick={onClose} aria-label="Close resources">×</button>
-      <VerseResourcesResults reference={reference} lessonBook={{ slug: book, volume }} onPreviewPassage={onPreviewPassage} resources={result?.resources ?? []} loading={result === null} error={result?.error ?? null} onRetry={() => { setResult(null); setAttempt((value) => value + 1); }} />
+      <VerseResourcesResults reference={reference} lessonBook={{ slug: book, volume }} onPreviewPassage={onPreviewPassage} resources={result?.resources ?? []} loading={result === null} error={result?.error ?? null} onRetry={() => { setResult(null); setAttempt((value) => value + 1); }} hasGeneratedResources={(chapterGuide.state?.resources.length ?? 0) > 0} chapterGuide={<ChapterGuideSection guide={chapterGuide} previewsPassages={Boolean(onPreviewPassage)} />} />
     </div>
   );
 
