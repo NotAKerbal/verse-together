@@ -5,7 +5,6 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isBibleVolume } from "@/lib/bibleCanon";
 import { chapterOverlayTranslations } from "@/lib/browseRoutes";
-import { groupChapterStudyPathsByVerse } from "@/lib/chapterInsights";
 import { readJstChapter } from "@/lib/jst";
 import { FEATURED_BIBLES } from "@/lib/translationCatalog";
 import { LdsContentGate } from "../../../../../src/components/HiddenContent";
@@ -14,7 +13,6 @@ import { loadChapterAsync, type ChapterText, type Verse } from "../../../../../s
 import { setDraftIntent } from "../../../../../src/features/journal/draftIntent";
 import { readPassagesFromEntries, readVerseMap } from "../../../../../src/features/readingProgress";
 import ChapterStudyNotices from "../../../../../src/features/reader/ChapterStudyNotices";
-import StudyPathsStatus from "../../../../../src/features/reader/StudyPathsStatus";
 import ChapterTranslationsSheet from "../../../../../src/features/reader/ChapterTranslationsSheet";
 import JstExcerptCard from "../../../../../src/features/reader/JstExcerptCard";
 import { journalRefsByVerse, type VerseNoteRef } from "../../../../../src/features/reader/journalRefs";
@@ -23,9 +21,9 @@ import { annotationHasMarks, buildReaderDocument, padRows, type Comparison, type
 import { ComparisonCards, ComparisonCells, TWO_COLUMN_MIN_WIDTH, columnGeometry, useComparisonColumns } from "../../../../../src/features/reader/ComparisonColumns";
 import { comparisonChapters } from "../../../../../src/features/reader/studyData";
 import { useFaithTradition, useJstPreference } from "../../../../../src/features/reader/studySettings";
-import StudyPathsSheet, { VerseNotesSheet } from "../../../../../src/features/reader/StudyPathsSheet";
-import { useChapterStudyPaths, useComparisonOverlays, useJstChapter } from "../../../../../src/features/reader/useChapterStudy";
+import { useComparisonOverlays, useJstChapter } from "../../../../../src/features/reader/useChapterStudy";
 import VerseMarkers, { MARKER_GUTTER } from "../../../../../src/features/reader/VerseMarkers";
+import VerseNotesSheet from "../../../../../src/features/reader/VerseNotesSheet";
 import ReaderSettingsSheet from "../../../../../src/features/reader/ReaderSettingsSheet";
 import {
   documentMarks,
@@ -171,7 +169,6 @@ function ChapterScreen() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [translationsOpen, setTranslationsOpen] = useState(false);
   const [showJstOmitted, setShowJstOmitted] = useState(false);
-  const [openPathVerse, setOpenPathVerse] = useState<number | null>(null);
   const [notesVerse, setNotesVerse] = useState<{ verse: number; refs: VerseNoteRef[] } | null>(null);
   // Bumped whenever the text lays out again, so the markers beside it are placed again.
   const [layoutTick, setLayoutTick] = useState(0);
@@ -198,7 +195,6 @@ function ChapterScreen() {
     setSelection(null);
     setLaidOut(false);
     setShowJstOmitted(false);
-    setOpenPathVerse(null);
     loadChapterAsync(volume, book, chapter)
       .then(async (data) => {
         if (!live) return;
@@ -294,17 +290,13 @@ function ChapterScreen() {
   const jstOmitsWording = useMemo(() => [...jstReading.rows.values()].some((row) => row.pieces.some((piece) => piece.kind === "omitted")), [jstReading]);
   const jstMarksKey = simple ? "" : [...jstReading.rows.keys()].filter((verse) => annotationHasMarks(annotations.get(verse))).join(",");
 
-  // Chapter study paths are written from a Latter-day Saint perspective; the site serves those it has cached.
-  const studyPaths = useChapterStudyPaths(volumeSlug, book, chapter, ready && showLdsContent);
-  const pathsByVerse = useMemo(() => groupChapterStudyPathsByVerse(studyPaths.status === "ready" ? studyPaths.paths : []), [studyPaths]);
   // The reader's own journal notes that link to verses here (simple mode leaves them out, as the web does).
   const noteRefs = useMemo(
     () => (simple ? new Map<number, VerseNoteRef[]>() : journalRefsByVerse(journal.entries, journal.bodies, { volume, book, chapter })),
     [simple, journal.entries, journal.bodies, volume, book, chapter]
   );
-  const pathVerses = useMemo(() => (simple ? [] : [...pathsByVerse.keys()].filter((verse) => verses.some((item) => item.verse === verse))), [simple, pathsByVerse, verses]);
   const markerVerses = useMemo(() => new Map([...noteRefs].filter(([verse]) => verses.some((item) => item.verse === verse))), [noteRefs, verses]);
-  const hasMarkers = pathVerses.length > 0 || markerVerses.size > 0;
+  const hasMarkers = markerVerses.size > 0;
 
   const comparisonView = prefs.comparisonView;
   const primaryLabel = primaryTranslation?.toLowerCase() === "lds" && !showLdsContent ? "KJV" : shortLabel(primaryTranslation);
@@ -550,7 +542,6 @@ function ChapterScreen() {
               showJstOmitted={showJstOmitted}
               onToggleJstOmitted={() => setShowJstOmitted((shown) => !shown)}
             />
-            <StudyPathsStatus paths={studyPaths} />
             {jstReading.leading.map((excerpt) => (
               <JstExcerptCard key={excerpt.id} excerpt={excerpt} />
             ))}
@@ -585,10 +576,7 @@ function ChapterScreen() {
                   textRef={textRef}
                   left={twoColumns ? geometry.leftWidth - MARKER_GUTTER : undefined}
                   layoutKey={`${layoutTick}:${document.text.length}`}
-                  pathVerses={pathVerses}
-                  openPathVerse={openPathVerse}
                   notes={markerVerses}
-                  onTogglePaths={(verse) => setOpenPathVerse((open) => (open === verse ? null : verse))}
                   onOpenNotes={(verse, refs) => {
                     if (refs.length === 1) router.push(`/notes/entry/${encodeURIComponent(refs[0].noteId)}` as never);
                     else setNotesVerse({ verse, refs });
@@ -623,7 +611,6 @@ function ChapterScreen() {
           bottomOffset={simple ? Math.max(insets.bottom, 14) + 60 : undefined}
         />
       ) : null}
-      <StudyPathsSheet paths={openPathVerse === null ? [] : pathsByVerse.get(openPathVerse) ?? []} onClose={() => setOpenPathVerse(null)} />
       <VerseNotesSheet
         verse={notesVerse?.verse ?? null}
         refs={notesVerse?.refs ?? []}

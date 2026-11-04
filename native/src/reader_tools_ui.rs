@@ -1,10 +1,8 @@
-// The reader tools' views: the side panel (study paths, Explore a word, lesson resources), study path markers,
-// other Bibles under each verse with their changed words, JST passages, and Your Bibles in Reader settings.
 use crate::bible_catalog;
 use crate::design::{self, Colors, icon, sans, serif};
 use crate::icons;
 use crate::reader_tools::{
-    self, BiblesView, Diff, Guide, HelpBlock, HelpInline, Load, Panel, StudyPath, ToolsMsg,
+    self, BiblesView, Diff, Guide, HelpBlock, HelpInline, Load, Panel, ToolsMsg,
 };
 use crate::select_text::{Piece, Shown};
 use crate::{App, Message};
@@ -70,41 +68,6 @@ fn boxed<'a>(p: Colors, content: impl Into<Element<'a, Message>>) -> Element<'a,
 const JST_SOURCE_DOCS_URL: &str = "https://openscriptureapi.org/docs/study-helps";
 
 impl App {
-    /// The verse's study path marker (`VerseStudyPathMarker`), when the chapter has a path tagging it.
-    pub(crate) fn path_marker(&self, verse: u32) -> Option<Element<'_, Message>> {
-        if self.focus || self.tools.paths_for(verse).is_empty() {
-            return None;
-        }
-        let p = self.p();
-        let open = self.tools.panel == Some(Panel::Paths(verse));
-        Some(
-            self.hint(
-                button(
-                    container(icon(
-                        &icons::LIGHTBULB,
-                        if open { p.accent } else { p.faint },
-                        13.,
-                    ))
-                    .center_x(28)
-                    .center_y(28),
-                )
-                .padding(0)
-                .on_press(msg(ToolsMsg::OpenPaths(verse)))
-                .style(move |_, status| button::Style {
-                    background: (open || matches!(status, button::Status::Hovered))
-                        .then(|| p.hover.into()),
-                    border: Border {
-                        color: if open { p.accent } else { Color::TRANSPARENT },
-                        width: 1.0,
-                        radius: 14.0.into(),
-                    },
-                    ..Default::default()
-                }),
-                "A study path is available".to_string(),
-            ),
-        )
-    }
-
     /// The other Bibles whose wording of this verse differs from the KJV's (`verseComparisons`): label, color and
     /// text, in the order they are shown.
     pub(crate) fn verse_comparisons(&self, number: u32, kjv: &str) -> Vec<(String, Color, &str)> {
@@ -474,15 +437,6 @@ impl App {
         )
         .padding(Padding::ZERO.top(crate::view::badge_top(size, line)));
         let mut first_line = row![stack![words, badge]].align_y(iced::Alignment::Start);
-        if let Some(marker) = self.path_marker(number) {
-            first_line = first_line.push(
-                container(marker).padding(
-                    Padding::ZERO
-                        .left(8)
-                        .top(((line - 12.0) / 2.0 - 8.0).max(0.0)),
-                ),
-            );
-        }
         if let Some(marker) = self.note_link_marker(number) {
             first_line = first_line.push(
                 container(marker)
@@ -595,7 +549,6 @@ impl App {
         let panel = self.tools.panel.as_ref()?;
         let p = self.p();
         let content: Element<'_, Message> = match panel {
-            Panel::Paths(verse) => self.paths_view(*verse),
             Panel::Explore => self.explore_view()?,
             Panel::Resources(verses) => self.resources_view(verses),
         };
@@ -618,169 +571,6 @@ impl App {
                 })
                 .into(),
         )
-    }
-
-    /// `VerseStudyPaths`.
-    fn paths_view(&self, verse: u32) -> Element<'_, Message> {
-        let p = self.p();
-        let paths = self.tools.paths_for(verse);
-        let mut list = column![
-            row![
-                container(icon(&icons::LIGHTBULB, p.ink, 15.))
-                    .center_x(36)
-                    .center_y(36)
-                    .style(move |_| container::Style {
-                        background: Some(p.primary.into()),
-                        border: Border {
-                            color: p.rule,
-                            width: 2.0,
-                            radius: 18.0.into(),
-                        },
-                        ..Default::default()
-                    }),
-                column![
-                    text("Study paths").size(16).font(sans(font::Weight::Bold)),
-                    text(if paths.len() == 1 {
-                        "1 direction to explore".to_string()
-                    } else {
-                        format!("{} directions to explore", paths.len())
-                    })
-                    .size(12)
-                    .color(p.muted),
-                ]
-                .width(Fill),
-                close(p, msg(ToolsMsg::ClosePanel)),
-            ]
-            .spacing(12)
-            .align_y(Center),
-        ]
-        .spacing(16);
-        for path in paths {
-            list = list.push(self.path_section(path));
-        }
-        list.into()
-    }
-    fn path_section<'a>(&self, path: &'a StudyPath) -> Element<'a, Message> {
-        let p = self.p();
-        let verses = path
-            .verse_numbers
-            .iter()
-            .map(u32::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        let mut section = column![
-            row![
-                container(
-                    text(reader_tools::kind_label(&path.kind).to_uppercase())
-                        .size(11)
-                        .font(sans(font::Weight::Bold))
-                )
-                .padding([2, 8])
-                .style(move |_| container::Style {
-                    background: Some(p.note.into()),
-                    border: Border {
-                        color: p.rule,
-                        width: 2.0,
-                        radius: 999.0.into(),
-                    },
-                    ..Default::default()
-                }),
-                text(format!(
-                    "{} {verses}",
-                    if path.verse_numbers.len() == 1 {
-                        "VERSE"
-                    } else {
-                        "VERSES"
-                    }
-                ))
-                .size(11)
-                .font(sans(font::Weight::Bold))
-                .color(p.faint),
-            ]
-            .spacing(8)
-            .align_y(Center),
-            text(path.title.clone())
-                .size(17)
-                .font(sans(font::Weight::Bold)),
-            text(path.direction.clone()).size(14).line_height(1.5),
-            text(path.why.clone())
-                .size(14)
-                .color(p.muted)
-                .line_height(1.5),
-        ]
-        .spacing(6);
-        let mut notice = column![
-            text("AS YOU REREAD, NOTICE")
-                .size(11)
-                .font(sans(font::Weight::Bold))
-                .color(p.muted)
-        ]
-        .spacing(3);
-        for item in &path.look_for {
-            notice = notice.push(text(format!("•  {item}")).size(14).line_height(1.45));
-        }
-        section = section.push(boxed(p, notice));
-        if !path.scripture_links.is_empty() {
-            let mut links = row![].spacing(10);
-            for l in &path.scripture_links {
-                let href = format!(
-                    "/browse/{}/{}/{}#v-{}",
-                    l.volume, l.book, l.chapter, l.verse_start
-                );
-                links = links.push(link_button(
-                    p,
-                    l.reference.clone(),
-                    msg(ToolsMsg::Link(href)),
-                ));
-            }
-            section = section.push(links.wrap());
-        }
-        for source in &path.sources {
-            let host = source
-                .url
-                .split("//")
-                .nth(1)
-                .and_then(|r| r.split('/').next())
-                .unwrap_or("source")
-                .trim_start_matches("www.")
-                .to_string();
-            section = section.push(
-                button(
-                    row![
-                        text(format!(
-                            "{}{}",
-                            if source.format == "video" {
-                                "Video · "
-                            } else {
-                                ""
-                            },
-                            source.title
-                        ))
-                        .size(13)
-                        .font(sans(font::Weight::Semibold))
-                        .color(p.accent),
-                        text(host).size(12).color(p.faint),
-                        icon(&icons::ARROW_UP_RIGHT_FROM_SQUARE, p.faint, 10.),
-                    ]
-                    .spacing(6)
-                    .align_y(Center),
-                )
-                .padding(0)
-                .on_press(Message::OpenLink(source.url.clone()))
-                .style(design::link(p.accent)),
-            );
-        }
-        container(section)
-            .padding(Padding::ZERO.top(12))
-            .style(move |_| container::Style {
-                border: Border {
-                    color: p.rule,
-                    width: 0.0,
-                    radius: 0.0.into(),
-                },
-                ..Default::default()
-            })
-            .into()
     }
 
     /// `WordStudyPanel` ("Explore Word").

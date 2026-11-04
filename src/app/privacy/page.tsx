@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   The public privacy policy for the website and the Android and iOS app, linked from Google Play. Keep it true to
   the code: when what the site or app collects, stores or sends changes, update this page and LAST_UPDATED.
 */
-const LAST_UPDATED = { iso: "2026-10-28", label: "October 28, 2026" };
+const LAST_UPDATED = { iso: "2026-11-04", label: "November 4, 2026" };
 const CONTACT_EMAIL = "isaachcochran@gmail.com";
 
 function ContactLink() {
@@ -155,14 +155,6 @@ export default function PrivacyPage() {
                   <td>the scripture reference or talk</td>
                   <td>Scripture Citation Index (scriptures.byu.edu)</td>
                 </tr>
-                <tr>
-                  <td>Open a chapter&apos;s study paths</td>
-                  <td>
-                    nothing about you. They were written in advance with OpenAI from the chapter&apos;s text. If a chapter
-                    has none yet and you&apos;re signed in, its reference and text are sent to OpenAI to write them.
-                  </td>
-                  <td>OpenAI</td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -288,8 +280,8 @@ export default function PrivacyPage() {
           <p>
             We don&apos;t sell or rent your information, share it for advertising, or build profiles of you. Besides
             the people you choose to share a note with, information goes only to the services described above, so they
-            can do their part: Google for sign-in, Convex for storage, Vercel for hosting, OpenAI for writing chapter
-            study paths from scripture text, and the public scripture and dictionary services for lookups. We may also
+            can do their part: Google for sign-in, Convex for storage, Vercel for hosting, OpenAI for chapter guide
+            research from scripture text, and the public scripture and dictionary services for lookups. We may also
             disclose information if the law requires it.
           </p>
         </section>

@@ -305,8 +305,8 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
     {
         id: "explore",
         group: "study",
-        title: "Explore words and study paths",
-        summary: "Look into a word without leaving the chapter: study helps, the Hebrew and Greek behind it, and its English meanings. On some verses, a light bulb opens a study path.",
+        title: "Explore words",
+        summary: "Look into a word without leaving the chapter: study helps, the Hebrew and Greek behind it, and its English meanings.",
         clips: [
             {
                 id: "explore-study-helps",
@@ -326,18 +326,8 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                     "Choose one to read its definition.",
                 ],
             },
-            {
-                id: "study-paths",
-                title: "Follow a study path",
-                steps: [
-                    "Choose the light bulb beside a verse.",
-                    "The study path suggests a direction to study and what to notice as you reread.",
-                    "Check its sources, listed below it.",
-                ],
-            },
         ],
         notes: [
-            "Study paths are found by AI. Read the sources and decide what holds up.",
             "Study helps are Latter-day Saint resources, so Other denominations hides them; Biblical languages and English meanings stay.",
         ],
         cover: { clip: "explore-languages", center: [0.22, 0.45], zoom: 2 },
