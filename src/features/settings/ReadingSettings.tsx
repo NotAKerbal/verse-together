@@ -31,8 +31,8 @@ export default function ReadingSettings() {
           <figcaption id="reading-sample-caption" className={styles.sampleCaption}>
             <span>Preview · John 1:1–3</span>
             <span>
-              {Math.round(prefs.fontScale * 100)}% · {prefs.fontFamily === "sans" ? "Sans" : "Serif"} ·{" "}
-              {TEXT_WIDTH_LABELS[prefs.textWidth]} width
+              {Math.round(prefs.fontScale * 100)}% · {prefs.fontFamily === "sans" ? "Sans" : "Serif"}
+              <span className="hidden md:inline"> · {TEXT_WIDTH_LABELS[prefs.textWidth]} width</span>
             </span>
           </figcaption>
           <div

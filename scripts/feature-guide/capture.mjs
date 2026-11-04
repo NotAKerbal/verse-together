@@ -72,7 +72,7 @@ async function settleVerse(page, a, n, align = 'center') {
 }
 const selectedTab = (p, name) => p.waitForFunction((n) => document.querySelector('[role=tab][aria-selected=true]')?.textContent?.trim() === n, name, { timeout: 8000 });
 const tab = (p, name) => p.getByRole('tab', { name, exact: true });
-const readerPanel = (p) => p.locator('div.overflow-y-auto').filter({ hasText: 'Simple mode' }).first();
+const readerPanel = (p) => p.locator('div.overflow-y-auto').filter({ hasText: 'Reading appearance' }).first();
 async function waitLibrary(p) {
     await p.waitForFunction(() => { try {
         return JSON.parse(localStorage.getItem('scripture-browser-storage-status') || '{}').state === 'ready';
@@ -290,7 +290,7 @@ await scene('compare', 'bible', { fresh: false }, async (p, a) => {
     const gear = p.getByRole('button', { name: 'Reader settings' });
     await a.click(gear, { reveal: false, dwell: 400 });
     await sleep(800);
-    const sw = p.getByRole('switch', { name: 'Show Berean Standard Bible' });
+    const sw = p.getByRole('switch', { name: 'Compare Berean Standard Bible' });
     await a.reveal(sw, { pad: 40 });
     await sleep(400);
     c.mark('list', { sw: await a.assertVisible(sw, { pad: 8, label: 'show BSB switch' }), panel: await box(readerPanel(p)) });
@@ -377,19 +377,14 @@ await scene('jst', 'jst', {}, async (p, a) => { await go(p, '/browse/newtestamen
     const gear = p.getByRole('button', { name: 'Reader settings' });
     await a.click(gear, { reveal: false, dwell: 400 });
     await sleep(800);
-    const sum = p.locator('summary', { hasText: 'Joseph Smith Translation' });
-    await a.reveal(sum, { pad: 40 });
-    await sleep(300);
-    await a.click(sum, { reveal: false, dwell: 400 });
-    await sleep(700);
-    const det = p.locator('details', { hasText: 'Joseph Smith Translation' });
+    const row = p.locator('[data-jst-setting]');
     const sw = p.getByRole('switch', { name: 'Joseph Smith Translation (JST)' });
-    await a.reveal(det, { pad: 16 });
+    await a.reveal(row, { pad: 16 });
     await sleep(300);
     await a.hover(sw, { reveal: false, ms: 600 });
     const swBox = await a.assertVisible(sw, { pad: 12, label: 'JST switch' });
-    const detBox = await a.assertVisible(det, { pad: 4, label: 'JST section' });
-    c.mark('jst_pre', { sw: swBox, det: detBox, panel: await box(readerPanel(p)) });
+    const rowBox = await a.assertVisible(row, { pad: 4, label: 'JST row' });
+    c.mark('jst_pre', { sw: swBox, row: rowBox, panel: await box(readerPanel(p)) });
     await sleep(1400);
     await a._down();
     await sleep(75);
@@ -397,7 +392,7 @@ await scene('jst', 'jst', {}, async (p, a) => { await go(p, '/browse/newtestamen
     await sleep(1200);
     if ((await sw.getAttribute('aria-checked')) !== 'true')
         throw new Error('JST switch did not turn on');
-    c.mark('jst_on', { sw: await box(sw), det: await box(det), panel: await box(readerPanel(p)) });
+    c.mark('jst_on', { sw: await box(sw), row: await box(row), panel: await box(readerPanel(p)) });
     await sleep(900);
     await a.click(gear, { reveal: false, dwell: 300 });
     await sleep(700);

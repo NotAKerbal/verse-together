@@ -42,7 +42,9 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    { kind: "improved", text: "The reading appearance menu is simpler, with a full-width text size slider and grab handle, no text width option on phones, easier Bible controls, and a Joseph Smith Translation switch you no longer have to expand a section to reach." },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [

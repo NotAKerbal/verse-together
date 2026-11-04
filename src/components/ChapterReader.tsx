@@ -1615,6 +1615,7 @@ export default function ChapterReader({
                   onClose={() => setSettingsOpen(false)}
                   prefs={prefs}
                   translationControls={translationControls}
+                  showComparisonView={overlayTranslations.length > 0}
                   anchorRef={settingsAnchorRef}
                   onChange={updatePrefs}
                 />
