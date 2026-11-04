@@ -107,7 +107,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 steps: [
                     "In the reader, choose the gear (Reader settings).",
                     "Drag Text size, and choose Serif or Sans.",
-                    "Choose a Text width: Comfortable, Wide or Full.",
+                    "On a larger screen, choose a Text width: Comfortable, Wide or Full.",
                     "Close the menu. Every chapter now reads this way.",
                 ],
             },
@@ -209,7 +209,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 title: "Turn on the JST",
                 steps: [
                     "In a Bible chapter, open Reader settings.",
-                    "Open Joseph Smith Translation and turn on its switch.",
+                    "Turn on the Joseph Smith Translation switch.",
                     "Close the menu. JST passages now read in place, with their wording underlined.",
                 ],
             },

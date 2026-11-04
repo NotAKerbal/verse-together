@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useTransition, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type MouseEvent, type ReactNode } from "react";
 import TranslationCatalogPicker, { useTranslationCatalog } from "@/components/TranslationCatalogPicker";
 import { BIBLE_TRANSLATION_OPTIONS, type BibleTranslationId } from "@/lib/bibleCanon";
 import { FEATURED_BIBLES, translationLanguage, translationTitle } from "@/lib/translationCatalog";
@@ -35,6 +35,52 @@ function TrashIcon() {
   </svg>;
 }
 
+function DefaultButton({ label, isDefault, disabled, onChoose, className = "" }: {
+  label: string;
+  isDefault: boolean;
+  disabled: boolean;
+  onChoose: () => void;
+  className?: string;
+}) {
+  return <button type="button" aria-pressed={isDefault} disabled={disabled} onClick={onChoose} aria-label={`Use ${label} as default`}
+    className={`shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium disabled:opacity-50 ${isDefault ? "" : "underline underline-offset-2"} ${className}`}>
+    {isDefault ? "Default" : "Make default"}
+  </button>;
+}
+
+function RemoveButton({ label, focusId, disabled, onRemove }: {
+  label: string;
+  focusId?: string;
+  disabled: boolean;
+  onRemove: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return <button type="button" data-bible-id={focusId} onClick={onRemove} aria-label={`Remove ${label}`} title="Remove" disabled={disabled}
+    className="shrink-0 rounded-lg p-2 text-foreground/50 hover:bg-[color:var(--surface-button-hover)] hover:text-foreground"><TrashIcon /></button>;
+}
+
+function CompactRow({ label, language, topAction, children }: {
+  label: string;
+  language?: string;
+  topAction?: ReactNode;
+  children: ReactNode;
+}) {
+  return <li className="px-3 py-1.5">
+    <div className="flex min-h-8 items-center gap-2">
+      <p className="min-w-0 flex-1 break-words text-sm font-medium" dir="auto">
+        {label}
+        {language && language !== "English" ? <span className="font-normal text-foreground/60"> · {language}</span> : null}
+      </p>
+      {topAction}
+    </div>
+    <div className="flex min-h-8 items-center justify-between gap-2">{children}</div>
+  </li>;
+}
+
+function SaveButton({ label, onSave, className = "" }: { label: string; onSave: () => void; className?: string }) {
+  return <button type="button" onClick={onSave} aria-label={`Save ${label}`}
+    className={`shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium underline underline-offset-2 ${className}`}>Save</button>;
+}
+
 function BibleList({ rows, onShow, onRemove, onSave, onAdd, defaultBible, onDefault, savingDefault }: {
   defaultBible: string;
   onDefault: (id: string) => void;
@@ -47,39 +93,46 @@ function BibleList({ rows, onShow, onRemove, onSave, onAdd, defaultBible, onDefa
 }) {
   const { showLdsContent } = useFaithTradition();
   const baseBibleLabel = showLdsContent ? "King James Bible (LDS edition)" : "King James Bible";
+  const baseIsDefault = defaultBible === "lds";
   return <div data-bible-list className="space-y-3">
     <ul aria-label="Your Bibles" className="divide-y divide-[color:var(--surface-border)] rounded-xl border border-[color:var(--surface-border)]">
-      <li className="flex items-center gap-2 px-3 py-2.5">
+      {onShow ? <CompactRow label={baseBibleLabel}>
+        <DefaultButton label={baseBibleLabel} isDefault={baseIsDefault} disabled={savingDefault} onChoose={() => onDefault("lds")} className="-ml-2" />
+      </CompactRow> : <li className="flex items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1"><p className="text-sm font-medium">{baseBibleLabel}</p>
         <p className="mt-0.5 text-xs text-foreground/60">English · Available offline</p></div>
-        <button type="button" aria-pressed={defaultBible === "lds"} disabled={savingDefault}
-          onClick={() => onDefault("lds")} aria-label={`Use ${baseBibleLabel} as default`}
-          className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium underline underline-offset-2 disabled:opacity-50">
-          {defaultBible === "lds" ? "Default" : "Make default"}
-        </button>
-      </li>
-      {rows.map((row) => <li key={row.id} className="flex items-center gap-2 px-3 py-2.5">
-        <div className="min-w-0 flex-1">
-          <p className="break-words text-sm font-medium" dir="auto">{row.label}</p>
-          <p className="mt-0.5 break-words text-xs text-foreground/60">
-            {[row.language, row.abbreviation, row.saved ? "" : "Not saved"].filter(Boolean).join(" · ")}
-          </p>
-        </div>
-        {row.saved ? <button type="button" aria-pressed={sameId(defaultBible, row.id)} disabled={savingDefault}
-          onClick={() => onDefault(row.id)} aria-label={`Use ${row.label} as default`}
-          className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium underline underline-offset-2 disabled:opacity-50">
-          {sameId(defaultBible, row.id) ? "Default" : "Make default"}
-        </button> : null}
-        {onShow && !sameId(defaultBible, row.id) ? <button type="button" role="switch" aria-checked={row.shown} aria-label={`Show ${row.label}`} data-bible-id={row.id}
-          className="marker-switch shrink-0" onClick={() => onShow(row)}><span className="marker-switch-knob" aria-hidden="true" /></button> : null}
-        {row.saved
-          ? <button type="button" data-bible-id={row.id} onClick={(event) => onRemove(row, event)} aria-label={`Remove ${row.label}`} title="Remove" disabled={savingDefault}
-            className="shrink-0 rounded-lg p-2 text-foreground/50 hover:bg-[color:var(--surface-button-hover)] hover:text-foreground"><TrashIcon /></button>
-          : <button type="button" onClick={() => onSave(row)} aria-label={`Save ${row.label}`}
-            className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium underline underline-offset-2">Save</button>}
-      </li>)}
+        <DefaultButton label={baseBibleLabel} isDefault={baseIsDefault} disabled={savingDefault} onChoose={() => onDefault("lds")} />
+      </li>}
+      {rows.map((row) => {
+        const isDefault = sameId(defaultBible, row.id);
+        const chooseDefault = () => onDefault(row.id);
+        const removeRow = (event: MouseEvent<HTMLButtonElement>) => onRemove(row, event);
+        if (onShow) return <CompactRow key={row.id} label={row.label} language={row.language}
+          topAction={row.saved ? <RemoveButton label={row.label} focusId={isDefault ? row.id : undefined} disabled={savingDefault} onRemove={removeRow} /> : null}>
+          {row.saved
+            ? <DefaultButton label={row.label} isDefault={isDefault} disabled={savingDefault} onChoose={chooseDefault} className="-ml-2" />
+            : <SaveButton label={row.label} onSave={() => onSave(row)} className="-ml-2" />}
+          {isDefault ? null : <span className="flex shrink-0 items-center gap-2 text-xs text-foreground/70">
+            <span aria-hidden="true">Compare</span>
+            <button type="button" role="switch" aria-checked={row.shown} aria-label={`Compare ${row.label}`} data-bible-id={row.id}
+              className="marker-switch" onClick={() => onShow(row)}><span className="marker-switch-knob" aria-hidden="true" /></button>
+          </span>}
+        </CompactRow>;
+        return <li key={row.id} className="flex items-center gap-2 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-sm font-medium" dir="auto">{row.label}</p>
+            <p className="mt-0.5 break-words text-xs text-foreground/60">
+              {[row.language, row.abbreviation, row.saved ? "" : "Not saved"].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+          {row.saved ? <>
+            <DefaultButton label={row.label} isDefault={isDefault} disabled={savingDefault} onChoose={chooseDefault} />
+            <RemoveButton label={row.label} focusId={row.id} disabled={savingDefault} onRemove={removeRow} />
+          </> : <SaveButton label={row.label} onSave={() => onSave(row)} />}
+        </li>;
+      })}
     </ul>
-    {rows.length ? null : <p className="text-xs text-foreground/60">Add a Bible to read it verse by verse beside the base text.</p>}
+    {rows.length || onShow ? null : <p className="text-xs text-foreground/60">Add a Bible to read it verse by verse beside the base text.</p>}
     <button type="button" data-add-bible onClick={onAdd} aria-haspopup="dialog"
       className="w-full rounded-lg border border-[color:var(--surface-border)] bg-background px-3 py-2.5 text-sm font-medium hover:bg-[color:var(--surface-button-hover)]">
       + Add Bible
@@ -198,19 +251,16 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
   return <div className="space-y-3">
     <div className="flex items-center justify-between gap-2">
       <h3 className="text-sm font-medium">Your Bibles</h3>
-      <button type="button" onClick={() => goTo("list")} aria-haspopup="dialog" aria-label="Open Your Bibles in a larger view" title="Expand"
+      {onShownChange ? null : <button type="button" onClick={() => goTo("list")} aria-haspopup="dialog" aria-label="Open Your Bibles in a larger view" title="Expand"
         className="rounded-lg p-1.5 text-foreground/55 hover:bg-[color:var(--surface-button-hover)] hover:text-foreground">
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
           <path d="M12 4h4v4M8 16H4v-4M16 4l-5 5M4 16l5-5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </button>
+      </button>}
     </div>
-    <p className="text-xs text-foreground/60">Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.</p>
+    {onShownChange ? null : <p className="text-xs text-foreground/60">Your default Bible is the main text when you open Bible chapters. Removing it restores the King James Bible.</p>}
     {defaultError ? <p role="alert" className="text-xs text-red-700 dark:text-red-300">{defaultError}</p> : null}
     <BibleList {...listProps} />
-    {/* Full screen on phones. From md up, a centered panel over the page: the list of Bibles is narrow and as tall
-        as its rows, the catalog and language chooser wide with a steady height so the panel doesn't jump while
-        searching. Clicking the backdrop closes it, unless the press began inside (selecting text in the search). */}
     <dialog ref={dialogRef} aria-labelledby={editorTitleId} onClose={() => setView(null)}
       onPointerDown={(event) => { pressedBackdrop.current = event.target === event.currentTarget; }}
       onClick={(event) => { if (pressedBackdrop.current && event.target === event.currentTarget) goTo(null); }}
@@ -235,13 +285,13 @@ export default function BibleTranslationControls({ shown = NO_COMPARISONS, onSho
         </div>
       </div> : null}
     </dialog>
-    {showLdsContent ? <details className="text-xs">
-      <summary className="cursor-pointer py-2 text-foreground/70">Joseph Smith Translation</summary>
-      <div className="mt-1 flex items-start justify-between gap-3">
-        <p id={jstDescriptionId} className="text-[11px] leading-relaxed text-foreground/60">When the LDS edition is the main text, show selected JST passages in place of the KJV verses they revise, with the JST&apos;s own wording underlined. <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline">Source</a></p>
-        <button type="button" role="switch" aria-checked={jstEnabled} aria-label="Joseph Smith Translation (JST)" aria-describedby={jstDescriptionId}
-          className="marker-switch mt-0.5 shrink-0" onClick={() => setJstEnabled(!jstEnabled)}><span className="marker-switch-knob" aria-hidden="true" /></button>
+    {showLdsContent ? <div data-jst-setting className="flex items-center justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <p aria-hidden="true" className="text-sm font-medium">Joseph Smith Translation</p>
+        {onShownChange ? null : <p id={jstDescriptionId} className="mt-0.5 text-xs leading-relaxed text-foreground/60">When the LDS edition is the main text, show selected JST passages in place of the KJV verses they revise, with the JST&apos;s own wording underlined. <a href={JST_SOURCE_DOCS_URL} target="_blank" rel="noreferrer" className="underline">Source</a></p>}
       </div>
-    </details> : null}
+      <button type="button" role="switch" aria-checked={jstEnabled} aria-label="Joseph Smith Translation (JST)" aria-describedby={onShownChange ? undefined : jstDescriptionId}
+        className="marker-switch shrink-0" onClick={() => setJstEnabled(!jstEnabled)}><span className="marker-switch-knob" aria-hidden="true" /></button>
+    </div> : null}
   </div>;
 }

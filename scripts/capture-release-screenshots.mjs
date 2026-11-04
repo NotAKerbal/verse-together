@@ -304,7 +304,7 @@ const SHOTS = [
       await open(page, "/browse/bookofmormon/1nephi/1");
       await page.getByRole("button", { name: "Reader settings" }).click();
       await page.waitForTimeout(500);
-      const menu = await page.getByRole("switch", { name: "Simple mode" }).locator("xpath=ancestor::div[contains(@class,'absolute') or contains(@class,'fixed')][1]").boundingBox();
+      const menu = await page.getByRole("dialog", { name: "Reading appearance" }).boundingBox();
       const header = await page.getByRole("button", { name: "Reader settings" }).boundingBox();
       const area = union(menu, header);
       return pad(area, 12, viewport);
@@ -365,7 +365,6 @@ const SHOTS = [
     async run(page, viewport) {
       await open(page, "/browse/newtestament/mark/9");
       await page.getByRole("button", { name: "Reader settings" }).click();
-      await page.getByText("Joseph Smith Translation", { exact: true }).click();
       await page.getByRole("switch", { name: "Joseph Smith Translation (JST)" }).click();
       await page.keyboard.press("Escape");
       await page.waitForTimeout(1200);
