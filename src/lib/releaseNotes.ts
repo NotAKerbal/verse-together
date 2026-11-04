@@ -47,7 +47,17 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.22.1",
+    date: "2026-11-04",
+    title: "Clearer chapter text without study path light bulbs",
+    items: [
+      { kind: "improved", text: "The study path light bulbs beside verses are gone, leaving the chapter text clearer." },
+    ],
+    commits: ["290926c2"],
+  },
+  {
     version: "2.22.0",
+    masterCommit: "c2b9af56",
     date: "2026-11-04",
     title: "AI-written guides to whole chapters",
     items: [

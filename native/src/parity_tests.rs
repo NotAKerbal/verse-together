@@ -330,11 +330,9 @@ fn other_denominations_hide_latter_day_saint_content_without_removing_study_data
         (app.screen, app.settings_tab),
         (Screen::Settings, settings_ui::SettingsTab::Reading)
     );
-    // Bible chapters read as before, without the JST, study paths or the study helps.
     let _ = app.update(Message::Navigate(at("newtestament", "john", 3), None));
     assert!(!app.content_hidden());
     assert!(!app.jst_enabled());
-    assert_eq!(app.tools.paths, crate::reader_tools::Load::Ready(vec![]));
     // Search keeps to the Bible: a Book of Mormon reference finds nothing, words only Bible verses.
     let path = app.store.as_ref().unwrap().scripture_path.clone();
     assert!(

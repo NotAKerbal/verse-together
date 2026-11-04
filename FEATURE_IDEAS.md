@@ -7,7 +7,6 @@ Updated 2026-09-26 alongside the Marker redesign. This is the planning list: wha
 - Reader for all five standard works with verse selection, per-verse annotations and highlight colors, footnotes, and reader settings (typeface, size, comparison view).
 - Bible translation compare: KJV built in, more translations from the catalog picker, inline word diff or side by side.
 - Notes (insights): block editor with scripture, text, quote, and dictionary blocks (Webster 1828, 1844, 1913, etymology), folders, tags, drafts vs. published, private / friends / link / public visibility, markdown export, share links.
-- AI study paths per chapter (the lightbulb bubbles). All 1,582 chapters were generated once in a batch and are cached in Convex; reading them needs no API key. `OPENAI_API_KEY` is only for regenerating a chapter or the signed-in notes assistant.
 - Word study: dictionary and etymology lookups from a selection.
 - Citations and talks: General Conference talks that cite a verse, talk reader.
 - Search across scriptures, notes, and talks.
@@ -51,7 +50,7 @@ Bring each back only once it has a real reason to exist in the nav.
 - Study groups: persistent groups with shared insight collections and discussion.
 
 ### 8. Citation and source graph
-- Visualize links between verses, talks, notes, and study paths. Builds on the citation cache and the scripture links inside study paths.
+- Visualize links between verses, talks, and notes. Builds on the citation cache.
 
 ## Housekeeping
 

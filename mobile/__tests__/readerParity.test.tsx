@@ -1,7 +1,3 @@
-// The reader's web-parity features: the Joseph Smith Translation read in place, whole-chapter comparison
-// translations (inline and beneath each verse), chapter study paths, lesson Resources, journal note markers and
-// Android Back leaving simple mode.
-//
 // Pure tests check the combined native text against the existing single-text document (selection and mark offsets
 // must still be the KJV's). Route tests render the app's real routes with the mocked native text bridge
 // (jest.setup.js) against a fetch that answers as the Verse Together site's routes do: /api/scriptures/jst bodies
@@ -237,9 +233,7 @@ function installFetch() {
   }) as typeof fetch;
 }
 
-/** The site with no study paths cached (signed out it can't research any) and nothing else asked for. */
 function defaultRoute(call: Call): Reply {
-  if (call.url.pathname === "/api/insights/chapter") return { status: 401, body: { error: "Sign in to generate chapter insights." } };
   return { status: 404, body: { error: "Not found" } };
 }
 
@@ -318,13 +312,13 @@ describe("the chapter route", () => {
     await waitFor(() => expect(nativeText().text).toContain("JST 9:40–48"));
   });
 
-  it("asks for no JST or study paths for Other denominations", async () => {
+  it("asks for no JST for Other denominations", async () => {
     setJstEnabled(true);
     faithTradition.set("other");
     await renderRouter("./app", { initialUrl: "/browse/newtestament/mark/9" });
     await screen.findByTestId("reader-text");
     await settle();
-    expect(calls.filter((call) => call.url.pathname === "/api/scriptures/jst" || call.url.pathname === "/api/insights/chapter")).toEqual([]);
+    expect(calls.filter((call) => call.url.pathname === "/api/scriptures/jst")).toEqual([]);
     expect(nativeText().text).not.toContain("JST");
   });
 
@@ -460,45 +454,11 @@ describe("the chapter route", () => {
     expect(screen.queryByTestId("reader-text")).toBeNull();
   });
 
-  it("shows a cached study path beside its verse and opens it", async () => {
-    route = (call) =>
-      call.url.pathname === "/api/insights/chapter"
-        ? {
-            body: {
-              reference: "John 1",
-              cached: true,
-              generated_at: "2026-10-01T00:00:00.000Z",
-              paths: [
-                {
-                  kind: "cross_reference",
-                  verse_numbers: [3],
-                  title: "Creation through the Word",
-                  direction: "Compare Moses 1:33 with this verse.",
-                  why: "Both describe creation by the Son.",
-                  look_for: ["Who acts in creation"],
-                  sources: [{ title: "Moses 1", url: "https://www.churchofjesuschrist.org/study/scriptures/pgp/moses/1", format: "article" }],
-                  scripture_links: [{ reference: "Moses 1:33", volume: "pearl", book: "moses", chapter: 1, verse_start: 33, verse_end: 33 }],
-                },
-              ],
-            },
-          }
-        : defaultRoute(call);
+  it("neither asks for study paths nor shows a marker for them", async () => {
     await renderRouter("./app", { initialUrl: "/browse/newtestament/john/1" });
     await screen.findByTestId("reader-text");
     await settle();
-    const insight = calls.find((call) => call.url.pathname === "/api/insights/chapter")!;
-    expect(insight.method).toBe("POST");
-    expect(JSON.parse(insight.body!)).toEqual({ volume: "newtestament", book: "john", chapter: 1 });
-    await press(await screen.findByTestId("study-path-marker-3"));
-    expect(screen.getByText("Creation through the Word")).toBeTruthy();
-    expect(screen.getByText("AI found these directions. Read the sources and decide what holds up.")).toBeTruthy();
-  });
-
-  it("shows no study path markers when the site has none cached", async () => {
-    await renderRouter("./app", { initialUrl: "/browse/newtestament/john/1" });
-    await screen.findByTestId("reader-text");
-    await settle();
-    expect(calls.some((call) => call.url.pathname === "/api/insights/chapter")).toBe(true);
+    expect(calls.some((call) => call.url.pathname === "/api/insights/chapter")).toBe(false);
     expect(screen.queryByTestId(/^study-path-marker-/)).toBeNull();
   });
 

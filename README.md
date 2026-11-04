@@ -107,7 +107,7 @@ The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/rou
 ### Optional environment variables
 
 - `MERRIAM_WEBSTER_API_KEY` (or `MW_DICTIONARY_API_KEY`)
-- Chapter study paths were generated once with the batch scripts below and are served from the Convex cache; reading them needs no API key, and the site never generates them on request. `OPENAI_API_KEY` in the local environment is only for those batch scripts.
+- The apps no longer show chapter study paths. The batch scripts below and the Convex cache remain, `/api/insights/chapter` still reads that cache, and the site never generates them on request. `OPENAI_API_KEY` in the local environment is only for those batch scripts.
 - AI chapter guides are requested from the Resources panel, which shows only the groups matching the selected verses, and read in full at `/chapter-guides/<volume>/<book>/<chapter>`. They're generated in Convex under an application-enforced $100 monthly spending ledger, which isn't a limit the providers enforce. Setup, keys, and limits are in `docs/chapter-guides.md`.
 
 If no Merriam-Webster key is configured, only Free Dictionary API entries will be returned.

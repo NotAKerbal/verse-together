@@ -204,7 +204,6 @@ function chapters(call: Call): Reply {
     const changed = translation === "NET" ? { 5: NET_JOHN_1_5 } : { 5: BSB_JOHN_1_5, 6: LONG_JOHN_1_6 };
     return { body: { reference: "John 1", translation, verses: john1.map((verse) => ({ verse: verse.verse, text: changed[verse.verse as 5] ?? verse.text })) } };
   }
-  if (call.url.pathname === "/api/insights/chapter") return { status: 401, body: { error: "Sign in to generate chapter insights." } };
   return { status: 404, body: { error: "Not found" } };
 }
 

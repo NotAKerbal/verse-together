@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   extractChapterInsightResponse,
-  groupChapterStudyPathsByVerse,
   isAllowedChapterInsightSource,
   parseChapterStudyPaths,
   stableJsonStringify,
@@ -96,21 +95,6 @@ test("keeps only paths grounded in verses and consulted sources", () => {
   assert.equal(paths[0].sources[0].title, "A useful article");
   assert.equal(paths[0].sources[0].format, "video");
   assert.equal(paths[0].scripture_links[0].reference, "1 Kings 22:19-23");
-});
-
-test("groups a study path only under its first tagged verse", () => {
-  const path = {
-    kind: "cross_reference",
-    verse_numbers: [3, 5],
-    title: "A connection",
-    direction: "Read the passages together.",
-    why: "They use the same image.",
-    look_for: ["Shared language"],
-    sources: [{ title: "Source", url: "https://scripturecentral.org/example" }],
-  };
-  const grouped = groupChapterStudyPathsByVerse([path]);
-  assert.equal(grouped.get(3)?.[0], path);
-  assert.equal(grouped.has(5), false);
 });
 
 test("keeps verse anchors sparse without limiting insight count", () => {

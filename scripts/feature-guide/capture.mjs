@@ -651,33 +651,6 @@ await scene('explore_languages', 'explore', { fresh: false }, async (p, a) => {
     await sleep(3400);
     c.mark('entry_hold');
 }, async (p) => ({ ok: (await p.getByText(/G3056/).count()) > 0 }));
-await scene('study_paths', 'explore', { fresh: false }, async (p, a) => {
-    await go(p, '/browse/bookofmormon/alma/32', 2200);
-    await dismissTip(p);
-    await settleVerse(p, a, 21);
-    await a.moveTo(820, 560);
-}, async (p, a, c) => {
-    await sleep(900);
-    const bulb = p.locator('[aria-label="Explore study path for verse 21"]');
-    await a.hover(bulb, { reveal: false, ms: 700 });
-    await sleep(500);
-    c.mark('bulb', { bulb: await box(bulb) });
-    await sleep(500);
-    await a.click(bulb, { reveal: false, dwell: 350 });
-    const title = p.getByText('Faith as an experiment rather than a demand for certainty').first();
-    await title.waitFor({ timeout: 20000 });
-    await sleep(1000);
-    c.mark('panel', { title: await box(title) });
-    await sleep(2200);
-    await a.hover(p.getByText('AS YOU REREAD, NOTICE', { exact: false }).first(), { reveal: false, dx: 190, ms: 800 });
-    c.mark('notice');
-    await sleep(2600);
-    const srcLink = p.locator('a', { hasText: 'churchofjesuschrist.org' }).first();
-    await a.hover(srcLink, { reveal: false, ms: 600 });
-    c.mark('sources', { sources: await a.assertVisible(p.getByText('Sources', { exact: true }).first(), { pad: 6, label: 'sources' }),
-        foot: await a.assertVisible(p.getByText('AI found these directions', { exact: false }).first(), { pad: 6, label: 'ai note' }) });
-    await sleep(3200);
-}, async (p) => ({ ok: (await p.getByText('AI found these directions').count()) > 0 }));
 await scene('notes_new', 'notes', {}, async (p, a) => {
     await go(p, '/browse/bookofmormon/alma/32');
     await dismissTip(p);

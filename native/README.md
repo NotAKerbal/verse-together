@@ -93,7 +93,7 @@ localhost deployments retain the website proxy. Credentials remain scoped to the
   take notes there as in the reader; scripture links outside the week open in a side panel.
   The guides are those published in the repository's catalog (`content/cfm/guides.json`).
 - **Reader study tools**, from the website's own public endpoints (network needed; the scripture itself stays
-  embedded): study-path markers beside verses (AI chapter insights, cached on the website), **Explore** a selected
+  embedded): **Explore** a selected
   word (Bible Dictionary/Guide/Topical Guide topics matched on this computer and read from the website, Strong's
   Hebrew and Greek, English dictionaries), **Resources** for selected verses from the published lessons, and for
   the Bible **Your Bibles** in Reader settings (other translations shown verse by verse beside the KJV with their
@@ -115,7 +115,7 @@ localhost deployments retain the website proxy. Credentials remain scoped to the
   Bibles and the default Bible); **Study tools** (quick marks); **Release notes** (the website's own release history
   and screenshots, embedded); **Feedback** (the website's feedback form, anonymous unless signed in).
 - **Faith tradition** (Settings → Reading): "Other denominations" keeps Bible reading and the journal and hides Latter-day
-  Saint scriptures, Come Follow Me, the JST, study paths and study resources, as the website does. It is saved on this
+  Saint scriptures, Come Follow Me, the JST and study resources, as the website does. It is saved on this
   computer only and never removes any notes or marks.
 - **Default Bible**: make any saved Bible the main text of Bible chapters (read from the website when you open a
   chapter; if it can't load, the bundled King James Bible shows with a notice). Marks stay on their verses; marks on

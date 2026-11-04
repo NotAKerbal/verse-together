@@ -635,19 +635,14 @@ impl App {
         if has_note {
             markers = markers.push(icon(&icons::NOTE_STICKY, p.muted, 12.));
         }
-        let path_marker = self.path_marker(number);
-        let has_path = path_marker.is_some();
-        if let Some(marker) = path_marker {
-            markers = markers.push(marker);
-        }
         // The website's "Note" / "N notes" link to the journal notes that link this passage.
         let note_marker = self.note_link_marker(number);
         let has_link = note_marker.is_some();
         if let Some(marker) = note_marker {
             markers = markers.push(marker);
         }
-        let raised = if has_path || has_link { 8.0 } else { 0.0 };
-        let marker_slot = if bookmarked || has_note || has_path || has_link {
+        let raised = if has_link { 8.0 } else { 0.0 };
+        let marker_slot = if bookmarked || has_note || has_link {
             container(markers).padding(
                 Padding::ZERO
                     .left(8)

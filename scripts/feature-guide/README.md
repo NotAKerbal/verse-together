@@ -25,7 +25,7 @@ visibility and selection assertion, and the check run on the result (all 30 pass
 
 Output: `public/feature-guide/<id>.mp4` (1280×720, 24 fps, H.264 High, yuv420p, faststart, CRF 28) and
 `<id>.webp` (960 px poster of the clip's result). `src/features/featureGuide/guideMedia.json` is written by the
-renderer with each clip's measured duration, size and bytes. 32 clips, about 19 MB with posters.
+renderer with each clip's measured duration, size and bytes. 31 clips, about 18 MB with posters.
 
 ## Re-recording
 
