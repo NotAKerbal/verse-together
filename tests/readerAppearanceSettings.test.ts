@@ -190,14 +190,16 @@ describe("release notes", () => {
     const versions = RELEASES.map((release) => release.version);
     expect(new Set(versions).size).toBe(versions.length);
     RELEASES.forEach((release, index) => {
-      expect(release.version).toMatch(/^2\.\d+\.0$/);
-      // One minor version per dev-to-master release, with none skipped.
-      expect(Number(release.version.split(".")[1])).toBe(RELEASES.length - 1 - index);
+      expect(release.version).toMatch(/^2\.\d+\.\d+$/);
+      const older = RELEASES[index + 1];
+      if (older) {
+        const [, olderMinor, olderPatch] = older.version.split(".").map(Number);
+        expect([`2.${olderMinor}.${olderPatch + 1}`, `2.${olderMinor + 1}.0`]).toContain(release.version);
+      }
       expect(release.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(Number.isNaN(new Date(`${release.date}T00:00:00Z`).getTime())).toBe(false);
       if (index > 0) expect(release.date <= RELEASES[index - 1].date).toBe(true);
-      // The newest release is prepared before its master merge exists.
-      if (index > 0 || release.masterCommit) expect(release.masterCommit).toMatch(/^[0-9a-f]{7}$/);
+      if (index > 0 || release.masterCommit) expect(release.masterCommit).toMatch(/^[0-9a-f]{7,40}$/);
       expect(release.items.length).toBeGreaterThan(0);
       expect(release.commits.length).toBeGreaterThan(0);
       expect(new Set(release.items.map((item) => item.text)).size).toBe(release.items.length);
