@@ -253,6 +253,14 @@ describe("truthful copy", () => {
   });
 });
 
+describe("reading menu", () => {
+  test("a chapter with JST passages offers the comparison view without another Bible turned on", () => {
+    const reader = readFileSync(new URL("../src/components/ChapterReader.tsx", import.meta.url), "utf8");
+    expect(reader).toContain("const hasJstColumn = jstReading.rows.size > 0;");
+    expect(reader).toContain("showComparisonView={overlayTranslations.length > 0 || hasJstColumn}");
+  });
+});
+
 describe("column layout rules", () => {
   const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
 

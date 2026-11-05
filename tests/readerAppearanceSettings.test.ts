@@ -22,7 +22,10 @@ vi.mock("@/lib/appData", () => ({
 }));
 
 import ReaderAppearanceControls from "../src/components/ReaderAppearanceControls";
+import ReaderSettings from "../src/components/ReaderSettings";
 import {
+  FONT_SCALE_MAX,
+  FONT_SCALE_MIN,
   getDefaultAppearance,
   getDefaultPreferences,
   isDefaultAppearance,
@@ -121,6 +124,61 @@ describe("reader appearance", () => {
     expect(html).toMatch(/aria-pressed="true"[^>]*>Wide</);
     expect(html).toMatch(/aria-pressed="true"[^>]*>Serif</);
     expect(html).toContain("A wider column on large screens.");
+  });
+
+  test("the size control is one labelled native slider with a grab bar that stays inside the track", () => {
+    const render = (fontScale: number) => renderToStaticMarkup(
+      createElement(ReaderAppearanceControls, {
+        prefs: { ...getDefaultPreferences(), fontScale },
+        onChange: () => {},
+      })
+    );
+    const html = render(1.08);
+    expect(html).toMatch(/<label for="([^"]+)">Text size<\/label>[\s\S]*<input id="\1" type="range"/);
+    expect(html).toContain(`min="${FONT_SCALE_MIN}"`);
+    expect(html).toContain(`max="${FONT_SCALE_MAX}"`);
+    expect(html).toContain('step="0.01"');
+    expect(html).toContain('aria-valuetext="108%"');
+    expect(html).toContain(">108%<");
+    expect(html).toContain('class="text-size-slider-bar"');
+    expect(html).not.toContain("Decrease text size");
+    expect(html).not.toContain("Increase text size");
+    expect(render(FONT_SCALE_MIN)).toContain("--text-size-fill:0");
+    expect(render(FONT_SCALE_MAX)).toContain("--text-size-fill:1");
+    expect(render(0.5)).toContain("--text-size-fill:0");
+    expect(render(2)).toContain("--text-size-fill:1");
+  });
+
+  test("typeface options show in their own fonts, and text width leaves phones", () => {
+    const html = renderToStaticMarkup(
+      createElement(ReaderAppearanceControls, { prefs: getDefaultPreferences(), onChange: () => {} })
+    );
+    expect(html).toMatch(/class="[^"]*font-serif[^"]*">Serif</);
+    expect(html).toMatch(/class="[^"]*font-sans[^"]*">Sans</);
+    expect(html).toMatch(/<fieldset class="[^"]*hidden md:block[^"]*"[^>]*><legend[^>]*>Text width</);
+    expect(html).toContain("Comparison view");
+  });
+
+  test("the reader menu drops simple mode, closes explicitly, and offers comparison view only while comparing", () => {
+    const render = (showComparisonView: boolean) => renderToStaticMarkup(
+      createElement(ReaderSettings, {
+        open: true,
+        onClose: () => {},
+        prefs: getDefaultPreferences(),
+        onChange: () => {},
+        translationControls: createElement("div", null, "Your Bibles"),
+        showComparisonView,
+      })
+    );
+    const html = render(false);
+    expect(html).toMatch(/role="dialog" aria-labelledby="([^"]+)"[\s\S]*<h2 id="\1"[^>]*>Reading appearance</);
+    expect(html).toContain('aria-label="Close reading appearance"');
+    expect(html).not.toContain("Simple mode");
+    expect(html).not.toContain('role="switch"');
+    expect(html).not.toContain("Translations");
+    expect(html).not.toContain("Comparison view");
+    expect(html).toContain("Your Bibles");
+    expect(render(true)).toMatch(/Your Bibles[\s\S]*Comparison view/);
   });
 });
 

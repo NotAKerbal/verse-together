@@ -155,6 +155,10 @@ export function chapterOverlayTranslations(volume: string, query: ChapterQuery):
     .filter((id, index, list) => list.findIndex((item) => item.toLowerCase() === id.toLowerCase()) === index);
 }
 
+export function chapterQueryChoosesTranslations(query: ChapterQuery): boolean {
+  return [...queryValues(query.translation), ...queryValues(query.compare)].some((value) => !!value);
+}
+
 /** "?translation=…&compare=…" carrying a chapter's comparison translations to the chapters next to it. */
 export function chapterQuerySuffix(overlayTranslations: string[]): string {
   const params = new URLSearchParams();
