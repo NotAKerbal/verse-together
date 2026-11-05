@@ -123,7 +123,6 @@ export type ChapterGuideProgress = {
   completedSteps: number;
   stepNumber: number;
   activity: string;
-  correctionsMayFollow: boolean;
 };
 
 export function chapterGuideProgress(stage: string, rounds: { correctionRound?: number; maxCorrectionRounds?: number } = {}): ChapterGuideProgress | null {
@@ -144,7 +143,6 @@ export function chapterGuideProgress(stage: string, rounds: { correctionRound?: 
     completedSteps: currentIndex,
     stepNumber: currentIndex + 1,
     activity: steps[currentIndex]!.activity,
-    correctionsMayFollow: round < maxRounds || !inCorrections,
   };
 }
 
@@ -163,7 +161,7 @@ export function chapterGuideElapsedLabel(startedAt: number, now: number): string
 export function chapterGuideCooldownMessage(cooldown: ChapterGuideCooldown, now: number): string {
   const failure = [...REQUIRED_STEPS, ...CORRECTION_STAGES].find((step) => step.stage === cooldown.failedStage)?.failure;
   const attempt = failure ? `The last attempt at this guide stopped during ${failure}, so nothing was saved.` : "The last attempt at this guide didn’t finish, so nothing was saved.";
-  return `${attempt} To limit repeat costs, each chapter waits before another try. It can be requested again ${retryTiming(cooldown.retryAt - now)}.`;
+  return `${attempt} It can be requested again ${retryTiming(cooldown.retryAt - now)}.`;
 }
 
 function retryTiming(remaining: number): string {
@@ -192,6 +190,14 @@ export function chapterGuideNoGuideMessage(
   now: number | null
 ): string {
   return chapterGuideUnavailableMessage(state, now) ?? `There’s no chapter guide for ${reference} yet. You can request one from Resources in the reader.`;
+}
+
+export function chapterGuideHidesEmptyResources(
+  state: Pick<ChapterGuideSelectionState, "hasGuide" | "resources" | "generating"> | null,
+  loadFailed: boolean
+): boolean {
+  if (!state) return !loadFailed;
+  return state.resources.length > 0 || (!state.hasGuide && Boolean(state.generating));
 }
 
 export function crossReferenceView(

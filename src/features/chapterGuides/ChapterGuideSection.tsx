@@ -41,7 +41,7 @@ export default function ChapterGuideSection({ guide, previewsPassages }: { guide
   } else if (!state) {
     body = <p className={styles.message} role="status">Checking for a chapter guide…</p>;
   } else if (state.generating) {
-    body = <ChapterGuideProgress reference={reference} generating={state.generating} now={stateLoadedAt} />;
+    body = <ChapterGuideProgress reference={reference} generating={state.generating} now={stateLoadedAt} compact />;
   } else if (unavailableMessage) {
     body = <p className={styles.message} role="status">{unavailableMessage}</p>;
   } else if (!user) {
@@ -60,7 +60,7 @@ export default function ChapterGuideSection({ guide, previewsPassages }: { guide
   }
 
   return (
-    <section className={styles.section} aria-label={CHAPTER_GUIDE_LABEL}>
+    <section className={panelStyles.generatedGuide} aria-label={CHAPTER_GUIDE_LABEL}>
       {body}
       {requestError && requestError !== refusalShownByState ? <p className={styles.message} role="alert">{requestError}</p> : null}
     </section>

@@ -1,12 +1,24 @@
-.progress { display: flex; flex-direction: column; gap: 10px; }
-.status { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--foreground); }
+.progress { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lead { margin: 0; color: var(--foreground); font-family: var(--font-serif-text), Georgia, serif; text-wrap: pretty; }
+.status { margin: 0; font-weight: 600; color: var(--foreground); overflow-wrap: anywhere; }
 .track { display: flex; gap: 4px; }
-.segment { flex: 1 1 0; height: 6px; border-radius: 3px; background: var(--surface-border); }
+.segment { flex: 1 1 0; min-width: 0; height: 6px; border-radius: 3px; background: var(--surface-border); }
 .segment[data-status="done"] { background: var(--accent-rubric); }
 .segment[data-status="current"] { background: var(--accent-rubric); animation: stage-pulse 1.8s ease-in-out infinite; }
-.steps { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.5; color: var(--foreground-soft); }
+.steps { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0; padding: 0; list-style: none; line-height: 1.5; color: var(--foreground-soft); }
 .step[data-status="current"] { color: var(--foreground); font-weight: 600; }
-.note { margin: 0; font-size: 14px; line-height: 1.6; color: var(--foreground-soft); }
+.elapsed { margin: 0; line-height: 1.5; color: var(--foreground-soft); }
+
+.compact .lead { padding-right: 28px; font-size: 18px; line-height: 1.35; }
+.compact .status { font-size: 13px; line-height: 1.5; }
+.compact .steps { font-size: 12px; }
+.compact .elapsed { font-size: 12px; }
+
+.full { gap: 12px; }
+.full .lead { font-size: 1.375rem; line-height: 1.3; }
+.full .status { font-size: 1rem; line-height: 1.5; }
+.full .steps { font-size: 0.875rem; }
+.full .elapsed { font-size: 0.875rem; }
 
 @keyframes stage-pulse {
   50% { opacity: .45; }

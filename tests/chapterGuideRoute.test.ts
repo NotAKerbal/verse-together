@@ -339,6 +339,8 @@ describe("the panel's chapter guide section", () => {
     expect(html).toContain('role="progressbar"');
     expect(html).toContain("Step 3 of 3: Reviewing the draft");
     expect(html).toContain("Started 5 minutes ago.");
+    expect(html).toContain("A guide for Alma 32 is being written.");
+    expect(html).not.toMatch(/several minutes|keep reading|come back later|saved here for everyone|more steps follow/);
   });
 
   test("during a cooldown, the panel says when it can be requested and offers no button", () => {

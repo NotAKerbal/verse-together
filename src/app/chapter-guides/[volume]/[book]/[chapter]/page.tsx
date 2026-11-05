@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import noGuideStyles from "@/features/chapterGuides/ChapterGuideNoGuidePage.module.css";
 import ChapterGuidePendingStatus from "@/features/chapterGuides/ChapterGuidePendingStatus";
 import LessonNoteButton from "@/features/comeFollowMe/LessonNoteButton";
 import { chapterHref, passageTarget } from "@/features/comeFollowMe/passagePreview";
@@ -114,13 +115,17 @@ function PlainHero({ eyebrow, title, reference, readerHref, noteSource }: { eyeb
 
 function NoGuidePage({ reference, readerHref, children }: { reference: string; readerHref: string; children: ReactNode }) {
   return (
-    <section className={`page-shell ${styles.page}`} data-lesson-page>
-      <PlainHero eyebrow={[reference, CHAPTER_GUIDE_LABEL]} title={`${reference} guide`} reference={reference} readerHref={readerHref} />
-      <div className={styles.noGuide}>
+    <section className={`page-shell ${styles.page} ${noGuideStyles.page}`} data-lesson-page>
+      <header className={noGuideStyles.heading}>
+        <Link href={readerHref} className={`${styles.backLink} ${noGuideStyles.back}`}>
+          <span aria-hidden="true">←</span> {reference}
+        </Link>
+        <p className={styles.eyebrow}><span>{CHAPTER_GUIDE_LABEL}</span></p>
+        <h1 className={noGuideStyles.title}>{reference} guide</h1>
+      </header>
+      <div className={noGuideStyles.body}>
         {children}
-        <ul>
-          <li><Link href={readerHref}>Open {reference} in the reader</Link></li>
-        </ul>
+        <Link href={readerHref} className={noGuideStyles.readerAction}>Open {reference} in the reader</Link>
       </div>
     </section>
   );
