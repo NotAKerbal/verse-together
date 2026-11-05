@@ -18,7 +18,7 @@ export default function MobileBottomNav() {
   return (
     <nav
       className="simple-hide fixed inset-x-0 z-40 flex justify-center px-4 sm:hidden"
-      style={{ bottom: "max(0.85rem, env(safe-area-inset-bottom))" }}
+      style={{ bottom: "var(--mobile-nav-bottom)" }}
       aria-label="Primary mobile navigation"
     >
       <div className="segmented-control mobile-nav-control pointer-events-auto w-full max-w-sm">

@@ -1,6 +1,6 @@
 "use client";
 
-import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown, faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Children, Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -115,10 +115,12 @@ export function ChapterHeader({
                 <ChapterLink
                   href={crumbs.currentHref}
                   aria-current="page"
+                  aria-label={`${reference}: choose a chapter`}
                   className="reader-toolbar-crumb"
                   title={`${reference}: choose a chapter`}
                 >
-                  {reference}
+                  <span className="reader-toolbar-crumb-text">{reference}</span>
+                  <FontAwesomeIcon icon={faChevronDown} aria-hidden="true" className="reader-toolbar-crumb-chevron" />
                 </ChapterLink>
               ) : (
                 <span aria-current="page" className="reader-toolbar-crumb" title={reference}>

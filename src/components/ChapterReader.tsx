@@ -2016,36 +2016,22 @@ export default function ChapterReader({
         />
       ) : null}
 
-      {/* One-time onboarding tooltip */}
       {showTapHint && !overlayOpen && !hasSelection ? (
-        <div
-          className="simple-hide fixed inset-x-0 z-40 pointer-events-none"
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
-        >
-          <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
-            <div
-              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-[color:var(--surface-border)] bg-background/90 px-3 py-2 shadow"
-              style={{ maxWidth: "28rem" }}
-              role="dialog"
-              aria-live="polite"
+        <div className="reader-tip-dock simple-hide">
+          <aside aria-label="Reader tip" className="reader-tip">
+            <p>Select text for notes, resource search, and word study.</p>
+            <button
+              type="button"
+              aria-label="Got it, dismiss tip"
+              onClick={() => {
+                try { setSeenTapToActionsHint(); } catch {}
+                setShowTapHint(false);
+              }}
+              className="reader-tip-dismiss"
             >
-              <div className="text-sm flex items-start gap-3">
-                <div className="text-lg select-none" aria-hidden>Tip</div>
-                <div className="flex-1">
-                  Select passage text to see note, resource search, and word study actions.
-                </div>
-                <button
-                  onClick={() => {
-                    try { setSeenTapToActionsHint(); } catch {}
-                    setShowTapHint(false);
-                  }}
-                  className="ml-2 text-sm px-2 py-1 rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </div>
+              Got it
+            </button>
+          </aside>
         </div>
       ) : null}
 

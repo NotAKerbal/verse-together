@@ -52,6 +52,8 @@
   /* Bottom edge of the floating desktop navigation: 1rem inset + 3rem bar. */
   --header-height: 4rem;
   --desktop-nav-control-size: 2.25rem;
+  --mobile-nav-bottom: max(0.85rem, env(safe-area-inset-bottom));
+  --mobile-nav-height: 3.75rem;
   --input-surface: #fffdf9;
   --mobile-nav-shell: #fbf9f4;
   --mobile-nav-ring: #d9d1c1;
@@ -792,10 +794,99 @@ a.reader-toolbar-crumb:hover {
   font-weight: 600;
 }
 
-/* Phones keep just the chapter in the trail. */
+.reader-toolbar-crumb > .reader-toolbar-crumb-chevron {
+  display: none;
+}
+
 @media (max-width: 639px) {
   .reader-toolbar-crumbs li:not(:last-child) {
     display: none;
+  }
+
+  .reader-toolbar-actions {
+    gap: 0;
+  }
+
+  a.reader-toolbar-crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding-inline: 0.125rem;
+  }
+
+  .reader-toolbar-crumb-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reader-toolbar-crumb > .reader-toolbar-crumb-chevron {
+    display: block;
+    flex-shrink: 0;
+    width: 0.625rem;
+    height: 0.625rem;
+    color: var(--foreground-muted);
+  }
+}
+
+.reader-tip-dock {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  margin-block: 0;
+  padding-inline: var(--shell-gutter);
+  pointer-events: none;
+}
+
+.reader-tip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 1rem;
+  background: var(--surface-card-strong);
+  box-shadow: var(--surface-shadow-soft);
+  color: var(--foreground);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  pointer-events: auto;
+}
+
+.reader-tip > p {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+.reader-tip-dismiss {
+  flex-shrink: 0;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding-inline: 0.875rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  font-weight: 600;
+  transition: background-color 120ms ease;
+}
+
+.reader-tip-dismiss:hover {
+  background: var(--surface-button-hover);
+}
+
+.reader-tip-dismiss:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .reader-tip-dock {
+    bottom: calc(var(--mobile-nav-bottom) + var(--mobile-nav-height) + 0.75rem);
   }
 }
 
