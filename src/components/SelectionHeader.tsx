@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { AppHeaderPortal, useAppHeaderSlot } from "./AppHeaderSlot";
 import BrowseLink from "./BrowseLink";
 import { usePageCoveredByChapterNavigation } from "./ChapterNavigation";
@@ -8,6 +9,11 @@ import ReaderSearchButton from "./ReaderSearchButton";
 type Props = {
   title: string;
   backHref?: string;
+  pageDetail?: ReactNode;
+};
+
+type SelectionControlsProps = Pick<Props, "title" | "backHref"> & {
+  titleIsHeading: boolean;
 };
 
 function BackIcon() {
@@ -27,7 +33,7 @@ function BackIcon() {
   );
 }
 
-function SelectionControls({ title, backHref }: Props) {
+function SelectionControls({ title, backHref, titleIsHeading }: SelectionControlsProps) {
   return (
     <div className="app-header-selection" data-back={backHref ? "true" : undefined}>
       {backHref ? (
@@ -35,35 +41,44 @@ function SelectionControls({ title, backHref }: Props) {
           <BackIcon />
         </BrowseLink>
       ) : null}
-      <h1 className="app-header-selection-title outline-none" tabIndex={-1} title={title} data-browse-title>
-        {title}
-      </h1>
+      {titleIsHeading ? (
+        <h1 className="app-header-selection-title outline-none" tabIndex={-1} title={title} data-browse-title>
+          {title}
+        </h1>
+      ) : (
+        <p className="app-header-selection-title" title={title}>
+          {title}
+        </p>
+      )}
       <ReaderSearchButton buttonClassName="simple-hide app-header-selection-button" />
     </div>
   );
 }
 
-/**
- * A volume's or book's back link, title, and search (the Library's, in a popover). Wider screens show them at
- * the app header's right (rendered through a portal, so BrowseLink still switches views in place); phones, narrow
- * windows, simple mode, and the server-rendered page keep them in the page. CSS shows one copy at a time. While a
- * chapter opening from this page covers it, the header copy is unmounted, so it never outlives the page.
- */
-export default function SelectionHeader({ title, backHref }: Props) {
+export default function SelectionHeader({ title, backHref, pageDetail }: Props) {
   const { available } = useAppHeaderSlot();
-  // The covered page stays mounted (hidden) so an abandoned navigation can return to it; its header controls
-  // must not stay on screen over the chapter, and come back with the page.
   const covered = usePageCoveredByChapterNavigation();
   const inHeader = available && !covered;
+  const hasPageIntro = pageDetail != null;
   return (
     <>
       <div className={`browse-selection-header${inHeader ? " browse-header-fallback" : ""}`}>
-        <SelectionControls title={title} backHref={backHref} />
+        <SelectionControls title={title} backHref={backHref} titleIsHeading />
       </div>
       {inHeader ? (
         <AppHeaderPortal>
-          <SelectionControls title={title} backHref={backHref} />
+          <SelectionControls title={title} backHref={backHref} titleIsHeading={!hasPageIntro} />
         </AppHeaderPortal>
+      ) : null}
+      {hasPageIntro ? (
+        <div className="browse-page-intro">
+          {inHeader ? (
+            <h1 className="page-title browse-page-heading outline-none" tabIndex={-1} data-browse-title>
+              {title}
+            </h1>
+          ) : null}
+          {pageDetail}
+        </div>
       ) : null}
     </>
   );

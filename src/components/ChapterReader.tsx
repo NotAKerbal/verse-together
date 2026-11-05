@@ -17,6 +17,7 @@ import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./Chapt
 import {
   ChapterHeader,
   ChapterSimpleNav,
+  ChapterTitle,
   ChapterTextBoundary,
   ChapterTextPending,
   READER_HEADER_BUTTON_CLASS,
@@ -1586,6 +1587,7 @@ export default function ChapterReader({
             ref={scriptureColumnRef}
             className="reader-column relative w-full max-w-6xl mx-auto"
             data-text-width={prefs.textWidth}
+            data-comparing={overlayTranslations.length > 0 || hasJstColumn ? "true" : undefined}
             style={
               hasSidebarPanelOpen && desktopScriptureOffset > 0
                 ? { left: `-${desktopScriptureOffset}px` }
@@ -1666,7 +1668,7 @@ export default function ChapterReader({
             ) : null}
           </ChapterHeader>
 
-          <h1 className="simple-only reader-simple-title">{reference}</h1>
+          <ChapterTitle reference={reference} />
           {jst.status === "loading" ? (
             <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
               Loading Joseph Smith Translation excerpts…
