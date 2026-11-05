@@ -69,7 +69,7 @@ export default function ChapterGuideOwnerPanel({ siteSecretConfigured }: { siteS
         {error ? <p role="alert" className="text-foreground/70">{error}</p> : null}
       </section>
 
-      <ChapterGuideReviewQueue />
+      <ChapterGuideReviewQueue audience="owner" />
 
       <section className="panel-card rounded-[1.35rem] p-4 space-y-2">
         <h2 className="text-base font-semibold">Recent guides</h2>

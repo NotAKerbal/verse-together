@@ -20,6 +20,7 @@ function viewerPayload(row: Doc<"users">, extra: { legacyAccountPending?: boolea
   return {
     appUserId: row.clerkId,
     isAdmin: row.isAdmin === true,
+    isChapterGuideReviewer: row.isChapterGuideReviewer === true,
     displayName: row.displayName ?? null,
     avatarUrl: row.avatarUrl ?? null,
     legacyAccount: row.authLinkSource === "admin-migration",

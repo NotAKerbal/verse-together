@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Id } from "../convex/_generated/dataModel";
 import type { ChapterGuideContent, GuideReview } from "../convex/chapterGuideContent";
+import type { GuideReviewRole } from "../convex/chapterGuides";
 
 const convexReact = vi.hoisted(() => ({ useQuery: vi.fn(), useMutation: vi.fn(() => vi.fn()) }));
 vi.mock("convex/react", () => convexReact);
@@ -55,9 +56,9 @@ const DETAIL = {
   history: [],
 };
 
-function renderDetail(overrides: Partial<typeof DETAIL> | Record<string, unknown> = {}, continuing = false) {
+function renderDetail(overrides: Partial<typeof DETAIL> | Record<string, unknown> = {}, continuing = false, audience: GuideReviewRole = "owner") {
   const detail = { ...DETAIL, ...overrides } as Parameters<typeof ChapterGuideReviewDetail>[0]["detail"];
-  return renderToStaticMarkup(createElement(ChapterGuideReviewDetail, { detail, continuing, onContinue: () => {}, onBack: () => {} }));
+  return renderToStaticMarkup(createElement(ChapterGuideReviewDetail, { detail, audience, continuing, onContinue: () => {}, onBack: () => {} }));
 }
 
 beforeEach(() => {
@@ -67,20 +68,33 @@ beforeEach(() => {
 describe("the review queue", () => {
   test("anyone a query refuses sees nothing at all", () => {
     convexReact.useQuery.mockReturnValue(null);
-    expect(renderToStaticMarkup(createElement(ChapterGuideReviewQueue))).toBe("");
+    expect(renderToStaticMarkup(createElement(ChapterGuideReviewQueue, { audience: "owner" }))).toBe("");
+  });
+
+  test("on the reviewer's own page, a refusal and a load both say so", () => {
+    convexReact.useQuery.mockReturnValue(null);
+    expect(renderToStaticMarkup(createElement(ChapterGuideReviewQueue, { audience: "reviewer" }))).toContain("only available to chapter guide reviewers and admins");
+    convexReact.useQuery.mockReturnValue(undefined);
+    expect(renderToStaticMarkup(createElement(ChapterGuideReviewQueue, { audience: "reviewer" }))).toContain("Loading…");
   });
 
   test("an empty queue says so", () => {
     convexReact.useQuery.mockImplementation((_fn: unknown, args: unknown) => (args === "skip" ? undefined : []));
-    const html = renderToStaticMarkup(createElement(ChapterGuideReviewQueue));
+    const html = renderToStaticMarkup(createElement(ChapterGuideReviewQueue, { audience: "reviewer" }));
     expect(html).toContain("Needs review (0)");
     expect(html).toContain("Nothing is waiting for review.");
   });
 
   test("it doesn't ask for a draft until one is opened", () => {
     convexReact.useQuery.mockImplementation((_fn: unknown, args: unknown) => (args === "skip" ? undefined : [ITEM]));
-    renderToStaticMarkup(createElement(ChapterGuideReviewQueue));
+    renderToStaticMarkup(createElement(ChapterGuideReviewQueue, { audience: "owner" }));
     expect(convexReact.useQuery.mock.calls.map((call) => call[1])).toEqual([{}, "skip"]);
+  });
+
+  test("a reviewer's list leaves out what a guide has spent", () => {
+    const html = renderToStaticMarkup(createElement(ChapterGuideReviewList, { queue: [{ ...ITEM, spentMicros: null }], onOpen: () => {} }));
+    expect(html).toContain("Alma 1: 2 open findings, 3 correction rounds, queued Nov 4, 2026");
+    expect(html).not.toContain("spent");
   });
 
   test("each item shows what's waiting and how to open it", () => {
@@ -114,7 +128,7 @@ describe("the review detail", () => {
     expect(html).toContain("3 more correction rounds");
     expect(html).toContain("up to 9 provider calls");
     expect(html).toContain("the rest is released");
-    expect(html).toContain("published only if the reviewer clears it");
+    expect(html).toContain("published only if the AI reviewer clears it");
     expect(html).toContain("To leave it queued, do nothing.");
     expect(html).toContain("sending this draft and these findings to the writer");
   });
@@ -148,6 +162,27 @@ describe("the review detail", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Continue generation/);
   });
 
+  test("a reviewer sees the reservation but not what the guide has spent", () => {
+    const html = renderDetail({ spentMicros: null }, false, "reviewer");
+    expect(html).toContain("Continue generation (reserves up to $8.43)");
+    expect(html).toContain("Correction rounds so far: 3");
+    expect(html).not.toContain("Spent so far");
+  });
+
+  test.each([
+    ["paused", "An admin has to resume it"],
+    ["not_configured", "isn’t available right now"],
+    ["busy", "Other guides are running."],
+    ["budget_exhausted", "can’t hold this reservation"],
+  ])("a reviewer blocked by %s isn't sent to controls they don't have", (blockedBy, expected) => {
+    const html = renderDetail({ blockedBy, spentMicros: null }, false, "reviewer");
+    expect(html).toContain(expected);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Continue generation/);
+    expect(html).not.toContain("Resume it above");
+    expect(html).not.toContain("provider key");
+    expect(html).not.toContain("service secret");
+  });
+
   test("a click already sent turns the button off", () => {
     expect(renderDetail({}, true)).toMatch(/<button[^>]*disabled=""[^>]*>Continuing…/);
   });
@@ -175,6 +210,12 @@ describe("what the owner is told after choosing", () => {
     [{ status: "unavailable", reason: "budget_exhausted" }, "can’t hold this reservation"],
     [{ status: "unavailable", reason: "paused" }, "Generation is paused."],
   ] as const)("%o says %s", (result, expected) => {
-    expect(continuationMessage(result)).toContain(expected);
+    expect(continuationMessage(result, "owner")).toContain(expected);
+  });
+
+  test("a reviewer refused by a pause is told an admin has to resume it", () => {
+    const message = continuationMessage({ status: "unavailable", reason: "paused" }, "reviewer");
+    expect(message).toContain("An admin has to resume it");
+    expect(message).not.toContain("Resume it above");
   });
 });

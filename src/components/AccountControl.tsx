@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGear } from "@fortawesome/free-solid-svg-icons";
+import ChapterGuideReviewLink from "@/features/chapterGuides/ChapterGuideReviewLink";
 import { SIGN_OUT_FAILED, useAuth } from "@/lib/auth";
 
 type AccountVariant = "header" | "page" | "dock";
@@ -233,6 +234,7 @@ function AccountMenu({ variant }: { variant: AccountVariant }) {
               <Link href="/account" className={MENU_ITEM_CLASS} onClick={() => setOpen(false)}>
                 Settings
               </Link>
+              <ChapterGuideReviewLink className={MENU_ITEM_CLASS} onClick={() => setOpen(false)} />
               <button
                 type="button"
                 className={MENU_ITEM_CLASS}

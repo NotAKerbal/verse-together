@@ -280,6 +280,23 @@ describe("who can start or complete a guide", () => {
     await expect(as.mutation(api.chapterGuides.setMonthlyCap, { capDollars: 1 })).rejects.toThrow("Forbidden");
     await expect(t.mutation(api.chapterGuides.setPaused, { paused: false })).rejects.toThrow("Unauthorized");
   });
+
+  test("a chapter guide reviewer can't read spending, change the controls, or curate resources", async () => {
+    await setSettings(t, { paused: true, monthlyCapMicros: 20_000_000 });
+    const { as } = await signInAs(t, "guide-reviewer");
+    await t.run(async (ctx) => {
+      const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", "guide-reviewer")).unique();
+      await ctx.db.patch(user!._id, { isChapterGuideReviewer: true });
+    });
+    const settingsBefore = await t.run(async (ctx) => await ctx.db.query("chapterGuideSettings").first());
+    expect(await as.query(api.chapterGuides.getOwnerOverview, {})).toBeNull();
+    await expect(as.mutation(api.chapterGuides.setPaused, { paused: false })).rejects.toThrow("Forbidden");
+    await expect(as.mutation(api.chapterGuides.setPaused, { paused: true })).rejects.toThrow("Forbidden");
+    await expect(as.mutation(api.chapterGuides.setMonthlyCap, { capDollars: 100 })).rejects.toThrow("Forbidden");
+    await expect(as.mutation(api.resources.create, { volume: "bookofmormon", title: "Not allowed" })).rejects.toThrow("Only admins can add resources");
+    expect(await t.run(async (ctx) => await ctx.db.query("chapterGuideSettings").first())).toEqual(settingsBefore);
+    expect(await as.query(api.users.isAdmin, { clerkId: "guide-reviewer" })).toBe(false);
+  });
 });
 
 describe("failing closed before any spending", () => {
@@ -1012,6 +1029,15 @@ describe("human review", () => {
     return session;
   }
 
+  async function signInReviewer(reviewerKey = "guide-reviewer") {
+    const session = await signInAs(t, reviewerKey);
+    await t.run(async (ctx) => {
+      const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", reviewerKey)).unique();
+      await ctx.db.patch(user!._id, { isChapterGuideReviewer: true });
+    });
+    return session;
+  }
+
   async function request(chapter = 1, owner = "reader-a") {
     const { as } = await signInAs(t, owner);
     return await as.mutation(api.chapterGuides.requestGeneration, { serviceSecret: SECRET, ...chapterArgs(chapter) });
@@ -1227,6 +1253,109 @@ describe("human review", () => {
       expect(after.jobs).toEqual(before.jobs);
       expect(after.periods).toEqual(before.periods);
       expect(after.continuations).toEqual([]);
+    });
+  });
+
+  describe("a chapter guide reviewer", () => {
+    test("reads the queue and the draft, with the reservation but no spending or provider state", async () => {
+      const job = await reachQueue();
+      const { as } = await signInReviewer();
+      const queue = await as.query(api.chapterGuides.getReviewQueue, {});
+      expect(queue).toEqual([
+        expect.objectContaining({ id: job._id, reference: "Alma 1", findingCount: 1, continuationMicros: CONTINUATION, continuationCalls: 9, queuedAt: job.reviewQueuedAt, spentMicros: null }),
+      ]);
+      const detail = await as.query(api.chapterGuides.getReviewDetail, { jobId: job._id });
+      expect(detail).toMatchObject({ blockedBy: null, spentMicros: null, continuationMicros: CONTINUATION, findings: { required_corrections: [FINAL_FINDING] }, draft: { passages: [{}, { heading: "Peace, revision 3" }] } });
+      for (const hidden of ["periodKey", "capMicros", "hardCapMicros", "reservedMicros", "paused", "pauseReason", "keysConfigured", "serviceSecretConfigured", "consecutiveFailures", "recentJobs", "marginMicros"]) {
+        expect(Object.keys(detail!)).not.toContain(hidden);
+      }
+    });
+
+    test("an admin still sees what the guide has spent", async () => {
+      const job = await reachQueue();
+      const { as } = await signInOwner();
+      expect(await as.query(api.chapterGuides.getReviewDetail, { jobId: job._id })).toMatchObject({ spentMicros: job.spentMicros });
+    });
+
+    test("an account that is both gets everything an admin does", async () => {
+      const job = await reachQueue();
+      const { as } = await signInOwner("owner-reviewer");
+      await t.run(async (ctx) => {
+        const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", "owner-reviewer")).unique();
+        await ctx.db.patch(user!._id, { isChapterGuideReviewer: true });
+      });
+      expect(await as.query(api.chapterGuides.getOwnerOverview, {})).toMatchObject({ paused: false });
+      expect(await as.query(api.chapterGuides.getReviewDetail, { jobId: job._id })).toMatchObject({ spentMicros: job.spentMicros });
+      await as.mutation(api.chapterGuides.setMonthlyCap, { capDollars: 50 });
+    });
+
+    test("can continue a held guide, which reserves and publishes as an admin's does, credited to them", async () => {
+      const job = await reachQueue();
+      const { as } = await signInReviewer();
+      continuedProviders({});
+      expect(await continueJob(as, job._id)).toEqual({ status: "started", reservedMicros: CONTINUATION });
+      expect(await readPeriod(t)).toMatchObject({ reservedMicros: CONTINUATION });
+      expect((await ledgerSnapshot()).continuations).toEqual([
+        expect.objectContaining({ jobId: job._id, continuation: 1, continuedByClerkId: "guide-reviewer", reservedMicros: CONTINUATION }),
+      ]);
+      await drain(t);
+      const state = await t.query(api.chapterGuides.getChapterState, stateArgs());
+      expect(state.guide?.provenance).toMatchObject({ ownerContinuations: 1 });
+      await expectReservationsBalanced(t);
+    });
+
+    test.each([
+      ["paused", async () => await setSettings(t, { paused: true }), "paused"],
+      ["missing a provider key", async () => vi.stubEnv("ANTHROPIC_API_KEY", ""), "not_configured"],
+      ["missing the service secret", async () => vi.stubEnv("CHAPTER_GUIDE_SERVICE_SECRET", ""), "not_configured"],
+      ["out of budget", async () => await setSettings(t, { monthlyCapMicros: 0 }), "budget_exhausted"],
+    ])("is refused while %s, and starts nothing", async (_name, block, reason) => {
+      const job = await reachQueue();
+      const { as } = await signInReviewer();
+      await block();
+      const before = await ledgerSnapshot();
+      const calls = happyProviders();
+      expect(await as.query(api.chapterGuides.getReviewDetail, { jobId: job._id })).toMatchObject({ blockedBy: reason });
+      expect(await continueJob(as, job._id)).toEqual({ status: "unavailable", reason });
+      await drain(t);
+      expect(calls).toEqual([]);
+      expect(await ledgerSnapshot()).toEqual(before);
+    });
+
+    test("is refused at the running-job limit", async () => {
+      const held = await reachQueue();
+      const { as } = await signInReviewer();
+      await t.run(async (ctx) => {
+        for (const chapter of [8, 9]) {
+          await ctx.db.insert("chapterGuideJobs", { ...chapterArgs(chapter), chapterBytes: CHAPTER_BYTES, status: "running", stage: "research", stageAttempts: { research: 0, write: 0, review: 0, repair: 0, recheck: 0 }, periodKey: budgetPeriodKey(Date.now()), reservedInitialMicros: 0, reservedRemainingMicros: 0, spentMicros: 0, leaseExpiresAt: Date.now() + 60_000, createdAt: Date.now() });
+        }
+      });
+      expect(await continueJob(as, held._id)).toEqual({ status: "unavailable", reason: "busy" });
+      expect((await ledgerSnapshot()).continuations).toEqual([]);
+    });
+
+    test("can't resume generation to get past a pause", async () => {
+      const job = await reachQueue();
+      const { as } = await signInReviewer();
+      await setSettings(t, { paused: true });
+      await expect(as.mutation(api.chapterGuides.setPaused, { paused: false })).rejects.toThrow("Forbidden");
+      expect(await continueJob(as, job._id)).toEqual({ status: "unavailable", reason: "paused" });
+    });
+
+    test("loses access when the flag is off or the session is revoked", async () => {
+      const job = await reachQueue();
+      const { as } = await signInReviewer();
+      await t.run(async (ctx) => {
+        const user = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", "guide-reviewer")).unique();
+        await ctx.db.patch(user!._id, { isChapterGuideReviewer: false });
+      });
+      expect(await as.query(api.chapterGuides.getReviewQueue, {})).toBeNull();
+      expect(await as.query(api.chapterGuides.getReviewDetail, { jobId: job._id })).toBeNull();
+      await expect(continueJob(as, job._id)).rejects.toThrow("Forbidden");
+      const { as: revoked, revoke } = await signInReviewer("second-reviewer");
+      await revoke();
+      expect(await revoked.query(api.chapterGuides.getReviewQueue, {})).toBeNull();
+      await expect(continueJob(revoked, job._id)).rejects.toThrow("Unauthorized");
     });
   });
 

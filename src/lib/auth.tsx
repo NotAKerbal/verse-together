@@ -20,6 +20,7 @@ type AppUser = {
 type Viewer = {
   appUserId: string;
   isAdmin: boolean;
+  isChapterGuideReviewer: boolean;
   displayName: string | null;
   avatarUrl: string | null;
   legacyAccount: boolean;
@@ -40,6 +41,7 @@ type AuthContextValue = {
   /** Set when a Better Auth session exists but the app account could not be verified or loaded. */
   error: string | null;
   isAdmin: boolean;
+  isChapterGuideReviewer: boolean;
   legacyAccount: boolean;
   legacyAccountPending: boolean;
   /**
@@ -352,6 +354,7 @@ export function AppAuthProvider({ children }: PropsWithChildren) {
       loading,
       error,
       isAdmin: viewer?.isAdmin === true,
+      isChapterGuideReviewer: viewer?.isChapterGuideReviewer === true,
       legacyAccount: viewer?.legacyAccount === true,
       legacyAccountPending: viewer?.legacyAccountPending === true,
       pendingDeletion: deleting,
@@ -387,6 +390,7 @@ export function UnconfiguredAuthProvider({ children }: PropsWithChildren) {
       loading: false,
       error: null,
       isAdmin: false,
+      isChapterGuideReviewer: false,
       legacyAccount: false,
       legacyAccountPending: false,
       pendingDeletion: null,

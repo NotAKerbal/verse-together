@@ -41,7 +41,13 @@ export async function getRequestViewer(request: Request): Promise<RequestViewer>
   }
   try {
     const viewer = await convexQuery<ServerViewer | null>("users:viewer", {}, credential.token);
-    return viewer ? { viewer: { appUserId: viewer.appUserId, isAdmin: viewer.isAdmin === true }, token: credential.token, via: "bearer" } : SIGNED_OUT;
+    return viewer
+      ? {
+          viewer: { appUserId: viewer.appUserId, isAdmin: viewer.isAdmin === true, isChapterGuideReviewer: viewer.isChapterGuideReviewer === true },
+          token: credential.token,
+          via: "bearer",
+        }
+      : SIGNED_OUT;
   } catch (error) {
     // Convex refuses a token it can't verify (bad signature, wrong issuer, expired) by failing the call.
     console.warn("Could not verify a bearer token", error instanceof Error ? error.message : error);

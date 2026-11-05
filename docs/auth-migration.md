@@ -103,8 +103,8 @@ attaches a sign-in to an existing row — not by email, not by any client-suppli
 `users:upsertCurrentUser` is kept for stale clients but ignores its arguments.
 
 Legacy accounts are linked **only** by the internal admin migration (`convex/authMigration.ts`), from an
-operator-supplied Clerk id → email mapping. Admin status (`users.isAdmin`) lives on the legacy row, so it is
-preserved once that row is linked.
+operator-supplied Clerk id → email mapping. Admin status (`users.isAdmin`) and chapter guide review access
+(`users.isChapterGuideReviewer`) live on the legacy row, so they are preserved once that row is linked.
 
 Other hardening in this change:
 
