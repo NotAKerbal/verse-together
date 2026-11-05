@@ -88,7 +88,7 @@ export function ChapterHeader({
 }: ChapterHeaderProps) {
   const [simpleMode, setSimpleMode] = useSimpleMode();
   const covered = usePageCoveredByChapterNavigation();
-  const dock = useReaderHeaderDock(!simpleMode && !covered);
+  const dock = useReaderHeaderDock(!covered);
   const crumbs = useMemo(() => headerCrumbs(breadcrumbs, volume, book), [breadcrumbs, volume, book]);
   const hasNotes = Children.toArray(children).length > 0;
   const readerChapter = useMemo<ReaderChapter>(
@@ -98,7 +98,7 @@ export function ChapterHeader({
   useRegisterReaderChapter(readerChapter);
 
   const toolbar = (
-    <div role="group" aria-label={`${reference} reader controls`} className="reader-toolbar simple-hide">
+    <div role="group" aria-label={`${reference} reader controls`} className="reader-toolbar simple-conceal">
       <div className="reader-toolbar-group reader-toolbar-nav">
         <ReaderSearchButton />
         <nav aria-label="Breadcrumb" className="reader-toolbar-crumbs">
@@ -144,7 +144,7 @@ export function ChapterHeader({
           title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
           aria-pressed={simpleMode}
           onClick={() => setSimpleMode(!simpleMode)}
-          className={READER_HEADER_BUTTON_CLASS}
+          className={`${READER_HEADER_BUTTON_CLASS} reader-toolbar-simple-toggle`}
         >
           <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
         </button>
@@ -156,7 +156,7 @@ export function ChapterHeader({
       </div>
     </div>
   );
-  const notes = hasNotes ? <div className="reader-header-notes simple-hide">{children}</div> : null;
+  const notes = hasNotes ? <div className="reader-header-notes simple-conceal">{children}</div> : null;
 
   if (dock.slot) {
     return createPortal(
@@ -170,7 +170,7 @@ export function ChapterHeader({
 
   return (
     <header
-      className={`reader-header-inline simple-hide sticky top-2 sm:top-[calc(var(--header-height)+0.5rem)] z-20 transition-all ${
+      className={`reader-header-inline sticky top-2 sm:top-[calc(var(--header-height)+0.5rem)] z-20 transition-all ${
         atTop ? "py-0" : "py-1"
       }`}
       data-dock-pending={dock.pending ? "true" : undefined}

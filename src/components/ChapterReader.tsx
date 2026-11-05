@@ -41,7 +41,6 @@ import { normalizeCompareText, readTranslationVerse } from "@/lib/verseCompariso
 import { readJstChapter } from "@/lib/jst";
 import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
-import { useSimpleMode } from "@/lib/simpleMode";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/reading/useReadingProgress";
@@ -626,8 +625,7 @@ export default function ChapterReader({
   const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
   const [annotationEditorVerse, setAnnotationEditorVerse] = useState<number | null>(null);
   const [customMobileSelectionSupported, setCustomMobileSelectionSupported] = useState(false);
-  const [simpleMode] = useSimpleMode();
-  const customMobileSelectionEnabled = customMobileSelectionSupported && !simpleMode;
+  const customMobileSelectionEnabled = customMobileSelectionSupported;
   const [isCustomTouchSelecting, setIsCustomTouchSelecting] = useState(false);
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
@@ -1526,7 +1524,7 @@ export default function ChapterReader({
         }`}
       >
         <aside
-          className={`simple-hide hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] ${
+          className={`hidden lg:block self-start sticky top-[calc(var(--header-height)+0.5rem)] ${
             openResources
               ? "space-y-3"
               : openExplorer && canExploreWord
@@ -1861,13 +1859,13 @@ export default function ChapterReader({
                                 )}
                                 </>
                               )}
-                              {verseInsightAction ? <span className="contents simple-hide">{verseInsightAction}</span> : null}
+                              {verseInsightAction}
                             </div>
                             )}
                             {/* Only a note gets a card; a highlight or underline alone is drawn on the verse text above. */}
                             {myVerseAnnotation?.body ? (
                               <div
-                                className={`simple-hide mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
+                                className={`mt-2 rounded-md border p-2 text-sm leading-6 ${annotationHighlightClass(
                                   highlightOf(myVerseAnnotation)
                                 )}`}
                               >
@@ -1994,7 +1992,6 @@ export default function ChapterReader({
         />
       ) : null}
 
-      {simpleMode ? null : (
       <div className={overlayOpen ? "hidden lg:contents" : "contents"}>
       <VerseActionBar
         visible={showSelectionActions}
@@ -2026,7 +2023,6 @@ export default function ChapterReader({
         shareHref={shareHref}
       />
       </div>
-      )}
     </section>
     </>
   );

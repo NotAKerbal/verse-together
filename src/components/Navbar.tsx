@@ -4,7 +4,7 @@ import { useFaithTradition } from "@/lib/useFaithTradition";
 import { isLdsContentPath } from "@/lib/faithTradition";
 
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
@@ -14,13 +14,14 @@ import LibrarySearch from "@/components/LibrarySearch";
 import ReaderHeaderSlot from "@/components/ReaderHeaderSlot";
 import { primaryNavIcons } from "@/components/primaryNavIcons";
 import { useBrowseNavHref } from "@/lib/browseNavigation";
+import { useSimpleMode } from "@/lib/simpleMode";
 import { isPathActive, primaryNavItems } from "@/lib/navigation";
 
 export default function Navbar() {
   const { showLdsContent } = useFaithTradition();
   const pathname = usePathname();
   const browseHref = useBrowseNavHref();
-  const [collapsed, setCollapsed] = useState(false);
+  const [simpleMode, setSimpleMode] = useSimpleMode();
   const navRef = useRef<HTMLElement>(null);
   const navItems = primaryNavItems.filter((item) => showLdsContent || !isLdsContentPath(item.href));
   const activeIndex = navItems.findIndex((item) => isPathActive(pathname, item.href));
@@ -52,18 +53,17 @@ export default function Navbar() {
   return (
     <header
       className="app-header"
-      data-collapsed={collapsed ? "true" : "false"}
       data-actions={showLibrarySearch || headerSlotFilled ? "true" : undefined}
     >
       <div className="desktop-nav-bar">
         <Link href="/" className="brand-wordmark desktop-nav-brand" aria-label="Verse Together home">
           Verse<span>Together</span>
         </Link>
-        <div id="desktop-navigation" className="desktop-nav-content" inert={collapsed} aria-hidden={collapsed}>
+        <div id="desktop-navigation" className="desktop-nav-content" inert={simpleMode} aria-hidden={simpleMode}>
           <div className="desktop-nav-items">
             <nav
               ref={navRef}
-              className="simple-hide desktop-nav-links"
+              className="desktop-nav-links"
               aria-label="Primary"
               data-has-active={activeIndex >= 0 ? "true" : "false"}
             >
@@ -89,19 +89,19 @@ export default function Navbar() {
               })}
             </nav>
 
-            <div className="simple-hide desktop-nav-account">
+            <div className="desktop-nav-account">
               <AccountControl variant="dock" />
             </div>
           </div>
         </div>
         <button
           type="button"
-          className="simple-hide desktop-nav-toggle"
+          className="desktop-nav-toggle"
           aria-controls="desktop-navigation"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
-          onClick={() => setCollapsed((value) => !value)}
+          aria-pressed={simpleMode}
+          aria-label={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+          title={simpleMode ? "Turn simple mode off" : "Turn simple mode on"}
+          onClick={() => setSimpleMode(!simpleMode)}
         >
           <FontAwesomeIcon icon={faChevronLeft} className="desktop-nav-toggle-icon h-3.5 w-3.5" aria-hidden="true" />
         </button>

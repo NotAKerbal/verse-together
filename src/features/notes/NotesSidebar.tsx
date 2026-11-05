@@ -183,7 +183,7 @@ export default function NotesSidebar({
       tabIndex={-1}
       aria-label="Journal"
       data-notes-panel={readerLog ? "reader" : "page"}
-      className="simple-hide panel-card fixed bottom-4 right-4 top-[calc(var(--header-height)+0.5rem)] z-40 hidden w-[440px] flex-col overflow-hidden rounded-[20px] font-sans outline-none lg:flex xl:w-[480px]"
+      className="panel-card fixed bottom-4 right-4 top-[calc(var(--header-height)+0.5rem)] z-40 hidden w-[440px] flex-col overflow-hidden rounded-[20px] font-sans outline-none lg:flex xl:w-[480px]"
     >
       {renderContent({ closeButton: <CollapseNotesButton onCollapse={onCollapse} label="Collapse Journal" /> })}
     </aside>

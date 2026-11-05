@@ -218,19 +218,19 @@ await scene('reading_simple', 'prefs', { fresh: false }, async (p, a) => {
     await a.place(1000, 400);
 }, async (p, a, c) => {
     await sleep(900);
-    const eye = p.getByRole('button', { name: 'Turn simple mode on' });
-    c.mark('before', { eye: await box(eye) });
-    await a.click(eye, { reveal: false, dwell: 450 });
+    const toggle = p.getByRole('button', { name: 'Turn simple mode on' });
+    c.mark('before', { toggle: await box(toggle) });
+    await a.click(toggle, { reveal: false, dwell: 450 });
     await sleep(1100);
     await a.moveTo(1150, 420, { ms: 700 });
     await sleep(400);
-    const exit = p.getByRole('button', { name: 'Exit simple mode' });
-    c.mark('simple', { exit: await a.assertVisible(exit, { pad: 4, label: 'exit pill' }) });
+    const exit = p.getByRole('button', { name: 'Turn simple mode off' });
+    c.mark('simple', { exit: await a.assertVisible(exit, { pad: 4, label: 'simple mode arrow' }) });
     await sleep(2600);
     await a.click(exit, { reveal: false, dwell: 450 });
     await sleep(1100);
     await a.moveTo(1150, 420, { ms: 600 });
-    c.mark('back', { eye: await box(p.getByRole('button', { name: 'Turn simple mode on' })) });
+    c.mark('back', { toggle: await box(p.getByRole('button', { name: 'Turn simple mode on' })) });
     await sleep(1800);
 }, async (p) => ({ ok: (await p.getByRole('button', { name: 'Turn simple mode on' }).count()) > 0 }));
 await scene('bibles_add', 'bible', {}, async (p, a) => { await go(p, '/account#bible-translations', 2500); await selectedTab(p, 'Translations'); await a.place(900, 500); }, async (p, a, c) => {

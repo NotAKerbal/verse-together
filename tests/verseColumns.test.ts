@@ -178,7 +178,7 @@ describe("side by side rows", () => {
       })
     );
     const [primary, net] = cellsOf(html);
-    expect(primary).toContain("simple-hide");
+    expect(primary).not.toContain("simple-hide");
     expect(primary).toContain("2 notes");
     expect(net).not.toContain("2 notes");
   });
