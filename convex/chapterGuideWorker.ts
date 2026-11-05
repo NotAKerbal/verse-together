@@ -59,6 +59,8 @@ type Provenance = {
   promptVersion: number;
   requiredCorrections: number;
   repaired: boolean;
+  correctionRounds: number;
+  ownerContinuations?: number;
   reviewSummary: string;
   unverifiable: string[];
   crossReferencesChecked: number;
@@ -73,8 +75,8 @@ type StageOutcome =
       sources: ReturnType<typeof publishedSources>;
       provenance: Provenance;
     }
-  | { kind: "retry"; code: string; feedback?: string[] }
-  | { kind: "fail"; code: string };
+  | { kind: "retry"; code: string; feedback?: string[]; review?: GuideReview }
+  | { kind: "fail"; code: string; review?: GuideReview };
 
 type StageCompletion = { charge: StageCharge; outcome: StageOutcome };
 
@@ -83,7 +85,8 @@ const MAX_FEEDBACK_ITEMS = 25;
 function provenance(
   review: GuideReview,
   requiredCorrections: number,
-  repaired: boolean,
+  correctionRounds: number,
+  ownerContinuations: number,
   evidence: readonly CrossReferenceEvidence[]
 ): Provenance {
   const checked = evidence.filter((item) => item.status === "supplied").length;
@@ -93,7 +96,9 @@ function provenance(
     reviewModel: REVIEW_MODEL,
     promptVersion: CHAPTER_GUIDE_PROMPT_VERSION,
     requiredCorrections,
-    repaired,
+    repaired: correctionRounds > 0,
+    correctionRounds,
+    ...(ownerContinuations > 0 ? { ownerContinuations } : {}),
     reviewSummary: review.summary,
     unverifiable: review.unverifiable,
     crossReferencesChecked: checked,
@@ -228,15 +233,15 @@ export function outcomeFromResult(plan: RunPlan, result: ProviderResult, evidenc
     const review = parseGuideReview(result.text);
     if (!review) return { kind: "retry", code: "review_unparseable" };
     if (review.required_corrections.length > MAX_REQUIRED_CORRECTIONS || !correctionsFitBound(review.required_corrections)) {
-      return { kind: "fail", code: "review_rejected" };
+      return { kind: "fail", code: "review_rejected", review };
     }
-    if (invalidCorrectionTargets(draft, review.required_corrections).length > 0) return { kind: "retry", code: "review_invalid_target" };
+    if (invalidCorrectionTargets(draft, review.required_corrections).length > 0) return { kind: "retry", code: "review_invalid_target", review };
     if (review.required_corrections.length > 0) return { kind: "next", stage: "repair", review };
     return {
       kind: "publish",
       content: draft,
       sources: publishedSources(draft, research.sources),
-      provenance: provenance(review, 0, false, evidence),
+      provenance: provenance(review, 0, 0, plan.continuation, evidence),
     };
   }
   const review = plan.review as GuideReview | undefined;
@@ -244,13 +249,21 @@ export function outcomeFromResult(plan: RunPlan, result: ProviderResult, evidenc
   if (plan.stage === "recheck") {
     const recheck = parseGuideReview(result.text);
     if (!recheck) return { kind: "retry", code: "recheck_unparseable" };
-    if (recheck.required_corrections.length > 0) return { kind: "fail", code: "repair_unresolved" };
-    return {
-      kind: "publish",
-      content: draft,
-      sources: publishedSources(draft, research.sources),
-      provenance: provenance(recheck, review.required_corrections.length, true, evidence),
-    };
+    const corrections = recheck.required_corrections;
+    if (corrections.length === 0) {
+      return {
+        kind: "publish",
+        content: draft,
+        sources: publishedSources(draft, research.sources),
+        provenance: provenance(recheck, plan.initialRequiredCorrections ?? review.required_corrections.length, plan.correctionRound, plan.continuation, evidence),
+      };
+    }
+    if (plan.correctionRound >= plan.maxCorrectionRounds) return { kind: "fail", code: "repair_unresolved", review: recheck };
+    if (corrections.length > MAX_REQUIRED_CORRECTIONS || !correctionsFitBound(corrections)) {
+      return { kind: "fail", code: "recheck_rejected", review: recheck };
+    }
+    if (invalidCorrectionTargets(draft, corrections).length > 0) return { kind: "retry", code: "recheck_invalid_target", review: recheck };
+    return { kind: "next", stage: "repair", review: recheck };
   }
   const repair = parseGuideRepair(result.text);
   if (!repair) return { kind: "fail", code: "repair_unparseable" };

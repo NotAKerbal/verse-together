@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ChapterGuideContent, PublishedGuideSource } from "../../convex/chapterGuideContent";
 import type { GuideAvailability } from "../../convex/chapterGuides";
-import { chapterGuideSourceTitle, type ChapterGuideState, crossReferenceView } from "@/lib/chapterGuideView";
+import { type ChapterGuideCooldown, type ChapterGuideGenerating, chapterGuideSourceTitle, type ChapterGuideState, crossReferenceView } from "@/lib/chapterGuideView";
 import { convexQuery } from "@/lib/convexHttp";
 import { getLocalLdsChapter, type LocalChapterResponse } from "@/lib/ldsLocalData.server";
 
@@ -16,13 +16,16 @@ type StoredState = {
       reviewModel: string;
       requiredCorrections: number;
       repaired: boolean;
+      correctionRounds?: number;
+      ownerContinuations?: number;
       crossReferencesChecked?: number;
       crossReferencesUnchecked?: number;
     };
     generatedAt: number;
   } | null;
-  generating: { stage: string; startedAt: number } | null;
+  generating: ChapterGuideGenerating | null;
   availability: GuideAvailability | null;
+  cooldown?: ChapterGuideCooldown | null;
 };
 
 export type ChapterParams = { volume: string; book: string; chapter: number };
@@ -61,8 +64,9 @@ export async function readChapterGuideState(params: ChapterParams, scripture: Lo
   });
   if (!stored.guide) {
     const siteCanRequest = Boolean(process.env.CHAPTER_GUIDE_SERVICE_SECRET?.trim());
-    const availability = stored.availability && !siteCanRequest ? "not_configured" : stored.availability;
-    return { reference: scripture.reference, guide: null, generating: stored.generating, availability };
+    const availability = stored.availability && stored.availability !== "needs_review" && !siteCanRequest ? "not_configured" : stored.availability;
+    const cooldown = availability === "cooldown" ? stored.cooldown ?? null : null;
+    return { reference: scripture.reference, guide: null, generating: stored.generating, availability, cooldown };
   }
   const { content, sources, provenance, generatedAt, reference } = stored.guide;
   const lastVerses = await lastVerseLookup(stored.guide);
@@ -81,6 +85,8 @@ export async function readChapterGuideState(params: ChapterParams, scripture: Lo
         reviewModel: provenance.reviewModel,
         requiredCorrections: provenance.requiredCorrections,
         repaired: provenance.repaired,
+        correctionRounds: provenance.correctionRounds,
+        ...(provenance.ownerContinuations !== undefined ? { ownerContinuations: provenance.ownerContinuations } : {}),
         ...(provenance.crossReferencesChecked !== undefined ? { crossReferencesChecked: provenance.crossReferencesChecked } : {}),
         ...(provenance.crossReferencesUnchecked !== undefined ? { crossReferencesUnchecked: provenance.crossReferencesUnchecked } : {}),
       },

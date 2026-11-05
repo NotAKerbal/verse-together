@@ -7,6 +7,7 @@ import { type ChapterGuideSession, createChapterGuideSession } from "./chapterGu
 type Snapshot = {
   key: string;
   state: ChapterGuideSelectionState | null;
+  stateLoadedAt: number | null;
   loadFailed: boolean;
   requesting: boolean;
   requestError: string | null;
@@ -14,9 +15,13 @@ type Snapshot = {
 
 export type ChapterGuideSelection = Omit<Snapshot, "key"> & { request: () => Promise<void> };
 
-const EMPTY: Omit<Snapshot, "key"> = { state: null, loadFailed: false, requesting: false, requestError: null };
+const EMPTY: Omit<Snapshot, "key"> = { state: null, stateLoadedAt: null, loadFailed: false, requesting: false, requestError: null };
 
-export function useChapterGuideSelection(chapter: { volume: string; book: string; chapter: number }, verseSpec: string): ChapterGuideSelection {
+export function useChapterGuideSelection(
+  chapter: { volume: string; book: string; chapter: number },
+  verseSpec: string,
+  { expectGenerating = false }: { expectGenerating?: boolean } = {}
+): ChapterGuideSelection {
   const { volume, book, chapter: number } = chapter;
   const key = `${volume}/${book}/${number}/${verseSpec}`;
   const [snapshot, setSnapshot] = useState<Snapshot>({ key, ...EMPTY });
@@ -26,13 +31,13 @@ export function useChapterGuideSelection(chapter: { volume: string; book: string
     const update = (patch: Partial<Snapshot>) =>
       setSnapshot((previous) => ({ ...(previous.key === key ? previous : { key, ...EMPTY }), ...patch }));
     const current = createChapterGuideSession({ volume, book, chapter: number }, verseSpec, {
-      onState: (state) => update({ state, loadFailed: false }),
+      onState: (state) => update({ state, stateLoadedAt: Date.now(), loadFailed: false }),
       onLoadFailed: () => update({ loadFailed: true }),
-    });
+    }, { expectGenerating });
     session.current = current;
     void current.load();
     return () => current.dispose();
-  }, [key, volume, book, number, verseSpec]);
+  }, [key, volume, book, number, verseSpec, expectGenerating]);
 
   const request = useCallback(async () => {
     const current = session.current;
@@ -46,5 +51,5 @@ export function useChapterGuideSelection(chapter: { volume: string; book: string
   }, [key]);
 
   const view = snapshot.key === key ? snapshot : { key, ...EMPTY };
-  return { state: view.state, loadFailed: view.loadFailed, requesting: view.requesting, requestError: view.requestError, request };
+  return { state: view.state, stateLoadedAt: view.stateLoadedAt, loadFailed: view.loadFailed, requesting: view.requesting, requestError: view.requestError, request };
 }

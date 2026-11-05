@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
+import ChapterGuidePendingStatus from "@/features/chapterGuides/ChapterGuidePendingStatus";
 import LessonNoteButton from "@/features/comeFollowMe/LessonNoteButton";
 import { chapterHref, passageTarget } from "@/features/comeFollowMe/passagePreview";
 import StudyCompanion from "@/features/comeFollowMe/StudyCompanion";
@@ -14,6 +16,7 @@ import {
   chapterGuideHref,
   chapterGuideKey,
   chapterGuideModelName,
+  chapterGuideNoGuideMessage,
   type ChapterGuideView,
 } from "@/lib/chapterGuideView";
 import { getLocalLdsChapter } from "@/lib/ldsLocalData.server";
@@ -34,6 +37,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return { title, robots: { index: false, follow: false } };
 }
 
+async function readTimedChapterGuideState(...args: Parameters<typeof readChapterGuideState>) {
+  const state = await readChapterGuideState(...args);
+  return { state, readAt: Date.now() };
+}
+
 function formatGeneratedDate(generatedAt: number) {
   return new Date(generatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
@@ -41,7 +49,10 @@ function formatGeneratedDate(generatedAt: number) {
 function correctionsLine(provenance: ChapterGuideView["provenance"], reviewer: string) {
   if (provenance.requiredCorrections === 0) return `${reviewer} checked the draft against the chapter and the research notes and required no corrections.`;
   const count = provenance.requiredCorrections === 1 ? "1 required correction" : `${provenance.requiredCorrections} required corrections`;
-  return `${reviewer} checked the draft against the chapter and the research notes and found ${count}. The writer revised those sections once, and the same reviewer checked the result before it was saved.`;
+  const found = `${reviewer} checked the draft against the chapter and the research notes and found ${count}.`;
+  const rounds = provenance.correctionRounds ?? 1;
+  if (rounds > 1) return `${found} The guide reached correction round ${rounds}, and the reviewer cleared the final draft before it was saved.`;
+  return `${found} The writer revised those sections once, and the same reviewer checked the result before it was saved.`;
 }
 
 function citedScriptureLine(provenance: ChapterGuideView["provenance"]) {
@@ -51,13 +62,18 @@ function citedScriptureLine(provenance: ChapterGuideView["provenance"]) {
   return `The reviewer was given the text of ${checked} of the ${total} scriptures this guide cites from other chapters.`;
 }
 
+function humanReviewLine(provenance: ChapterGuideView["provenance"]) {
+  if (!provenance.ownerContinuations) return "No person has reviewed it.";
+  return "An owner looked at an earlier draft and allowed more correction rounds, but no person has approved this text.";
+}
+
 function GuideFooter({ guide }: { guide: ChapterGuideView }) {
   const { provenance } = guide;
   const reviewer = chapterGuideModelName(provenance.reviewModel);
   return (
     <footer className={styles.footer}>
       <p>
-        <span className={styles.attribution}>{ATTRIBUTION}</span>, saved {formatGeneratedDate(guide.generatedAt)}. No person has reviewed it. It isn’t a Come, Follow Me lesson, a Church publication, or a statement of doctrine. Scripture text is from Verse Together&apos;s local library.
+        <span className={styles.attribution}>{ATTRIBUTION}</span>, saved {formatGeneratedDate(guide.generatedAt)}. {humanReviewLine(provenance)} It isn’t a Come, Follow Me lesson, a Church publication, or a statement of doctrine. Scripture text is from Verse Together&apos;s local library.
       </p>
       <details className={styles.generatedProvenance}>
         <summary>How this guide was made</summary>
@@ -96,12 +112,12 @@ function PlainHero({ eyebrow, title, reference, readerHref, noteSource }: { eyeb
   );
 }
 
-function NoGuidePage({ reference, readerHref, message }: { reference: string; readerHref: string; message: string }) {
+function NoGuidePage({ reference, readerHref, children }: { reference: string; readerHref: string; children: ReactNode }) {
   return (
     <section className={`page-shell ${styles.page}`} data-lesson-page>
       <PlainHero eyebrow={[reference, CHAPTER_GUIDE_LABEL]} title={`${reference} guide`} reference={reference} readerHref={readerHref} />
       <div className={styles.noGuide}>
-        <p>{message}</p>
+        {children}
         <ul>
           <li><Link href={readerHref}>Open {reference} in the reader</Link></li>
         </ul>
@@ -120,16 +136,20 @@ export default async function ChapterGuidePage({ params }: Params) {
   const readerHref = chapterHref(target, false);
 
   let state;
+  let readAt;
   try {
-    state = await readChapterGuideState(location, scripture);
+    ({ state, readAt } = await readTimedChapterGuideState(location, scripture));
   } catch {
-    return <NoGuidePage reference={reference} readerHref={readerHref} message="This chapter guide is temporarily unavailable. Try again in a little while." />;
+    return <NoGuidePage reference={reference} readerHref={readerHref}><p>This chapter guide is temporarily unavailable. Try again in a little while.</p></NoGuidePage>;
   }
   if (!state.guide) {
-    const message = state.generating
-      ? `A guide for ${reference} is being written. It can take several minutes.`
-      : `There’s no chapter guide for ${reference} yet. You can request one from Resources in the reader.`;
-    return <NoGuidePage reference={reference} readerHref={readerHref} message={message} />;
+    return (
+      <NoGuidePage reference={reference} readerHref={readerHref}>
+        {state.generating
+          ? <ChapterGuidePendingStatus chapter={location} reference={reference} generating={state.generating} renderedAt={readAt} />
+          : <p>{chapterGuideNoGuideMessage(state, reference, readAt)}</p>}
+      </NoGuidePage>
+    );
   }
 
   const companion = chapterGuideCompanion(state.guide, location);

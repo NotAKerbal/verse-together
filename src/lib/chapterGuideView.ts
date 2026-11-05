@@ -16,7 +16,8 @@ export type ChapterGuideAvailability =
   | "cooldown"
   | "busy"
   | "user_limit"
-  | "daily_limit";
+  | "daily_limit"
+  | "needs_review";
 
 export type ChapterGuideCrossReferenceView = GuideCrossReference & { href: string | null; rangeEnd: string | null };
 export type ChapterGuidePassageView = Omit<GuidePassage, "cross_references"> & {
@@ -28,6 +29,8 @@ export type ChapterGuideProvenanceView = {
   reviewModel: string;
   requiredCorrections: number;
   repaired: boolean;
+  correctionRounds?: number;
+  ownerContinuations?: number;
   crossReferencesChecked?: number;
   crossReferencesUnchecked?: number;
 };
@@ -39,11 +42,15 @@ export type ChapterGuideView = Omit<ChapterGuideContent, "passages"> & {
   generatedAt: number;
 };
 
+export type ChapterGuideGenerating = { stage: string; startedAt: number; correctionRound?: number; maxCorrectionRounds?: number };
+export type ChapterGuideCooldown = { retryAt: number; failedStage: string };
+
 export type ChapterGuideState = {
   reference: string;
   guide: ChapterGuideView | null;
-  generating: { stage: string; startedAt: number } | null;
+  generating: ChapterGuideGenerating | null;
   availability: ChapterGuideAvailability | null;
+  cooldown?: ChapterGuideCooldown | null;
 };
 
 export type ChapterGuideResource = {
@@ -64,8 +71,9 @@ export type ChapterGuideSelectionState = {
   href: string;
   hasGuide: boolean;
   resources: ChapterGuideResource[];
-  generating: { stage: string; startedAt: number } | null;
+  generating: ChapterGuideGenerating | null;
   availability: ChapterGuideAvailability | null;
+  cooldown?: ChapterGuideCooldown | null;
 };
 
 export const CHAPTER_GUIDE_LABEL = "Chapter guide";
@@ -79,7 +87,112 @@ export const CHAPTER_GUIDE_UNAVAILABLE_MESSAGES: Record<Exclude<ChapterGuideAvai
   busy: "Other chapter guides are being written. Try again in a few minutes.",
   user_limit: "You’ve reached your limit for new chapter guides for now. Guides that already exist can still be read.",
   daily_limit: "Today’s new chapter guides have all been requested. Try again tomorrow.",
+  needs_review: "This one needs a little additional human review. You can keep reading the chapter and its other resources.",
 };
+
+const REQUIRED_STEPS = [
+  { stage: "research", label: "Research", activity: "Researching the chapter", failure: "research" },
+  { stage: "write", label: "Writing", activity: "Writing the guide", failure: "writing" },
+  { stage: "review", label: "Review", activity: "Reviewing the draft", failure: "review" },
+];
+const CORRECTION_STAGES = [
+  { stage: "repair", failure: "corrections" },
+  { stage: "recheck", failure: "the review of its corrections" },
+];
+const REVIEW_ORDINALS = ["Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh"];
+
+function correctionSteps(round: number, maxRounds: number) {
+  const ofRounds = maxRounds > 1 ? ` (round ${round} of ${maxRounds})` : "";
+  return [
+    {
+      stage: "repair",
+      label: round === 1 ? "Corrections" : `Corrections, round ${round}`,
+      activity: `Making the corrections from the review${ofRounds}`,
+    },
+    {
+      stage: "recheck",
+      label: `${REVIEW_ORDINALS[round - 1] ?? "Next"} review`,
+      activity: `Reviewing the corrections${ofRounds}`,
+    },
+  ];
+}
+
+export type ChapterGuideProgressStep = { key: string; stage: string; label: string; status: "done" | "current" | "upcoming" };
+export type ChapterGuideProgress = {
+  steps: ChapterGuideProgressStep[];
+  completedSteps: number;
+  stepNumber: number;
+  activity: string;
+  correctionsMayFollow: boolean;
+};
+
+export function chapterGuideProgress(stage: string, rounds: { correctionRound?: number; maxCorrectionRounds?: number } = {}): ChapterGuideProgress | null {
+  const inCorrections = CORRECTION_STAGES.some((step) => step.stage === stage);
+  const round = inCorrections ? Math.max(1, rounds.correctionRound ?? 1) : 0;
+  const maxRounds = Math.max(round, rounds.maxCorrectionRounds ?? 1);
+  const steps: Array<{ stage: string; label: string; activity: string }> = [...REQUIRED_STEPS];
+  for (let index = 1; index <= round; index += 1) steps.push(...correctionSteps(index, maxRounds));
+  const currentIndex = steps.map((step) => step.stage).lastIndexOf(stage);
+  if (currentIndex < 0) return null;
+  return {
+    steps: steps.map((step, index) => ({
+      key: `${step.stage}-${index}`,
+      stage: step.stage,
+      label: step.label,
+      status: index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming",
+    })),
+    completedSteps: currentIndex,
+    stepNumber: currentIndex + 1,
+    activity: steps[currentIndex]!.activity,
+    correctionsMayFollow: round < maxRounds || !inCorrections,
+  };
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+function countOf(count: number, unit: string): string {
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
+}
+
+export function chapterGuideElapsedLabel(startedAt: number, now: number): string {
+  const minutes = Math.floor((now - startedAt) / MINUTE_MS);
+  return minutes < 1 ? "Started less than a minute ago." : `Started ${countOf(minutes, "minute")} ago.`;
+}
+
+export function chapterGuideCooldownMessage(cooldown: ChapterGuideCooldown, now: number): string {
+  const failure = [...REQUIRED_STEPS, ...CORRECTION_STAGES].find((step) => step.stage === cooldown.failedStage)?.failure;
+  const attempt = failure ? `The last attempt at this guide stopped during ${failure}, so nothing was saved.` : "The last attempt at this guide didn’t finish, so nothing was saved.";
+  return `${attempt} To limit repeat costs, each chapter waits before another try. It can be requested again ${retryTiming(cooldown.retryAt - now)}.`;
+}
+
+function retryTiming(remaining: number): string {
+  if (remaining <= 0) return "soon";
+  return `in about ${remaining >= HOUR_MS ? countOf(Math.ceil(remaining / HOUR_MS), "hour") : countOf(Math.ceil(remaining / MINUTE_MS), "minute")}`;
+}
+
+export function chapterGuideConnectionMessage(reference: string, lastKnown: ChapterGuideGenerating): string {
+  const activity = chapterGuideProgress(lastKnown.stage, lastKnown)?.activity;
+  const lastStep = activity ? ` Last known step: ${activity}.` : "";
+  return `We couldn’t check on the guide for ${reference}, so we don’t know if it’s still being written.${lastStep} We’ll keep checking while this page is open.`;
+}
+
+export function chapterGuideUnavailableMessage(
+  state: { availability: ChapterGuideAvailability | null; cooldown?: ChapterGuideCooldown | null },
+  now: number | null
+): string | null {
+  if (!state.availability || state.availability === "available") return null;
+  if (state.availability === "cooldown" && state.cooldown && now !== null) return chapterGuideCooldownMessage(state.cooldown, now);
+  return CHAPTER_GUIDE_UNAVAILABLE_MESSAGES[state.availability];
+}
+
+export function chapterGuideNoGuideMessage(
+  state: { availability: ChapterGuideAvailability | null; cooldown?: ChapterGuideCooldown | null },
+  reference: string,
+  now: number | null
+): string {
+  return chapterGuideUnavailableMessage(state, now) ?? `There’s no chapter guide for ${reference} yet. You can request one from Resources in the reader.`;
+}
 
 export function crossReferenceView(
   reference: GuideCrossReference,

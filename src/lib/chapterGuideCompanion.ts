@@ -263,5 +263,6 @@ export function chapterGuideSelectionState(state: ChapterGuideState, location: C
     resources: state.guide ? chapterGuideResources(state.guide, location, verses) : [],
     generating: state.generating,
     availability: state.availability,
+    cooldown: state.cooldown ?? null,
   };
 }

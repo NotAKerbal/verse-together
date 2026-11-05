@@ -4,13 +4,14 @@ import Link from "next/link";
 import VerseResourceItem from "@/components/VerseResourceItem";
 import panelStyles from "@/components/VerseResourcesPanel.module.css";
 import { useAuth } from "@/lib/auth";
-import { CHAPTER_GUIDE_LABEL, CHAPTER_GUIDE_UNAVAILABLE_MESSAGES, OPEN_CHAPTER_GUIDE_LABEL } from "@/lib/chapterGuideView";
+import { CHAPTER_GUIDE_LABEL, CHAPTER_GUIDE_UNAVAILABLE_MESSAGES, chapterGuideUnavailableMessage, OPEN_CHAPTER_GUIDE_LABEL } from "@/lib/chapterGuideView";
+import ChapterGuideProgress from "./ChapterGuideProgress";
 import styles from "./ChapterGuideSection.module.css";
 import type { ChapterGuideSelection } from "./useChapterGuideSelection";
 
 export default function ChapterGuideSection({ guide, previewsPassages }: { guide: ChapterGuideSelection; previewsPassages: boolean }) {
   const { user } = useAuth();
-  const { state, loadFailed, requesting, requestError, request } = guide;
+  const { state, stateLoadedAt, loadFailed, requesting, requestError, request } = guide;
 
   if (state?.hasGuide) {
     return (
@@ -30,22 +31,19 @@ export default function ChapterGuideSection({ guide, previewsPassages }: { guide
   }
 
   const reference = state?.reference ?? "this chapter";
-  const unavailableMessage = state?.availability && state.availability !== "available"
+  const refusalShownByState = state?.availability && state.availability !== "available"
     ? CHAPTER_GUIDE_UNAVAILABLE_MESSAGES[state.availability]
     : null;
+  const unavailableMessage = state ? chapterGuideUnavailableMessage(state, stateLoadedAt) : null;
   let body;
   if (loadFailed && !state) {
     body = <p className={styles.message}>We couldn’t check for a chapter guide.</p>;
   } else if (!state) {
     body = <p className={styles.message} role="status">Checking for a chapter guide…</p>;
   } else if (state.generating) {
-    body = (
-      <p className={styles.message} role="status">
-        A guide for {reference} is being written. It can take several minutes, and you can keep reading or come back later. Once it’s done, it’s saved here for everyone.
-      </p>
-    );
+    body = <ChapterGuideProgress reference={reference} generating={state.generating} now={stateLoadedAt} />;
   } else if (unavailableMessage) {
-    body = <p className={styles.message}>{unavailableMessage}</p>;
+    body = <p className={styles.message} role="status">{unavailableMessage}</p>;
   } else if (!user) {
     body = <p className={styles.message}>There’s no chapter guide for {reference} yet. <Link href="/sign-in">Sign in</Link> to request one.</p>;
   } else {
@@ -64,7 +62,7 @@ export default function ChapterGuideSection({ guide, previewsPassages }: { guide
   return (
     <section className={styles.section} aria-label={CHAPTER_GUIDE_LABEL}>
       {body}
-      {requestError && requestError !== unavailableMessage ? <p className={styles.message} role="alert">{requestError}</p> : null}
+      {requestError && requestError !== refusalShownByState ? <p className={styles.message} role="alert">{requestError}</p> : null}
     </section>
   );
 }

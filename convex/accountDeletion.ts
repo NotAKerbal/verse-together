@@ -128,6 +128,13 @@ export const DELETION_STEPS: Record<string, Step> = {
       budget.left -= 1;
     }
   },
+  chapterGuideContinuations: async (ctx, owner, budget) => {
+    const rows = await ctx.db.query("chapterGuideContinuations").withIndex("by_continued_by", (q) => q.eq("continuedByClerkId", owner)).take(budget.left);
+    for (const row of rows) {
+      await ctx.db.patch(row._id, { continuedByClerkId: DELETED_ACCOUNT_OWNER });
+      budget.left -= 1;
+    }
+  },
   // Normally already removed by `begin`; also covers a row keyed by this owner but linked to no one.
   users: async (ctx, owner, budget) => {
     await remove(ctx, budget, (await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", owner)).take(budget.left)).map((row) => row._id));
