@@ -115,9 +115,10 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 id: "reading-simple-mode",
                 title: "Read in simple mode",
                 steps: [
-                    "Choose the eye in the reader's top bar to turn simple mode on.",
-                    "Study tools and navigation step aside, leaving the text.",
-                    "Choose Exit simple mode to bring them back.",
+                    "Choose the arrow beside Verse Together at the top of the page to turn simple mode on. On a phone, choose the eye in the reader's top bar.",
+                    "Navigation and toolbars step aside, and the text stays where it was.",
+                    "Select text to highlight, underline, note or explore it, just as before.",
+                    "Choose the arrow again, or Exit simple mode on a phone, to bring everything back.",
                 ],
             },
         ],

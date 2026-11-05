@@ -50,7 +50,7 @@ export function VerseColumnsRow({ primary, aside, cells }: {
     <div className="verse-columns-row">
       <div className="verse-columns-cell">
         {primary}
-        {aside ? <div className="verse-columns-aside simple-hide">{aside}</div> : null}
+        {aside ? <div className="verse-columns-aside">{aside}</div> : null}
       </div>
       {cells.map((cell) => (
         <div

@@ -536,14 +536,14 @@ mark {
   outline-offset: 3px;
 }
 
-.app-header[data-collapsed="true"] .desktop-nav-content {
+:root[data-simple="true"] .desktop-nav-content {
   grid-template-columns: 0fr;
   opacity: 0;
   visibility: hidden;
   transition-delay: 0s, 0s, 280ms;
 }
 
-.app-header[data-collapsed="true"] .desktop-nav-toggle-icon {
+:root[data-simple="true"] .desktop-nav-toggle-icon {
   transform: rotate(180deg);
 }
 
@@ -607,9 +607,7 @@ mark {
   display: none;
 }
 
-/* Like browse pages' header controls ([data-actions]): the header spans the shell, and its gaps let clicks through
-   to the page. */
-:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) {
+.app-header:has(> .reader-header-slot:not(:empty)) {
   display: flex;
   right: max(var(--shell-gutter), calc((100% - var(--shell-max-width)) / 2));
   align-items: flex-start;
@@ -618,19 +616,16 @@ mark {
   pointer-events: none;
 }
 
-:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) > .desktop-nav-bar {
+.app-header:has(> .reader-header-slot:not(:empty)) > .desktop-nav-bar {
   flex-shrink: 0;
   pointer-events: auto;
 }
 
-/* A chapter's header replaces a browse page's controls there (e.g. while a chapter opens over /browse or a book
-   page), so the app header never shows two sets of page controls. */
-:root:not([data-simple="true"]) .app-header:has(> .reader-header-slot:not(:empty)) > :is(.app-header-search, .app-header-slot) {
+.app-header:has(> .reader-header-slot:not(:empty)) > :is(.app-header-search, .app-header-slot) {
   display: none;
 }
 
-/* The navigation never shrinks; the trail in the reader pill gives way first. */
-:root:not([data-simple="true"]) .reader-header-slot:not(:empty) {
+.reader-header-slot:not(:empty) {
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
@@ -653,6 +648,12 @@ mark {
 @media (min-width: 640px) {
   .reader-header-inline {
     align-items: flex-end;
+  }
+}
+
+@media (max-width: 639.98px) {
+  :root[data-simple="true"] .reader-header-inline {
+    display: none;
   }
 }
 
@@ -718,6 +719,12 @@ mark {
 .reader-toolbar-button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+@media (min-width: 640px) {
+  .reader-toolbar-simple-toggle {
+    display: none;
+  }
 }
 
 .reader-toolbar-log {
@@ -946,40 +953,40 @@ a.reader-toolbar-crumb {
 }
 
 @media (min-width: 1024px) {
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) {
+  body:has([data-notes-panel="reader"]) {
     --reader-notes-width: 440px;
     --reader-notes-measure: var(--reader-comfortable-measure);
     --reader-notes-inset: max(2rem, calc((100% - var(--reader-notes-measure) - var(--reader-notes-width) - 2rem) / 2));
   }
 
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-column[data-comparing="true"]) {
+  body:has([data-notes-panel="reader"]):has(.reader-column[data-comparing="true"]) {
     --reader-notes-measure: var(--reader-comparison-measure);
   }
 
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-layout[data-sidebar-open="true"]) {
+  body:has([data-notes-panel="reader"]):has(.reader-layout[data-sidebar-open="true"]) {
     --reader-notes-measure: 72rem;
   }
 
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-column[data-text-width="wide"]) {
+  body:has([data-notes-panel="reader"]):has(.reader-column[data-text-width="wide"]) {
     --reader-notes-measure: var(--shell-max-width-wide);
   }
 
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-column[data-text-width="full"]) {
+  body:has([data-notes-panel="reader"]):has(.reader-column[data-text-width="full"]) {
     --reader-notes-measure: 100%;
   }
 
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) .app-main {
+  body:has([data-notes-panel="reader"]) .app-main {
     padding-left: var(--reader-notes-inset);
     padding-right: calc(var(--reader-notes-inset) + var(--reader-notes-width) + 2rem);
   }
 
-  :root:not([data-simple="true"]) [data-notes-panel="reader"] {
+  [data-notes-panel="reader"] {
     right: var(--reader-notes-inset);
   }
 }
 
 @media (min-width: 1280px) {
-  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) {
+  body:has([data-notes-panel="reader"]) {
     --reader-notes-width: 480px;
   }
 }
@@ -1491,8 +1498,10 @@ a.reader-toolbar-crumb {
   text-transform: uppercase;
 }
 
-:root[data-simple="true"] .verse-columns-header {
-  top: 0;
+@media (max-width: 639.98px) {
+  :root[data-simple="true"] .verse-columns-header {
+    top: 0;
+  }
 }
 
 .verse-columns-header > span {
@@ -2027,59 +2036,25 @@ a.reader-toolbar-crumb {
   display: none !important;
 }
 
+:root[data-simple="true"] .simple-conceal,
+:root[data-simple="true"] .simple-conceal * {
+  visibility: hidden !important;
+}
+
 :root[data-simple="true"] .app-body {
   padding-bottom: 0;
 }
 
-:root[data-simple="true"] .app-main:not([data-fixed="true"], :has([data-lesson-page])) {
-  padding-top: 2.5rem;
-  padding-bottom: 5.5rem;
+@media (max-width: 639.98px) {
+  :root[data-simple="true"] .app-main:not([data-fixed="true"], :has([data-lesson-page])) {
+    padding-top: 2.5rem;
+    padding-bottom: 5.5rem;
+  }
 }
 
 /* Pure paper: the dotted grid is gone altogether. */
 :root[data-simple="true"] body {
   background-image: none;
-}
-
-/* The reader collapses to a single centered book-page column. */
-:root[data-simple="true"] .reader-layout {
-  display: block;
-}
-
-:root[data-simple="true"] .reader-column {
-  max-width: 42rem;
-}
-
-:root[data-simple="true"] .reader-column[data-text-width="wide"] {
-  max-width: 64rem;
-}
-
-:root[data-simple="true"] .reader-column[data-text-width="full"] {
-  max-width: none;
-}
-
-:root[data-simple="true"] .verse-badge {
-  width: auto;
-  height: auto;
-  margin-right: 0.35rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--accent-rubric);
-  font-size: 0.7em;
-  font-weight: 600;
-  line-height: 1;
-  vertical-align: super;
-}
-
-/* Same selected treatment as the base rule: ink numeral with a rubric underline. */
-:root[data-simple="true"] .verse-badge[data-selected="true"] {
-  background: transparent;
-  color: var(--foreground);
-  text-decoration: underline;
-  text-decoration-color: var(--accent-rubric);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.2em;
 }
 
 /* Chapter tiles lose their read / current tints. */
@@ -2089,7 +2064,13 @@ a.reader-toolbar-crumb {
 }
 
 .reader-chapter-title {
-  margin: 0 0 1.5rem;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
   font-family: var(--font-serif-text);
   font-size: 1.25rem;
   font-weight: 400;
@@ -2098,14 +2079,16 @@ a.reader-toolbar-crumb {
   text-align: center;
 }
 
-:root:not([data-simple="true"]) .reader-chapter-title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+@media (max-width: 639.98px) {
+  :root[data-simple="true"] .reader-chapter-title {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0 0 1.5rem;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
 }
 
 .reader-simple-nav {
@@ -2156,6 +2139,12 @@ a.reader-toolbar-crumb {
 
 .simple-exit-pill:hover {
   background: var(--surface-button-hover);
+}
+
+@media (min-width: 640px) {
+  .simple-exit-pill {
+    display: none;
+  }
 }
 
 /* Marker-style switch used in Reader settings. */
@@ -2257,32 +2246,26 @@ a.reader-toolbar-crumb {
   }
 }
 
-/* Phones: the wordmark header is the way home once the bottom nav is hidden. */
-:root[data-simple="true"] .app-header {
-  display: block;
-  position: relative;
-  inset: auto;
-  width: max-content;
-  margin: 1.25rem 0 0 var(--shell-gutter);
-}
+@media (max-width: 639.98px) {
+  :root[data-simple="true"] .app-header {
+    display: block;
+    position: relative;
+    inset: auto;
+    width: max-content;
+    margin: 1.25rem 0 0 var(--shell-gutter);
+  }
 
-:root[data-simple="true"] .app-header .desktop-nav-content {
-  display: none;
-}
+  :root[data-simple="true"] .app-header :is(.desktop-nav-content, .desktop-nav-toggle) {
+    display: none;
+  }
 
-:root[data-simple="true"] .app-header .desktop-nav-bar {
-  min-height: 2.75rem;
-  padding: 0.55rem 1.05rem;
-}
+  :root[data-simple="true"] .app-header .desktop-nav-bar {
+    min-height: 2.75rem;
+    padding: 0.55rem 1.05rem;
+  }
 
-:root[data-simple="true"] .desktop-nav-brand {
-  font-size: 1.5rem;
-}
-
-/* The insight side panel is hidden, so the reader no longer reserves room for it. */
-@media (min-width: 1024px) {
-  :root[data-simple="true"] .app-main {
-    padding-right: 2rem;
+  :root[data-simple="true"] .desktop-nav-brand {
+    font-size: 1.5rem;
   }
 }
 
