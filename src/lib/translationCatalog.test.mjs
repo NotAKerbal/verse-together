@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  catalogLanguages, comparisonQuery, filterTranslationCatalog, isLicensedOnlyQuery, languageDisplayName, searchCatalogLanguages,
-  translationNativeName, translationTitle, withComparison,
+  catalogLanguages, comparisonQuery, filterTranslationCatalog, hrefAfterComparisonChange, isLicensedOnlyQuery, languageDisplayName,
+  parseSavedComparisons, resolveChapterComparisons, searchCatalogLanguages, translationNativeName, translationTitle, withComparison,
 } from "./translationCatalog.ts";
 
 const catalog = [
@@ -97,4 +97,33 @@ test("comparison URLs keep unrelated settings and drop empty selections", () => 
   assert.deepEqual(removed.getAll("compare"), ["spa_r09"]);
   assert.equal(comparisonQuery("translation=BSB", []), "");
   assert.equal(comparisonQuery("translation=BSB&verse=2", []), "verse=2");
+});
+
+test("saved comparisons survive bad storage and never repeat or include the bundled text", () => {
+  for (const raw of [null, "", "not json", "{}", "\"BSB\""]) assert.deepEqual(parseSavedComparisons(raw), []);
+  assert.deepEqual(parseSavedComparisons(JSON.stringify(["BSB", "bsb", " eng_net ", "lds", "", 7, null])), ["BSB", "eng_net"]);
+});
+
+test("a chapter URL's translations replace the saved ones, and only a URL without any uses them", () => {
+  assert.deepEqual(resolveChapterComparisons(null, ["BSB", "eng_net"], "lds"), ["BSB", "eng_net"]);
+  assert.deepEqual(resolveChapterComparisons(["spa_r09"], ["BSB", "eng_net"], "lds"), ["spa_r09"]);
+  assert.deepEqual(resolveChapterComparisons([], ["BSB", "eng_net"], "lds"), []);
+});
+
+test("the Bible being read as the main text is not compared with itself", () => {
+  assert.deepEqual(resolveChapterComparisons(null, ["BSB", "eng_net"], "bsb"), ["eng_net"]);
+});
+
+test("a saved comparison change leaves a clean URL so old history entries cannot bring back a removed Bible", () => {
+  const path = "/browse/oldtestament/genesis/1";
+  assert.equal(hrefAfterComparisonChange(path, "", ["BSB"], true), null);
+  assert.equal(hrefAfterComparisonChange(path, "verse=2", ["BSB"], true), null);
+  assert.equal(hrefAfterComparisonChange(path, "translation=BSB&compare=eng_net", ["BSB"], true), path);
+  assert.equal(hrefAfterComparisonChange(path, "translation=BSB&verse=2", [], true), `${path}?verse=2`);
+});
+
+test("when the device can't save, the URL keeps the Bibles shown", () => {
+  const path = "/browse/oldtestament/genesis/1";
+  assert.equal(hrefAfterComparisonChange(path, "", ["BSB", "eng_net"], false), `${path}?translation=BSB&compare=eng_net`);
+  assert.equal(hrefAfterComparisonChange(path, "translation=BSB", [], false), path);
 });

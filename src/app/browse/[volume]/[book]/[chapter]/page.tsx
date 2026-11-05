@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { DEFAULT_BIBLE_COOKIE, defaultBibleNotice, normalizeDefaultBible } from "@/lib/defaultBible";
 import { redirect } from "next/navigation";
+import BibleChapterReader from "@/components/BibleChapterReader";
 import ChapterReader from "@/components/ChapterReader";
-import BibleTranslationToolbar from "@/components/BibleTranslationToolbar";
 import { isBibleVolume } from "@/lib/bibleCanon";
-import { buildChapterChrome, chapterOverlayTranslations } from "@/lib/browseRoutes";
+import { buildChapterChrome, chapterOverlayTranslations, chapterQueryChoosesTranslations } from "@/lib/browseRoutes";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { fetchChapterOnServer } from "@/lib/scriptureChapters.server";
 import { normalizeScriptureVolume, toScriptureVolumeUrlSlug } from "@/lib/scriptureVolumes";
@@ -52,21 +52,16 @@ export default async function ChapterPage({ params, searchParams }: Params) {
 
   return (
     <article className="page-shell">
-      <ChapterReader
-        chrome={chrome}
-        content={content}
-        translationControls={
-          bibleMode ? (
-            <BibleTranslationToolbar
-              volume={volumeSlug}
-              book={book}
-              chapter={chapter}
-              compare={overlayTranslations}
-            />
-          ) : undefined
-        }
-        overlayTranslations={overlayTranslations}
-      />
+      {bibleMode ? (
+        <BibleChapterReader
+          chrome={chrome}
+          content={content}
+          defaultBible={defaultBible}
+          urlComparisons={chapterQueryChoosesTranslations(query) ? overlayTranslations : null}
+        />
+      ) : (
+        <ChapterReader chrome={chrome} content={content} />
+      )}
     </article>
   );
 }

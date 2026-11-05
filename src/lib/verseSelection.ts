@@ -32,6 +32,21 @@ export function scriptureTextNodes(element: HTMLElement): Text[] {
   return nodes;
 }
 
+export function scriptureClientRects(range: Range, container: HTMLElement): DOMRect[] {
+  const rects: DOMRect[] = [];
+  for (const element of container.querySelectorAll<HTMLElement>("[data-verse-text]")) {
+    for (const node of scriptureTextNodes(element)) {
+      if (!range.intersectsNode(node)) continue;
+      const clipped = container.ownerDocument.createRange();
+      clipped.selectNodeContents(node);
+      if (range.startContainer === node) clipped.setStart(node, range.startOffset);
+      if (range.endContainer === node) clipped.setEnd(node, range.endOffset);
+      rects.push(...clipped.getClientRects());
+    }
+  }
+  return rects;
+}
+
 /** Map displayed typography back to canonical scripture offsets; refuse any other text mismatch. */
 export function scriptureSourceOffsets(source: string, displayed: string): number[] | null {
   const offsets = [0];

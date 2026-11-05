@@ -107,7 +107,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 steps: [
                     "In the reader, choose the gear (Reader settings).",
                     "Drag Text size, and choose Serif or Sans.",
-                    "Choose a Text width: Comfortable, Wide or Full.",
+                    "On a larger screen, choose a Text width: Comfortable, Wide or Full.",
                     "Close the menu. Every chapter now reads this way.",
                 ],
             },
@@ -190,7 +190,10 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 ],
             },
         ],
-        notes: ["Add the Bibles you want to compare first (see Add Bibles above)."],
+        notes: [
+            "Add the Bibles you want to compare first (see Add Bibles above).",
+            "The Bibles you turn on stay on in every Bible chapter on this device until you turn them off.",
+        ],
         cover: { clip: "compare-inline", center: [0.33, 0.36], zoom: 1.7 },
         tryIt: { href: "/browse/newtestament/john/1", label: "Open John 1" },
     },
@@ -206,7 +209,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 title: "Turn on the JST",
                 steps: [
                     "In a Bible chapter, open Reader settings.",
-                    "Open Joseph Smith Translation and turn on its switch.",
+                    "Turn on the Joseph Smith Translation switch.",
                     "Close the menu. JST passages now read in place, with their wording underlined.",
                 ],
             },

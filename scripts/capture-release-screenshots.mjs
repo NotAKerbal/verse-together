@@ -98,6 +98,49 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.23.0-side-by-side",
+    viewport: { width: 1440, height: 1000 },
+    async run(page, viewport) {
+      await open(page, "/browse/newtestament/mark/9?compare=BSB");
+      await page.getByRole("button", { name: "Reader settings" }).click();
+      await page.getByRole("switch", { name: "Joseph Smith Translation (JST)" }).click();
+      await page.getByRole("button", { name: "Side by side", exact: true }).click();
+      await page.getByRole("button", { name: "Wide", exact: true }).click();
+      await page.keyboard.press("Escape");
+      await page.locator('[data-verse-column="BSB"]').first().waitFor();
+      await page.locator('[data-verse-column="jst"]').first().waitFor();
+      await page.waitForTimeout(1200);
+      const header = page.locator(".verse-columns-header");
+      const stickyBottom = await header.evaluate((el) => parseFloat(getComputedStyle(el).top) + el.offsetHeight);
+      const first = page.locator(".verse-columns-row").nth(2);
+      await first.evaluate((el, offset) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - offset), stickyBottom);
+      await page.waitForTimeout(600);
+      const last = page.locator(".verse-columns-row").nth(5);
+      const area = union(await header.boundingBox(), await first.boundingBox(), await last.boundingBox());
+      return { x: area.x - 16, y: area.y + 4, width: area.width + 32, height: Math.min(viewport.height - area.y - 4, area.height + 4) };
+    },
+  },
+  {
+    name: "2.23.0-reading-appearance",
+    viewport: { width: 1280, height: 900 },
+    async run(page) {
+      await open(page, "/browse/newtestament/mark/9");
+      await page.getByRole("button", { name: "Reader settings" }).click();
+      const menu = page.getByRole("dialog", { name: "Reading appearance" });
+      await page.locator("[data-jst-setting]").waitFor();
+      const label = menu.getByText("Text size", { exact: true });
+      await label.evaluate((el) => {
+        const scroller = el.closest(".overflow-y-auto");
+        scroller.scrollTo(0, el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 12);
+      });
+      await page.waitForTimeout(500);
+      const box = await menu.boundingBox();
+      const top = await label.boundingBox();
+      const jst = await page.locator("[data-jst-setting]").boundingBox();
+      return { x: box.x, y: top.y - 12, width: box.width, height: jst.y + jst.height + 12 - (top.y - 12) };
+    },
+  },
+  {
     name: "2.22.0-chapter-guides",
     viewport: { width: 1280, height: 1200 },
     async run(page) {
@@ -304,7 +347,7 @@ const SHOTS = [
       await open(page, "/browse/bookofmormon/1nephi/1");
       await page.getByRole("button", { name: "Reader settings" }).click();
       await page.waitForTimeout(500);
-      const menu = await page.getByRole("switch", { name: "Simple mode" }).locator("xpath=ancestor::div[contains(@class,'absolute') or contains(@class,'fixed')][1]").boundingBox();
+      const menu = await page.getByRole("dialog", { name: "Reading appearance" }).boundingBox();
       const header = await page.getByRole("button", { name: "Reader settings" }).boundingBox();
       const area = union(menu, header);
       return pad(area, 12, viewport);
@@ -365,7 +408,6 @@ const SHOTS = [
     async run(page, viewport) {
       await open(page, "/browse/newtestament/mark/9");
       await page.getByRole("button", { name: "Reader settings" }).click();
-      await page.getByText("Joseph Smith Translation", { exact: true }).click();
       await page.getByRole("switch", { name: "Joseph Smith Translation (JST)" }).click();
       await page.keyboard.press("Escape");
       await page.waitForTimeout(1200);

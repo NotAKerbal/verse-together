@@ -47,7 +47,39 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.23.0",
+    date: "2026-11-04",
+    title: "Clearer side-by-side comparisons and reading controls",
+    items: [
+      {
+        kind: "improved",
+        text: "Side by side comparison now lines verses up in clean columns at your reading size, and shows Joseph Smith Translation wording beside the KJV.",
+        screenshot: {
+          src: "/release-notes/2.23.0-side-by-side.webp",
+          width: 1600,
+          height: 408,
+          alt: "Mark 9:3 through 6 in three aligned columns headed KJV, JST and BSB, with the JST's added wording in verse 4 underlined and a dash where the JST has no passage.",
+          caption: "KJV, JST and BSB lined up verse by verse.",
+        },
+      },
+      {
+        kind: "improved",
+        text: "The reading appearance menu is simpler, with a full-width text size slider and grab handle, no text width option on phones, easier Bible controls, and a Joseph Smith Translation switch you no longer have to expand a section to reach.",
+        screenshot: {
+          src: "/release-notes/2.23.0-reading-appearance.webp",
+          width: 768,
+          height: 976,
+          alt: "The reading appearance menu, with a full-width text size slider, typeface and text width choices, Your Bibles, and a Joseph Smith Translation switch.",
+          caption: "The simplified reading appearance menu.",
+        },
+      },
+      { kind: "improved", text: "The Bibles you turn on to compare now stay on as you move between chapters and other pages, until you turn them off. Your choice is saved on this device." },
+    ],
+    commits: ["3b706a45", "18b88b75", "3ba2ef79"],
+  },
+  {
     version: "2.22.1",
+    masterCommit: "c8dbb7b3",
     date: "2026-11-04",
     title: "Clearer chapter text without study path light bulbs",
     items: [

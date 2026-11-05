@@ -50,6 +50,27 @@ the JST off restores the KJV text with its marks exactly.
 Comparison translations (`?translation=…&compare=…`) work as before on KJV verses. On a verse read with the JST,
 each overlay's wording is shown on its own under the JST reading, without repeating the KJV.
 
+### Side-by-side comparison view
+
+With Reader settings → Comparison view set to **Side by side**, the JST no longer stands in for the KJV. Every verse
+in the chapter becomes one row: the KJV in the first column, then the JST (when the chapter has a passage read in
+place), then each loaded comparison translation.
+
+- The KJV column holds the only `data-verse` and `data-verse-text` in a row, so highlights, underlines, notes, and
+  quotes save against KJV offsets, on revised verses too. Comparison columns sit outside it, carry `data-verse-ignore`,
+  and can't be selected, so neither a drag nor a long-press can pick up JST or translation wording. The mobile
+  selection overlay draws only over KJV text in this view.
+- The JST column uses the same `readJstChapter` rows as the in-place reading: each row is keyed by its KJV verse, so
+  multi-verse passages stay aligned and JST verse numbers that differ from the KJV's keep their own numerals. A KJV
+  verse outside any passage shows a dash, since the appendix prints selected passages and silence there doesn't mean
+  the JST agrees.
+- A translation matching the KJV apart from case and punctuation says "Same wording". One with no text for the verse
+  says "No text for this verse".
+- Columns appear only when every one of them fits at least 15em of the reader's type, and otherwise stack under the
+  verse with a label on each. `.verse-columns` sets its own font size to the reader's size times the column count, so
+  the single `@container (min-width: 15em)` rule scales with both the font setting and the number of columns.
+  Stacking follows the available width, so an open side panel or a narrower text width can trigger it.
+
 ## Source and request path
 
 - Docs: <https://openscriptureapi.org/docs/study-helps>
