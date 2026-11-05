@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
 function unavailableStatus(reason: ChapterGuideAvailability): number {
   if (reason === "user_limit" || reason === "daily_limit") return 429;
-  if (reason === "cooldown" || reason === "busy") return 409;
+  if (reason === "cooldown" || reason === "busy" || reason === "needs_review") return 409;
   return 503;
 }
 

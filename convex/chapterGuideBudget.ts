@@ -75,6 +75,9 @@ export type ChapterGuideStage = "research" | "write" | "review" | "repair" | "re
 export const CHAPTER_GUIDE_STAGES: ChapterGuideStage[] = ["research", "write", "review", "repair", "recheck"];
 
 export const STAGE_MAX_ATTEMPTS: Record<ChapterGuideStage, number> = { research: 2, write: 2, review: 2, repair: 1, recheck: 2 };
+export const MAX_CORRECTION_ROUNDS = 3;
+export const LEGACY_CORRECTION_ROUNDS = 1;
+export const CONTINUATION_CORRECTION_ROUNDS = 3;
 export const STAGE_TIMEOUT_MS: Record<ChapterGuideStage, number> = {
   research: 300_000,
   write: 540_000,
@@ -175,11 +178,30 @@ export function stageMaxCostMicros(stage: ChapterGuideStage, verseCount: number,
   return micros(inputTokenBound, inputCents) + micros(maxOutput, outputCents);
 }
 
-export function jobReservationMicros(verseCount: number, chapterBytes: number): number {
+export function isCorrectionStage(stage: ChapterGuideStage): boolean {
+  return stage === "repair" || stage === "recheck";
+}
+
+export function stageMaxJobAttempts(stage: ChapterGuideStage, correctionRounds: number = MAX_CORRECTION_ROUNDS): number {
+  return isCorrectionStage(stage) ? correctionRounds * STAGE_MAX_ATTEMPTS[stage] : STAGE_MAX_ATTEMPTS[stage];
+}
+
+export function jobReservationMicros(verseCount: number, chapterBytes: number, correctionRounds: number = MAX_CORRECTION_ROUNDS): number {
   return CHAPTER_GUIDE_STAGES.reduce(
-    (total, stage) => total + STAGE_MAX_ATTEMPTS[stage] * stageMaxCostMicros(stage, verseCount, chapterBytes),
+    (total, stage) => total + stageMaxJobAttempts(stage, correctionRounds) * stageMaxCostMicros(stage, verseCount, chapterBytes),
     0
   );
+}
+
+export function continuationCalls(resumeStage: ChapterGuideStage): number {
+  const roundCalls = STAGE_MAX_ATTEMPTS.repair + STAGE_MAX_ATTEMPTS.recheck;
+  return CONTINUATION_CORRECTION_ROUNDS * roundCalls + (resumeStage === "repair" ? 0 : STAGE_MAX_ATTEMPTS[resumeStage]);
+}
+
+export function continuationReservationMicros(resumeStage: ChapterGuideStage, verseCount: number, chapterBytes: number): number {
+  const stageCost = (stage: ChapterGuideStage) => STAGE_MAX_ATTEMPTS[stage] * stageMaxCostMicros(stage, verseCount, chapterBytes);
+  const rounds = CONTINUATION_CORRECTION_ROUNDS * (stageCost("repair") + stageCost("recheck"));
+  return resumeStage === "repair" ? rounds : rounds + stageCost(resumeStage);
 }
 
 export function budgetPeriodKey(now: number): string {

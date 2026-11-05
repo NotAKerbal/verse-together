@@ -55,6 +55,8 @@ export const chapterGuideProvenanceValidator = v.object({
   promptVersion: v.number(),
   requiredCorrections: v.number(),
   repaired: v.boolean(),
+  correctionRounds: v.optional(v.number()),
+  ownerContinuations: v.optional(v.number()),
   reviewSummary: v.string(),
   unverifiable: v.array(v.string()),
   crossReferencesChecked: v.optional(v.number()),
@@ -74,7 +76,8 @@ export const chapterGuideStageValidator = v.union(
 export const chapterGuideJobStatusValidator = v.union(
   v.literal("running"),
   v.literal("succeeded"),
-  v.literal("failed")
+  v.literal("failed"),
+  v.literal("needs_review")
 );
 
 export const chapterGuidePauseReasonValidator = v.union(

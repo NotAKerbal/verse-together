@@ -122,6 +122,30 @@ describe("reading", () => {
     expect((await (await GET(get())).json()).guide.title).toBe("Faith as an experiment");
   });
 
+  test("a guide held for human review reads as that everywhere, with no draft, even with no secret on the site", async () => {
+    const query = "volume=bookofmormon&book=alma&chapter=32&verses=21";
+    convex.query.mockResolvedValue({ guide: null, generating: null, availability: "needs_review", cooldown: null });
+    expect(await (await GET(get())).json()).toEqual({ reference: "Alma 32", guide: null, generating: null, availability: "needs_review", cooldown: null });
+    expect(await (await GET(get(query))).json()).toMatchObject({ hasGuide: false, resources: [], availability: "needs_review" });
+    vi.stubEnv("CHAPTER_GUIDE_SERVICE_SECRET", "");
+    expect(await (await GET(get(query))).json()).toMatchObject({ hasGuide: false, availability: "needs_review" });
+    expect(convex.mutation).not.toHaveBeenCalled();
+  });
+
+  test("cooldown details reach a selection, and only during a cooldown", async () => {
+    const cooldown = { retryAt: 1000, failedStage: "review" };
+    const query = "volume=bookofmormon&book=alma&chapter=32&verses=21";
+    convex.query.mockResolvedValue({ guide: null, generating: null, availability: "cooldown", cooldown });
+    expect(await (await GET(get(query))).json()).toMatchObject({ availability: "cooldown", cooldown });
+    vi.stubEnv("CHAPTER_GUIDE_SERVICE_SECRET", "");
+    expect(await (await GET(get(query))).json()).toMatchObject({ availability: "not_configured", cooldown: null });
+  });
+
+  test("a backend that doesn't report cooldown details still reads as a cooldown", async () => {
+    convex.query.mockResolvedValue({ guide: null, generating: null, availability: "cooldown" });
+    expect(await (await GET(get())).json()).toMatchObject({ availability: "cooldown", cooldown: null });
+  });
+
   test("only cross-references that exist in the local scriptures become links", async () => {
     convex.query.mockResolvedValue({ guide: STORED_GUIDE, generating: null, availability: null });
     const body = await (await GET(get())).json();
@@ -197,6 +221,7 @@ describe("requesting", () => {
     ["daily_limit", 429],
     ["cooldown", 409],
     ["busy", 409],
+    ["needs_review", 409],
   ])("a refusal for %s becomes status %i with a readable message", async (reason, status) => {
     convex.mutation.mockResolvedValue({ status: "unavailable", reason });
     const response = await POST(post());
@@ -268,6 +293,7 @@ describe("choosing verses", () => {
 describe("the panel's chapter guide section", () => {
   const selection = (state: object | null, overrides: object = {}) => ({
     state: state as never,
+    stateLoadedAt: null,
     loadFailed: false,
     requesting: false,
     requestError: null,
@@ -305,6 +331,38 @@ describe("the panel's chapter guide section", () => {
     expect(html).toContain("A guide for Alma 32 is being written");
     expect(html).not.toContain("AI-generated");
     expect(html).not.toContain(">Chapter guide<");
+  });
+
+  test("while a guide is being written, the panel shows its real stage in a progress bar", () => {
+    const state = { reference: "Alma 32", href: "/chapter-guides/bookofmormon/alma/32", hasGuide: false, resources: [], generating: { stage: "review", startedAt: 0 }, availability: null };
+    const html = renderToStaticMarkup(createElement(ChapterGuideSection, { guide: selection(state, { stateLoadedAt: 5 * 60_000 }), previewsPassages: true }));
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain("Step 3 of 3: Reviewing the draft");
+    expect(html).toContain("Started 5 minutes ago.");
+  });
+
+  test("during a cooldown, the panel says when it can be requested and offers no button", () => {
+    const state = { reference: "Alma 32", href: "/chapter-guides/bookofmormon/alma/32", hasGuide: false, resources: [], generating: null, availability: "cooldown", cooldown: { retryAt: 9 * 60 * 60_000, failedStage: "write" } };
+    const html = renderToStaticMarkup(createElement(ChapterGuideSection, { guide: selection(state, { stateLoadedAt: 0, requestError: "A recent attempt at this guide didn’t finish. It can be requested again later." }), previewsPassages: true }));
+    expect(html).toContain("stopped during writing");
+    expect(html).toContain("in about 9 hours");
+    expect(html).not.toContain("role=\"alert\"");
+    expect(html).not.toContain("<button");
+  });
+
+  test("a guide held for human review gets the warm message, no button, and no timing", () => {
+    const state = { reference: "Alma 32", href: "/chapter-guides/bookofmormon/alma/32", hasGuide: false, resources: [], generating: null, availability: "needs_review", cooldown: null };
+    const html = renderToStaticMarkup(createElement(ChapterGuideSection, { guide: selection(state, { stateLoadedAt: 0, requestError: "This one needs a little additional human review. You can keep reading the chapter and its other resources." }), previewsPassages: true }));
+    expect(html).toContain("This one needs a little additional human review.");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toMatch(/in about|soon|tomorrow|hours?\b|minutes?\b/i);
+  });
+
+  test("an older backend's cooldown with no details keeps the plain message", () => {
+    const state = { reference: "Alma 32", href: "/chapter-guides/bookofmormon/alma/32", hasGuide: false, resources: [], generating: null, availability: "cooldown" };
+    const html = renderToStaticMarkup(createElement(ChapterGuideSection, { guide: selection(state, { stateLoadedAt: 0 }), previewsPassages: true }));
+    expect(html).toContain("A recent attempt at this guide didn’t finish");
   });
 
   test("with no guide, a signed-out reader is sent to sign in, and nothing offers to generate", () => {

@@ -663,6 +663,13 @@ export default defineSchema({
     status: chapterGuideJobStatusValidator,
     stage: chapterGuideStageValidator,
     stageAttempts: v.object({ research: v.number(), write: v.number(), review: v.number(), repair: v.number(), recheck: v.number() }),
+    maxCorrectionRounds: v.optional(v.number()),
+    correctionRound: v.optional(v.number()),
+    initialRequiredCorrections: v.optional(v.number()),
+    continuations: v.optional(v.number()),
+    resumedAt: v.optional(v.number()),
+    reviewQueuedAt: v.optional(v.number()),
+    reviewCode: v.optional(v.string()),
     periodKey: v.string(),
     reservedInitialMicros: v.number(),
     reservedRemainingMicros: v.number(),
@@ -685,6 +692,8 @@ export default defineSchema({
     jobId: v.id("chapterGuideJobs"),
     stage: chapterGuideStageValidator,
     attempt: v.number(),
+    correctionRound: v.optional(v.number()),
+    continuation: v.optional(v.number()),
     model: v.string(),
     maxCostMicros: v.number(),
     periodKey: v.string(),
@@ -698,6 +707,22 @@ export default defineSchema({
     startedAt: v.number(),
     settledAt: v.optional(v.number()),
   }).index("by_job", ["jobId"]),
+
+  chapterGuideContinuations: defineTable({
+    jobId: v.id("chapterGuideJobs"),
+    continuation: v.number(),
+    continuedByClerkId: v.string(),
+    queueCode: v.string(),
+    resumeStage: chapterGuideStageValidator,
+    fromCorrectionRound: v.number(),
+    maxCorrectionRounds: v.number(),
+    periodKey: v.string(),
+    reservedMicros: v.number(),
+    findings: v.any(),
+    createdAt: v.number(),
+  })
+    .index("by_job", ["jobId"])
+    .index("by_continued_by", ["continuedByClerkId"]),
 
   chapterGuideRequests: defineTable({
     clerkId: v.string(),
