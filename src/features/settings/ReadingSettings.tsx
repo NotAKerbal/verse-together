@@ -85,7 +85,7 @@ export default function ReadingSettings() {
                 <h3 id="simple-mode-setting-title" className={styles.settingTitle}>
                   Simple mode
                 </h3>
-                <p aria-live="polite">{simpleMode ? "Study tools hidden" : "Study tools visible"} · This device</p>
+                <p aria-live="polite">{simpleMode ? "Navigation and toolbars hidden" : "Navigation and toolbars visible"} · This device</p>
               </div>
               <button
                 type="button"

@@ -141,7 +141,7 @@ export default function NotesSheet({
   }
 
   return (
-    <div className="simple-hide lg:hidden">
+    <div className="lg:hidden">
       <button type="button" tabIndex={-1} aria-label="Close Journal" onClick={onClose} className={`${styles.backdrop} fixed inset-0 z-50 bg-black/30`} />
       <section
         ref={sheetRef}
