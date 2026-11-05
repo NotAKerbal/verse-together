@@ -470,6 +470,8 @@ async function seedOwnedRows(t: T, owner: string, authUserId?: string) {
     await ctx.db.insert("deviceStudyImports", { clerkId: owner, deviceId: "device-1", recordId: String(draftId) });
     await ctx.db.insert("friendships", { requesterClerkId: owner, addresseeClerkId: "someone-else", status: "accepted", createdAt: now, updatedAt: now });
     await ctx.db.insert("feedback", { clerkId: owner, message: "Hello there", contact: "reader@example.com", createdAt: now });
+    const jobId = await ctx.db.insert("chapterGuideJobs", { volume: "bookofmormon", book: "alma", chapter: 32, reference: "Alma 32", scriptureHash: "hash", verses: [], chapterBytes: 0, status: "running", stage: "repair", stageAttempts: { research: 1, write: 1, review: 1, repair: 0, recheck: 0 }, periodKey: "2026-11", reservedInitialMicros: 0, reservedRemainingMicros: 0, spentMicros: 0, leaseExpiresAt: now, createdAt: now });
+    await ctx.db.insert("chapterGuideContinuations", { jobId, continuation: 1, continuedByClerkId: owner, queueCode: "repair_unresolved", resumeStage: "repair", fromCorrectionRound: 3, maxCorrectionRounds: 6, periodKey: "2026-11", reservedMicros: 0, findings: {}, createdAt: now });
     await ctx.db.insert("scriptureResources", { volume: "bookofmormon", book: "alma", resourceType: "chapter", title: "Link", chapterStart: 32, chapterEnd: 32, createdByClerkId: owner, createdAt: now, updatedAt: now });
   });
 }
@@ -512,6 +514,8 @@ describe("account deletion", () => {
       // Shared reference links stay, credited to no one.
       const resources = await ctx.db.query("scriptureResources").collect();
       expect(resources.map((row) => row.createdByClerkId).sort()).toEqual([DELETED_ACCOUNT_OWNER, "other-owner"]);
+      const continuations = await ctx.db.query("chapterGuideContinuations").collect();
+      expect(continuations.map((row) => row.continuedByClerkId).sort()).toEqual([DELETED_ACCOUNT_OWNER, "other-owner"]);
       expect((await ctx.db.query("feedback").collect()).map((row) => row.message).sort()).toEqual(["Anonymous note", "Hello there"]);
       expect((await listOwnedTables(ctx, "other-owner")).length).toBeGreaterThan(10);
     });

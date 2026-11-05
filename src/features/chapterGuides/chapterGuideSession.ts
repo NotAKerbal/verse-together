@@ -13,12 +13,18 @@ export type ChapterGuideSession = {
 export function createChapterGuideSession(
   chapter: { volume: string; book: string; chapter: number },
   verseSpec: string,
-  handlers: { onState: (state: ChapterGuideSelectionState) => void; onLoadFailed: () => void }
+  handlers: { onState: (state: ChapterGuideSelectionState) => void; onLoadFailed: () => void },
+  options: { expectGenerating?: boolean } = {}
 ): ChapterGuideSession {
   const lifetime = new AbortController();
   const { signal } = lifetime;
   let latestLoad = 0;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let awaitingFirstState = options.expectGenerating === true;
+
+  function startPolling() {
+    if (pollTimer === null && !signal.aborted) pollTimer = setInterval(() => void load(), CHAPTER_GUIDE_POLL_INTERVAL_MS);
+  }
 
   function stopPolling() {
     if (pollTimer !== null) clearInterval(pollTimer);
@@ -26,6 +32,7 @@ export function createChapterGuideSession(
   }
 
   async function load() {
+    if (awaitingFirstState) startPolling();
     latestLoad += 1;
     const loadId = latestLoad;
     const params = new URLSearchParams({ volume: chapter.volume, book: chapter.book, chapter: String(chapter.chapter), verses: verseSpec });
@@ -34,9 +41,10 @@ export function createChapterGuideSession(
       if (!response.ok) throw new Error("Unable to load the chapter guide");
       const next = (await response.json()) as ChapterGuideSelectionState;
       if (signal.aborted || loadId !== latestLoad) return;
+      awaitingFirstState = false;
       handlers.onState(next);
-      if (!next.generating) stopPolling();
-      else if (pollTimer === null) pollTimer = setInterval(() => void load(), CHAPTER_GUIDE_POLL_INTERVAL_MS);
+      if (next.generating) startPolling();
+      else stopPolling();
     } catch {
       if (!signal.aborted && loadId === latestLoad) handlers.onLoadFailed();
     }

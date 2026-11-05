@@ -5,6 +5,10 @@ import {
   effectiveMonthlyCapMicros,
   isValidTokenUsage,
   jobReservationMicros,
+  continuationReservationMicros,
+  LEGACY_CORRECTION_ROUNDS,
+  MAX_CHAPTER_BYTES,
+  MAX_CHAPTER_VERSES,
   MAX_CORRECTIONS_BYTES,
   MAX_EVIDENCE_BYTES,
   MAX_FEEDBACK_BYTES,
@@ -358,9 +362,16 @@ describe("budget arithmetic", () => {
 
   test("a 43-verse chapter's reservation matches the docs and stays well under the cap", () => {
     const reservation = jobReservationMicros(43, utf8Bytes(words(1000)));
-    expect(reservation).toBeGreaterThan(6_000_000);
-    expect(reservation).toBeLessThan(7_000_000);
-    expect(jobReservationMicros(176, 32 * 1024)).toBeLessThan(10_000_000);
+    expect(Math.round(reservation / 10_000) / 100).toBe(12.53);
+    expect(Math.round(jobReservationMicros(43, utf8Bytes(words(1000)), LEGACY_CORRECTION_ROUNDS) / 10_000) / 100).toBe(6.92);
+    expect(Math.round(jobReservationMicros(MAX_CHAPTER_VERSES, MAX_CHAPTER_BYTES) / 10_000) / 100).toBe(21.03);
+    expect(jobReservationMicros(MAX_CHAPTER_VERSES, MAX_CHAPTER_BYTES)).toBeLessThan(25_000_000);
+  });
+
+  test("a 43-verse chapter's continuation matches the docs, and starting with a review costs more", () => {
+    const continuation = (stage: "repair" | "recheck") => Math.round(continuationReservationMicros(stage, 43, utf8Bytes(words(1000))) / 10_000) / 100;
+    expect(continuation("repair")).toBe(8.43);
+    expect(continuation("recheck")).toBe(9.86);
   });
 
   test("a request's size counts its prompt, its JSON schema, its tools, and an allowance for provider framing", () => {

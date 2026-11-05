@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { useState, type FormEvent } from "react";
 import { api } from "../../../convex/_generated/api";
+import ChapterGuideReviewQueue from "./ChapterGuideReviewQueue";
 
 function dollars(micros: number): string {
   return `$${(micros / 1_000_000).toFixed(2)}`;
@@ -68,13 +69,15 @@ export default function ChapterGuideOwnerPanel({ siteSecretConfigured }: { siteS
         {error ? <p role="alert" className="text-foreground/70">{error}</p> : null}
       </section>
 
+      <ChapterGuideReviewQueue audience="owner" />
+
       <section className="panel-card rounded-[1.35rem] p-4 space-y-2">
         <h2 className="text-base font-semibold">Recent guides</h2>
         {overview.recentJobs.length === 0 ? <p className="text-foreground/70">None yet.</p> : (
           <ul className="space-y-1">
             {overview.recentJobs.map((job) => (
               <li key={job.id}>
-                {job.reference}: {job.status}{job.status === "running" ? ` (${job.stage})` : ""}, {dollars(job.spentMicros)}{job.failureCode ? ` · ${job.failureCode}` : ""}
+                {job.reference}: {job.status === "needs_review" ? "needs review" : job.status}{job.status === "running" ? ` (${job.stage})` : ""}, {dollars(job.spentMicros)}{job.failureCode ? ` · ${job.failureCode}` : ""}
               </li>
             ))}
           </ul>

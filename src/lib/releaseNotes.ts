@@ -47,7 +47,19 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.24.0",
+    date: "2026-11-05",
+    title: "Chapter guide progress and human review",
+    items: [
+      { kind: "improved", text: "While a chapter guide is being written, a progress bar shows which step it’s on. If an attempt doesn’t finish, you can see where it stopped and when it can be requested again." },
+      { kind: "improved", text: "Chapter guides get up to three rounds of corrections from the reviewer, instead of one. A guide that still needs corrections after that shows that it needs a little additional human review, and its draft is kept, unpublished, for a reviewer or admin to look at and decide whether to continue." },
+      { kind: "new", text: "A new chapter guide reviewer role can read the drafts held for human review and continue them, without access to spending or generation controls. Reviewers find it under Chapter guide reviews in the account menu and in Settings." },
+    ],
+    commits: ["eadea825", "1ab8b8e7"],
+  },
+  {
     version: "2.23.0",
+    masterCommit: "1d4826a3",
     date: "2026-11-04",
     title: "Clearer side-by-side comparisons and reading controls",
     items: [

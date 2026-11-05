@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const convex = vi.hoisted(() => ({ query: vi.fn(), mutation: vi.fn() }));
 const companion = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
 vi.mock("@/lib/convexHttp", () => ({ convexQuery: convex.query, convexMutation: convex.mutation }));
 vi.mock("next/link", () => ({ default: "a" }));
-vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND"); } }));
+vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND"); }, useRouter: () => ({ refresh: () => {} }) }));
 vi.mock("@/features/comeFollowMe/LessonNoteButton", () => ({ default: () => null }));
 vi.mock("@/features/notes/NoteSourceRegistrar", () => ({ default: () => null }));
 vi.mock("@/features/comeFollowMe/StudyCompanion", () => ({
@@ -46,6 +46,11 @@ beforeEach(() => {
   convex.query.mockReset();
   convex.mutation.mockReset();
   companion.props = null;
+  vi.stubEnv("CHAPTER_GUIDE_SERVICE_SECRET", "service-secret-value");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("the full chapter guide page", () => {
@@ -99,6 +104,15 @@ describe("the full chapter guide page", () => {
     expect(html).toContain("given the text of 12 of the 15 scriptures");
   });
 
+  test.each([
+    [undefined, "The writer revised those sections once"],
+    [1, "The writer revised those sections once"],
+    [3, "The guide reached correction round 3, and the reviewer cleared the final draft"],
+  ])("with %s correction rounds recorded, the footer says how often it was revised", async (correctionRounds, expected) => {
+    convex.query.mockResolvedValue({ guide: { ...STORED, provenance: { ...STORED.provenance, correctionRounds } }, generating: null, availability: null });
+    expect(renderToStaticMarkup(await ChapterGuidePage(params()))).toContain(expected);
+  });
+
   test("with no saved guide, nothing is generated and the reader is offered", async () => {
     convex.query.mockResolvedValue({ guide: null, generating: null, availability: "available" });
     const html = renderToStaticMarkup(await ChapterGuidePage(params()));
@@ -107,6 +121,52 @@ describe("the full chapter guide page", () => {
     expect(html).toContain('href="/browse/bookofmormon/1nephi/1"');
     expect(convex.mutation).not.toHaveBeenCalled();
     expect(companion.props).toBeNull();
+  });
+
+  test("while a guide is being written, the page shows its real stage and still offers the reader", async () => {
+    convex.query.mockResolvedValue({ guide: null, generating: { stage: "repair", startedAt: 1 }, availability: null });
+    const html = renderToStaticMarkup(await ChapterGuidePage(params()));
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain("Step 4 of 5: Making the corrections from the review");
+    expect(html).toContain('href="/browse/bookofmormon/1nephi/1"');
+    expect(convex.mutation).not.toHaveBeenCalled();
+    expect(companion.props).toBeNull();
+  });
+
+  test("during a cooldown, the page says why it can't be requested yet instead of offering it", async () => {
+    convex.query.mockResolvedValue({ guide: null, generating: null, availability: "cooldown", cooldown: { retryAt: Date.now() + 2.5 * 60 * 60_000, failedStage: "recheck" } });
+    const html = renderToStaticMarkup(await ChapterGuidePage(params()));
+    expect(html).toContain("stopped during the review of its corrections");
+    expect(html).toContain("in about 3 hours");
+    expect(html).not.toContain("You can request one");
+    expect(html).not.toContain('role="progressbar"');
+  });
+
+  test("a guide held for human review says so warmly, with no timing, draft, or request", async () => {
+    convex.query.mockResolvedValue({ guide: null, generating: null, availability: "needs_review", cooldown: null });
+    const html = renderToStaticMarkup(await ChapterGuidePage(params()));
+    expect(html).toContain("This one needs a little additional human review.");
+    expect(html).toContain('href="/browse/bookofmormon/1nephi/1"');
+    expect(html).not.toContain("You can request one");
+    expect(html).not.toContain('role="progressbar"');
+    expect(html).not.toMatch(/in about|soon|tomorrow|hours?\b/i);
+    expect(convex.mutation).not.toHaveBeenCalled();
+    expect(companion.props).toBeNull();
+  });
+
+  test("a footer says a person allowed more rounds, without claiming anyone approved the text", async () => {
+    convex.query.mockResolvedValue({ guide: { ...STORED, provenance: { ...STORED.provenance, correctionRounds: 5, ownerContinuations: 1 } }, generating: null, availability: null });
+    const html = renderToStaticMarkup(await ChapterGuidePage(params()));
+    expect(html).toContain("A human reviewer looked at an earlier draft and allowed more correction rounds, but no person has approved this text.");
+    expect(html).not.toContain("No person has reviewed it");
+    expect(html).toContain("The guide reached correction round 5");
+  });
+
+  test("a paused backend isn't described as open to requests", async () => {
+    convex.query.mockResolvedValue({ guide: null, generating: null, availability: "paused" });
+    const html = renderToStaticMarkup(await ChapterGuidePage(params()));
+    expect(html).toContain("paused");
+    expect(html).not.toContain("You can request one");
   });
 
   test("a backend failure is a readable page", async () => {

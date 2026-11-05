@@ -27,6 +27,7 @@ const OWNED_TABLE_CHECKS: Array<{ table: string; check: (ctx: Ctx, ownerId: stri
   { table: "friendships (requester)", check: (ctx, id) => ctx.db.query("friendships").withIndex("by_requester", (q) => q.eq("requesterClerkId", id)).first() },
   { table: "friendships (addressee)", check: (ctx, id) => ctx.db.query("friendships").withIndex("by_addressee", (q) => q.eq("addresseeClerkId", id)).first() },
   { table: "chapterGuideRequests", check: (ctx, id) => ctx.db.query("chapterGuideRequests").withIndex("by_clerk_created", (q) => q.eq("clerkId", id)).first() },
+  { table: "chapterGuideContinuations", check: (ctx, id) => ctx.db.query("chapterGuideContinuations").withIndex("by_continued_by", (q) => q.eq("continuedByClerkId", id)).first() },
   { table: "scriptureResources", check: (ctx, id) => ctx.db.query("scriptureResources").withIndex("by_created_by", (q) => q.eq("createdByClerkId", id)).first() },
 ];
 

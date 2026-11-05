@@ -157,7 +157,7 @@ describe("budget for the added input", () => {
   });
 
   test("the job reservation stays well under the monthly cap", () => {
-    expect(jobReservationMicros(176, 64 * 1024)).toBeLessThan(12_000_000);
+    expect(jobReservationMicros(176, 64 * 1024)).toBeLessThan(25_000_000);
   });
 });
 

@@ -112,6 +112,36 @@ describe("identity resolution", () => {
     });
   });
 
+  test("a new account isn't a chapter guide reviewer, and a client can't make itself one", async () => {
+    const t = setup();
+    const { authUserId, as } = await signedIn(t, "reader@example.com");
+    expect((await as.mutation(api.users.ensureCurrentUser, {})).isChapterGuideReviewer).toBe(false);
+    const injected = { isChapterGuideReviewer: true, isAdmin: true } as never;
+    await expect(as.mutation(api.users.ensureCurrentUser, injected)).rejects.toThrow(/Validator/);
+    await expect(as.mutation(api.users.upsertCurrentUser, injected)).rejects.toThrow(/Validator/);
+    await expect(as.mutation(api.users.saveJournalGoals, { studyDays: 3, reflections: 1, isChapterGuideReviewer: true } as never)).rejects.toThrow(/Validator/);
+    await as.mutation(api.users.upsertCurrentUser, { displayName: "Reader" });
+    expect(await as.query(api.users.viewer, {})).toMatchObject({ isAdmin: false, isChapterGuideReviewer: false });
+    const [row] = await t.run((ctx) => ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", authUserId)).collect());
+    expect(row.isChapterGuideReviewer).toBeUndefined();
+    expect(row.isAdmin).toBeUndefined();
+  });
+
+  test("a granted reviewer keeps exactly that access through provisioning and profile updates", async () => {
+    const t = setup();
+    const { authUserId, as } = await signedIn(t, "reviewer@example.com");
+    await as.mutation(api.users.ensureCurrentUser, {});
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", authUserId)).unique();
+      await ctx.db.patch(row!._id, { isChapterGuideReviewer: true });
+    });
+    expect(await as.mutation(api.users.ensureCurrentUser, {})).toMatchObject({ isAdmin: false, isChapterGuideReviewer: true });
+    await as.mutation(api.users.upsertCurrentUser, { displayName: "Reviewer" });
+    await as.mutation(api.users.saveJournalGoals, { studyDays: 3, reflections: 1 });
+    expect(await as.query(api.users.viewer, {})).toMatchObject({ isAdmin: false, isChapterGuideReviewer: true });
+    expect(await as.query(api.users.accountStatus, {})).toMatchObject({ viewer: { isAdmin: false, isChapterGuideReviewer: true } });
+  });
+
   test("unverified emails are not stored for friend lookup", async () => {
     const t = setup();
     const { as } = await signedIn(t, "unverified@example.com", false);

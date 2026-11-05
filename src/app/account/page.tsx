@@ -8,6 +8,7 @@ import { faBookBible, faBookOpen, faClockRotateLeft, faCommentDots, faHighlighte
 import { AppHeaderPortal, useAppHeaderSlot } from "@/components/AppHeaderSlot";
 import FeedbackForm from "@/components/FeedbackForm";
 import AccountManager from "@/features/auth/AccountManager";
+import ChapterGuideReviewLink from "@/features/chapterGuides/ChapterGuideReviewLink";
 import QuickMarkSettings from "@/features/annotations/QuickMarkSettings";
 import BibleTranslationControls from "@/components/BibleTranslationControls";
 import ReadingSettings from "@/features/settings/ReadingSettings";
@@ -205,6 +206,7 @@ export default function AccountPage() {
       <div className={styles.panels}>
         <SettingsPanel tab="account" selected={selected === "account"}>
           <AccountManager />
+          <ChapterGuideReviewLink className="surface-button inline-flex w-fit rounded-full border px-4 py-2 text-sm" />
         </SettingsPanel>
 
         <SettingsPanel tab="reading" selected={selected === "reading"}>

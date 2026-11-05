@@ -1,0 +1,17 @@
+.progress { display: flex; flex-direction: column; gap: 10px; }
+.status { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--foreground); }
+.track { display: flex; gap: 4px; }
+.segment { flex: 1 1 0; height: 6px; border-radius: 3px; background: var(--surface-border); }
+.segment[data-status="done"] { background: var(--accent-rubric); }
+.segment[data-status="current"] { background: var(--accent-rubric); animation: stage-pulse 1.8s ease-in-out infinite; }
+.steps { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.5; color: var(--foreground-soft); }
+.step[data-status="current"] { color: var(--foreground); font-weight: 600; }
+.note { margin: 0; font-size: 14px; line-height: 1.6; color: var(--foreground-soft); }
+
+@keyframes stage-pulse {
+  50% { opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment[data-status="current"] { animation: none; opacity: .7; }
+}

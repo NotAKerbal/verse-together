@@ -2,7 +2,7 @@ import { CHAPTER_INSIGHT_SOURCE_DOMAINS } from "../src/lib/chapterInsights";
 import { MAX_CHAPTER_VERSES, MAX_CORRECTIONS_BYTES, MAX_GUIDE_BYTES, MAX_RESEARCH_PACKET_BYTES, utf8Bytes } from "./chapterGuideBudget";
 import type { CrossReferenceEvidence, EvidenceRequest } from "./chapterGuideEvidence";
 
-export const CHAPTER_GUIDE_PROMPT_VERSION = 2;
+export const CHAPTER_GUIDE_PROMPT_VERSION = 3;
 
 export const CHAPTER_GUIDE_SOURCE_DOMAINS = [...CHAPTER_INSIGHT_SOURCE_DOMAINS, "johnhiltoniii.com"] as const;
 
@@ -835,7 +835,7 @@ ${JSON.stringify(args.corrections)}
 
 export const REPAIR_SYSTEM_PROMPT = `${AUTHORING_RULES}
 
-You are revising your guide after an independent review. Return a complete, corrected replacement for every section that a required correction names, and only those sections: overview, historical_context, limitations, an entry in significant_insights with its zero-based index, or whole passages that keep the same verse_start and verse_end. Use null or an empty list for everything else. Do not change sections that were not flagged. A second review will check the result.`;
+You are revising your guide after an independent review. Return a complete, corrected replacement for every section that a required correction names, and only those sections: overview, historical_context, limitations, an entry in significant_insights with its zero-based index, or whole passages that keep the same verse_start and verse_end. Use null or an empty list for everything else. Do not change sections that were not flagged. Another review will check the result.`;
 
 export function repairUserPrompt(args: {
   reference: string;

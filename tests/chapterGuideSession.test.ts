@@ -32,10 +32,10 @@ function trackedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   });
 }
 
-function session(chapter = 32) {
+function session(chapter = 32, options?: { expectGenerating?: boolean }) {
   const onState = vi.fn();
   const onLoadFailed = vi.fn();
-  return { onState, onLoadFailed, current: createChapterGuideSession({ volume: "bookofmormon", book: "alma", chapter }, "21,24", { onState, onLoadFailed }) };
+  return { onState, onLoadFailed, current: createChapterGuideSession({ volume: "bookofmormon", book: "alma", chapter }, "21,24", { onState, onLoadFailed }, options) };
 }
 
 beforeEach(() => {
@@ -131,6 +131,98 @@ describe("polling", () => {
     current.dispose();
     await pending[0]!.respond(stateFor("Alma 32", true));
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("a page that already knows a guide is being written", () => {
+  const expectGenerating = { expectGenerating: true };
+
+  test("a failed first load is retried, and recovery resumes normal polling until the guide is done", async () => {
+    const { current, onState, onLoadFailed } = session(32, expectGenerating);
+    void current.load();
+    await pending[0]!.respond({}, 500);
+    expect(onLoadFailed).toHaveBeenCalledTimes(1);
+    expect(onState).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    expect(pending).toHaveLength(2);
+    await pending[1]!.respond(stateFor("Alma 32", true));
+    expect(onState).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    expect(pending).toHaveLength(3);
+    await pending[2]!.respond(stateFor("Alma 32"));
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS * 3);
+    expect(pending).toHaveLength(3);
+    expect(onLoadFailed).toHaveBeenCalledTimes(1);
+  });
+
+  test("it keeps retrying through repeated failures, reporting each one", async () => {
+    const { current, onLoadFailed } = session(32, expectGenerating);
+    void current.load();
+    await pending[0]!.respond({}, 500);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    await pending[1]!.respond({}, 503);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    expect(pending).toHaveLength(3);
+    expect(onLoadFailed).toHaveBeenCalledTimes(2);
+    current.dispose();
+  });
+
+  test("recovering to a finished state stops the retries", async () => {
+    const { current, onState } = session(32, expectGenerating);
+    void current.load();
+    await pending[0]!.respond({}, 500);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    await pending[1]!.respond(stateFor("Alma 32"));
+    expect(onState).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("a first load that never answers doesn't block the retry, and its late answer is dropped", async () => {
+    const { current, onState } = session(32, expectGenerating);
+    void current.load();
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    expect(pending).toHaveLength(2);
+    await pending[1]!.respond(stateFor("newer", true));
+    await pending[0]!.respond(stateFor("older"));
+    expect(onState.mock.calls.map(([state]) => state.reference)).toEqual(["newer"]);
+    current.dispose();
+  });
+
+  test("leaving during a retry clears the timer, aborts the load, and reports nothing", async () => {
+    const { current, onState, onLoadFailed } = session(32, expectGenerating);
+    void current.load();
+    await pending[0]!.respond({}, 500);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS);
+    expect(pending).toHaveLength(2);
+    current.dispose();
+    expect(pending[1]!.signal.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    await pending[1]!.respond({}, 500);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS * 3);
+    expect(pending).toHaveLength(2);
+    expect(onState).not.toHaveBeenCalled();
+    expect(onLoadFailed).toHaveBeenCalledTimes(1);
+  });
+
+  test("a load after leaving starts no timer", async () => {
+    const { current } = session(32, expectGenerating);
+    current.dispose();
+    void current.load();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  test("a session that doesn't expect a guide being written doesn't retry a failed first load", async () => {
+    const { current, onLoadFailed } = session();
+    void current.load();
+    await pending[0]!.respond({}, 500);
+    expect(onLoadFailed).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(CHAPTER_GUIDE_POLL_INTERVAL_MS * 3);
+    expect(pending).toHaveLength(1);
   });
 });
 
