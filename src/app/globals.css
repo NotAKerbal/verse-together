@@ -46,10 +46,13 @@
   --browse-grid: #e0d9cb;
   --shell-max-width: 1180px;
   --shell-max-width-wide: 1400px;
+  --reader-comfortable-measure: 38rem;
+  --reader-comparison-measure: 56rem;
   --shell-gutter: clamp(1rem, 2.6vw, 2rem);
   /* Bottom edge of the floating desktop navigation: 1rem inset + 3rem bar. */
   --header-height: 4rem;
   --desktop-nav-control-size: 2.25rem;
+  --mobile-nav-bottom: max(0.85rem, env(safe-area-inset-bottom));
   --input-surface: #fffdf9;
   --mobile-nav-shell: #fbf9f4;
   --mobile-nav-ring: #d9d1c1;
@@ -428,14 +431,14 @@ mark {
 .desktop-nav-indicator {
   position: absolute;
   top: 0;
-  left: 0.75rem;
-  width: calc(var(--desktop-nav-control-size) + 0.375rem + var(--active-label-width, 0px));
+  left: 0;
+  width: var(--active-link-width, var(--desktop-nav-control-size));
   height: var(--desktop-nav-control-size);
   border-radius: 0.7rem;
   background: var(--surface-button-active);
   pointer-events: none;
   opacity: 0;
-  transform: translateX(calc(var(--active-index, 0) * (var(--desktop-nav-control-size) + 0.375rem)));
+  transform: translateX(var(--active-link-offset, 0px));
   transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1), width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 120ms ease;
 }
 
@@ -459,31 +462,24 @@ mark {
 
 .desktop-nav-link {
   position: relative;
-  width: var(--desktop-nav-control-size);
+  width: auto;
   min-width: var(--desktop-nav-control-size);
-  gap: 0;
+  gap: 0.375rem;
   padding-inline: 0.5rem;
   border-radius: 0.7rem;
   font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;
-  transition: width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
 }
 
 .desktop-nav-link > svg {
   flex-shrink: 0;
 }
 
-.desktop-nav-label {
-  max-width: 0;
-  margin-left: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
-}
-
-.desktop-nav-label-text {
-  display: inline-block;
+@media (max-width: 1079.98px) {
+  .app-header:is([data-actions="true"], :has(> .reader-header-slot:not(:empty))) .desktop-nav-link:not([data-active="true"]) .desktop-nav-label {
+    display: none;
+  }
 }
 
 .desktop-nav-link:hover,
@@ -492,19 +488,15 @@ mark {
 }
 
 .desktop-nav-link[data-active="true"] {
-  width: calc(var(--desktop-nav-control-size) + 0.375rem + var(--nav-label-width, 0px));
   background: transparent;
   color: var(--surface-button-active-text);
 }
 
-.desktop-nav-link[data-active="true"] .desktop-nav-label {
-  max-width: var(--nav-label-width, 0px);
-  margin-left: 0.375rem;
-  opacity: 1;
+.desktop-nav-links:not([data-measured="true"]) .desktop-nav-link[data-active="true"] {
+  background: var(--surface-button-active);
 }
 
 .desktop-nav-links:not([data-measured="true"]) .desktop-nav-link,
-.desktop-nav-links:not([data-measured="true"]) .desktop-nav-label,
 .desktop-nav-links:not([data-measured="true"]) .desktop-nav-indicator {
   transition: none;
 }
@@ -559,8 +551,7 @@ mark {
   .desktop-nav-content,
   .desktop-nav-toggle-icon,
   .desktop-nav-indicator,
-  .desktop-nav-link,
-  .desktop-nav-label {
+  .desktop-nav-link {
     transition: none;
   }
 }
@@ -793,15 +784,41 @@ a.reader-toolbar-crumb:hover {
   color: var(--foreground);
 }
 
-.reader-toolbar-crumb[aria-current="page"] {
+.reader-toolbar-crumb-current {
   color: var(--foreground);
   font-weight: 600;
 }
 
-/* Phones keep just the chapter in the trail. */
+a.reader-toolbar-crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.reader-toolbar-crumb-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reader-toolbar-crumb > .reader-toolbar-crumb-chevron {
+  flex-shrink: 0;
+  width: 0.625rem;
+  height: 0.625rem;
+  color: var(--foreground-muted);
+}
+
 @media (max-width: 639px) {
   .reader-toolbar-crumbs li:not(:last-child) {
     display: none;
+  }
+
+  .reader-toolbar-actions {
+    gap: 0;
+  }
+
+  a.reader-toolbar-crumb {
+    padding-inline: 0.125rem;
   }
 }
 
@@ -928,13 +945,15 @@ a.reader-toolbar-crumb:hover {
   gap: 1.5rem;
 }
 
-/* Center the reading measure and its Log panel together, with a consistent 2rem gap.
-   When space is tight, keep the outer gutters and let the reader fit the remaining room. */
 @media (min-width: 1024px) {
   :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]) {
     --reader-notes-width: 440px;
-    --reader-notes-measure: 56rem;
+    --reader-notes-measure: var(--reader-comfortable-measure);
     --reader-notes-inset: max(2rem, calc((100% - var(--reader-notes-measure) - var(--reader-notes-width) - 2rem) / 2));
+  }
+
+  :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-column[data-comparing="true"]) {
+    --reader-notes-measure: var(--reader-comparison-measure);
   }
 
   :root:not([data-simple="true"]) body:has([data-notes-panel="reader"]):has(.reader-layout[data-sidebar-open="true"]) {
@@ -1295,50 +1314,28 @@ a.reader-toolbar-crumb:hover {
 }
 
 .mobile-nav-control .mobile-nav-button {
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  flex-direction: column;
   min-width: 3rem;
   min-height: 3rem;
-  gap: 0;
-  padding-inline: 0.5rem;
+  gap: 0.125rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  transition: flex-grow 280ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms ease, color 120ms ease;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
 }
 
 .mobile-nav-button > svg {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.mobile-nav-label {
-  max-width: 0;
-  margin-left: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1), margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 180ms ease;
-}
-
-.mobile-nav-control .mobile-nav-button[data-active="true"] {
-  flex-grow: 3;
-}
-
-.mobile-nav-button[data-active="true"] .mobile-nav-label {
-  max-width: 10rem;
-  margin-left: 0.375rem;
-  opacity: 1;
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .mobile-nav-button:focus-visible {
   outline: 2px solid var(--accent-rubric);
   outline-offset: -2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mobile-nav-control .mobile-nav-button,
-  .mobile-nav-label {
-    transition: none;
-  }
 }
 
 .sticky-note {
@@ -1890,14 +1887,9 @@ a.reader-toolbar-crumb:hover {
   text-decoration-line: none;
 }
 
-/*
-  The reader column sits on plain paper: a backdrop the color of the page,
-  feathered at every edge so the dotted grid fades away around the text.
-  It bleeds only as far as the main gutter so it never widens the page.
-*/
 .reader-column {
   --reader-backdrop-bleed: 1rem;
-  max-width: 56rem;
+  max-width: var(--reader-comfortable-measure);
   isolation: isolate;
 }
 
@@ -1930,10 +1922,10 @@ a.reader-toolbar-crumb:hover {
   }
 }
 
-/*
-  Text width (Reader settings): comfortable keeps a centered reading measure,
-  wide opens the shell up, full lets the verses run edge to edge.
-*/
+.reader-column[data-comparing="true"] {
+  max-width: var(--reader-comparison-measure);
+}
+
 .reader-column[data-text-width="wide"] {
   max-width: 88rem;
 }
@@ -2096,7 +2088,7 @@ a.reader-toolbar-crumb:hover {
   color: var(--foreground) !important;
 }
 
-.reader-simple-title {
+.reader-chapter-title {
   margin: 0 0 1.5rem;
   font-family: var(--font-serif-text);
   font-size: 1.25rem;
@@ -2104,6 +2096,16 @@ a.reader-toolbar-crumb:hover {
   letter-spacing: -0.01em;
   color: var(--foreground-soft);
   text-align: center;
+}
+
+:root:not([data-simple="true"]) .reader-chapter-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .reader-simple-nav {

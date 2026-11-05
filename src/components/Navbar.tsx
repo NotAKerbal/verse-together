@@ -4,7 +4,7 @@ import { useFaithTradition } from "@/lib/useFaithTradition";
 import { isLdsContentPath } from "@/lib/faithTradition";
 
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
@@ -32,21 +32,20 @@ export default function Navbar() {
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
-    // Measure the unclipped text so the label and shared highlight can animate to the same width.
-    const labels = Array.from(nav.querySelectorAll<HTMLElement>(".desktop-nav-label-text"));
-    const measureLabels = () => {
-      labels.forEach((label, index) => {
-        const width = `${label.getBoundingClientRect().width}px`;
-        label.closest("a")?.style.setProperty("--nav-label-width", width);
-        if (index === activeIndex) nav.style.setProperty("--active-label-width", width);
-      });
+    const links = Array.from(nav.querySelectorAll<HTMLElement>(".desktop-nav-link"));
+    const measureActiveLink = () => {
+      const activeLink = links[activeIndex];
+      if (activeLink) {
+        nav.style.setProperty("--active-link-offset", `${activeLink.offsetLeft}px`);
+        nav.style.setProperty("--active-link-width", `${activeLink.offsetWidth}px`);
+      }
       nav.dataset.measured = "true";
     };
-    measureLabels();
-    const observer = new ResizeObserver(measureLabels);
-    labels.forEach((label) => observer.observe(label));
+    measureActiveLink();
+    const observer = new ResizeObserver(measureActiveLink);
+    links.forEach((link) => observer.observe(link));
     return () => observer.disconnect();
-  }, [activeIndex]);
+  }, [activeIndex, navItems.length]);
 
   // Phones have no app header (outside simple mode): the bottom navigation carries the destinations,
   // and Notes and Plans show the account at their own top right (AccountControl variant="page").
@@ -67,7 +66,6 @@ export default function Navbar() {
               className="simple-hide desktop-nav-links"
               aria-label="Primary"
               data-has-active={activeIndex >= 0 ? "true" : "false"}
-              style={{ "--active-index": Math.max(0, activeIndex) } as CSSProperties}
             >
               <span className="desktop-nav-indicator" aria-hidden="true" />
               {navItems.map((item) => {
@@ -85,9 +83,7 @@ export default function Navbar() {
                     title={item.label}
                   >
                     <FontAwesomeIcon icon={icon} className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
-                    <span className="desktop-nav-label" aria-hidden="true">
-                      <span className="desktop-nav-label-text">{item.label}</span>
-                    </span>
+                    <span className="desktop-nav-label" aria-hidden="true">{item.label}</span>
                   </Link>
                 );
               })}

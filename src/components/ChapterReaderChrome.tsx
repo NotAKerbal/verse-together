@@ -1,11 +1,6 @@
 "use client";
 
-// The chapter page around its text: the reader header, the simple-mode title and chapter links, and the empty text
-// area that stands in for the verses until they arrive. ChapterReader draws its page with these, and
-// ChapterReaderShell draws the same page before the chapter's route has arrived, so opening a chapter shows its
-// page at once and only the text comes in later (fading in; see ChapterReader).
-
-import { faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown, faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Children, Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -119,14 +114,15 @@ export function ChapterHeader({
               {crumbs.currentHref ? (
                 <ChapterLink
                   href={crumbs.currentHref}
-                  aria-current="page"
-                  className="reader-toolbar-crumb"
+                  aria-label={`${reference}: choose a chapter`}
+                  className="reader-toolbar-crumb reader-toolbar-crumb-current"
                   title={`${reference}: choose a chapter`}
                 >
-                  {reference}
+                  <span className="reader-toolbar-crumb-text">{reference}</span>
+                  <FontAwesomeIcon icon={faChevronDown} aria-hidden="true" className="reader-toolbar-crumb-chevron" />
                 </ChapterLink>
               ) : (
-                <span aria-current="page" className="reader-toolbar-crumb" title={reference}>
+                <span aria-current="page" className="reader-toolbar-crumb reader-toolbar-crumb-current" title={reference}>
                   {reference}
                 </span>
               )}
@@ -258,6 +254,10 @@ export class ChapterTextBoundary extends Component<ChapterTextBoundaryProps, { f
   }
 }
 
+export function ChapterTitle({ reference }: { reference: string }) {
+  return <h1 className="reader-chapter-title">{reference}</h1>;
+}
+
 /** Previous/Next chapter links, shown in simple mode. */
 export function ChapterSimpleNav({ prevHref, nextHref }: { prevHref?: string; nextHref?: string }) {
   return (
@@ -283,11 +283,6 @@ export function chapterLogOptions(
   ];
 }
 
-/**
- * A chapter's page before its route has arrived: the reader's real header, breadcrumbs, title, and chapter links
- * (all usable), with the text area empty. Reader settings are shown disabled, and Log's form waits for the text.
- * It never shows another chapter's actions: nothing here belongs to the page it replaces.
- */
 export function ChapterReaderShell({ chrome }: { chrome: ChapterChrome }) {
   const logOptions = useMemo(() => chapterLogOptions(chrome, chrome.reference, chrome.pathname), [chrome]);
   return (
@@ -303,7 +298,7 @@ export function ChapterReaderShell({ chrome }: { chrome: ChapterChrome }) {
             logOptions={logOptions}
             logReady={false}
           />
-          <h1 className="simple-only reader-simple-title">{chrome.reference}</h1>
+          <ChapterTitle reference={chrome.reference} />
           <ChapterTextPending reference={chrome.reference} />
           <ChapterSimpleNav prevHref={chrome.prevHref} nextHref={chrome.nextHref} />
         </div>
