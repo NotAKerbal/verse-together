@@ -45,6 +45,7 @@ export const UNRELEASED: UnreleasedNotes = {
   items: [
     { kind: "improved", text: "The reader’s default Comfortable text width is narrower on larger screens, so lines are easier to follow. Comparing translations still gets more room, and the Wide and Full choices work as before." },
     { kind: "improved", text: "The main navigation shows labels with its icons, including on phones, though narrower desktop windows with page controls in the header may label only the current page. In the reader, a small arrow by the chapter name shows it opens the chapter picker, and the one-time tip about selecting text no longer appears." },
+    { kind: "improved", text: "While a chapter guide is being written, its page lines up the heading and progress in one column with less explanatory text, and the status in Resources is more compact." },
   ],
 };
 

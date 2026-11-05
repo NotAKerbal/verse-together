@@ -16,8 +16,8 @@ vi.mock("../src/features/chapterGuides/useChapterGuideSelection", () => ({ useCh
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-function render(stage: string, now: number | null = null, startedAt = 0, rounds: { correctionRound?: number; maxCorrectionRounds?: number } = {}) {
-  return renderToStaticMarkup(createElement(ChapterGuideProgress, { reference: "Revelation 2", generating: { stage, startedAt, ...rounds }, now }));
+function render(stage: string, now: number | null = null, startedAt = 0, rounds: { correctionRound?: number; maxCorrectionRounds?: number } = {}, compact = false) {
+  return renderToStaticMarkup(createElement(ChapterGuideProgress, { reference: "Revelation 2", generating: { stage, startedAt, ...rounds }, now, compact }));
 }
 
 function statuses(stage: string) {
@@ -33,13 +33,13 @@ describe("the stage model", () => {
     expect(statuses("research")).toEqual(["research:current", "write:upcoming", "review:upcoming"]);
     expect(statuses("write")).toEqual(["research:done", "write:current", "review:upcoming"]);
     expect(statuses("review")).toEqual(["research:done", "write:done", "review:current"]);
-    expect(chapterGuideProgress("review")).toMatchObject({ completedSteps: 2, stepNumber: 3, correctionsMayFollow: true });
+    expect(chapterGuideProgress("review")).toMatchObject({ completedSteps: 2, stepNumber: 3 });
   });
 
   test("repair and the second review add the two optional steps", () => {
     expect(statuses("repair")).toEqual(["research:done", "write:done", "review:done", "repair:current", "recheck:upcoming"]);
     expect(statuses("recheck")).toEqual(["research:done", "write:done", "review:done", "repair:done", "recheck:current"]);
-    expect(chapterGuideProgress("recheck")).toMatchObject({ completedSteps: 4, stepNumber: 5, correctionsMayFollow: false });
+    expect(chapterGuideProgress("recheck")).toMatchObject({ completedSteps: 4, stepNumber: 5 });
   });
 
   test("a stage it doesn't know isn't given a position", () => {
@@ -65,21 +65,21 @@ describe("the stage model", () => {
     }
   });
 
-  test("each round's steps have their own names, and the last round says nothing more may follow", () => {
+  test("each round's steps have their own names and their place in the rounds", () => {
     const rounds = { correctionRound: 3, maxCorrectionRounds: 3 };
     const last = chapterGuideProgress("recheck", rounds)!;
     expect(last.steps.map((step) => step.label)).toEqual([
       "Research", "Writing", "Review", "Corrections", "Second review", "Corrections, round 2", "Third review", "Corrections, round 3", "Fourth review",
     ]);
-    expect(last).toMatchObject({ stepNumber: 9, completedSteps: 8, activity: "Reviewing the corrections (round 3 of 3)", correctionsMayFollow: false });
-    expect(chapterGuideProgress("recheck", { correctionRound: 2, maxCorrectionRounds: 3 })).toMatchObject({ stepNumber: 7, correctionsMayFollow: true });
+    expect(last).toMatchObject({ stepNumber: 9, completedSteps: 8, activity: "Reviewing the corrections (round 3 of 3)" });
+    expect(chapterGuideProgress("recheck", { correctionRound: 2, maxCorrectionRounds: 3 })).toMatchObject({ stepNumber: 7 });
     expect(chapterGuideProgress("repair", { correctionRound: 2, maxCorrectionRounds: 3 })?.activity).toBe("Making the corrections from the review (round 2 of 3)");
   });
 
-  test("a job limited to one round isn't told more may follow, and a job with no round details is treated the same", () => {
+  test("a job limited to one round names no rounds, and a job with no round details is treated the same", () => {
     const legacy = { correctionRound: 1, maxCorrectionRounds: 1 };
     expect(chapterGuideProgress("recheck", legacy)).toEqual(chapterGuideProgress("recheck"));
-    expect(chapterGuideProgress("recheck", legacy)).toMatchObject({ activity: "Reviewing the corrections", correctionsMayFollow: false });
+    expect(chapterGuideProgress("recheck", legacy)).toMatchObject({ activity: "Reviewing the corrections" });
   });
 });
 
@@ -93,7 +93,14 @@ describe("the progress bar", () => {
     expect(html).toContain('aria-valuetext="Step 2 of 3: Writing the guide"');
     expect(html).toContain('role="status">Step 2 of 3: Writing the guide<');
     expect(html.match(/aria-current="step"/g)).toHaveLength(1);
+    expect(html).toContain("This guide is being written.");
+  });
+
+  test("the Resources panel names the chapter, since it has no page heading above it", () => {
+    const html = render("write", null, 0, {}, true);
     expect(html).toContain("A guide for Revelation 2 is being written.");
+    expect(html).toContain("Step 2 of 3: Writing the guide");
+    expect(html).toContain('role="progressbar"');
   });
 
   test("time passing moves only the elapsed text, never the bar", () => {
@@ -105,15 +112,36 @@ describe("the progress bar", () => {
     expect(late).not.toMatch(/\d+%/);
   });
 
-  test("it warns that corrections may add steps, until no more rounds are left", () => {
-    expect(render("review")).toContain("more steps follow");
+  test.each([false, true])("it shows the stage without paragraphs of explanation (compact: %s)", (compact) => {
+    for (const stage of [...CHAPTER_GUIDE_STAGES, "writing"]) {
+      const html = render(stage, MINUTE, 0, { correctionRound: 1, maxCorrectionRounds: 3 }, compact);
+      expect(html, stage).not.toMatch(/several minutes|keep reading|come back later|saved here for everyone|more steps follow|corrections, more/);
+    }
+  });
+
+  test("a correction round shows its real step in the bar", () => {
     const repair = render("repair");
-    expect(repair).not.toContain("more steps follow");
     expect(repair).toContain("Step 4 of 5: Making the corrections from the review");
     expect(repair).toContain('aria-valuenow="3"');
     expect(repair).toContain("Second review");
-    expect(render("repair", null, 0, { correctionRound: 1, maxCorrectionRounds: 3 })).toContain("more steps follow");
-    expect(render("recheck", null, 0, { correctionRound: 3, maxCorrectionRounds: 3 })).not.toContain("more steps follow");
+  });
+
+  test("the panel drops the long list of round names but keeps the real position, and the page keeps them all", () => {
+    const rounds = { correctionRound: 3, maxCorrectionRounds: 3 };
+    const panel = render("recheck", MINUTE, 0, rounds, true);
+    expect(panel).toContain("Step 9 of 9: Reviewing the corrections (round 3 of 3)");
+    expect(panel).toContain('aria-valuemax="9"');
+    expect(panel).toContain('aria-valuenow="8"');
+    expect(panel.match(/data-status=/g)).toHaveLength(9);
+    expect(panel).toContain("Started 1 minute ago.");
+    expect(panel).not.toContain("<ol");
+    expect(panel).not.toContain("Corrections, round 2");
+    const page = render("recheck", MINUTE, 0, rounds);
+    expect(page).toContain("Corrections, round 2");
+    expect(page.match(/aria-current="step"/g)).toHaveLength(1);
+    const firstPass = render("write", null, 0, {}, true);
+    expect(firstPass).toContain("<ol");
+    expect(firstPass.match(/aria-current="step"/g)).toHaveLength(1);
   });
 
   test("a later round shows its place in the longer bar", () => {
@@ -128,7 +156,8 @@ describe("the progress bar", () => {
 
   test("an unknown stage falls back to a plain message without inventing progress", () => {
     const html = render("writing");
-    expect(html).toContain("A guide for Revelation 2 is being written.");
+    expect(html).toContain("This guide is being written.");
+    expect(html).toContain('role="status"');
     expect(html).not.toContain("progressbar");
     expect(html).not.toContain("Step ");
   });
@@ -143,9 +172,9 @@ describe("the progress bar", () => {
 describe("rounds an owner adds", () => {
   test("a continued job keeps its finished steps and adds its later rounds", () => {
     const progress = chapterGuideProgress("repair", { correctionRound: 4, maxCorrectionRounds: 6 })!;
-    expect(progress).toMatchObject({ completedSteps: 9, stepNumber: 10, activity: "Making the corrections from the review (round 4 of 6)", correctionsMayFollow: true });
+    expect(progress).toMatchObject({ completedSteps: 9, stepNumber: 10, activity: "Making the corrections from the review (round 4 of 6)" });
     expect(progress.steps.slice(-2).map((step) => step.label)).toEqual(["Corrections, round 4", "Fifth review"]);
-    expect(chapterGuideProgress("recheck", { correctionRound: 6, maxCorrectionRounds: 6 })).toMatchObject({ stepNumber: 15, correctionsMayFollow: false });
+    expect(chapterGuideProgress("recheck", { correctionRound: 6, maxCorrectionRounds: 6 })).toMatchObject({ stepNumber: 15 });
   });
 });
 
@@ -220,6 +249,7 @@ describe("the cooldown message", () => {
     const message = chapterGuideCooldownMessage({ retryAt: 2 * HOUR, failedStage }, 0);
     expect(message).toContain(expected);
     expect(message).toContain("nothing was saved");
+    expect(message).not.toContain("repeat costs");
   });
 
   test.each([

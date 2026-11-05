@@ -69,6 +69,7 @@
 .sources a.passageSource { color: var(--accent-rubric); text-decoration: underline; }
 .generatedGuide { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-border); }
 .results > section:empty + .generatedGuide { margin-top: 0; padding-top: 0; border-top: 0; }
+.results > section:empty + .generatedGuide > p:first-child { padding-right: 28px; }
 .webSearch { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-border); }
 .webSearch p { margin: 0 0 10px; font-size: 12px; color: var(--foreground-soft); }
 .searchButton { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; border: 1px solid var(--surface-border); border-radius: 8px; background: var(--surface-card); padding: 9px 12px; color: var(--foreground); text-decoration: none; font-size: 13px; font-weight: 600; }

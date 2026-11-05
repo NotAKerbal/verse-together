@@ -6,6 +6,7 @@ import ChapterGuideSection from "@/features/chapterGuides/ChapterGuideSection";
 import { useChapterGuideSelection } from "@/features/chapterGuides/useChapterGuideSelection";
 import { resourcePassageFromLink, type PassageTarget } from "@/features/comeFollowMe/passagePreview";
 import type { VerseLessonResource } from "@/lib/cfm/verseResources";
+import { chapterGuideHidesEmptyResources } from "@/lib/chapterGuideView";
 import VerseResourceItem from "./VerseResourceItem";
 import styles from "./VerseResourcesPanel.module.css";
 
@@ -35,10 +36,10 @@ type ResultsProps = {
   error: string | null;
   onRetry: () => void;
   chapterGuide?: ReactNode;
-  hasGeneratedResources?: boolean;
+  hideEmptyMessage?: boolean;
 };
 
-export function VerseResourcesResults({ reference, lessonBook, onPreviewPassage, resources, loading, error, onRetry, chapterGuide, hasGeneratedResources = false }: ResultsProps) {
+export function VerseResourcesResults({ reference, lessonBook, onPreviewPassage, resources, loading, error, onRetry, chapterGuide, hideEmptyMessage = false }: ResultsProps) {
   const searchHref = `https://www.google.com/search?${new URLSearchParams({ q: `Come Follow Me ${reference}` })}`;
   // One handler for every link in the results, the lessons' own HTML included. New tabs and windows stay the browser's.
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -60,7 +61,7 @@ export function VerseResourcesResults({ reference, lessonBook, onPreviewPassage,
             <button type="button" className={styles.link} onClick={onRetry}>Try again</button>
           </div>
         ) : null}
-        {!loading && !error && resources.length === 0 && !hasGeneratedResources ? (
+        {!loading && !error && resources.length === 0 && !hideEmptyMessage ? (
           <p className={styles.message}>No resources for these verses in our published lessons yet. Search the web for more Come, Follow Me resources.</p>
         ) : null}
         {!loading && !error && resources.length > 0 ? (
@@ -135,7 +136,7 @@ export default function VerseResourcesPanel({ volume, book, chapter, verseSpec, 
   const content = (
     <div className={styles.panel}>
       <button type="button" className={styles.close} onClick={onClose} aria-label="Close resources">×</button>
-      <VerseResourcesResults reference={reference} lessonBook={{ slug: book, volume }} onPreviewPassage={onPreviewPassage} resources={result?.resources ?? []} loading={result === null} error={result?.error ?? null} onRetry={() => { setResult(null); setAttempt((value) => value + 1); }} hasGeneratedResources={(chapterGuide.state?.resources.length ?? 0) > 0} chapterGuide={<ChapterGuideSection guide={chapterGuide} previewsPassages={Boolean(onPreviewPassage)} />} />
+      <VerseResourcesResults reference={reference} lessonBook={{ slug: book, volume }} onPreviewPassage={onPreviewPassage} resources={result?.resources ?? []} loading={result === null} error={result?.error ?? null} onRetry={() => { setResult(null); setAttempt((value) => value + 1); }} hideEmptyMessage={chapterGuideHidesEmptyResources(chapterGuide.state, chapterGuide.loadFailed)} chapterGuide={<ChapterGuideSection guide={chapterGuide} previewsPassages={Boolean(onPreviewPassage)} />} />
     </div>
   );
 
