@@ -5,7 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import type { ContinuationBlock, ReviewContinuationResult } from "../../../convex/chapterGuides";
+import type { ContinuationBlock, GuideReviewRole, ReviewContinuationResult } from "../../../convex/chapterGuides";
 
 type ReviewDetail = NonNullable<FunctionReturnType<typeof api.chapterGuides.getReviewDetail>>;
 type ReviewQueueItem = NonNullable<FunctionReturnType<typeof api.chapterGuides.getReviewQueue>>[number];
@@ -23,16 +23,16 @@ function countOf(count: number, unit: string): string {
 }
 
 const REVIEW_REASONS: Record<string, string> = {
-  repair_unresolved: "The reviewer still had findings after the last allowed correction round.",
+  repair_unresolved: "The AI reviewer still had findings after the last allowed correction round.",
   repair_noop: "The writer’s last repair left a flagged section unchanged, so it wasn’t applied.",
   repair_out_of_scope: "The writer’s last repair changed a section nobody flagged, so it wasn’t applied.",
   repair_invalid: "The writer’s last repair didn’t pass validation, so it wasn’t applied.",
   repair_unparseable: "The writer’s last repair couldn’t be read, so it wasn’t applied.",
-  review_rejected: "The reviewer returned more findings than a repair can take.",
-  recheck_rejected: "The reviewer returned more findings than a repair can take.",
-  review_invalid_target: "The reviewer’s findings name sections that aren’t in the guide.",
-  recheck_invalid_target: "The reviewer’s findings name sections that aren’t in the guide.",
-  recheck_unparseable: "The reviewer’s answer about the last repair couldn’t be read. These are the findings that repair addressed.",
+  review_rejected: "The AI reviewer returned more findings than a repair can take.",
+  recheck_rejected: "The AI reviewer returned more findings than a repair can take.",
+  review_invalid_target: "The AI reviewer’s findings name sections that aren’t in the guide.",
+  recheck_invalid_target: "The AI reviewer’s findings name sections that aren’t in the guide.",
+  recheck_unparseable: "The AI reviewer’s answer about the last repair couldn’t be read. These are the findings that repair addressed.",
 };
 
 const RESUME_STEPS: Record<string, string> = {
@@ -41,11 +41,24 @@ const RESUME_STEPS: Record<string, string> = {
   review: "It starts with a fresh review of this draft, because these findings can’t go straight to the writer.",
 };
 
-const BLOCK_MESSAGES: Record<ContinuationBlock, string> = {
-  paused: "Generation is paused. Resume it above to continue this guide.",
-  not_configured: "A provider key or the service secret is missing, so this can’t continue yet.",
-  busy: "Other guides are running. Try again when one finishes.",
-  budget_exhausted: "This month’s budget can’t hold this reservation.",
+const BLOCK_MESSAGES: Record<GuideReviewRole, Record<ContinuationBlock, string>> = {
+  owner: {
+    paused: "Generation is paused. Resume it above to continue this guide.",
+    not_configured: "A provider key or the service secret is missing, so this can’t continue yet.",
+    busy: "Other guides are running. Try again when one finishes.",
+    budget_exhausted: "This month’s budget can’t hold this reservation.",
+  },
+  reviewer: {
+    paused: "Generation is paused. An admin has to resume it before this guide can continue.",
+    not_configured: "Generation isn’t available right now, so this can’t continue yet.",
+    busy: "Other guides are running. Try again when one finishes.",
+    budget_exhausted: "This month’s budget can’t hold this reservation.",
+  },
+};
+
+const UNCONFIRMED_MESSAGES: Record<GuideReviewRole, string> = {
+  owner: "We couldn’t confirm whether generation continued. Check the queue and recent jobs before trying again.",
+  reviewer: "We couldn’t confirm whether generation continued. Check the queue before trying again.",
 };
 
 function reviewReason(code: string): string {
@@ -63,12 +76,12 @@ function findingTargetLabel(target: string): string {
   return target;
 }
 
-export function continuationMessage(result: ReviewContinuationResult): string {
+export function continuationMessage(result: ReviewContinuationResult, audience: GuideReviewRole): string {
   if (result.status === "started") return `Continuing. Up to ${dollars(result.reservedMicros)} is reserved, and readers now see its progress.`;
   if (result.status === "running") return "This guide is already running.";
   if (result.status === "already_published") return "A guide for this chapter is already saved, so this draft left the queue.";
   if (result.status === "stale") return "This guide changed since it was opened, so nothing was started. Check the latest draft and findings.";
-  return BLOCK_MESSAGES[result.reason];
+  return BLOCK_MESSAGES[audience][result.reason];
 }
 
 function Paragraphs({ items }: { items: readonly string[] }) {
@@ -140,7 +153,7 @@ function FindingsView({ findings }: Pick<ReviewDetail, "findings">) {
       </ol>
       {findings.unverifiable.length > 0 ? (
         <div>
-          <p className="font-semibold">The reviewer couldn’t verify</p>
+          <p className="font-semibold">The AI reviewer couldn’t verify</p>
           <ul className="list-disc pl-5">
             {findings.unverifiable.map((item, index) => <li key={index}>{item}</li>)}
           </ul>
@@ -158,8 +171,9 @@ function FindingsView({ findings }: Pick<ReviewDetail, "findings">) {
   );
 }
 
-export function ChapterGuideReviewDetail({ detail, continuing, onContinue, onBack }: {
+export function ChapterGuideReviewDetail({ detail, audience, continuing, onContinue, onBack }: {
   detail: ReviewDetail;
+  audience: GuideReviewRole;
   continuing: boolean;
   onContinue: () => void;
   onBack: () => void;
@@ -170,7 +184,7 @@ export function ChapterGuideReviewDetail({ detail, continuing, onContinue, onBac
       <button type="button" onClick={onBack} className="surface-button rounded-full border px-4 py-1.5">Back to the queue</button>
       <h3 className="text-base font-semibold">{detail.reference}</h3>
       <p>{reviewReason(detail.reasonCode)}</p>
-      <p className="text-foreground/70">Spent so far: {dollars(detail.spentMicros)} · Correction rounds so far: {detail.correctionRound} · Queued {shortDate(detail.queuedAt)}. Readers see only that this guide needs additional human review. They can’t see this draft or these findings, and nothing here is published.</p>
+      <p className="text-foreground/70">{detail.spentMicros === null ? "" : `Spent so far: ${dollars(detail.spentMicros)} · `}Correction rounds so far: {detail.correctionRound} · Queued {shortDate(detail.queuedAt)}. Readers see only that this guide needs additional human review. They can’t see this draft or these findings, and nothing here is published.</p>
 
       <section className="space-y-2">
         <h3 className="text-base font-semibold">Outstanding findings ({detail.findingCount})</h3>
@@ -179,9 +193,9 @@ export function ChapterGuideReviewDetail({ detail, continuing, onContinue, onBac
 
       <section className="space-y-2">
         <h3 className="text-base font-semibold">Your decision</h3>
-        <p>Continuing allows {countOf(detail.continuationRounds, "more correction round")} from this draft, up to {countOf(detail.continuationCalls, "provider call")}. {RESUME_STEPS[detail.resumeStage] ?? ""} Up to {reserve} is reserved now. Only what’s used is spent, and the rest is released when it stops. It’s published only if the reviewer clears it and it passes validation. Otherwise it comes back here.</p>
+        <p>Continuing allows {countOf(detail.continuationRounds, "more correction round")} from this draft, up to {countOf(detail.continuationCalls, "provider call")}. {RESUME_STEPS[detail.resumeStage] ?? ""} Up to {reserve} is reserved now. Only what’s used is spent, and the rest is released when it stops. It’s published only if the AI reviewer clears it and it passes validation. Otherwise it comes back here.</p>
         <p className="text-foreground/70">To leave it queued, do nothing. That costs nothing, and readers keep seeing the human review message.</p>
-        {detail.blockedBy ? <p role="status" className="text-foreground/70">{BLOCK_MESSAGES[detail.blockedBy]}</p> : null}
+        {detail.blockedBy ? <p role="status" className="text-foreground/70">{BLOCK_MESSAGES[audience][detail.blockedBy]}</p> : null}
         <button type="button" disabled={continuing || detail.blockedBy !== null} onClick={onContinue} className="surface-button rounded-full border px-4 py-1.5 disabled:opacity-60">
           {continuing ? "Continuing…" : `Continue generation (reserves up to ${reserve})`}
         </button>
@@ -212,7 +226,7 @@ export function ChapterGuideReviewList({ queue, onOpen }: { queue: readonly Revi
     <ul className="space-y-2">
       {queue.map((item) => (
         <li key={item.id} className="flex flex-wrap items-center gap-2">
-          <span>{item.reference}: {countOf(item.findingCount, "open finding")}, {countOf(item.correctionRound, "correction round")}, {dollars(item.spentMicros)} spent, queued {shortDate(item.queuedAt)}</span>
+          <span>{item.reference}: {countOf(item.findingCount, "open finding")}, {countOf(item.correctionRound, "correction round")}, {item.spentMicros === null ? "" : `${dollars(item.spentMicros)} spent, `}queued {shortDate(item.queuedAt)}</span>
           <button type="button" onClick={() => onOpen(item.id)} className="surface-button rounded-full border px-4 py-1.5">Review {item.reference}</button>
         </li>
       ))}
@@ -220,7 +234,7 @@ export function ChapterGuideReviewList({ queue, onOpen }: { queue: readonly Revi
   );
 }
 
-export default function ChapterGuideReviewQueue() {
+export default function ChapterGuideReviewQueue({ audience }: { audience: GuideReviewRole }) {
   const queue = useQuery(api.chapterGuides.getReviewQueue, {});
   const [selectedId, setSelectedId] = useState<Id<"chapterGuideJobs"> | null>(null);
   const detail = useQuery(api.chapterGuides.getReviewDetail, selectedId ? { jobId: selectedId } : "skip");
@@ -228,7 +242,10 @@ export default function ChapterGuideReviewQueue() {
   const [continuing, setContinuing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  if (!queue) return null;
+  if (!queue) {
+    if (audience === "owner") return null;
+    return <p className="text-sm text-foreground/70">{queue === undefined ? "Loading…" : "Reviews are only available to chapter guide reviewers and admins."}</p>;
+  }
 
   const select = (id: ReviewQueueItem["id"] | null) => {
     setMessage(null);
@@ -240,9 +257,9 @@ export default function ChapterGuideReviewQueue() {
     setContinuing(true);
     setMessage(null);
     try {
-      setMessage(continuationMessage(await continueReview({ jobId: detail.id, queuedAt: detail.queuedAt })));
+      setMessage(continuationMessage(await continueReview({ jobId: detail.id, queuedAt: detail.queuedAt }), audience));
     } catch {
-      setMessage("We couldn’t confirm whether generation continued. Check the queue and recent jobs before trying again.");
+      setMessage(UNCONFIRMED_MESSAGES[audience]);
     } finally {
       setContinuing(false);
     }
@@ -255,7 +272,7 @@ export default function ChapterGuideReviewQueue() {
       {selectedId !== null && detail === null ? <p className="text-foreground/70">That guide is no longer waiting for review.</p> : null}
       {selectedId !== null && detail === undefined ? <p className="text-foreground/70">Loading…</p> : null}
       {selectedId !== null && detail ? (
-        <ChapterGuideReviewDetail detail={detail} continuing={continuing} onContinue={() => void submit()} onBack={() => select(null)} />
+        <ChapterGuideReviewDetail detail={detail} audience={audience} continuing={continuing} onContinue={() => void submit()} onBack={() => select(null)} />
       ) : (
         <ChapterGuideReviewList queue={queue} onOpen={select} />
       )}

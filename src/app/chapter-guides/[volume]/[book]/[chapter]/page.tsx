@@ -64,7 +64,7 @@ function citedScriptureLine(provenance: ChapterGuideView["provenance"]) {
 
 function humanReviewLine(provenance: ChapterGuideView["provenance"]) {
   if (!provenance.ownerContinuations) return "No person has reviewed it.";
-  return "An owner looked at an earlier draft and allowed more correction rounds, but no person has approved this text.";
+  return "A human reviewer looked at an earlier draft and allowed more correction rounds, but no person has approved this text.";
 }
 
 function GuideFooter({ guide }: { guide: ChapterGuideView }) {

@@ -157,7 +157,7 @@ describe("the full chapter guide page", () => {
   test("a footer says a person allowed more rounds, without claiming anyone approved the text", async () => {
     convex.query.mockResolvedValue({ guide: { ...STORED, provenance: { ...STORED.provenance, correctionRounds: 5, ownerContinuations: 1 } }, generating: null, availability: null });
     const html = renderToStaticMarkup(await ChapterGuidePage(params()));
-    expect(html).toContain("An owner looked at an earlier draft and allowed more correction rounds, but no person has approved this text.");
+    expect(html).toContain("A human reviewer looked at an earlier draft and allowed more correction rounds, but no person has approved this text.");
     expect(html).not.toContain("No person has reviewed it");
     expect(html).toContain("The guide reached correction round 5");
   });

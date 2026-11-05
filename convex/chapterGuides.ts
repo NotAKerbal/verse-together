@@ -88,6 +88,8 @@ export type GenerationRequestResult =
 
 export type ContinuationBlock = "paused" | "not_configured" | "budget_exhausted" | "busy";
 
+export type GuideReviewRole = "owner" | "reviewer";
+
 export type ReviewContinuationResult =
   | { status: "started"; reservedMicros: number }
   | { status: "running" }
@@ -188,24 +190,30 @@ async function runningJobCount(ctx: QueryCtx, limit: number): Promise<number> {
   return running.length;
 }
 
-async function requireOwner(ctx: MutationCtx): Promise<string> {
-  const clerkId = await requireClerkId(ctx);
+async function readGuideReviewRole(ctx: QueryCtx, clerkId: string): Promise<GuideReviewRole | null> {
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
     .unique();
-  if (user?.isAdmin !== true) throw new Error("Forbidden");
+  if (user?.isAdmin === true) return "owner";
+  return user?.isChapterGuideReviewer === true ? "reviewer" : null;
+}
+
+async function requireOwner(ctx: MutationCtx): Promise<string> {
+  const clerkId = await requireClerkId(ctx);
+  if ((await readGuideReviewRole(ctx, clerkId)) !== "owner") throw new Error("Forbidden");
   return clerkId;
 }
 
-async function viewerIsOwner(ctx: QueryCtx): Promise<boolean> {
+async function requireGuideReviewAccess(ctx: MutationCtx): Promise<string> {
+  const clerkId = await requireClerkId(ctx);
+  if (!(await readGuideReviewRole(ctx, clerkId))) throw new Error("Forbidden");
+  return clerkId;
+}
+
+async function viewerGuideReviewRole(ctx: QueryCtx): Promise<GuideReviewRole | null> {
   const clerkId = await getViewerClerkId(ctx);
-  if (!clerkId) return false;
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
-    .unique();
-  return user?.isAdmin === true;
+  return clerkId ? await readGuideReviewRole(ctx, clerkId) : null;
 }
 
 async function upsertSettings(
@@ -757,7 +765,7 @@ export const retireGuide = internalMutation({
 export const getOwnerOverview = query({
   args: {},
   handler: async (ctx) => {
-    if (!(await viewerIsOwner(ctx))) return null;
+    if ((await viewerGuideReviewRole(ctx)) !== "owner") return null;
 
     const now = Date.now();
     const periodKey = budgetPeriodKey(now);
@@ -791,7 +799,7 @@ export const getOwnerOverview = query({
   },
 });
 
-function reviewQueueItem(job: Doc<"chapterGuideJobs">) {
+function reviewQueueItem(job: Doc<"chapterGuideJobs">, role: GuideReviewRole) {
   return {
     id: job._id,
     reference: job.reference,
@@ -801,7 +809,7 @@ function reviewQueueItem(job: Doc<"chapterGuideJobs">) {
     correctionRound: correctionRoundOf(job),
     continuations: job.continuations ?? 0,
     findingCount: (job.review as GuideReview | undefined)?.required_corrections.length ?? 0,
-    spentMicros: job.spentMicros,
+    spentMicros: role === "owner" ? job.spentMicros : null,
     continuationRounds: CONTINUATION_CORRECTION_ROUNDS,
     continuationCalls: continuationCalls(job.stage),
     continuationMicros: continuationReservationMicros(job.stage, job.verses.length, job.chapterBytes),
@@ -819,19 +827,21 @@ async function continuationBlock(ctx: QueryCtx, job: Doc<"chapterGuideJobs">, pe
 export const getReviewQueue = query({
   args: {},
   handler: async (ctx) => {
-    if (!(await viewerIsOwner(ctx))) return null;
+    const role = await viewerGuideReviewRole(ctx);
+    if (!role) return null;
     const held = await ctx.db
       .query("chapterGuideJobs")
       .withIndex("by_status_lease", (q) => q.eq("status", "needs_review"))
       .take(MAX_REVIEW_QUEUE_ROWS);
-    return held.map(reviewQueueItem).sort((left, right) => left.queuedAt - right.queuedAt);
+    return held.map((job) => reviewQueueItem(job, role)).sort((left, right) => left.queuedAt - right.queuedAt);
   },
 });
 
 export const getReviewDetail = query({
   args: { jobId: v.id("chapterGuideJobs") },
   handler: async (ctx, { jobId }) => {
-    if (!(await viewerIsOwner(ctx))) return null;
+    const role = await viewerGuideReviewRole(ctx);
+    if (!role) return null;
     const job = await ctx.db.get(jobId);
     if (job?.status !== "needs_review") return null;
     const continuations = await ctx.db
@@ -839,7 +849,7 @@ export const getReviewDetail = query({
       .withIndex("by_job", (q) => q.eq("jobId", jobId))
       .collect();
     return {
-      ...reviewQueueItem(job),
+      ...reviewQueueItem(job, role),
       blockedBy: await continuationBlock(ctx, job, budgetPeriodKey(Date.now())),
       draft: job.draft as ChapterGuideContent,
       findings: job.review as GuideReview,
@@ -859,7 +869,7 @@ export const getReviewDetail = query({
 export const continueReview = mutation({
   args: { jobId: v.id("chapterGuideJobs"), queuedAt: v.number() },
   handler: async (ctx, { jobId, queuedAt }): Promise<ReviewContinuationResult> => {
-    const continuedByClerkId = await requireOwner(ctx);
+    const continuedByClerkId = await requireGuideReviewAccess(ctx);
     const job = await ctx.db.get(jobId);
     if (job?.status === "running") return { status: "running" };
     if (job?.status !== "needs_review" || job.reviewQueuedAt !== queuedAt) return { status: "stale" };

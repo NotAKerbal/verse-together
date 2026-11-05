@@ -73,7 +73,7 @@ one that holds regardless.
   `completeStage` raises it, refusing to pass the job's limit, so the loop always ends.
 - **Jobs keep the limit they reserved for.** Each job records its own `maxCorrectionRounds` when its reservation is made.
   A job already running when the limit changed has no such field, so it keeps its one correction round and its smaller
-  reservation. No job is given rounds it hasn't reserved. The only way to raise the limit is an owner's **Continue
+  reservation. No job is given rounds it hasn't reserved. The only way to raise the limit is a person's **Continue
   generation**, which reserves those rounds first (see [Human review](#human-review)).
 - **How input is bounded.** `requestInputBytes` measures the system prompt, the user message, the JSON schema, and any
   tool definition, and adds a fixed allowance for provider framing. A request over its stage's bound isn't sent. The cost
@@ -190,13 +190,29 @@ starts fresh.
 
 **What an owner sees.** **Needs review** at `/resources/manage/chapter-guides` lists the queue, and each item opens the
 draft, the outstanding findings, and the continuation's cost. `getReviewQueue` and `getReviewDetail` return `null` to
-anyone but an admin. There's no editing or approving here, and doing nothing leaves the item queued.
+anyone but an admin or a chapter guide reviewer. There's no editing or approving here, and doing nothing leaves the item
+queued.
 
-**Continue generation.** `chapterGuides:continueReview` authenticates an admin, then, in one serializable mutation,
+**Chapter guide reviewers.** `users.isChapterGuideReviewer` gives an account review access and nothing else. Set it on
+the account's `users` row in the Convex dashboard; no client-callable function can write it. An account's signed-in row
+is the one `users:viewer` resolves to, so a flag on an unlinked legacy row or a retired provisional row grants nothing.
+
+- **What a reviewer can do.** Use `getReviewQueue`, `getReviewDetail`, and `continueReview`. The same page shows them
+  only the review queue, linked as **Chapter guide reviews** from the account menu and Settings.
+- **What a reviewer can't do.** `getOwnerOverview` returns `null` to them, and `setPaused` and `setMonthlyCap` are
+  `Forbidden`. The resource manager and citation tools still require `users.isAdmin`.
+- **What a reviewer is told.** The continuation's reservation, including earlier continuations', because continuing
+  spends money. A guide's spending so far comes back as `null`, and the page never gets the month's spending, the cap,
+  or the state of the keys and secrets. `blockedBy` still says when generation is paused, unconfigured, busy, or out of
+  budget, since it explains a disabled button, and the page words those without naming configuration.
+- **What doesn't change.** A reviewer's continuation goes through the same checks as an admin's, so it can't get past a
+  pause, the cap, missing configuration, or the running-job limit.
+
+**Continue generation.** `chapterGuides:continueReview` authenticates an admin or reviewer, then, in one serializable mutation,
 checks the configuration, the pause, the running-job limit, and the current month's room (including the $2 margin),
 reserves the cost in the current UTC month, records a `chapterGuideContinuations` row, and schedules the worker. The
 same job continues, so its round numbers keep counting and its attempts carry a `continuation` number. The row records
-who continued, the reason it was queued, the findings as they stood, and the amount reserved. If that admin later deletes
+who continued, the reason it was queued, the findings as they stood, and the amount reserved. If that person later deletes
 their account, the row stays and is credited to no one.
 
 - **What it allows.** 3 more correction rounds, counted from the job's current round: 1 repair call and up to 2 review
@@ -205,7 +221,7 @@ their account, the row stays and is credited to no one.
   start with a fresh review instead, which adds up to 2 calls, about $9.86 in all.
 - **Nothing skips the checks.** It publishes only through the same path as any guide: a review with no required
   corrections, after each repair has passed validation. Otherwise it returns to the queue with the newest draft and
-  findings, and no further round starts until an owner chooses again, so there's no automatic loop.
+  findings, and no further round starts until a person chooses again, so there's no automatic loop.
 - **Repeat clicks.** Each queue entry has its own `queuedAt`. A second click finds the job running and reserves nothing,
   and a click from a stale page finds a different `queuedAt` and starts nothing.
 - **If a continuation stops early.** A pause, a budget stop, a provider error, or a lost worker returns the job to the
@@ -256,7 +272,7 @@ Validation checks verse coverage, that sources come from the research packet, le
 words or more matches the chapter. A guide that fails isn't published.
 
 Headings and Resources cards call it a chapter guide, in the same style as Come, Follow Me resources, with no AI badge.
-The page's footer says what was and wasn't done: AI writing, no human review (or, if an owner continued it, that no person approved the text), and that the writer saw research notes rather than the source pages. No source is described as read in full, because the search API doesn't report that reliably.
+The page's footer says what was and wasn't done: AI writing, no human review (or, if a person continued it, that no person approved the text), and that the writer saw research notes rather than the source pages. No source is described as read in full, because the search API doesn't report that reliably.
 
 ## Security
 
@@ -264,7 +280,8 @@ The page's footer says what was and wasn't done: AI writing, no human review (or
 - `requestGeneration` needs both the service secret and a live signed-in session, because it trusts the scripture text
   it's given. Only the site's server has the secret.
 - Every function that records spending or publishes a guide is internal, so a client can't call it. The one exception
-  is `continueReview`, which rejects anyone but an admin before it reads a job, and can only reserve and schedule.
+  is `continueReview`, which rejects anyone but an admin or chapter guide reviewer before it reads a job, and can only
+  reserve and schedule.
 - Study paths no longer generate anything: `/api/insights/chapter` only reads the batch cache, so opening a chapter
   never costs money, and the public `upsertChapterInsight` mutation is gone.
 

@@ -37,6 +37,7 @@ export async function getServerConvexToken(): Promise<string | null> {
 export type ServerViewer = {
   appUserId: string;
   isAdmin: boolean;
+  isChapterGuideReviewer: boolean;
 };
 
 /**
@@ -48,7 +49,12 @@ export async function getServerViewer(): Promise<{ viewer: ServerViewer | null; 
   if (!token) return { viewer: null, token: null };
   try {
     const viewer = await convexQuery<ServerViewer | null>("users:viewer", {}, token);
-    return { viewer: viewer ? { appUserId: viewer.appUserId, isAdmin: viewer.isAdmin === true } : null, token };
+    return {
+      viewer: viewer
+        ? { appUserId: viewer.appUserId, isAdmin: viewer.isAdmin === true, isChapterGuideReviewer: viewer.isChapterGuideReviewer === true }
+        : null,
+      token,
+    };
   } catch (error) {
     unstable_rethrow(error);
     console.warn("Could not resolve the signed-in user", error instanceof Error ? error.message : error);
