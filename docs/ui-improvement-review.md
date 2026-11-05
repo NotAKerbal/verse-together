@@ -759,3 +759,25 @@ expanded. Unknowns stay Unknown, and an Unknown beside a number is not an improv
 
 Final row: R3 at `240c5d6f`. Gate Not met for target 9, no established blockers, stopped because the budget of three
 cycles is spent.
+
+## Owner follow-up
+
+After the final verdict, the owner reviewed the mobile reader at the delivered UI and wrote: "I don't like the double chapter
+names... Also the tip and text for the buttons looks horrible on mobile". The owner's direct preference overrides the earlier
+recommendations in this ledger, including the reviewers' and the round proposals that called for these changes.
+
+What the follow-up rolls back:
+
+- **Reader title:** the toolbar's chapter link is the one visible chapter name. The large in-page title is gone. Regular mode keeps
+  one `h1` for screen readers only, and simple mode, which hides the toolbar, shows it. The loading page matches.
+- **Book chapter picker:** the large in-page heading is gone by the same principle. The header title is the visible `h1` and keeps
+  focus after in-place navigation, and the chapter count stays in the page.
+- **Mobile reader actions:** Log, Simple, and Settings are icon-only again, on the loaded reader and the loading page, with their
+  accessible names, titles, and 44px targets. Primary navigation keeps its labels.
+- **First-visit tip:** removed on mobile and desktop, with no replacement.
+
+The default reading width, explicit wide and full preferences, comparison layouts, library artwork, and chapter link chevron are
+unchanged.
+
+The rounds and scores above stay as history. They describe revisions through `240c5d6f` and are not valid for this interface. This
+follow-up was not a review round, and no score, overall or by category, is claimed for it.

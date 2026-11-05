@@ -42,7 +42,6 @@ import { readJstChapter } from "@/lib/jst";
 import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
 import { useSimpleMode } from "@/lib/simpleMode";
-import { hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/reading/useReadingProgress";
@@ -633,8 +632,6 @@ export default function ChapterReader({
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = openResources || openExplorer;
-  const [showTapHint, setShowTapHint] = useState(false);
-  const chapterTitleRef = useRef<HTMLHeadingElement | null>(null);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -843,18 +840,6 @@ export default function ChapterReader({
   }
 
 
-  useEffect(() => {
-    // Show one-time hint on first use, once there is text to select
-    if (!textReady) return;
-    try {
-      if (!hasSeenTapToActionsHint() && !window.location.hash) {
-        setShowTapHint(true);
-      }
-    } catch {
-      // ignore
-    }
-  }, [textReady]);
-
   const selectedText = selectionState?.selectedText ?? "";
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
@@ -1045,9 +1030,6 @@ export default function ChapterReader({
         ) {
           return prev;
         }
-        if (nextSelectionState && showTapHint) {
-          try { setSeenTapToActionsHint(); } catch {}
-        }
         return nextSelectionState;
       });
     }
@@ -1061,7 +1043,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [openResources, openExplorer, customMobileSelectionEnabled, showTapHint, verses]);
+  }, [openResources, openExplorer, customMobileSelectionEnabled, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1280,9 +1262,6 @@ export default function ChapterReader({
       customSelectionActiveRef.current = true;
       setIsCustomTouchSelecting(true);
       if (!applyCustomWordRange(nextWordRange, { haptic: false })) return;
-      if (showTapHint) {
-        try { setSeenTapToActionsHint(); } catch {}
-      }
       setOpenResources(false);
       setOpenExplorer(false);
       window.getSelection?.()?.removeAllRanges();
@@ -1617,7 +1596,6 @@ export default function ChapterReader({
                     aria-hidden="true"
                     className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
                   />
-                  <span className="reader-toolbar-button-label" aria-hidden="true">Settings</span>
                 </button>
                 <ReaderSettings
                   open={settingsOpen}
@@ -1668,24 +1646,7 @@ export default function ChapterReader({
             ) : null}
           </ChapterHeader>
 
-          <ChapterTitle ref={chapterTitleRef} reference={reference} />
-          {showTapHint ? (
-            <aside aria-label="Reader tip" className="reader-tip simple-hide">
-              <p>Select text for notes, resource search, and word study.</p>
-              <button
-                type="button"
-                aria-label="Got it, dismiss tip"
-                onClick={(event) => {
-                  try { setSeenTapToActionsHint(); } catch {}
-                  if (event.detail === 0) chapterTitleRef.current?.focus({ preventScroll: true });
-                  setShowTapHint(false);
-                }}
-                className="reader-tip-dismiss"
-              >
-                Got it
-              </button>
-            </aside>
-          ) : null}
+          <ChapterTitle reference={reference} />
           {jst.status === "loading" ? (
             <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
               Loading Joseph Smith Translation excerpts…

@@ -590,10 +590,6 @@ mark {
   :root:not([data-simple="true"]) .browse-header-fallback {
     display: none;
   }
-
-  :root:not([data-simple="true"]) .browse-page-heading {
-    display: block;
-  }
 }
 
 .desktop-nav-account-placeholder {
@@ -812,10 +808,6 @@ a.reader-toolbar-crumb {
   color: var(--foreground-muted);
 }
 
-.reader-toolbar-button-label {
-  display: none;
-}
-
 @media (max-width: 639px) {
   .reader-toolbar-crumbs li:not(:last-child) {
     display: none;
@@ -828,48 +820,6 @@ a.reader-toolbar-crumb {
   a.reader-toolbar-crumb {
     padding-inline: 0.125rem;
   }
-}
-
-.reader-tip {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: var(--reader-comfortable-measure);
-  margin-bottom: 1.25rem;
-  padding: 0.5rem 0.5rem 0.5rem 0.875rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 1rem;
-  background: var(--surface-card-strong);
-  color: var(--foreground);
-  font-size: 0.875rem;
-  line-height: 1.35;
-}
-
-.reader-tip > p {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-wrap: pretty;
-}
-
-.reader-tip-dismiss {
-  flex-shrink: 0;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-  padding-inline: 0.875rem;
-  border: 1px solid var(--surface-border);
-  border-radius: 999px;
-  font-weight: 600;
-  transition: background-color 120ms ease;
-}
-
-.reader-tip-dismiss:hover {
-  background: var(--surface-button-hover);
-}
-
-.reader-tip-dismiss:focus-visible {
-  outline: 2px solid var(--accent-rubric);
-  outline-offset: 2px;
 }
 
 /* The search panel is placed against the pill, so it lines up with the pill's right edge. */
@@ -932,22 +882,8 @@ a.reader-toolbar-crumb {
     padding-inline: 0;
   }
 
-  .reader-toolbar-actions .reader-toolbar-button {
-    flex-direction: column;
-    gap: 0.0625rem;
-    border-radius: 0.875rem;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    line-height: 1.15;
-  }
-
-  .reader-toolbar-actions .reader-toolbar-button > svg {
-    width: 1.125rem;
-    height: 1.125rem;
-  }
-
-  .reader-toolbar-button-label {
-    display: block;
+  .reader-toolbar-log-label {
+    display: none;
   }
 
   .reader-toolbar-crumb {
@@ -1133,18 +1069,6 @@ a.reader-toolbar-crumb {
     width: 1.25rem;
     height: 1.25rem;
   }
-}
-
-.browse-page-intro {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding-inline: 0.25rem;
-}
-
-.browse-page-heading {
-  display: none;
-  margin-top: 0.5rem;
 }
 
 .browse-title {
@@ -2165,35 +2089,23 @@ a.reader-toolbar-crumb {
 }
 
 .reader-chapter-title {
-  margin: 1rem 0 1.25rem;
-  padding-inline: 0.25rem;
-  font-family: var(--font-serif-text);
-  font-size: clamp(1.9rem, 3vw, 2.6rem);
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.016em;
-  color: var(--foreground);
-  overflow-wrap: anywhere;
-}
-
-.reader-chapter-title:focus-visible {
-  outline: 2px solid var(--accent-rubric);
-  outline-offset: 2px;
-  border-radius: 0.25rem;
-}
-
-@media (min-width: 900px) {
-  .reader-chapter-title {
-    margin-top: 0.5rem;
-  }
-}
-
-:root[data-simple="true"] .reader-chapter-title {
   margin: 0 0 1.5rem;
+  font-family: var(--font-serif-text);
   font-size: 1.25rem;
+  font-weight: 400;
   letter-spacing: -0.01em;
   color: var(--foreground-soft);
   text-align: center;
+}
+
+:root:not([data-simple="true"]) .reader-chapter-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .reader-simple-nav {

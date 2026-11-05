@@ -101,15 +101,12 @@ function VolumeView({ volume, volumeSlug }: { volume: string; volumeSlug: string
 function BookSelectionView({ view }: { view: BookView }) {
   return (
     <section className="page-shell browse-shell">
-      <SelectionHeader
-        title={view.label}
-        backHref={view.backHref}
-        pageDetail={
-          <p className="text-[0.72rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-soft)]">
-            {view.chapterCount} {view.delineation.toLowerCase()}{view.chapterCount === 1 ? "" : "s"}
-          </p>
-        }
-      />
+      <SelectionHeader title={view.label} backHref={view.backHref} />
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <p className="text-[0.72rem] font-bold uppercase tracking-[0.1em] text-[color:var(--foreground-soft)]">
+          {view.chapterCount} {view.delineation.toLowerCase()}{view.chapterCount === 1 ? "" : "s"}
+        </p>
+      </div>
       <ChapterGrid
         volume={view.volumeSlug}
         book={view.book}
