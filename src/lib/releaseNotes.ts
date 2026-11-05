@@ -43,6 +43,7 @@ export type UnreleasedNotes = {
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
+    { kind: "improved", text: "Side by side comparison now lines verses up in clean columns at your reading size, and shows Joseph Smith Translation wording beside the KJV." },
     { kind: "improved", text: "The reading appearance menu is simpler, with a full-width text size slider and grab handle, no text width option on phones, easier Bible controls, and a Joseph Smith Translation switch you no longer have to expand a section to reach." },
     { kind: "improved", text: "The Bibles you turn on to compare now stay on as you move between chapters and other pages, until you turn them off. Your choice is saved on this device." },
   ],

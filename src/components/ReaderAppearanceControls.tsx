@@ -42,8 +42,8 @@ const TEXT_WIDTH_DESCRIPTIONS: Record<ReaderTextWidth, string> = {
 };
 
 const COMPARISON_DESCRIPTIONS: Record<ReaderPreferences["comparisonView"], string> = {
-  inline: "Compared translations follow each verse that differs.",
-  sideBySide: "Compared translations sit beside each verse that differs.",
+  inline: "Compared wording appears within each verse that differs, and JST passages read in place of the KJV.",
+  sideBySide: "Each verse lines up in columns with its compared translations and JST wording, stacking when space is tight.",
 };
 
 function stopPropagation(event: React.SyntheticEvent) {
