@@ -17,6 +17,7 @@ import { useChapterNavigation, usePageCoveredByChapterNavigation } from "./Chapt
 import {
   ChapterHeader,
   ChapterSimpleNav,
+  ChapterTitle,
   ChapterTextBoundary,
   ChapterTextPending,
   READER_HEADER_BUTTON_CLASS,
@@ -41,7 +42,6 @@ import { readJstChapter } from "@/lib/jst";
 import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
 import { useSimpleMode } from "@/lib/simpleMode";
-import { hasSeenTapToActionsHint, setSeenTapToActionsHint } from "@/lib/preferences";
 import { useReaderPreferences } from "@/lib/useReaderPreferences";
 import { useInsightBuilder } from "@/features/insights/InsightBuilderProvider";
 import { useMyReadingLog, useTrackLastPosition } from "@/features/reading/useReadingProgress";
@@ -632,7 +632,6 @@ export default function ChapterReader({
   const [customSelectionRects, setCustomSelectionRects] = useState<HighlightRect[]>([]);
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = openResources || openExplorer;
-  const [showTapHint, setShowTapHint] = useState(false);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -841,18 +840,6 @@ export default function ChapterReader({
   }
 
 
-  useEffect(() => {
-    // Show one-time hint on first use, once there is text to select
-    if (!textReady) return;
-    try {
-      if (!hasSeenTapToActionsHint()) {
-        setShowTapHint(true);
-      }
-    } catch {
-      // ignore
-    }
-  }, [textReady]);
-
   const selectedText = selectionState?.selectedText ?? "";
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
@@ -1043,10 +1030,6 @@ export default function ChapterReader({
         ) {
           return prev;
         }
-        if (nextSelectionState && showTapHint) {
-          try { setSeenTapToActionsHint(); } catch {}
-          setShowTapHint(false);
-        }
         return nextSelectionState;
       });
     }
@@ -1060,7 +1043,7 @@ export default function ChapterReader({
       window.removeEventListener("resize", syncSelectionState);
       window.removeEventListener("scroll", syncSelectionState, true);
     };
-  }, [openResources, openExplorer, customMobileSelectionEnabled, showTapHint, verses]);
+  }, [openResources, openExplorer, customMobileSelectionEnabled, verses]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1279,10 +1262,6 @@ export default function ChapterReader({
       customSelectionActiveRef.current = true;
       setIsCustomTouchSelecting(true);
       if (!applyCustomWordRange(nextWordRange, { haptic: false })) return;
-      if (showTapHint) {
-        try { setSeenTapToActionsHint(); } catch {}
-        setShowTapHint(false);
-      }
       setOpenResources(false);
       setOpenExplorer(false);
       window.getSelection?.()?.removeAllRanges();
@@ -1586,6 +1565,7 @@ export default function ChapterReader({
             ref={scriptureColumnRef}
             className="reader-column relative w-full max-w-6xl mx-auto"
             data-text-width={prefs.textWidth}
+            data-comparing={overlayTranslations.length > 0 || hasJstColumn ? "true" : undefined}
             style={
               hasSidebarPanelOpen && desktopScriptureOffset > 0
                 ? { left: `-${desktopScriptureOffset}px` }
@@ -1666,7 +1646,7 @@ export default function ChapterReader({
             ) : null}
           </ChapterHeader>
 
-          <h1 className="simple-only reader-simple-title">{reference}</h1>
+          <ChapterTitle reference={reference} />
           {jst.status === "loading" ? (
             <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
               Loading Joseph Smith Translation excerpts…
@@ -2012,39 +1992,6 @@ export default function ChapterReader({
           loaded={chapterAnnotationData !== undefined}
           onClose={() => setAnnotationEditorVerse(null)}
         />
-      ) : null}
-
-      {/* One-time onboarding tooltip */}
-      {showTapHint && !overlayOpen && !hasSelection ? (
-        <div
-          className="simple-hide fixed inset-x-0 z-40 pointer-events-none"
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
-        >
-          <div className="mx-auto max-w-3xl px-3 sm:px-4 pointer-events-auto">
-            <div
-              className="mx-auto w-full sm:w-auto sm:inline-block rounded-md border border-[color:var(--surface-border)] bg-background/90 px-3 py-2 shadow"
-              style={{ maxWidth: "28rem" }}
-              role="dialog"
-              aria-live="polite"
-            >
-              <div className="text-sm flex items-start gap-3">
-                <div className="text-lg select-none" aria-hidden>Tip</div>
-                <div className="flex-1">
-                  Select passage text to see note, resource search, and word study actions.
-                </div>
-                <button
-                  onClick={() => {
-                    try { setSeenTapToActionsHint(); } catch {}
-                    setShowTapHint(false);
-                  }}
-                  className="ml-2 text-sm px-2 py-1 rounded-md border border-[color:var(--surface-border)] hover:bg-black/5 dark:hover:bg-white/10"
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       {simpleMode ? null : (

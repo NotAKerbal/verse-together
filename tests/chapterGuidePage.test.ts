@@ -133,6 +133,17 @@ describe("the full chapter guide page", () => {
     expect(companion.props).toBeNull();
   });
 
+  test("the pending page reads from heading to status to reader, without paragraphs of explanation", async () => {
+    convex.query.mockResolvedValue({ guide: null, generating: { stage: "research", startedAt: 1 }, availability: null });
+    const html = renderToStaticMarkup(await ChapterGuidePage(params()));
+    const order = ["<h1", "This guide is being written.", "Step 1 of 3: Researching the chapter", 'role="progressbar"', "Open 1 Nephi 1 in the reader"].map((text) => html.indexOf(text));
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toMatch(/<h1[^>]*>1 Nephi 1 guide<\/h1>/);
+    expect(html).not.toMatch(/several minutes|keep reading|come back later|saved here for everyone|more steps follow/);
+  });
+
   test("during a cooldown, the page says why it can't be requested yet instead of offering it", async () => {
     convex.query.mockResolvedValue({ guide: null, generating: null, availability: "cooldown", cooldown: { retryAt: Date.now() + 2.5 * 60 * 60_000, failedStage: "recheck" } });
     const html = renderToStaticMarkup(await ChapterGuidePage(params()));
