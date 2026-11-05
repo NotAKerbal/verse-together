@@ -98,6 +98,16 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.24.1-navigation",
+    viewport: { width: 1280, height: 720 },
+    async run(page, viewport) {
+      await open(page, "/browse/newtestament/mark/9");
+      await page.locator('.desktop-nav-links[data-measured="true"]').waitFor();
+      await page.locator(".reader-header-slot .reader-toolbar-crumb-chevron").waitFor();
+      return pad(await page.locator(".app-header").boundingBox(), 8, viewport);
+    },
+  },
+  {
     name: "2.23.0-side-by-side",
     viewport: { width: 1440, height: 1000 },
     async run(page, viewport) {

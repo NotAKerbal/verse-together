@@ -25,4 +25,5 @@ export const RELEASE_NOTE_IMAGES: Record<string, number> = {
   "/release-notes/2.16.0-lesson-explore.webp": require("../../../../public/release-notes/2.16.0-lesson-explore.webp"),
   "/release-notes/2.17.0-tester-signup.webp": require("../../../../public/release-notes/2.17.0-tester-signup.webp"),
   "/release-notes/2.18.0-feature-guide.webp": require("../../../../public/release-notes/2.18.0-feature-guide.webp"),
+  "/release-notes/2.24.1-navigation.webp": require("../../../../public/release-notes/2.24.1-navigation.webp"),
 };

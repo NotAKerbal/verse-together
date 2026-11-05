@@ -42,16 +42,34 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "The reader’s default Comfortable text width is narrower on larger screens, so lines are easier to follow. Comparing translations still gets more room, and the Wide and Full choices work as before." },
-    { kind: "improved", text: "The main navigation shows labels with its icons, including on phones, though narrower desktop windows with page controls in the header may label only the current page. In the reader, a small arrow by the chapter name shows it opens the chapter picker, and the one-time tip about selecting text no longer appears." },
-    { kind: "improved", text: "While a chapter guide is being written, its page lines up the heading and progress in one column with less explanatory text, and the status in Resources is more compact." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.24.1",
+    date: "2026-11-05",
+    title: "Easier-to-follow text and labeled navigation",
+    items: [
+      { kind: "improved", text: "The reader’s default Comfortable text width is narrower on larger screens, so lines are easier to follow. Comparing translations still gets more room, and the Wide and Full choices work as before." },
+      {
+        kind: "improved",
+        text: "The main navigation shows labels with its icons, including on phones, though narrower desktop windows with page controls in the header may label only the current page. In the reader, a small arrow by the chapter name shows it opens the chapter picker, and the one-time tip about selecting text no longer appears.",
+        screenshot: {
+          src: "/release-notes/2.24.1-navigation.webp",
+          width: 1600,
+          height: 86,
+          alt: "The app header with the main navigation labeled Browse, Journal and Come Follow Me beside their icons, and the chapter picker showing Mark 9 with a small down arrow.",
+          caption: "Labeled navigation, and an arrow showing Mark 9 opens the chapter picker.",
+        },
+      },
+      { kind: "improved", text: "While a chapter guide is being written, its page lines up the heading and progress in one column with less explanatory text, and the status in Resources is more compact." },
+    ],
+    commits: ["e5337a97", "0225f175", "240c5d6f", "0788b308", "67d953c0"],
+  },
+  {
     version: "2.24.0",
+    masterCommit: "943969f3",
     date: "2026-11-05",
     title: "Chapter guide progress and human review",
     items: [
