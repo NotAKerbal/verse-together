@@ -42,14 +42,32 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "On desktop, the arrow in the header now turns simple mode on and off. The reader’s text stays in place when you switch, and selection tools, annotations, and notes stay available in simple mode." },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.25.0",
+    date: "2026-11-05",
+    title: "Simple reading with study tools",
+    items: [
+      {
+        kind: "improved",
+        text: "On desktop, the arrow in the header now turns simple mode on and off. The reader’s text stays in place when you switch, and selection tools, annotations, and notes stay available in simple mode.",
+        screenshot: {
+          src: "/release-notes/2.25.0-simple-mode.webp",
+          width: 1600,
+          height: 1090,
+          alt: "The reader in simple mode on desktop: the header shows only the Verse Together name and the arrow that turns simple mode off, and 1 Nephi 3:7 is selected with its menu open, showing the highlight and underline buttons, New Note, Annotate, Resources and Focus scripture.",
+          caption: "Simple mode, turned on with the header arrow, with the selection menu’s marks and Annotate still available.",
+        },
+      },
+    ],
+    commits: ["c9911063"],
+  },
+  {
     version: "2.24.1",
+    masterCommit: "badb6bf9",
     date: "2026-11-05",
     title: "Easier-to-follow text and labeled navigation",
     items: [

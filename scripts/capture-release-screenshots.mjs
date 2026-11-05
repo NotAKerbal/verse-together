@@ -98,6 +98,23 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.25.0-simple-mode",
+    viewport: { width: 1280, height: 860 },
+    async run(page, viewport) {
+      await open(page, "/browse/bookofmormon/1nephi/3");
+      await page.locator(".desktop-nav-toggle").click();
+      await page.locator('.desktop-nav-toggle[aria-pressed="true"]').waitFor();
+      await page.waitForTimeout(800);
+      const verse = page.locator(".reader-verse").nth(6);
+      await dragAcross(page, verse);
+      await page.getByRole("dialog", { name: "Selection actions" }).waitFor();
+      const header = await page.locator(".app-header").boundingBox();
+      const menu = await page.getByRole("dialog", { name: "Selection actions" }).boundingBox();
+      const area = union(header, menu, await verse.boundingBox());
+      return pad({ ...area, y: 0, height: area.y + area.height }, 12, viewport);
+    },
+  },
+  {
     name: "2.24.1-navigation",
     viewport: { width: 1280, height: 720 },
     async run(page, viewport) {
