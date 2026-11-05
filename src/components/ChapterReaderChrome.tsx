@@ -2,7 +2,7 @@
 
 import { faChevronDown, faEye, faEyeSlash, faGear } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Children, Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Children, Component, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -114,16 +114,15 @@ export function ChapterHeader({
               {crumbs.currentHref ? (
                 <ChapterLink
                   href={crumbs.currentHref}
-                  aria-current="page"
                   aria-label={`${reference}: choose a chapter`}
-                  className="reader-toolbar-crumb"
+                  className="reader-toolbar-crumb reader-toolbar-crumb-current"
                   title={`${reference}: choose a chapter`}
                 >
                   <span className="reader-toolbar-crumb-text">{reference}</span>
                   <FontAwesomeIcon icon={faChevronDown} aria-hidden="true" className="reader-toolbar-crumb-chevron" />
                 </ChapterLink>
               ) : (
-                <span aria-current="page" className="reader-toolbar-crumb" title={reference}>
+                <span aria-current="page" className="reader-toolbar-crumb reader-toolbar-crumb-current" title={reference}>
                   {reference}
                 </span>
               )}
@@ -148,10 +147,12 @@ export function ChapterHeader({
           className={READER_HEADER_BUTTON_CLASS}
         >
           <FontAwesomeIcon icon={simpleMode ? faEyeSlash : faEye} aria-hidden="true" className="h-4 w-4" />
+          <span className="reader-toolbar-button-label" aria-hidden="true">Simple</span>
         </button>
         {settings ?? (
           <button type="button" aria-label="Reader settings" title="Reader settings" disabled className={READER_HEADER_BUTTON_CLASS}>
             <FontAwesomeIcon icon={faGear} aria-hidden="true" className="h-4 w-4" />
+            <span className="reader-toolbar-button-label" aria-hidden="true">Settings</span>
           </button>
         )}
       </div>
@@ -255,8 +256,12 @@ export class ChapterTextBoundary extends Component<ChapterTextBoundaryProps, { f
   }
 }
 
-export function ChapterTitle({ reference }: { reference: string }) {
-  return <h1 className="reader-chapter-title">{reference}</h1>;
+export function ChapterTitle({ reference, ref }: { reference: string; ref?: Ref<HTMLHeadingElement> }) {
+  return (
+    <h1 ref={ref} className="reader-chapter-title" tabIndex={-1}>
+      {reference}
+    </h1>
+  );
 }
 
 /** Previous/Next chapter links, shown in simple mode. */

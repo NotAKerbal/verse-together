@@ -53,7 +53,6 @@
   --header-height: 4rem;
   --desktop-nav-control-size: 2.25rem;
   --mobile-nav-bottom: max(0.85rem, env(safe-area-inset-bottom));
-  --mobile-nav-height: 3.75rem;
   --input-surface: #fffdf9;
   --mobile-nav-shell: #fbf9f4;
   --mobile-nav-ring: #d9d1c1;
@@ -789,12 +788,31 @@ a.reader-toolbar-crumb:hover {
   color: var(--foreground);
 }
 
-.reader-toolbar-crumb[aria-current="page"] {
+.reader-toolbar-crumb-current {
   color: var(--foreground);
   font-weight: 600;
 }
 
+a.reader-toolbar-crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.reader-toolbar-crumb-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .reader-toolbar-crumb > .reader-toolbar-crumb-chevron {
+  flex-shrink: 0;
+  width: 0.625rem;
+  height: 0.625rem;
+  color: var(--foreground-muted);
+}
+
+.reader-toolbar-button-label {
   display: none;
 }
 
@@ -808,37 +826,8 @@ a.reader-toolbar-crumb:hover {
   }
 
   a.reader-toolbar-crumb {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
     padding-inline: 0.125rem;
   }
-
-  .reader-toolbar-crumb-text {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .reader-toolbar-crumb > .reader-toolbar-crumb-chevron {
-    display: block;
-    flex-shrink: 0;
-    width: 0.625rem;
-    height: 0.625rem;
-    color: var(--foreground-muted);
-  }
-}
-
-.reader-tip-dock {
-  position: fixed;
-  inset-inline: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
-  z-index: 40;
-  display: flex;
-  justify-content: center;
-  margin-block: 0;
-  padding-inline: var(--shell-gutter);
-  pointer-events: none;
 }
 
 .reader-tip {
@@ -846,16 +835,15 @@ a.reader-toolbar-crumb:hover {
   align-items: center;
   gap: 0.75rem;
   width: 100%;
-  max-width: 28rem;
+  max-width: var(--reader-comfortable-measure);
+  margin-bottom: 1.25rem;
   padding: 0.5rem 0.5rem 0.5rem 0.875rem;
   border: 1px solid var(--surface-border);
   border-radius: 1rem;
   background: var(--surface-card-strong);
-  box-shadow: var(--surface-shadow-soft);
   color: var(--foreground);
   font-size: 0.875rem;
   line-height: 1.35;
-  pointer-events: auto;
 }
 
 .reader-tip > p {
@@ -882,12 +870,6 @@ a.reader-toolbar-crumb:hover {
 .reader-tip-dismiss:focus-visible {
   outline: 2px solid var(--accent-rubric);
   outline-offset: 2px;
-}
-
-@media (max-width: 639px) {
-  .reader-tip-dock {
-    bottom: calc(var(--mobile-nav-bottom) + var(--mobile-nav-height) + 0.75rem);
-  }
 }
 
 /* The search panel is placed against the pill, so it lines up with the pill's right edge. */
@@ -950,8 +932,22 @@ a.reader-toolbar-crumb:hover {
     padding-inline: 0;
   }
 
-  .reader-toolbar-log-label {
-    display: none;
+  .reader-toolbar-actions .reader-toolbar-button {
+    flex-direction: column;
+    gap: 0.0625rem;
+    border-radius: 0.875rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.15;
+  }
+
+  .reader-toolbar-actions .reader-toolbar-button > svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .reader-toolbar-button-label {
+    display: block;
   }
 
   .reader-toolbar-crumb {
@@ -2178,6 +2174,12 @@ a.reader-toolbar-crumb:hover {
   letter-spacing: -0.016em;
   color: var(--foreground);
   overflow-wrap: anywhere;
+}
+
+.reader-chapter-title:focus-visible {
+  outline: 2px solid var(--accent-rubric);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
 }
 
 @media (min-width: 900px) {

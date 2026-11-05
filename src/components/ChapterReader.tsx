@@ -634,6 +634,7 @@ export default function ChapterReader({
   const jumpHighlightTimeout = useRef<number | null>(null);
   const overlayOpen = openResources || openExplorer;
   const [showTapHint, setShowTapHint] = useState(false);
+  const chapterTitleRef = useRef<HTMLHeadingElement | null>(null);
   const layoutGridRef = useRef<HTMLDivElement | null>(null);
   const scriptureColumnRef = useRef<HTMLDivElement | null>(null);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -846,7 +847,7 @@ export default function ChapterReader({
     // Show one-time hint on first use, once there is text to select
     if (!textReady) return;
     try {
-      if (!hasSeenTapToActionsHint()) {
+      if (!hasSeenTapToActionsHint() && !window.location.hash) {
         setShowTapHint(true);
       }
     } catch {
@@ -1046,7 +1047,6 @@ export default function ChapterReader({
         }
         if (nextSelectionState && showTapHint) {
           try { setSeenTapToActionsHint(); } catch {}
-          setShowTapHint(false);
         }
         return nextSelectionState;
       });
@@ -1282,7 +1282,6 @@ export default function ChapterReader({
       if (!applyCustomWordRange(nextWordRange, { haptic: false })) return;
       if (showTapHint) {
         try { setSeenTapToActionsHint(); } catch {}
-        setShowTapHint(false);
       }
       setOpenResources(false);
       setOpenExplorer(false);
@@ -1618,6 +1617,7 @@ export default function ChapterReader({
                     aria-hidden="true"
                     className={`h-4 w-4 transition-[transform,color] duration-200 ease-out ${settingsOpen ? "rotate-45" : "rotate-0"}`}
                   />
+                  <span className="reader-toolbar-button-label" aria-hidden="true">Settings</span>
                 </button>
                 <ReaderSettings
                   open={settingsOpen}
@@ -1668,7 +1668,24 @@ export default function ChapterReader({
             ) : null}
           </ChapterHeader>
 
-          <ChapterTitle reference={reference} />
+          <ChapterTitle ref={chapterTitleRef} reference={reference} />
+          {showTapHint ? (
+            <aside aria-label="Reader tip" className="reader-tip simple-hide">
+              <p>Select text for notes, resource search, and word study.</p>
+              <button
+                type="button"
+                aria-label="Got it, dismiss tip"
+                onClick={(event) => {
+                  try { setSeenTapToActionsHint(); } catch {}
+                  if (event.detail === 0) chapterTitleRef.current?.focus({ preventScroll: true });
+                  setShowTapHint(false);
+                }}
+                className="reader-tip-dismiss"
+              >
+                Got it
+              </button>
+            </aside>
+          ) : null}
           {jst.status === "loading" ? (
             <div className="text-[11px] sm:text-xs text-foreground/55" role="status" aria-live="polite">
               Loading Joseph Smith Translation excerpts…
@@ -2014,25 +2031,6 @@ export default function ChapterReader({
           loaded={chapterAnnotationData !== undefined}
           onClose={() => setAnnotationEditorVerse(null)}
         />
-      ) : null}
-
-      {showTapHint && !overlayOpen && !hasSelection ? (
-        <div className="reader-tip-dock simple-hide">
-          <aside aria-label="Reader tip" className="reader-tip">
-            <p>Select text for notes, resource search, and word study.</p>
-            <button
-              type="button"
-              aria-label="Got it, dismiss tip"
-              onClick={() => {
-                try { setSeenTapToActionsHint(); } catch {}
-                setShowTapHint(false);
-              }}
-              className="reader-tip-dismiss"
-            >
-              Got it
-            </button>
-          </aside>
-        </div>
       ) : null}
 
       {simpleMode ? null : (
