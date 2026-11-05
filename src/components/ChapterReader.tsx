@@ -34,7 +34,9 @@ import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import { useComparisonChapters } from "./useComparisonChapters";
 import { useJstExcerpts } from "./useJstExcerpts";
 import JstExcerptCard from "./JstExcerptCard";
-import JstVerseText from "./JstVerseText";
+import JstVerseText, { JstPassageStatus } from "./JstVerseText";
+import { VerseColumnsHeader, VerseColumnsRow, verseColumnsScopeStyle, type VerseColumn, type VerseComparisonCell } from "./VerseColumns";
+import { normalizeCompareText, readTranslationVerse } from "@/lib/verseComparison";
 import { readJstChapter } from "@/lib/jst";
 import { useJstPreference } from "@/lib/jstPreference";
 import ReaderSettings from "./ReaderSettings";
@@ -71,7 +73,7 @@ import {
   verseMarkAttributes,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
-import { selectedVerseRanges, selectedVersePassages, restoreVerseRange } from "@/lib/verseSelection";
+import { scriptureClientRects, selectedVerseRanges, selectedVersePassages, restoreVerseRange } from "@/lib/verseSelection";
 import type { VerseTextRange } from "../../convex/annotationRules";
 import { api } from "../../convex/_generated/api";
 
@@ -306,8 +308,9 @@ function createRangeFromWordRange(wordRange: WordRange): Range {
   return range;
 }
 
-function getHighlightRectsFromRange(range: Range): HighlightRect[] {
-  return Array.from(range.getClientRects())
+function getHighlightRectsFromRange(range: Range, container: HTMLElement | null): HighlightRect[] {
+  const inColumns = container?.closest(".verse-columns");
+  return (inColumns ? scriptureClientRects(range, container!) : Array.from(range.getClientRects()))
     .filter((rect) => rect.width > 0 || rect.height > 0)
     .map((rect) => ({
       top: rect.top,
@@ -322,14 +325,6 @@ type DiffSegment = {
   primary: string[];
   compare: string[];
 };
-
-function normalizeCompareText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function formatTranslationShortLabel(translationId: string | undefined): string {
   if (!translationId) return "UNKNOWN";
@@ -797,7 +792,7 @@ export default function ChapterReader({
     const prevWordRange = customWordRangeRef.current;
     customWordRangeRef.current = nextWordRange;
     setSelectionState(nextState);
-    setCustomSelectionRects(getHighlightRectsFromRange(range));
+    setCustomSelectionRects(getHighlightRectsFromRange(range, verseListRef.current));
 
     const changed =
       !prevWordRange ||
@@ -923,6 +918,18 @@ export default function ChapterReader({
     [compareByTranslation, translationNameById]
   );
   const hasCompareSelections = compareByTranslation.size > 0;
+  const hasJstColumn = jstReading.rows.size > 0;
+  const sideBySide = prefs.comparisonView === "sideBySide" && (hasCompareSelections || hasJstColumn);
+  const primaryColumn: VerseColumn = {
+    key: "primary",
+    label: hasJstColumn ? "KJV" : primaryTranslationLabel,
+    title: translationNameById.get(primaryTranslation ?? "") ?? primaryTranslationLabel,
+    colorClass: "text-amber-700 dark:text-amber-300",
+  };
+  const comparisonColumns: VerseColumn[] = [
+    ...(hasJstColumn ? [{ key: "jst", label: "JST", title: "Joseph Smith Translation", colorClass: "text-[color:var(--foreground-muted)]" }] : []),
+    ...compareLegend.map((item) => ({ key: item.translationId, label: item.label, title: item.title, colorClass: item.colorClass })),
+  ];
   const shareHref = selectedVerses.length > 0
     ? buildShareUrl({ volume, book, chapter, verses: selectedVerses.map((verse) => verse.verse) })
     : null;
@@ -959,7 +966,7 @@ export default function ChapterReader({
           startWord: { start: { node: firstWord.startContainer, offset: firstWord.startOffset }, end: { node: firstWord.endContainer, offset: firstWord.endOffset } },
           endWord: { start: { node: lastWord.startContainer, offset: lastWord.startOffset }, end: { node: lastWord.endContainer, offset: lastWord.endOffset } },
         };
-        setCustomSelectionRects(getHighlightRectsFromRange(range));
+        setCustomSelectionRects(getHighlightRectsFromRange(range, verseListRef.current));
       }
     } else if (range) {
       const selection = window.getSelection();
@@ -1621,7 +1628,7 @@ export default function ChapterReader({
               </div>
             }
           >
-            {hasCompareSelections ? (
+            {hasCompareSelections && !sideBySide ? (
               <div className="text-[11px] sm:text-xs text-foreground/60 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="text-foreground/45">Key:</span>
                 <span
@@ -1670,15 +1677,7 @@ export default function ChapterReader({
           ) : jst.status === "ready" ? (
             <div className="text-[11px] sm:text-xs text-foreground/55">
               <span role="status" aria-live="polite">
-                {jstReading.integrated.length > 0 ? (
-                  <>
-                    {jstReading.integrated.length === 1 ? "1 JST passage" : `${jstReading.integrated.length} JST passages`} read
-                    in place of the KJV; <ins className="jst-added">JST wording</ins> is underlined. Turn off the JST to
-                    highlight or note those verses.
-                  </>
-                ) : (
-                  "The JST appendix has a note for this chapter."
-                )}
+                <JstPassageStatus passages={jstReading.integrated.length} sideBySide={sideBySide} />
               </span>
               {jstOmitsWording ? (
                 <>
@@ -1711,6 +1710,11 @@ export default function ChapterReader({
                     {jstReading.leading.map((excerpt) => (
                       <JstExcerptCard key={excerpt.id} excerpt={excerpt} />
                     ))}
+                    <div
+                      className={sideBySide ? "verse-columns" : undefined}
+                      style={sideBySide ? verseColumnsScopeStyle(prefs.fontScale, comparisonColumns.length + 1) : undefined}
+                    >
+                    {sideBySide ? <VerseColumnsHeader columns={[primaryColumn, ...comparisonColumns]} /> : null}
                     <ol
                       ref={verseListRef}
                       onContextMenu={(event) => {
@@ -1757,6 +1761,44 @@ export default function ChapterReader({
                             (item): item is { key: string; label: string; compareText: string; compareColorClass: string } =>
                               item !== null
                           );
+                        const verseInsightAction = verseInsightRefs.length > 0 ? (
+                          <VerseInsightMarker
+                            verse={v.verse}
+                            insights={verseInsightRefs}
+                            onOpen={async (draftId) => {
+                              if (draftId !== activeDraftId) await switchDraft(draftId);
+                              openBuilder();
+                            }}
+                          />
+                        ) : null;
+                        const selectableVerse = (children: ReactNode) => (
+                          <div
+                            className={`min-w-0 flex-1 text-left ${
+                              customMobileSelectionEnabled
+                                ? "select-none"
+                                : "select-text selection:bg-[color:var(--accent-primary)] selection:text-foreground"
+                            }`}
+                            data-verse={v.verse}
+                            data-verse-selectable="true"
+                            style={
+                              customMobileSelectionEnabled
+                                ? ({
+                                    userSelect: "none",
+                                    WebkitUserSelect: "none",
+                                    WebkitTouchCallout: "none",
+                                  } as CSSProperties)
+                                : undefined
+                            }
+                          >
+                            <span className="verse-badge">{v.verse}</span>
+                            {children}
+                          </div>
+                        );
+                        const comparisonCells: VerseComparisonCell[] = comparisonColumns.map((column) =>
+                          column.key === "jst"
+                            ? { column, kind: "jst", row: jstRow, showOmitted: showJstOmitted }
+                            : { column, kind: "translation", reading: readTranslationVerse(v.text, compareByTranslation.get(column.key)?.get(v.verse)) }
+                        );
                         return (
                           <li
                             key={v.verse}
@@ -1786,6 +1828,15 @@ export default function ChapterReader({
                                 onOpen={openReading}
                               />
                             ) : null}
+                            {sideBySide ? (
+                              <VerseColumnsRow
+                                primary={selectableVerse(
+                                  <VerseMarkedText annotation={myVerseAnnotation}>{renderVerseText(v)}</VerseMarkedText>
+                                )}
+                                aside={verseInsightAction}
+                                cells={comparisonCells}
+                              />
+                            ) : (
                             <div className="flex items-start gap-2">
                               {jstRow ? (
                                 <div className="min-w-0 flex-1 text-left" data-verse={v.verse}>
@@ -1806,56 +1857,11 @@ export default function ChapterReader({
                                     </span>
                                   ) : null}
                                 </div>
-                              ) : (
-                              <div
-                                className={`min-w-0 flex-1 text-left ${
-                                  customMobileSelectionEnabled
-                                    ? "select-none"
-                                    : "select-text selection:bg-[color:var(--accent-primary)] selection:text-foreground"
-                                }`}
-                                data-verse={v.verse}
-                                data-verse-selectable="true"
-                                style={
-                                  customMobileSelectionEnabled
-                                    ? ({
-                                        userSelect: "none",
-                                        WebkitUserSelect: "none",
-                                        WebkitTouchCallout: "none",
-                                      } as CSSProperties)
-                                    : undefined
-                                }
-                              >
-                                <span className="verse-badge">{v.verse}</span>
-                                {/* The reader's highlight and underline mark the verse's own words, inline. */}
+                              ) : selectableVerse(
+                                <>
                                 {verseComparisons.length === 0 ? (
                                   <span>
                                     <VerseMarkedText annotation={myVerseAnnotation}>{renderVerseText(v)}</VerseMarkedText>
-                                  </span>
-                                ) : prefs.comparisonView === "sideBySide" ? (
-                                  <span className="mt-1 block space-y-2">
-                                  {verseComparisons.map((comparison) => (
-                                    <span
-                                      key={`${v.verse}-${comparison.key}`}
-                                      className="block rounded-md border border-[color:var(--surface-border)] p-2"
-                                    >
-                                      <span className="grid gap-2 md:grid-cols-2">
-                                        <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
-                                          <span className="block text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                                            {primaryTranslationLabel}
-                                          </span>
-                                          <span className="mt-0.5 block text-sm leading-6">
-                                            <VerseMarkedText annotation={myVerseAnnotation}>{renderVerseText(v)}</VerseMarkedText>
-                                          </span>
-                                        </span>
-                                        <span className="block rounded bg-black/[0.03] dark:bg-white/[0.05] px-2 py-1.5">
-                                          <span className={`block text-[10px] uppercase tracking-wide ${comparison.compareColorClass}`}>
-                                            {comparison.label}
-                                          </span>
-                                          <span className="mt-0.5 block text-sm leading-6">{comparison.compareText}</span>
-                                        </span>
-                                      </span>
-                                    </span>
-                                  ))}
                                   </span>
                                 ) : (
                                   <span className="text-sm leading-6">
@@ -1872,21 +1878,11 @@ export default function ChapterReader({
                                   ))}
                                   </span>
                                 )}
-                              </div>
+                                </>
                               )}
-                              {verseInsightRefs.length > 0 ? (
-                                <span className="contents simple-hide">
-                                <VerseInsightMarker
-                                  verse={v.verse}
-                                  insights={verseInsightRefs}
-                                  onOpen={async (draftId) => {
-                                    if (draftId !== activeDraftId) await switchDraft(draftId);
-                                    openBuilder();
-                                  }}
-                                />
-                                </span>
-                              ) : null}
+                              {verseInsightAction ? <span className="contents simple-hide">{verseInsightAction}</span> : null}
                             </div>
+                            )}
                             {/* Only a note gets a card; a highlight or underline alone is drawn on the verse text above. */}
                             {myVerseAnnotation?.body ? (
                               <div
@@ -1902,6 +1898,7 @@ export default function ChapterReader({
                         );
                       })}
                     </ol>
+                    </div>
                   </>
                 )}
               </ChapterText>

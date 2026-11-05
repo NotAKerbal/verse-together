@@ -1470,6 +1470,121 @@ a.reader-toolbar-crumb:hover {
   margin-top: 0.25rem;
 }
 
+.verse-columns {
+  container: verse-columns / inline-size;
+  font-size: calc(var(--verse-font-size) * var(--verse-column-count));
+}
+
+.verse-columns-header {
+  display: none;
+  position: sticky;
+  top: var(--header-height);
+  z-index: 1;
+  grid-template-columns: repeat(var(--verse-column-count), minmax(0, 1fr));
+  column-gap: 1.5rem;
+  margin-inline: -0.5rem;
+  padding: 0.5rem 0.75rem 0.375rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--surface-border) 35%, transparent);
+  background: var(--background);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+:root[data-simple="true"] .verse-columns-header {
+  top: 0;
+}
+
+.verse-columns-header > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.verse-columns-header > span + span {
+  padding-left: 0.75rem;
+}
+
+.verse-columns .reader-verses {
+  --verse-gap: 0px;
+}
+
+.verse-columns .reader-verse {
+  border-radius: 0;
+}
+
+.verse-columns .reader-verse + .reader-verse {
+  border-top: 1px solid color-mix(in oklab, var(--surface-border) 15%, transparent);
+}
+
+.verse-columns-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem 1.5rem;
+}
+
+.verse-columns-cell {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.verse-columns-compare {
+  padding-left: 0.75rem;
+  border-left: 1px solid color-mix(in oklab, var(--surface-border) 25%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.verse-columns-compare[data-empty="true"] {
+  display: none;
+}
+
+.verse-columns-label {
+  display: block;
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.verse-columns-note {
+  color: var(--foreground-muted);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.verse-columns-aside {
+  margin-top: 0.125rem;
+}
+
+@container verse-columns (min-width: 15em) {
+  .verse-columns-header {
+    display: grid;
+  }
+
+  .verse-columns-row {
+    grid-template-columns: repeat(var(--verse-column-count), minmax(0, 1fr));
+  }
+
+  .verse-columns-compare[data-empty="true"] {
+    display: block;
+  }
+
+  .verse-columns-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 .verse-read-marker {
   position: absolute;
   left: -0.75rem;

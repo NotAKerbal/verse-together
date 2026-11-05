@@ -6,6 +6,22 @@ function shortLabel(label: string): string {
   return label.replace(/^JST,\s*/, "");
 }
 
+export function JstPassageStatus({ passages, sideBySide }: { passages: number; sideBySide: boolean }) {
+  if (passages === 0) return <>The JST appendix has a note for this chapter.</>;
+  const count = passages === 1 ? "1 JST passage" : `${passages} JST passages`;
+  return sideBySide ? (
+    <>
+      {count} shown with the KJV; <ins className="jst-added">JST wording</ins> is underlined. Highlights and notes stay
+      on the KJV text.
+    </>
+  ) : (
+    <>
+      {count} read in place of the KJV; <ins className="jst-added">JST wording</ins> is underlined. Turn off the JST to
+      highlight or note those verses.
+    </>
+  );
+}
+
 /**
  * The Joseph Smith Translation's reading of one KJV verse, in the reader's own type: wording it shares with the
  * KJV reads normally and its own wording is quietly underlined, so the passage reads as one text. KJV wording it
