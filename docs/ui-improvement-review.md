@@ -104,8 +104,8 @@ These fixes do not establish a score. Scores come only from fresh review of capt
 | Target score | 9 |
 | Gate | Not met |
 | Confirmed blockers | None |
-| Evidence manifest | `/tmp/verse-ui-round1.json` |
-| Reviewer reports | `/tmp/verse-round1-ux.md`, `/tmp/verse-round1-visual.md`, `/tmp/verse-round1-access.md` |
+| Evidence manifest | [verse-ui-round1.json](ui-review/evidence/verse-ui-round1.json) |
+| Reviewer reports | [ux](ui-review/reviews/verse-round1-ux.md), [visual](ui-review/reviews/verse-round1-visual.md), [access](ui-review/reviews/verse-round1-access.md) |
 | Peer sources accessed | 2026-11-05 UTC |
 
 ### Provenance notes
@@ -267,8 +267,8 @@ These fixes do not establish a score. Scores come only from fresh review of capt
 | Target score | 9 |
 | Gate | Not met |
 | Confirmed blockers | None established by any report |
-| Evidence manifest | `/tmp/verse-ui-round2.json` |
-| Reviewer reports | `/tmp/verse-round2-ux.md`, `/tmp/verse-round2-visual.md`, `/tmp/verse-round2-access.md` |
+| Evidence manifest | [verse-ui-round2.json](ui-review/evidence/verse-ui-round2.json) |
+| Reviewer reports | [ux](ui-review/reviews/verse-round2-ux.md), [visual](ui-review/reviews/verse-round2-visual.md), [access](ui-review/reviews/verse-round2-access.md) |
 | Peer sources accessed | 2026-11-05 UTC |
 
 ### Provenance notes
@@ -417,8 +417,8 @@ Reported by the lead, who ran them independently.
 ## Round 3 proposed fixes
 
 This is the third and final authorized implementation cycle. No further UI changes follow it without the owner's
-approval. These fixes do not establish a score. Scores come only from fresh review of captures taken after the change, and
-that review has not happened.
+approval. These fixes do not establish a score. Scores come only from fresh review of captures taken after the change;
+that review is recorded under Round 3 fresh review.
 
 1. Move the first-visit tip into the reader's content, between the chapter title and the scripture, so it covers neither
    the passage nor the navigation. It keeps its copy, opaque surface, named aside, 44px dismiss button, simple-mode hiding,
@@ -444,6 +444,289 @@ Left out of round 3's scope:
 - Verse spacing rhythm (R1 visual V3). Its source grouping was not settled, so spacing is unchanged.
 - Optional chapter descriptions, seen on a peer (UX and visual peer observations).
 
+## Round 3 fresh review
+
+| Item | Value |
+| --- | --- |
+| Revision | `240c5d6f`. This is the frozen UI revision. A later docs-only commit does not invalidate the review |
+| Scope | Signed-out library → Old Testament books → Genesis chapters → Genesis 1 reader; unchanged from the earlier path |
+| Viewports | Desktop 1280×800, mobile 390×844, and small 320×568; light, plus the dark mobile reader |
+| Build | `npm run build`, then `next start` on port 3124 |
+| Data | Default LDS route, with the bundled server scripture route through `getLocalLdsChapter` and actual verse content. No fake data or backend writes |
+| Council | gpt-6.1-sol (UX), gpt-6-astra (visual), gpt-6.1-terra (accessibility) |
+| Target score | 9 |
+| Gate | Not met |
+| Confirmed blockers | None established by any report |
+| Evidence manifest | [verse-ui-round3.json](ui-review/evidence/verse-ui-round3.json) |
+| Reviewer reports | [ux](ui-review/reviews/verse-round3-ux.md), [visual](ui-review/reviews/verse-round3-visual.md), [access](ui-review/reviews/verse-round3-access.md) |
+| Peer sources accessed | 2026-11-05 UTC |
+
+### Provenance notes
+
+- Models are labeled from the harness assignment recorded by the lead. The reports self-identify generically as Codex and do
+  not expose a model identifier.
+- Every report says it opened E1 to E12, P1, P2, and the K3 record, and could open all of them. Each treats K3 as the
+  lead's recorded observation, not a runtime test the reviewer repeated.
+- E10 and E11 are the same screenshot, so they count as one observation.
+- P1 and P2 are legitimate desktop peer captures. They are not validation of peer behavior.
+
+### What the evidence added
+
+R3 opened evidence earlier rounds did not have: the chapter-end state (E12) and the K3 observation. The scope stayed the
+same and the evidence expanded, so differences from R2 are not a pure before and after, and this ledger does not present them
+as proven improvements.
+
+| Label | Manifest description | File or source |
+| --- | --- | --- |
+| E1 | R3library | `browser-screenshot-localhost-mw38jq4i-c045add8.png` |
+| E2 | R3mobilebooks | `browser-screenshot-localhost-mw38ja1f-40cd1a94.png` |
+| E3 | R3books | `browser-screenshot-localhost-mw38in2u-630fa067.png` |
+| E4 | R3picker | `browser-screenshot-localhost-mw38igik-51b60147.png` |
+| E5 | R3reader | `browser-screenshot-localhost-mw38iax9-b2f51a7e.png` |
+| E6 | R3mobilepicker | `browser-screenshot-localhost-mw38jif6-a48c8e59.png` |
+| E7 | R3mobilereader | `browser-screenshot-localhost-mw38eumh-e246c368.png` |
+| E8 | R3darkreader | `browser-screenshot-localhost-mw38f0k6-8e3d6e77.png` |
+| E9 | R3smallreader | `browser-screenshot-localhost-mw38feff-ed0d40a6.png` |
+| E10 | R3focus | `browser-screenshot-localhost-mw38gsif-a05c2ade.png` |
+| E11 | R3dismissed | `browser-screenshot-localhost-mw38gsif-a05c2ade.png` |
+| E12 | R3end | `browser-screenshot-localhost-mw38h3fr-4f0ea99e.png` |
+| P1 | [Bible.com Genesis 1](https://www.bible.com/bible/1/GEN.1.KJV) | `browser-screenshot-www-bible-com-mw35r3jp-54dd9bdc.png` |
+| P2 | [Church of Jesus Christ Old Testament](https://www.churchofjesuschrist.org/study/scriptures/ot?lang=eng) | `browser-screenshot-www-churchofjesuschrist-org-mw35rjvd-eea1eeb4.png` |
+| K3 | Lead tool observation at 320×568 | `behavior.K3` in the manifest |
+
+Screenshot files are in `/home/jeffrey-home/.t3/userdata/browser-artifacts/`.
+
+K3, verbatim from the manifest:
+
+> Lead tools at240c5d6f production:320x568 scrollWidth320; tip computedpositionstatic, bottom220.13,verse1top248.13; Search,Log,Simple,Settings controls44x44 with real accessible names. Pickerlink noaria-current. SixTabsfromreader focusedGotitdismissbutton2pxoutline, Enterremovedtip andfocusH1Genesis1 with2pxoutline;scrollY0before/after;reloadtipabsent. Atchapterend afterscroll, actualverse31 bottom263.94 versusnavtop494.41, so finalversevisibleabovebar. ScreenshotE12. These are observed toolresults, not full keyboard/AA certification. Earlier dataflowinspect bundledscripture serverroute to getLocalLdsChapter; actualGenesis1 textloaded. Nobackendwrites/fakedata. Bodytext rgb31,29,26 onrgb246,243,236 primarylightonly; noentireUIcontrastcertification.
+
+Rows in the next three tables are copied verbatim from each report; only the `#` column is added.
+
+### gpt-6.1-sol (UX)
+
+| # | Category | Score | Confidence | Evidence | Gap |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Task flow and information architecture | 8 | Medium | E1–E7, E12, K3 | The collection → book → numbered chapter → text sequence is clear, with location preserved in the reader. At chapter end there is no visible adjacent-chapter action; continuation relies on the header picker. Back-navigation behavior and picker operation were not exercised in this review. |
+| 2 | Visual hierarchy | 9 | Medium | E1–E12, P1, P2 | Strong screen titles, clear book names, a restrained text column, and prominent chapter targets work across the captured states. Reader tools remain distinguishable from scripture. Dark browsing and additional non-default navigation states are absent; no material hierarchy problem is demonstrated in the available views. |
+| 3 | Layout and spacing | 8 | Medium | E2–E12, K3 | The grid and reader adapt coherently, and the supplied end-state evidence establishes final-verse clearance. The short reader reserves substantial space for persistent chrome and chapter-end blank space without a continuation action. Full book-list/picker bottoms, intermediate widths and zoom are not shown. |
+| 4 | Typography | 9 | Medium | E2–E10, E12, P1 | Serif book names and scripture are legible, with distinct sans-serif controls and visible verse numbers. Desktop line length is restrained and small-screen text wraps cleanly. User font adjustments, zoom and alternative content lengths were not captured. |
+| 5 | Iconography and imagery | 9 | Medium | E1–E9, P1, P2 | Consistent warm illustrations help distinguish collections and books without entering the reader. Navigation icons are visually coherent; mobile secondary actions have text labels. Unshown interaction states and recognition testing prevent a reference-quality claim. |
+| 6 | Color and contrast | 8 | Medium | E1–E10, E12, K3 | Light and mobile dark reader appearances remain visually coherent; verse numbers provide an additional positional cue rather than carrying meaning alone. K3 provides primary light text/background colors only. Full UI and dark-theme contrast have not been measured, and no WCAG target was supplied. This is not an AA conformance judgment. |
+| 7 | Components and consistency | 9 | Medium | E1–E12, K3 | Rounded navigation shells, card outlines, arrow affordances and bottom selection treatment form a consistent system. The desktop/mobile presentation varies appropriately in the observed views. The tip-dismissed focus state fits this system. Most component interaction states were not captured. |
+| 8 | States and feedback | 8 | Medium | E7–E12, K3 | The instructional tip has an explicit dismissal action. K3 reports that keyboard dismissal removes it, focuses the chapter heading, preserves scroll position and remains dismissed after reload; E10/E11 show the resulting state. Loading, error, navigation-progress and text-selection results are missing, so feedback coverage remains partial. |
+| 9 | Accessibility | 8 | Medium | E9–E12, K3 | K3 reports real names and 44×44 controls for Search, Log, Simple and Settings, a visible keyboard outline, and successful Enter dismissal with focus restoration. This is meaningful partial behavior evidence, not a complete keyboard path. Full traversal, assistive technology, 200% zoom, reduced motion and broader contrast checks are absent. No confirmed accessibility blocker or measured AA failure is established. |
+| 10 | Responsive and adaptive behavior | 8 | Medium | E2–E9, E12, K3 | Desktop grids become mobile lists and a four-column chapter grid; reader controls and tip fit the 320px capture. K3 reports scrollWidth 320 at viewport width 320 and the final verse clear of bottom navigation after scrolling. Small-width browsing, intermediate breakpoints, zoom, alternate reading widths, translated labels and dark browsing remain unverified. |
+| 11 | Content and microcopy | 8 | Medium | E1–E9, E12 | Collection/book/chapter names and the text-selection instruction clearly support the task. “Log” and “Simple” give first-time readers less information about the action or current mode than the explicit instructional copy does. Resulting panels/modes were not opened, so this is a discoverability finding rather than a claim that their behavior is wrong. |
+| 12 | Motion and perceived performance | unknown | Low | K3; E7, E10/E11 | K3 records a completed dismissal and unchanged scroll position, but no timed response, transition observation, loading sequence or reduced-motion behavior. Static endpoint screenshots cannot establish animation, layout shift during transitions or perceived speed. |
+
+### gpt-6-astra (visual)
+
+| # | Category | Score | Confidence | Evidence | Gap |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Task flow and information architecture | 8 | Medium | E1–E7, E12, K3 | Collection → book → chapter → text is legible, with back affordances on browse views and a chapter selector in the reader. No visible next-chapter affordance at the captured chapter end; complete traversal and selector operation were not observed by this reviewer. |
+| 2 | Visual hierarchy | 8 | High | E1–E9, E12 | Reading has a clear chapter heading and dominant text; artwork supports browsing. At small mobile widths the large fixed navigation and dense reader toolbar compete with the text, and the first-use tip takes substantial initial vertical space. |
+| 3 | Layout and spacing | 8 | High | E2–E12, K3 | Cards, grids, and margins align consistently; K3 reports no horizontal overflow at 320px and a readable final verse above navigation. The small reader toolbar has little visible separation between Simple and Settings labels, and floating navigation covers portions of the scrolling text window. |
+| 4 | Typography | 8 | High | E1–E12, P1 | Serif reading text and titles pair coherently with sans-serif controls, and reading measures are restrained on desktop. Utility labels become crowded at 320px; large mobile inter-verse spacing increases scrolling. No 200% zoom or alternative type-size evidence. |
+| 5 | Iconography and imagery | 8 | High | E1–E9, P1, P2 | Artwork is purposeful, consistent in warmth and crop, and preserves a distinctive identity. Icons generally have strong silhouettes and familiar shapes. Desktop reader eye icon has no visible text counterpart, while mobile labels it Simple; unfamiliar users must infer its function. No tooltip interaction captured. |
+| 6 | Color and contrast | 8 | Medium | E1–E10, K3 | Warm neutrals, rust verse numbers, and dark-theme inversion remain coherent. K3 supplies primary light body-text colors only. Secondary labels, control boundaries, focus states, and dark-mode contrast are not measured; no WCAG compliance or failure is asserted. |
+| 7 | Components and consistency | 8 | High | E1–E12 | Pill navigation, rounded bordered cards, and serif labels recur deliberately. Mobile reader action labels and desktop icon-only actions differ in discoverability. Journal is present in desktop navigation and as a separate floating action on browse/picker views, adding a duplicate entry point. |
+| 8 | States and feedback | 8 | Medium | E7–E12, K3 | The observed tip dismissal removes it, retains scroll position, transfers visible focus to the heading, and persists after reload according to K3. Loading, failure, empty, selector-open, and selection-action feedback remain unobserved. This score describes the demonstrated state transition, not comprehensive state coverage. |
+| 9 | Accessibility | 8 | Medium | E9–E11, K3 | K3 reports named 44×44 reader actions and keyboard tip dismissal with visible focus; the resulting heading focus is visible in E10/E11. Complete keyboard path, assistive technology, 200% zoom, reduced motion, and comprehensive contrast measurements are missing. No certification is claimed. |
+| 10 | Responsive and adaptive behavior | 8 | Medium | E2–E12, K3 | Desktop books reflow to mobile rows; chapter grids reflow; reader remains within the measured 320px viewport. End-of-chapter scroll evidence establishes final text is reachable. Toolbar labels are crowded at 320px. Dark browse/picker, wide/full/comparison modes, long translated labels, and zoom are not covered. |
+| 11 | Content and microcopy | 8 | High | E1–E12 | Collection names, counts, and chapter labels are direct. The tip names concrete outcomes. Simple is ambiguous about what mode it activates, especially beside Log and Settings; chapter-end continuation is not explicitly named in the captured view. |
+| 12 | Motion and perceived performance | unknown | Low | K3 | Stable scroll position during tip dismissal is a narrow observation, not evidence of response timing, transition quality, loading behavior, or layout shift across the flow. No measured timings or motion capture supplied. |
+
+### gpt-6.1-terra (accessibility)
+
+| # | Category | Score | Confidence | Evidence | Gap |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Task flow and information architecture | 8 | Medium | E1–E7, E12, K3 | The library, book list, chapter grid and reader show a legible route, but full navigation and return paths were not independently exercised; the meaning of Simple is unclear. |
+| 2 | Visual hierarchy | 8 | Medium | E1–E9 | Titles and scripture lead the scan; the persistent navigation competes with reading on the smallest viewport. Non-default controls and states are not fully shown. |
+| 3 | Layout and spacing | 7 | Medium | E2–E9, E12 | Generous reading spacing is consistent, but floating bars cover content while scrolling and cost a significant portion of the 320px viewport. The end verse is reachable above the bottom bar per K3; intermediate scrolling remains affected. |
+| 4 | Typography | 8 | Medium | E3–E9 | The warm serif and comfortable reader line spacing fit the purpose. Small uppercase metadata and dense reader toolbar labels are less comfortable; zoom and alternate text settings were not examined. |
+| 5 | Iconography and imagery | 8 | Medium | E1–E8 | Book imagery supports recognition and controls mostly have labels; Simple's eye icon and label do not clearly communicate the result. Other icon states are not examined. |
+| 6 | Color and contrast | 8 | Medium | E5, E7–E9, K3 | Primary body text is visually distinct in light and dark reader views; K3 supplies light body colors only. Other text, control boundaries, focus, imagery and dark theme contrast were not measured. No conformance claim or numerical cap is made. |
+| 7 | Components and consistency | 8 | Medium | E2–E9 | Book cards, chapter buttons and floating navigation use a coherent visual language across shown sizes. Full interactive and state consistency is unverified. |
+| 8 | States and feedback | unknown | Low | E7, E10–E11, K3 | Tip dismissal, focus transfer and persistence are observed; loading, errors, success and other controls' feedback are not represented enough to score the category. |
+| 9 | Accessibility | unknown | Low | E9–E11, K3 | K3 reports named 44px reader controls and visible focus after dismissal, but no complete keyboard traversal, screen-reader test, 200% zoom or reduced-motion check. Picker has no aria-current, but the picker is not shown as having a current chapter, so this alone is not a defect. |
+| 10 | Responsive and adaptive behavior | 7 | Medium | E2–E9, E12, K3 | Reader has no horizontal overflow at 320px per K3 and the last verse can clear the bottom bar. Persistent controls overlay the reading area at small sizes; other 320px screens, zoom, translation and touch operation remain unverified. |
+| 11 | Content and microcopy | 7 | Medium | E2–E7 | Book and chapter names and the tip are clear; Simple does not describe the resulting mode, and the action labeled Log is ambiguous without context. Error and empty copy are unobserved. |
+| 12 | Motion and perceived performance | unknown | Low | K3 | No measured response times, loading transitions, layout shift or reduced-motion behavior. |
+
+### Lowest category scores
+
+The lowest column uses numeric scores only. An Unknown is flagged beside it, never converted into a number.
+
+| # | Category | Lowest score | Unknown from |
+| --- | --- | --- | --- |
+| 1 | Task flow and information architecture | 8 | None |
+| 2 | Visual hierarchy | 8 | None |
+| 3 | Layout and spacing | 7 | None |
+| 4 | Typography | 8 | None |
+| 5 | Iconography and imagery | 8 | None |
+| 6 | Color and contrast | 8 | None |
+| 7 | Components and consistency | 8 | None |
+| 8 | States and feedback | 8 | gpt-6.1-terra |
+| 9 | Accessibility | 8 | gpt-6.1-terra |
+| 10 | Responsive and adaptive behavior | 7 | None |
+| 11 | Content and microcopy | 7 | None |
+| 12 | Motion and perceived performance | No numeric score | All three |
+
+### Dissent
+
+Reviewers disagree, and the disagreement stands. No scores are averaged.
+
+| Category | gpt-6.1-sol | gpt-6-astra | gpt-6.1-terra | Basis of the difference |
+| --- | --- | --- | --- | --- |
+| Visual hierarchy | 9 | 8 | 8 | Sol found no material problem; astra and terra say navigation competes with reading on the smallest viewport |
+| Layout and spacing | 8 | 8 | 7 | Terra weighs bars covering content while scrolling more heavily |
+| Typography | 9 | 8 | 8 | Astra and terra cite crowded or dense toolbar labels |
+| Iconography and imagery | 9 | 8 | 8 | Astra and terra cite the Simple eye icon's unclear result |
+| Components and consistency | 9 | 8 | 8 | Astra cites the mobile and desktop label difference and a duplicate Journal entry; terra cites unverified interactive consistency |
+| States and feedback | 8 | 8 | Unknown | Terra says the evidence is not enough to score the category |
+| Accessibility | 8 | 8 | Unknown | Terra says the evidence is not enough to score the category |
+| Responsive and adaptive behavior | 8 | 8 | 7 | Terra weighs persistent controls overlaying the reading area |
+| Content and microcopy | 8 | 8 | 7 | Terra weighs the ambiguity of Simple and Log |
+
+Reviewers also differ on priority and remedy:
+
+- Chapter-end continuation is P2 from UX and P3 and conditional from visual. Accessibility raised no finding on it.
+- Simple and Log clarity is P2 from UX and accessibility and P3 from visual, whose finding names Simple and the eye icon only.
+- For the floating bars, accessibility proposes letting them recede or be hidden. Visual prefers trying a compact, stable bar
+  first, because auto-hiding adds motion and complexity.
+
+The R3 Accessibility and States numbers are not an improvement over R2's 6 and 7. Those lows came from gpt-6.1-terra, which
+did not score either category in R3, so the R3 lows come from the other two reviewers only.
+
+### Remaining gaps
+
+From the manifest: No completekeyboardtraversal,assistivetech,200%zoom,loading/error/reducedmotion/timing; darkonlymobilereader; wide/full/comparisonnotrerunthiscycle; authenticatedstatesoutsidefocusedflow. E10/E11 same screenshot keyboarddismissedstate. E12 extraendstate; expanded behaviorvspriorrounds not pureimprovement proof.
+
+No screen reader, 200% zoom, full keyboard traversal, error, loading, or motion measurement was taken. Contrast was measured
+for primary light body text only.
+
+Layout shift remains unverified. The first-visit tip is now in the page flow, so it pushes the first verse down and
+dismissing it removes that space. K3 shows only that `scrollY` stayed 0 on dismissal at the top of the chapter. No layout shift
+measurement exists, and the movement of content on dismissal from another scroll position was not observed.
+
+### Automated checks at `240c5d6f`
+
+Run independently by the lead.
+
+| Check | Status | Result |
+| --- | --- | --- |
+| `npx tsc --noEmit` | Passed | |
+| `npm run test:browse` | Passed | 36 of 36 tests |
+| `npm run test:cfm-reader` | Passed | 34 of 34 tests |
+| `npm run build` | Passed | |
+| `git diff --check` | Passed | |
+| ESLint | Failed | 2 errors and 4 warnings in `src/components/ChapterReader.tsx`, the same baseline counts; `src/components/ChapterReaderChrome.tsx` clean |
+
+Exact ESLint output is `/tmp/verse-round3-eslint.json`, which is not among the preserved copies.
+
+### Runtime check at `240c5d6f`
+
+Run by the lead on the production build at port 3124, with status Passed for the paths below only.
+
+- At 320 wide, `scrollWidth` is 320.
+- Search, Log, Simple, and Settings are 44×44 with real accessible names.
+- The tip is `position: static`, with its bottom at 220.13 and verse 1's top at 248.13.
+- Six Tabs focus Got it with a 2px outline. Enter dismisses the tip and focuses the `h1` Genesis 1, `scrollY` stays 0, and the
+  tip is absent after reload.
+- At chapter end, verse 31's bottom is 263.94 and the navigation's top is 494.41.
+
+Default, light, dark, mobile, and desktop captures are real production captures with no fake data.
+
+## Final changes
+
+What the three cycles changed at `240c5d6f`, in plain terms:
+
+- **Titles:** the book chapter picker and the reader show a clear title in the page, with one exposed `h1`.
+- **Reading width:** the default reader line is measured at 608px on desktop. Explicit wide and full preferences and comparison
+  layouts are preserved in the implementation, and were not rerun in R3.
+- **Mobile labels:** primary navigation shows persistent labels, and the reader's Log, Simple, and Settings icons show short
+  labels inside their 44px targets. Search stays icon-only.
+- **First-visit tip:** it now sits in the page between the title and the scripture, so it covers neither the passage nor the
+  navigation. Keyboard dismissal moves focus to the chapter title.
+- **Chapter picker link:** it shows a chevron on desktop and mobile and no longer claims `aria-current="page"` for a different
+  page.
+
+## Final residual findings
+
+Priorities are the reviewers' own. Proposed changes are recorded only: no further implementation is authorized.
+
+**Chapter-end continuation.** UX F1 P2, visual V4 P3 (conditional).
+
+- Finding: E12 shows no visible next-chapter action after Genesis 1's final verse, only blank space and the header picker.
+- Impact: continuing means going back to navigation and choosing a chapter. It does not prevent reading Genesis 1.
+- Proposed: a restrained Genesis 2 link after the final verse, after confirming no equivalent exists outside the capture.
+- Verification: desktop, 390px, and 320px by pointer and keyboard, reaching Genesis 2 at its heading, with first and last chapter
+  boundaries checked separately.
+- Tradeoff: adds a control to a quiet page and needs boundary handling.
+
+**Log and Simple meaning.** UX F2 P2, accessibility F2 P2, visual V3 P3.
+
+- Finding: accessible names exist, but some visible meaning stays ambiguous. Simple and its eye icon do not say what changes,
+  and Log does not say what gets logged. Visual's finding names Simple only.
+- Impact: readers may hesitate before using them. No report asserts that the actions fail.
+- Proposed: wording based on actual behavior, confirmed before choosing it.
+- Verification: first-time readers predict each result; visible name, accessible name, and result then agree at desktop and 320px.
+- Tradeoff: longer labels press on a compact toolbar.
+
+**Compact labels at 320px.** Visual V1 P2.
+
+- Finding: Simple and Settings sit close together in the 320px toolbar.
+- Impact: usable, with more effort needed to tell the actions apart on the smallest viewport.
+- Proposed: more horizontal separation, recovering space without shrinking text or the 44×44 targets.
+- Verification: 320px and 390px captures, initial and dismissed, plus target boxes, overflow, and keyboard order.
+- Tradeoff: a narrower chapter selector must still fit long book names.
+
+**Floating navigation over reading text.** Visual V2 P2, accessibility F1 P2.
+
+- Finding: fixed bars cover lines of text as they pass behind while scrolling, most of all at 320×568. The final verse is
+  reachable above the bar per K3; no report establishes this as permanently hidden content.
+- Impact: a shorter reading window and some visual interference, not a blocker.
+- Proposed: a compact reader bar or a discoverable way to recede or hide it, keeping navigation recoverable.
+- Verification: a full chapter scroll at 320×568 and 390×844 by touch and keyboard, confirming each verse can rest in view and
+  focus is never hidden. Only the final verse has been measured.
+- Tradeoff: persistent navigation supports orientation, and auto-hiding adds motion and interaction complexity.
+
+**Unverified accessibility and states.** Accessibility F3 P2, a verification gap and not a failure.
+
+- Finding: partial focus and dismissal evidence cannot establish the full keyboard or screen-reader route or error recovery.
+- Proposed: a structured keyboard, screen-reader, and 200% zoom pass, plus loading, error, and retry states.
+- Verification: record focus order and names from library through reader and back, zoom reflow, and an actual recoverable error.
+- Tradeoff: takes test time, and the serif and artwork identity should not change to resolve semantics issues.
+
+## Final tradeoffs accepted
+
+- The in-flow tip pushes the first verse down on a first visit, in exchange for no longer covering text or navigation.
+- Selecting text marks the tip as seen but leaves it on screen, and a first visit at a verse link shows no tip.
+- Mobile labels make tools clearer and crowd the 320px toolbar.
+- Persistent bottom navigation keeps orientation and shortens the reading window.
+
+## Final verdict
+
+**Not met.** Target 9 was not reached at UI revision `240c5d6f`. No blockers are established. Stop reason: the budget is spent,
+after three of three implementation cycles. No further implementation is planned without the owner's approval.
+
+| Stage | Status | Notes |
+| --- | --- | --- |
+| Implementation | Passed | Three cycles, ending at `240c5d6f` |
+| Independent review | Passed as a process; gate Not met | Three fresh reports from the frozen revision |
+| Automated checks | Mixed | Build, types, and 70 tests Passed; lint Failed at the baseline counts |
+| Runtime verification | Passed for tested paths; Not run for the remaining gaps | See Runtime check and Remaining gaps |
+| Merge and deployment | Not run | Not part of this review |
+
+## Preserved reports and evidence
+
+Verbatim copies of the reports are in `docs/ui-review/reviews/`, and the manifests are in `docs/ui-review/evidence/`. Rows in
+this ledger link to those copies; their earlier `/tmp` locations are gone from the tables, and the contents are unchanged.
+
+- R0 is preserved as its matrix only, in this ledger. No separate R0 report is kept.
+- Screenshots stay in `/home/jeffrey-home/.t3/userdata/browser-artifacts/`, and manifests refer to that path. They were not copied.
+- ESLint outputs stay in `/tmp` and were not copied.
+
 ## Score ledger
 
 Lowest score any reviewer gave in each category. Earlier rounds are not rewritten.
@@ -453,22 +736,26 @@ Lowest score any reviewer gave in each category. Earlier rounds are not rewritte
 | R0 | `635aa60d` | Not met | None |
 | R1 | `e5337a97` | Not met | None |
 | R2 | `0225f175` | Not met | None |
-| R3 | Pending | Pending | Pending |
+| R3 | `240c5d6f` | Not met | None established |
 
 | # | Category | R0 lowest | R1 lowest | R2 lowest | R3 lowest | Comparability of R0 and R1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Task flow and information architecture | 7 | 8 | 8 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 2 | Visual hierarchy | 7 | 8 | 8 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 3 | Layout and spacing | 7 | 7 | 7 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 4 | Typography | 7 | 8 | 8 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 5 | Iconography and imagery | 7 | 7 | 7 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 6 | Color and contrast | 7 (low confidence) | 8 | 8 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 7 | Components and consistency | 7 | 7 | 8 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 8 | States and feedback | Unknown | 6 | 7 | Pending | New numeric score from evidence expansion, not a proven improvement |
-| 9 | Accessibility | Unknown | 6 | 6 | Pending | New numeric score from evidence expansion, not a proven improvement |
-| 10 | Responsive and adaptive behavior | Unknown | 7 | 7 | Pending | New numeric score from evidence expansion, not a proven improvement |
-| 11 | Content and microcopy | 7 | 7 | 8 | Pending | R1 evidence set is larger than R0, so this is not a pure before and after |
-| 12 | Motion and perceived performance | Unknown | Unknown | Unknown | Pending | Unknown in both |
+| 1 | Task flow and information architecture | 7 | 8 | 8 | 8 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 2 | Visual hierarchy | 7 | 8 | 8 | 8 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 3 | Layout and spacing | 7 | 7 | 7 | 7 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 4 | Typography | 7 | 8 | 8 | 8 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 5 | Iconography and imagery | 7 | 7 | 7 | 8 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 6 | Color and contrast | 7 (low confidence) | 8 | 8 | 8 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 7 | Components and consistency | 7 | 7 | 8 | 8 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 8 | States and feedback | Unknown | 6 | 7 | 8, plus Unknown from gpt-6.1-terra | New numeric score from evidence expansion, not a proven improvement |
+| 9 | Accessibility | Unknown | 6 | 6 | 8, plus Unknown from gpt-6.1-terra | New numeric score from evidence expansion, not a proven improvement |
+| 10 | Responsive and adaptive behavior | Unknown | 7 | 7 | 7 | New numeric score from evidence expansion, not a proven improvement |
+| 11 | Content and microcopy | 7 | 7 | 8 | 7 | R1 evidence set is larger than R0, so this is not a pure before and after |
+| 12 | Motion and perceived performance | Unknown | Unknown | Unknown | Unknown | Unknown in both |
 
-R2 rests on more evidence than R1 (E9 to E11 and K2), so R1 and R2 are also not a pure before and after. R3 is pending
-capture and review; this ledger does not record a final review as complete.
+R2 rests on more evidence than R1 (E9 to E11 and K2), so R1 and R2 are also not a pure before and after. R3 rests on
+more evidence than R2 (E12 and K3), so the same holds for R2 and R3. The scope stayed the same throughout; the evidence
+expanded. Unknowns stay Unknown, and an Unknown beside a number is not an improvement.
+
+Final row: R3 at `240c5d6f`. Gate Not met for target 9, no established blockers, stopped because the budget of three
+cycles is spent.
