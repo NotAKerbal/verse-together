@@ -1,19 +1,23 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { api, components, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   budgetPeriodKey,
   CONTINUATION_CORRECTION_ROUNDS,
   continuationCalls,
   continuationReservationMicros,
+  DAY_MS,
   FAILURE_COOLDOWN_MS,
   FAILURES_BEFORE_AUTO_PAUSE,
   jobReservationMicros,
   LEGACY_CORRECTION_ROUNDS,
+  MAX_ACTIVE_JOBS,
   MAX_CORRECTION_ROUNDS,
+  MAX_JOBS_PER_DAY,
   MAX_RESEARCH_PACKET_BYTES,
   MAX_USER_JOBS_PER_DAY,
+  MAX_USER_JOBS_PER_MONTH,
   RESERVATION_MARGIN_MICROS,
   STAGE_MAX_ATTEMPTS,
   stageMaxCostMicros,
@@ -472,6 +476,181 @@ describe("deduplication and abuse limits", () => {
     const { as } = await signInAs(t, "owner-a");
     await as.mutation(api.chapterGuides.requestGeneration, { serviceSecret: SECRET, ...chapterArgs() });
     expect(await t.query(api.chapterGuides.getChapterState, stateArgs())).toMatchObject({ generating: { stage: "research" }, availability: null, cooldown: null });
+  });
+});
+
+describe("unlimited generation for one account", () => {
+  async function seedRequests(backend: Backend, clerkId: string, ages: number[]) {
+    await backend.run(async (ctx) => {
+      const job = await ctx.db.query("chapterGuideJobs").first();
+      const now = Date.now();
+      for (const age of ages) await ctx.db.insert("chapterGuideRequests", { clerkId, jobId: job!._id, createdAt: now - age });
+    });
+  }
+
+  async function finishRunningJobs(backend: Backend) {
+    await backend.run(async (ctx) => {
+      for (const job of await ctx.db.query("chapterGuideJobs").collect()) {
+        await ctx.db.patch(job._id, { status: "succeeded", reservedRemainingMicros: 0 });
+      }
+      for (const period of await ctx.db.query("chapterGuideBudgetPeriods").collect()) {
+        await ctx.db.patch(period._id, { reservedMicros: 0 });
+      }
+    });
+  }
+
+  async function userRow(backend: Backend, clerkId: string) {
+    return await backend.run(async (ctx) => await ctx.db.query("users").withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId)).unique());
+  }
+
+  const request = (as: Awaited<ReturnType<typeof signInAs>>["as"], chapter: number) =>
+    as.mutation(api.chapterGuides.requestGeneration, { serviceSecret: SECRET, ...chapterArgs(chapter) });
+
+  const grant = (email: string, unlimited = true) => t.mutation(internal.chapterGuides.setUnlimitedGeneration, { email, unlimited });
+
+  test("a reader without the allowance is held to the 30-day limit as well as the daily one", async () => {
+    await setSettings(t);
+    const other = await signInAs(t, "owner-b");
+    await request(other.as, 50);
+    await finishRunningJobs(t);
+    const { as } = await signInAs(t, "owner-a");
+    await seedRequests(t, "owner-a", Array.from({ length: MAX_USER_JOBS_PER_MONTH }, (_, index) => (index + 2) * DAY_MS));
+    expect(await request(as, 1)).toEqual({ status: "unavailable", reason: "user_limit" });
+    expect(await allJobs(t)).toHaveLength(1);
+  });
+
+  test("an account with the allowance starts guides past both per-reader limits, and each request is still recorded", async () => {
+    await setSettings(t);
+    const other = await signInAs(t, "owner-b");
+    await request(other.as, 50);
+    await finishRunningJobs(t);
+    const { as } = await signInAs(t, "owner-a");
+    await seedRequests(t, "owner-a", Array.from({ length: MAX_USER_JOBS_PER_MONTH }, (_, index) => (index + 1) * 60_000));
+    expect(await request(as, 1)).toEqual({ status: "unavailable", reason: "user_limit" });
+
+    expect(await grant("owner-a@example.com")).toMatchObject({ ok: true, ownerKey: "owner-a", unlimitedChapterGuideGeneration: true, previous: false });
+    for (let chapter = 1; chapter <= MAX_USER_JOBS_PER_DAY + 1; chapter += 1) {
+      expect(await request(as, chapter)).toEqual({ status: "started" });
+      await finishRunningJobs(t);
+    }
+    const requests = await t.run(async (ctx) =>
+      await ctx.db.query("chapterGuideRequests").withIndex("by_clerk_created", (q) => q.eq("clerkId", "owner-a")).collect()
+    );
+    expect(requests).toHaveLength(MAX_USER_JOBS_PER_MONTH + MAX_USER_JOBS_PER_DAY + 1);
+
+    const reader = await signInAs(t, "owner-c");
+    await seedRequests(t, "owner-c", Array.from({ length: MAX_USER_JOBS_PER_DAY }, () => 60_000));
+    expect(await request(reader.as, 20)).toEqual({ status: "unavailable", reason: "user_limit" });
+  });
+
+  test("the allowance doesn't get past the pause, the running-job limit, or the budget", async () => {
+    await setSettings(t);
+    const { as } = await signInAs(t, "owner-a");
+    await grant("owner-a@example.com");
+
+    await setSettings(t, { paused: true });
+    expect(await request(as, 1)).toEqual({ status: "unavailable", reason: "paused" });
+    await setSettings(t, { paused: false });
+
+    for (let chapter = 1; chapter <= MAX_ACTIVE_JOBS; chapter += 1) expect(await request(as, chapter)).toEqual({ status: "started" });
+    expect(await request(as, MAX_ACTIVE_JOBS + 1)).toEqual({ status: "unavailable", reason: "busy" });
+    await finishRunningJobs(t);
+
+    await t.run(async (ctx) => {
+      const period = await ctx.db.query("chapterGuideBudgetPeriods").first();
+      await ctx.db.patch(period!._id, { spentMicros: CAP });
+    });
+    expect(await request(as, MAX_ACTIVE_JOBS + 1)).toEqual({ status: "unavailable", reason: "budget_exhausted" });
+    expect(await allJobs(t)).toHaveLength(MAX_ACTIVE_JOBS);
+  });
+
+  test("the allowance doesn't get past the daily limit for all readers", async () => {
+    await setSettings(t);
+    const { as } = await signInAs(t, "owner-a");
+    await grant("owner-a@example.com");
+    for (let chapter = 1; chapter <= MAX_JOBS_PER_DAY; chapter += 1) {
+      expect(await request(as, chapter)).toEqual({ status: "started" });
+      await finishRunningJobs(t);
+    }
+    expect(await request(as, MAX_JOBS_PER_DAY + 1)).toEqual({ status: "unavailable", reason: "daily_limit" });
+    expect(await allJobs(t)).toHaveLength(MAX_JOBS_PER_DAY);
+  });
+
+  test("a reader can't grant themselves the allowance", async () => {
+    expect((chapterGuides.setUnlimitedGeneration as unknown as { isInternal?: boolean }).isInternal).toBe(true);
+    expect((chapterGuides.getGenerationAllowance as unknown as { isInternal?: boolean }).isInternal).toBe(true);
+    await setSettings(t);
+    const { as } = await signInAs(t, "owner-a");
+    const injected = { unlimitedChapterGuideGeneration: true } as never;
+    await expect(as.mutation(api.users.ensureCurrentUser, injected)).rejects.toThrow(/Validator/);
+    await expect(as.mutation(api.users.upsertCurrentUser, injected)).rejects.toThrow(/Validator/);
+    await expect(
+      as.mutation(api.users.saveJournalGoals, { studyDays: 3, reflections: 1, unlimitedChapterGuideGeneration: true } as never)
+    ).rejects.toThrow(/Validator/);
+    await expect(
+      as.mutation(api.chapterGuides.requestGeneration, { serviceSecret: SECRET, ...chapterArgs(1), unlimitedChapterGuideGeneration: true } as never)
+    ).rejects.toThrow(/Validator/);
+    expect((await userRow(t, "owner-a"))!.unlimitedChapterGuideGeneration).toBeUndefined();
+
+    for (let chapter = 1; chapter <= MAX_USER_JOBS_PER_DAY; chapter += 1) {
+      expect(await request(as, chapter)).toEqual({ status: "started" });
+      await finishRunningJobs(t);
+    }
+    expect(await request(as, MAX_USER_JOBS_PER_DAY + 1)).toEqual({ status: "unavailable", reason: "user_limit" });
+  });
+
+  test("the grant finds only the signed-in account for a verified address, and grants nothing else", async () => {
+    await setSettings(t);
+    const { as } = await signInAs(t, "owner-a");
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.insert("users", { clerkId: "user_unlinkedLegacy01", email: "owner-a@example.com", createdAt: now, updatedAt: now });
+    });
+
+    expect(await t.query(internal.chapterGuides.getGenerationAllowance, { email: "owner-a@example.com" })).toMatchObject({
+      ok: true,
+      ownerKey: "owner-a",
+      unlimitedChapterGuideGeneration: false,
+    });
+    expect(await grant("  Owner-A@Example.com ")).toMatchObject({ ok: true, email: "owner-a@example.com", ownerKey: "owner-a" });
+    expect((await userRow(t, "owner-a"))!.unlimitedChapterGuideGeneration).toBe(true);
+    expect((await userRow(t, "user_unlinkedLegacy01"))!.unlimitedChapterGuideGeneration).toBeUndefined();
+
+    expect(await as.query(api.users.viewer, {})).toMatchObject({ isAdmin: false, isChapterGuideReviewer: false });
+    expect(await as.query(api.chapterGuides.getOwnerOverview, {})).toBeNull();
+    expect(await as.query(api.chapterGuides.getReviewQueue, {})).toBeNull();
+    await expect(as.mutation(api.chapterGuides.setPaused, { paused: true })).rejects.toThrow("Forbidden");
+    const row = await userRow(t, "owner-a");
+    expect(row!.isAdmin).toBeUndefined();
+    expect(row!.isChapterGuideReviewer).toBeUndefined();
+
+    await signInAs(t, "fresh", "fresh", { linked: false });
+    const now = Date.now();
+    const unverified = await t.mutation(components.betterAuth.adapter.create, {
+      input: { model: "user", data: { name: "Unverified", email: "unverified@example.com", emailVerified: false, createdAt: now, updatedAt: now } },
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", { clerkId: String(unverified._id), authUserId: String(unverified._id), createdAt: now, updatedAt: now });
+    });
+    expect(await grant("not-an-email")).toEqual({ ok: false, error: "invalid_email" });
+    expect(await grant("nobody@example.com")).toEqual({ ok: false, error: "auth_user_missing" });
+    expect(await grant("unverified@example.com")).toEqual({ ok: false, error: "auth_user_unverified" });
+    expect(await grant("fresh@example.com")).toEqual({ ok: false, error: "account_not_linked" });
+    const flagged = await t.run(async (ctx) => (await ctx.db.query("users").collect()).filter((user) => user.unlimitedChapterGuideGeneration !== undefined));
+    expect(flagged.map((user) => user.clerkId)).toEqual(["owner-a"]);
+  });
+
+  test("revoking the allowance restores the per-reader limits", async () => {
+    await setSettings(t);
+    const { as } = await signInAs(t, "owner-a");
+    await grant("owner-a@example.com");
+    for (let chapter = 1; chapter <= MAX_USER_JOBS_PER_DAY + 1; chapter += 1) {
+      expect(await request(as, chapter)).toEqual({ status: "started" });
+      await finishRunningJobs(t);
+    }
+    expect(await grant("owner-a@example.com", false)).toMatchObject({ ok: true, unlimitedChapterGuideGeneration: false, previous: true });
+    expect((await userRow(t, "owner-a"))!.unlimitedChapterGuideGeneration).toBeUndefined();
+    expect(await request(as, MAX_USER_JOBS_PER_DAY + 2)).toEqual({ status: "unavailable", reason: "user_limit" });
   });
 });
 

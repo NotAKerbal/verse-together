@@ -47,7 +47,20 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.25.1",
+    date: "2026-11-05",
+    title: "Unlimited chapter guides for chosen accounts",
+    items: [
+      {
+        kind: "improved",
+        text: "Chosen accounts can be given unlimited personal chapter-guide generation, lifting the per-reader daily and 30-day limits for them. Limits shared by all readers still apply to those accounts.",
+      },
+    ],
+    commits: ["5eba8556"],
+  },
+  {
     version: "2.25.0",
+    masterCommit: "868b3ed0",
     date: "2026-11-05",
     title: "Simple reading with study tools",
     items: [

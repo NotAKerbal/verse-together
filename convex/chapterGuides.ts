@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import {
   budgetPeriodKey,
   type ChapterGuideModel,
@@ -60,7 +60,7 @@ import {
   chapterGuideUsageValidator,
   chapterVerseValidator,
 } from "./chapterGuideValidators";
-import { getViewerClerkId, requireClerkId } from "./utils";
+import { getViewerClerkId, requireClerkId, requireViewerUser } from "./utils";
 
 const WORKER_START_GRACE_MS = 5 * 60 * 1000;
 const CODES_WITHOUT_COOLDOWN = new Set(["paused", "budget_stopped", "not_configured", "superseded"]);
@@ -288,7 +288,8 @@ export const requestGeneration = mutation({
     const expectedSecret = process.env.CHAPTER_GUIDE_SERVICE_SECRET?.trim();
     if (!expectedSecret) return { status: "unavailable", reason: "not_configured" };
     if (!secretsMatch(expectedSecret, args.serviceSecret)) throw new Error("Forbidden");
-    const clerkId = await requireClerkId(ctx);
+    const viewer = await requireViewerUser(ctx);
+    const clerkId = viewer.clerkId;
 
     const chapterBytes = utf8Bytes(args.verses.map((verse) => `${verse.verse}. ${verse.text}`).join("\n"));
     if (args.verses.length === 0 || args.verses.length > MAX_CHAPTER_VERSES || chapterBytes > MAX_CHAPTER_BYTES) {
@@ -308,12 +309,7 @@ export const requestGeneration = mutation({
     if (isInCooldown(latest, now)) return { status: "unavailable", reason: "cooldown" };
     if ((await runningJobCount(ctx, MAX_ACTIVE_JOBS)) >= MAX_ACTIVE_JOBS) return { status: "unavailable", reason: "busy" };
 
-    const userRequests = await ctx.db
-      .query("chapterGuideRequests")
-      .withIndex("by_clerk_created", (q) => q.eq("clerkId", clerkId).gt("createdAt", now - MONTH_WINDOW_MS))
-      .take(MAX_USER_JOBS_PER_MONTH);
-    if (userRequests.length >= MAX_USER_JOBS_PER_MONTH) return { status: "unavailable", reason: "user_limit" };
-    if (userRequests.filter((row) => row.createdAt > now - DAY_MS).length >= MAX_USER_JOBS_PER_DAY) {
+    if (viewer.unlimitedChapterGuideGeneration !== true && (await reachedUserLimit(ctx, clerkId, now))) {
       return { status: "unavailable", reason: "user_limit" };
     }
     const recentJobs = await ctx.db
@@ -350,6 +346,83 @@ export const requestGeneration = mutation({
     await ctx.db.insert("chapterGuideRequests", { clerkId, jobId, createdAt: now });
     await ctx.scheduler.runAfter(0, internal.chapterGuideWorker.runStage, { jobId });
     return { status: "started" };
+  },
+});
+
+async function reachedUserLimit(ctx: QueryCtx, clerkId: string, now: number): Promise<boolean> {
+  const userRequests = await ctx.db
+    .query("chapterGuideRequests")
+    .withIndex("by_clerk_created", (q) => q.eq("clerkId", clerkId).gt("createdAt", now - MONTH_WINDOW_MS))
+    .take(MAX_USER_JOBS_PER_MONTH);
+  if (userRequests.length >= MAX_USER_JOBS_PER_MONTH) return true;
+  return userRequests.filter((row) => row.createdAt > now - DAY_MS).length >= MAX_USER_JOBS_PER_DAY;
+}
+
+type GenerationAllowanceError =
+  | "invalid_email"
+  | "auth_user_missing"
+  | "auth_user_unverified"
+  | "account_not_linked"
+  | "auth_user_linked_to_multiple_rows";
+
+type GenerationAllowanceAccount =
+  | { error: GenerationAllowanceError }
+  | { email: string; authUserId: string; user: Doc<"users"> };
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function findSignedInAccountByEmail(ctx: QueryCtx, rawEmail: string): Promise<GenerationAllowanceAccount> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) return { error: "invalid_email" };
+  const authUser = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
+    model: "user",
+    where: [{ field: "email", value: email }],
+  })) as { _id: string; emailVerified: boolean } | null;
+  if (!authUser) return { error: "auth_user_missing" };
+  if (!authUser.emailVerified) return { error: "auth_user_unverified" };
+  const authUserId = String(authUser._id);
+  const linked = await ctx.db
+    .query("users")
+    .withIndex("by_auth_user_id", (q) => q.eq("authUserId", authUserId))
+    .take(2);
+  if (linked.length > 1) return { error: "auth_user_linked_to_multiple_rows" };
+  const user = linked[0];
+  if (!user) return { error: "account_not_linked" };
+  return { email, authUserId, user };
+}
+
+function allowanceSummary(account: { email: string; authUserId: string; user: Doc<"users"> }, unlimited: boolean) {
+  return {
+    ok: true as const,
+    email: account.email,
+    authUserId: account.authUserId,
+    ownerKey: account.user.clerkId,
+    unlimitedChapterGuideGeneration: unlimited,
+  };
+}
+
+export const getGenerationAllowance = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const account = await findSignedInAccountByEmail(ctx, args.email);
+    if ("error" in account) return { ok: false as const, error: account.error };
+    return allowanceSummary(account, account.user.unlimitedChapterGuideGeneration === true);
+  },
+});
+
+export const setUnlimitedGeneration = internalMutation({
+  args: { email: v.string(), unlimited: v.boolean() },
+  handler: async (ctx, args) => {
+    const account = await findSignedInAccountByEmail(ctx, args.email);
+    if ("error" in account) return { ok: false as const, error: account.error };
+    const previous = account.user.unlimitedChapterGuideGeneration === true;
+    if (previous !== args.unlimited) {
+      await ctx.db.patch(account.user._id, {
+        unlimitedChapterGuideGeneration: args.unlimited ? true : undefined,
+        updatedAt: Date.now(),
+      });
+    }
+    return { ...allowanceSummary(account, args.unlimited), previous };
   },
 });
 
