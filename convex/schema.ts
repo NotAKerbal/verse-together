@@ -71,6 +71,7 @@ export default defineSchema({
     avatarUrl: v.optional(v.string()),
     isAdmin: v.optional(v.boolean()),
     isChapterGuideReviewer: v.optional(v.boolean()),
+    unlimitedChapterGuideGeneration: v.optional(v.boolean()),
     journalGoals: v.optional(v.object({ studyDays: v.number(), reflections: v.number() })),
     createdAt: v.number(),
     updatedAt: v.number(),
