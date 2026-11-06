@@ -114,6 +114,26 @@ Other limits, in `convex/chapterGuideBudget.ts`: one job per chapter (a repeat r
 failed. A continuation is the same job, so it doesn't count against those daily or per-reader limits, but it does count
 as a running job.
 
+**Unlimited generation for one account.** `users.unlimitedChapterGuideGeneration` lifts only the per-reader limits (2 a
+day and 8 per 30 days) for that account. Everything else still applies: the pause, the monthly cap and its margin, the
+running-job limit, the 20-a-day limit for all readers, the retry wait, and missing configuration. The account's requests
+are still recorded in `chapterGuideRequests`, so they count again if the flag is removed. It grants no admin or reviewer
+access, and no client-callable function can write it.
+
+Set it with internal functions, which need deployment credentials. Both find the account from a verified Better Auth
+email, then the single `users` row linked to that Better Auth user, which is the row a signed-in request resolves to. They
+never touch an unlinked legacy row or another row with the same `users.email`.
+
+```sh
+npx convex run chapterGuides:getGenerationAllowance '{"email":"reader@example.com"}'
+npx convex run chapterGuides:setUnlimitedGeneration '{"email":"reader@example.com","unlimited":true}'
+npx convex run chapterGuides:setUnlimitedGeneration '{"email":"reader@example.com","unlimited":false}'
+```
+
+Add `--prod` for production. Each returns the `ownerKey` and `authUserId` it resolved, or `ok: false` with
+`invalid_email`, `auth_user_missing`, `auth_user_unverified`, `account_not_linked`, or
+`auth_user_linked_to_multiple_rows`, and changes nothing.
+
 ### Prices
 
 Verified on 2026-11-04 from each provider's pricing and model pages. Recheck them and update `MODEL_PRICES` and

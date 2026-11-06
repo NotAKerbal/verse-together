@@ -67,6 +67,13 @@ export async function requireClerkId(ctx: AuthCtx): Promise<string> {
   return clerkId;
 }
 
+export async function requireViewerUser(ctx: AuthCtx): Promise<Doc<"users">> {
+  const authUserId = await getAuthenticatedAuthUserId(ctx);
+  const row = authUserId ? await findAppUserByAuthUserId(ctx, authUserId) : null;
+  if (!row?.clerkId) throw new Error("Unauthorized");
+  return row;
+}
+
 export function clampFontScale(value: number): number {
   if (!Number.isFinite(value)) return 1;
   return Math.max(0.85, Math.min(1.3, value));
