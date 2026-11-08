@@ -49,6 +49,24 @@ export const FALLBACK_COVER: GeneratedCover = {
 };
 
 const LESSON_COVERS: Readonly<Record<string, LessonCover>> = {
+  "2026-11-09": {
+    kind: "painting",
+    src: "/cfm/covers/riviere-daniels-answer.webp",
+    width: 1200,
+    height: 772,
+    focus: "30% 30%",
+    alt: "An elderly Daniel, hands behind his back, stands in a brick-walled den and looks up toward the light while lions gather behind him, in Briton Rivière’s Daniel’s Answer to the King.",
+    credit: {
+      title: "Daniel’s Answer to the King",
+      artist: "Briton Rivière",
+      date: "1890",
+      collection: "Manchester Art Gallery",
+      license: "Public domain",
+      sourceLabel: "Wikimedia Commons",
+      sourceUrl:
+        "https://commons.wikimedia.org/wiki/File:Daniel%27s_Answer_to_the_King,_by_Briton_Riviere,_GMIII_MCAG_1937_123-001.jpg",
+    },
+  },
   "2026-11-02": {
     kind: "painting",
     src: "/cfm/art/tissot-good-shepherd.webp",

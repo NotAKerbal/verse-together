@@ -39,7 +39,8 @@ const SOURCE_FILES = {
   "content/cfm/2026-10-19-jeremiah-1-3-7-16-18-20.md": ["e2a55290b045c2786a64daed1bcbbed822d734e16997b636cbcfa78e293b5880", 85627],
   "content/cfm/2026-10-26-jeremiah-31-33-36-39-lamentations-1-3.md": ["e6c3e669c181420edafae9da5ba1a5fc9ed38deaff921d7c7008e5806f43b237", 133565],
   "content/cfm/2026-11-02-ezekiel-1-3-33-34-36-37-47.md": ["da21527882a9cfc600caf3364c1b07242be74bcf10bc5ba3bea3581795146f1c", 123572],
-  "content/cfm/guides.json": ["0282d9c89b93f7f723e38eade761dec6edeaa97b24ed54fa36e88c1d4c95ffcd", 3365],
+  "content/cfm/2026-11-09-daniel-1-7.md": ["b3a718c323f32b53ebe0141dbc0bc694514d1087680986fe2d0bce52e3803c84", 164218],
+  "content/cfm/guides.json": ["19f6c4504854b3720b50d901a6567407724f6faef91bba8e29f57063a33399f0", 3987],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
@@ -52,6 +53,7 @@ const latest = parsed.get("2026-10-12-isaiah-58-66");
 const jeremiah = parsed.get("2026-10-19-jeremiah-1-3-7-16-18-20");
 const mixed = parsed.get("2026-10-26-jeremiah-31-33-36-39-lamentations-1-3");
 const ezekiel = parsed.get("2026-11-02-ezekiel-1-3-33-34-36-37-47");
+const daniel = parsed.get("2026-11-09-daniel-1-7");
 
 test("scripture-first fragments retain every reader byte, anchor, source, and artwork in source order", () => {
   for (const guide of parsed.values()) {
@@ -186,7 +188,7 @@ test("every guide splits into introduction, reader, and closing sections, losing
   const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
   const opens = (guide, chapter, item) =>
     `<section class="cfm-section" data-kind="chapter" data-chapter="${chapter}" aria-labelledby="${item.id}">`;
-  assert.equal(parsed.size, 6);
+  assert.equal(parsed.size, 7);
   for (const guide of parsed.values()) {
     const name = guide.title;
     const parts = { introduction: guide.introductionHtml, reader: guide.readerHtml, closing: guide.closingHtml };
@@ -1056,4 +1058,56 @@ test("the November 2 guide pairs Ezekiel 1–3, 33–34, 36–37, and 47, coveri
   const local = new Set(Array.from(ezekiel.html.matchAll(/href="#scripture-ezekiel-(\d+)/g), (match) => Number(match[1])));
   assert.deepEqual([...local].sort((a, b) => a - b), chapters);
   assert.equal(rangeLabel(entries), "Ezekiel 1, 2, 3, 33, 34, 36, 37, 47");
+});
+
+test("the November 9 guide pairs Daniel 1–7, covering each of its 224 verses once", () => {
+  const bundle = oldTestament();
+  const chapters = [1, 2, 3, 4, 5, 6, 7];
+  const { entries } = daniel.range;
+  assert.equal(guides.find((guide) => guide.slug === "2026-11-09-daniel-1-7").scripture, "Daniel 1–7");
+  assert.deepEqual(guideRange("Daniel 1–7").chapters, chapters);
+  assert.deepEqual(entries.map((entry) => [entry.book, entry.slug, entry.volume, entry.chapter]), chapters.map((chapter) => ["Daniel", "daniel", "oldtestament", chapter]));
+  assert.deepEqual(daniel.range.chapters, chapters);
+  assert.deepEqual(entries.map((entry) => entry.key), chapters);
+  assert.deepEqual(daniel.readerSections.filter((section) => section.chapter != null).map((section) => section.chapter), chapters);
+  for (const section of daniel.readerSections) {
+    for (const block of section.blocks) {
+      if (block.passage) assert.equal(block.passage.chapter, section.chapter, block.id);
+    }
+  }
+  for (const chapter of chapters) {
+    const item = daniel.toc.find((toc) => toc.kind === "chapter" && toc.book === "Daniel" && Number(toc.number) === chapter);
+    assert.ok(item, `Daniel ${chapter}`);
+    assert.equal(item.part, "reader", `Daniel ${chapter}`);
+  }
+  const paired = Array.from(daniel.html.matchAll(/<section class="cfm-section" data-kind="chapter" data-chapter="(\d+)"/g), (match) => Number(match[1]));
+  assert.deepEqual(paired, chapters);
+  assert.equal(daniel.html, daniel.introductionHtml + daniel.readerHtml + daniel.closingHtml);
+  for (const outside of [daniel.introductionHtml, daniel.closingHtml]) {
+    assert.ok(!/data-chapter="\d+" aria-labelledby/.test(outside));
+    assert.ok(!outside.includes("data-cfm-passage"));
+  }
+  assert.equal(daniel.passages.length, 97);
+  const counts = chapters.map((chapter) => verseCount(bundle, "Daniel", chapter));
+  assert.deepEqual(counts, [21, 49, 30, 37, 31, 28, 28]);
+  assert.equal(counts.reduce((sum, count) => sum + count, 0), 224);
+  const covered = new Map();
+  for (const passage of daniel.passages) {
+    const index = chapters.indexOf(passage.chapter);
+    assert.ok(index >= 0, passage.id);
+    assert.ok(passage.first >= 1 && passage.last >= passage.first && passage.last <= counts[index], passage.id);
+    assert.ok(daniel.readerHtml.includes(` id="${passage.id}"`), passage.id);
+    for (let verse = passage.firstHalf === "b" ? passage.first + 1 : passage.first; verse <= passage.last; verse += 1) {
+      covered.set(`${passage.chapter}:${verse}`, (covered.get(`${passage.chapter}:${verse}`) ?? 0) + 1);
+    }
+  }
+  chapters.forEach((chapter, index) => {
+    for (let verse = 1; verse <= counts[index]; verse += 1) {
+      assert.equal(covered.get(`${chapter}:${verse}`), 1, `Daniel ${chapter}:${verse}`);
+    }
+  });
+  assert.equal(covered.size, 224);
+  const local = new Set(Array.from(daniel.html.matchAll(/href="#scripture-daniel-(\d+)/g), (match) => Number(match[1])));
+  assert.deepEqual([...local].sort((a, b) => a - b), chapters);
+  assert.equal(rangeLabel(entries), "Daniel 1–7");
 });
