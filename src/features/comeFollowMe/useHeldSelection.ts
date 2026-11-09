@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { watchSelectionGesture } from "@/lib/selectionGesture";
 
 /** Touch browsers clear a selection as a tap on the menu begins; keep the menu long enough to take the tap. */
 const MENU_LINGER_MS = 400;
@@ -55,7 +56,7 @@ export function useHeldSelection<T>({ menuRef, contains, read, same }: Options<T
 
   useEffect(() => {
     let frame = 0;
-    let dragging = false;
+    let selecting = false;
     const hideNow = () => {
       window.clearTimeout(hideTimerRef.current);
       hideTimerRef.current = 0;
@@ -67,16 +68,15 @@ export function useHeldSelection<T>({ menuRef, contains, read, same }: Options<T
     };
     const measure = () => {
       frame = 0;
+      if (selecting) {
+        hideNow();
+        return;
+      }
       const { contains, read, same } = latest.current;
       const native = document.getSelection();
       const live = native && native.rangeCount > 0 && !native.isCollapsed ? native.getRangeAt(0) : null;
       // The live selection in the text, else (while the reader works in the menu) the one the menu is on.
       const range = live && contains(live.commonAncestorContainer) ? live : inMenuRef.current ? heldRef.current : null;
-      // The menu waits for a drag in the text to finish rather than covering the words being selected.
-      if (dragging) {
-        hideNow();
-        return;
-      }
       const next = range ? read(range) : null;
       if (!range || !next) {
         hide();
@@ -93,13 +93,13 @@ export function useHeldSelection<T>({ menuRef, contains, read, same }: Options<T
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       inMenuRef.current = !!target && !!menuRef.current?.contains(target);
-      dragging = !inMenuRef.current && !!target && latest.current.contains(target);
       schedule();
     };
-    const onPointerUp = () => {
-      dragging = false;
-      schedule();
-    };
+    const stopWatchingGesture = watchSelectionGesture((active) => {
+      selecting = active;
+      if (active) hideNow();
+      else schedule();
+    });
     const onFocusIn = (event: FocusEvent) => {
       inMenuRef.current = !!menuRef.current?.contains(event.target as Node | null);
       schedule();
@@ -115,18 +115,19 @@ export function useHeldSelection<T>({ menuRef, contains, read, same }: Options<T
     document.addEventListener("selectionchange", schedule);
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("focusin", onFocusIn);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
+    window.addEventListener("pointerup", schedule);
+    window.addEventListener("pointercancel", schedule);
     window.addEventListener("keydown", onKeyDown);
     // Any scroller moving (the page, a pane, the strip) carries the selection with it.
     window.addEventListener("scroll", schedule, { capture: true, passive: true });
     window.addEventListener("resize", schedule);
     return () => {
+      stopWatchingGesture();
       document.removeEventListener("selectionchange", schedule);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("focusin", onFocusIn);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("pointerup", schedule);
+      window.removeEventListener("pointercancel", schedule);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("scroll", schedule, { capture: true });
       window.removeEventListener("resize", schedule);
