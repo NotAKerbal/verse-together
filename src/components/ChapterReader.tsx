@@ -30,6 +30,7 @@ import type { Footnote } from "@/lib/openscripture";
 import { loadChapter } from "@/lib/chapterClient";
 import { runIdleQueue } from "@/lib/chapterRequestCache";
 import { scheduleIdleTask } from "@/lib/idle";
+import { watchSelectionGesture } from "@/lib/selectionGesture";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import { useComparisonChapters } from "./useComparisonChapters";
@@ -619,7 +620,8 @@ export default function ChapterReader({
   const leavingRef = useRef(false);
   const [openResources, setOpenResources] = useState(false);
   const [openExplorer, setOpenExplorer] = useState(false);
-  const [isPointerSelecting, setIsPointerSelecting] = useState(false);
+  const [isSelectionGestureActive, setIsSelectionGestureActive] = useState(false);
+  const pressBeganInVersesRef = useRef(false);
   const [dismissedSelectionKey, setDismissedSelectionKey] = useState<string | null>(null);
   const [isAtTop, setIsAtTop] = useState(true);
   const [jumpHighlightVerse, setJumpHighlightVerse] = useState<number | null>(null);
@@ -842,7 +844,7 @@ export default function ChapterReader({
   const selectedVerses = selectionState?.selectedVerses ?? [];
   const hasSelection = selectedVerses.length > 0;
   const selectedVerseKey = selectionState?.ranges.map(range => `${range.verse}:${range.start}:${range.end}`).join(",") ?? "";
-  const showSelectionActions = hasSelection && !isPointerSelecting && !isCustomTouchSelecting &&
+  const showSelectionActions = hasSelection && !isSelectionGestureActive && !isCustomTouchSelecting &&
     (!overlayOpen || selectedVerseKey !== dismissedSelectionKey);
   const singleSelectedWord = useMemo(() => extractSingleSelectedWord(selectedText), [selectedText]);
   const canExploreWord = hasSelection && !!singleSelectedWord;
@@ -1043,21 +1045,24 @@ export default function ChapterReader({
     };
   }, [openResources, openExplorer, customMobileSelectionEnabled, verses]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  useEffect(() => watchSelectionGesture(setIsSelectionGestureActive), []);
 
-    function finishPointerSelection() {
-      setIsPointerSelecting(false);
+  useEffect(() => {
+    function finishVersePress(event: PointerEvent) {
+      const pressBeganInVerses = pressBeganInVersesRef.current;
+      pressBeganInVersesRef.current = false;
+      if (!pressBeganInVerses && !verseListRef.current?.contains(event.target as Node | null)) return;
+      if (getChapterSelectionState(window.getSelection(), verseListRef.current, verses)) setDismissedSelectionKey(null);
     }
 
-    window.addEventListener("pointerup", finishPointerSelection);
-    window.addEventListener("pointercancel", finishPointerSelection);
+    window.addEventListener("pointerup", finishVersePress);
+    window.addEventListener("pointercancel", finishVersePress);
 
     return () => {
-      window.removeEventListener("pointerup", finishPointerSelection);
-      window.removeEventListener("pointercancel", finishPointerSelection);
+      window.removeEventListener("pointerup", finishVersePress);
+      window.removeEventListener("pointercancel", finishVersePress);
     };
-  }, []);
+  }, [verses]);
 
 
   useEffect(() => {
@@ -1107,6 +1112,7 @@ export default function ChapterReader({
     }
 
     function onScrollDismiss() {
+      if (isSelectionGestureActive || isCustomTouchSelecting || activeHandleRef.current || customSelectionActiveRef.current) return;
       if (overlayOpen) setDismissedSelectionKey(selectedVerseKey);
       else clearSelection();
     }
@@ -1124,7 +1130,7 @@ export default function ChapterReader({
       window.removeEventListener("scroll", onScrollDismiss);
       window.removeEventListener("resize", onScrollDismiss);
     };
-  }, [hasSelection, isCustomTouchSelecting, overlayOpen, customMobileSelectionEnabled, selectedVerseKey]);
+  }, [hasSelection, isCustomTouchSelecting, isSelectionGestureActive, overlayOpen, customMobileSelectionEnabled, selectedVerseKey]);
 
   useEffect(() => {
     function syncTopState() {
@@ -1369,6 +1375,15 @@ export default function ChapterReader({
     touchStartTime.current = null;
   }
 
+  function onTouchCancel() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressOriginRef.current = null;
+    longPressTouchIdRef.current = null;
+  }
+
   function onTransitionEnd() {
     if (leavingRef.current && navHrefRef.current) {
       const href = navHrefRef.current;
@@ -1484,6 +1499,7 @@ export default function ChapterReader({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchCancel}
       style={
         customMobileSelectionEnabled && isCustomTouchSelecting
           ? ({ touchAction: "none" } as CSSProperties)
@@ -1706,11 +1722,7 @@ export default function ChapterReader({
                         if (event.button !== 0 || !target?.closest("[data-verse-selectable='true']")) return;
                         if (target.closest("button, a, input, textarea, select, [role='button']")) return;
                         setDismissedSelectionKey(selectedVerseKey);
-                        setIsPointerSelecting(true);
-                      }}
-                      onPointerUp={() => {
-                        const selection = getChapterSelectionState(window.getSelection(), verseListRef.current, verses);
-                        if (selection) setDismissedSelectionKey(null);
+                        pressBeganInVersesRef.current = true;
                       }}
                       className={`reader-verses ${prefs.fontFamily === "sans" ? "font-sans" : "font-serif"}`}
                       style={{ fontSize: `${prefs.fontScale}rem` }}
@@ -1890,7 +1902,7 @@ export default function ChapterReader({
           <ChapterDesktopNav
             prevHref={prevHref}
             nextHref={nextHref}
-            shortcutsBlocked={pageCovered || settingsOpen || overlayOpen || hasSelection || isPointerSelecting || annotationEditorVerse !== null || isDragging || animTargetX !== null}
+            shortcutsBlocked={pageCovered || settingsOpen || overlayOpen || hasSelection || isSelectionGestureActive || annotationEditorVerse !== null || isDragging || animTargetX !== null}
           />
           <ChapterSimpleNav prevHref={prevHref} nextHref={nextHref} />
           </div>
@@ -1911,6 +1923,10 @@ export default function ChapterReader({
               }}
             />
           ))}
+        </div>
+      ) : null}
+      {customMobileSelectionEnabled && customSelectionRects.length > 0 && !selectionCoversWholeVerses ? (
+        <div className="pointer-events-none fixed inset-0 z-[41]">
           {startHandleRect ? (
             <button
               type="button"

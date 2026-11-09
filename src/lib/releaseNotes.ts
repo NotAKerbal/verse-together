@@ -47,7 +47,20 @@ export const UNRELEASED: UnreleasedNotes = {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.25.2",
+    date: "2026-11-09",
+    title: "A selection menu that waits for you",
+    items: [
+      {
+        kind: "improved",
+        text: "The selection menu stays out of the way while you select or adjust text, and comes back when you finish.",
+      },
+    ],
+    commits: ["103f1430"],
+  },
+  {
     version: "2.25.1",
+    masterCommit: "d6b18132",
     date: "2026-11-05",
     title: "Unlimited chapter guides for chosen accounts",
     items: [
