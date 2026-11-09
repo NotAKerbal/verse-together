@@ -42,7 +42,9 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [],
+  items: [
+    { kind: "improved", text: "The selection menu stays out of the way while you select or adjust text, and comes back when you finish." },
+  ],
 };
 
 export const RELEASES: readonly Release[] = [

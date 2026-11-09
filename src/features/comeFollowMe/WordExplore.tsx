@@ -64,7 +64,7 @@ function PageSelection({ root, open }: { root: RefObject<HTMLDivElement | null>;
   }, [selection]);
   if (!selection) return null;
   return createPortal(
-    <div ref={menuRef} className={styles.selection} role="group" aria-label="Selection actions">
+    <div ref={menuRef} data-selection-popover="true" className={styles.selection} role="group" aria-label="Selection actions">
       <button type="button" onMouseDown={event => { if (event.button === 0) event.preventDefault(); }} onClick={() => { clear(); open(selection.word); }}>
         Explore “{selection.word}”
       </button>
