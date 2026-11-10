@@ -98,6 +98,70 @@ function pad(box, by, viewport) {
 /** Each shot opens its page, does what a reader would, and returns the area to keep. */
 const SHOTS = [
   {
+    name: "2.26.0-journal-prompts",
+    viewport: { width: 1280, height: 900 },
+    async run(page, viewport) {
+      await open(page, "/notes");
+      const invitation = page.getByRole("region", { name: "An invitation to reflect", exact: true });
+      const question = invitation.getByRole("heading", { level: 2 });
+      const another = invitation.getByRole("button", { name: "Choose another prompt", exact: true });
+      await another.waitFor();
+      await page.waitForFunction(() => document.querySelector('[aria-label="An invitation to reflect"] h2')?.textContent?.trim());
+      const shown = async () => ({
+        text: (await question.textContent()).trim(),
+        art: await invitation.evaluate((el) => el.style.backgroundImage),
+      });
+      const before = await shown();
+      if (!before.art) throw new Error("The invitation has no artwork");
+      await another.click();
+      await page.waitForFunction(
+        (previous) => document.querySelector('[aria-label="An invitation to reflect"] h2')?.textContent?.trim() !== previous,
+        before.text
+      );
+      const after = await shown();
+      if (after.text === before.text) throw new Error("Choose another prompt kept the same question");
+      if (!after.art || after.art === before.art) throw new Error("Choose another prompt kept the same artwork");
+      await invitation.evaluate(async (el) => {
+        const src = el.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1];
+        if (!src) return;
+        const image = new Image();
+        image.src = src;
+        await image.decode();
+      });
+      await invitation.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+      return pad(await invitation.boundingBox(), 12, viewport);
+    },
+  },
+  {
+    name: "2.26.0-language-details",
+    viewport: { width: 1280, height: 1200 },
+    async run(page, viewport) {
+      await open(page, "/browse/newtestament/john/1");
+      const point = await wordPoint(page, page.locator(".reader-verse").first(), "Word");
+      await page.mouse.dblclick(point.x, point.y);
+      await page.getByRole("button", { name: /^Explore/ }).first().click();
+      const panel = page.locator("#word-study-panel-desktop");
+      await panel.waitFor();
+      const languages = panel.getByRole("button", { name: /Biblical languages/ });
+      await languages.getByText(/matches/).waitFor();
+      if (await languages.getAttribute("aria-expanded") !== "true") await languages.click();
+      await panel.getByRole("heading", { name: "Greek", exact: true }).waitFor();
+      await panel.getByRole("heading", { name: "Hebrew", exact: true }).waitFor();
+      const summary = panel.locator("summary", { hasText: "Sources & details" });
+      const details = summary.locator("xpath=..");
+      if (await details.evaluate((el) => el.open)) throw new Error("Sources & details started open");
+      await summary.click();
+      await panel.getByText("Possible translations for this word in Greek or Hebrew.", { exact: true }).waitFor();
+      await summary.click();
+      await page.waitForFunction((el) => !el.open, await details.elementHandle());
+      await summary.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+      const card = languages.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' explore-card ')][1]");
+      return pad(await card.boundingBox(), 8, viewport);
+    },
+  },
+  {
     name: "2.25.0-simple-mode",
     viewport: { width: 1280, height: 860 },
     async run(page, viewport) {

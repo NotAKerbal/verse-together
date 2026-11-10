@@ -42,18 +42,43 @@ export type UnreleasedNotes = {
 /** Changes waiting for the next dev-to-master release. Empty items when there are none. */
 export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
-  items: [
-    { kind: "improved", text: "The journal’s invitation to reflect now shows a different question and artwork each time you visit, from a larger set of questions, and Choose another prompt changes both." },
-    {
-      kind: "improved",
-      text: "Greek and Hebrew word results are simpler to read, with source links and details kept in an expandable footer.",
-    },
-  ],
+  items: [],
 };
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.26.0",
+    date: "2026-11-09",
+    title: "Fresh journal prompts and tidier word sources",
+    items: [
+      {
+        kind: "improved",
+        text: "The journal’s invitation to reflect now shows a different question and artwork each time you visit, from a larger set of questions, and Choose another prompt changes both.",
+        screenshot: {
+          src: "/release-notes/2.26.0-journal-prompts.webp",
+          width: 1588,
+          height: 608,
+          alt: "The journal’s invitation to reflect: a reflection question set over scripture artwork, with Write a reflection and Choose another prompt buttons beneath it.",
+          caption: "A reflection question and artwork in the journal; Choose another prompt changes both.",
+        },
+      },
+      {
+        kind: "improved",
+        text: "Greek and Hebrew word results are simpler to read, with source links and details kept in an expandable footer.",
+        screenshot: {
+          src: "/release-notes/2.26.0-language-details.webp",
+          width: 788,
+          height: 1692,
+          alt: "The Explore panel for “Word” in John 1:1, showing Greek and Hebrew lexicon matches under Biblical languages, with a collapsed Sources & details footer beneath them.",
+          caption: "Greek and Hebrew results for “Word”, with sources and details folded into a footer.",
+        },
+      },
+    ],
+    commits: ["b6af8f80", "57db3622"],
+  },
+  {
     version: "2.25.2",
+    masterCommit: "91f0b066",
     date: "2026-11-09",
     title: "A selection menu that waits for you",
     items: [
