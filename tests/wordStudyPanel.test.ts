@@ -334,11 +334,21 @@ describe("Explore word study with entries and lexicon results loaded", () => {
 
     // Strong's Hebrew results as rows, under how they matched, with the lemma isolated right to left; Greek is still loading.
     const languages = languagesOpen("faith", genesis);
-    expect(languages).toContain("not the word in this verse");
     expect(languages).toContain("translated “faith” in the KJV");
     expect(languages).toMatch(/<span[^>]*>Hebrew · <span class="sr-only">Strong’s number <\/span>H530<\/span><span[^>]*><bdi lang="he" dir="rtl"[^>]*>אֱמוּנָה<\/bdi>/);
     expect(languages).not.toContain("KJV renders it");
-    expect(languages).toContain("Strong’s Hebrew Dictionary, from");
+    expect(countOf(languages, "<details")).toBe(1);
+    expect(languages).toMatch(/<details class="[^"]*"><summary[^>]*>Sources &amp; details<svg/);
+    const details = languages.slice(languages.indexOf("<details"), languages.indexOf("</details>"));
+    expect(languages.slice(0, languages.indexOf("<details"))).not.toContain("Search Bible Hub");
+    expect(languages.slice(0, languages.indexOf("<details"))).not.toContain("OpenScriptures");
+    expect(details).toContain("Possible translations for this word in Greek or Hebrew.");
+    expect(details).toContain('href="https://biblehub.net/searchhebrew.php?q=faith"');
+    expect(details).toContain('href="https://biblehub.net/searchgreek.php?q=faith"');
+    expect(details).toContain('href="https://biblehub.com/interlinear/genesis/1.htm"');
+    expect(details).toContain("Strong’s Hebrew Dictionary, from");
+    expect(details).toMatch(/<a href="https:\/\/github\.com\/openscriptures\/strongs\/[^"]*"[^>]*>OpenScriptures<span class="sr-only"> \(opens in a new tab\)<\/span><\/a> \(CC-BY-SA\)/);
+    expect(details).not.toContain("Strong’s Greek Dictionary, from");
     expect(languages).toContain("Looking up “faith” in Strong’s Greek dictionary…");
     expect(languages).not.toContain("πίστις");
     // Opening a result shows it in full: what it means, how the KJV renders it, and where it comes from.
@@ -373,7 +383,8 @@ describe("Explore word study with entries and lexicon results loaded", () => {
     expect(header).not.toContain("match");
     const opened = languagesOpen("xyzzy", genesis);
     expect(opened).toContain('href="https://biblehub.com/interlinear/genesis/1.htm"');
-    expect(opened).not.toContain("not the word in this verse");
+    expect(opened).not.toContain("<details");
+    expect(opened).not.toContain("Possible translations for this word in Greek or Hebrew.");
     expect(opened).not.toContain("Strong’s Hebrew dictionary…");
   });
 

@@ -279,24 +279,81 @@ export function useBiblicalLanguages(word: string, context?: WordStudyContext | 
   return { term, interlinear, languages, status: interlinear && lexiconStatus === "empty" ? "found" : lexiconStatus };
 }
 
-function LexiconPanel({ language, term, state, retry }: { language: BiblicalLanguage; term: string; state: ResourceState<StrongsLookup>; retry: () => void }) {
-  const search = (
+function LexiconSearchLink({ language, term }: { language: BiblicalLanguage; term: string }) {
+  return (
     <ExternalLink href={bibleHubLexiconSearchUrl(language, term)} className={secondaryLink}>
       Search Bible Hub’s {LANGUAGE_LABELS[language]} lexicon<span className="sr-only"> for “{term}”</span>
       <ExternalIcon />
     </ExternalLink>
   );
+}
+
+function LexiconPanel({ language, term, state, retry }: { language: BiblicalLanguage; term: string; state: ResourceState<StrongsLookup>; retry: () => void }) {
   if (state.status === "ready") {
-    return <LexiconResults lookup={state.data} furtherStudy={search} />;
+    return <LexiconResults lookup={state.data} />;
   }
   return (
     <ExploreNotice>
       {state.status === "error" ? (
-        <LoadError message={`${LANGUAGE_LABELS[language]} lexicon entries didn’t load.`} onRetry={retry}>{search}</LoadError>
+        <LoadError message={`${LANGUAGE_LABELS[language]} lexicon entries didn’t load.`} onRetry={retry}>
+          <LexiconSearchLink language={language} term={term} />
+        </LoadError>
       ) : (
         <LoadingLines label={`Looking up “${term}” in Strong’s ${LANGUAGE_LABELS[language]} dictionary…`} />
       )}
     </ExploreNotice>
+  );
+}
+
+function InterlinearLink({ interlinear }: { interlinear: BibleInterlinearLink }) {
+  return (
+    <ExternalLink
+      href={interlinear.url}
+      className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-[10px] px-2.5 py-2 transition-colors hover:bg-[color:var(--explore-row-hover)] motion-reduce:transition-none"
+    >
+      <span className="min-w-0">
+        <span className="block text-xs leading-snug text-[color:var(--foreground-muted)]">
+          {interlinear.testament === "old" ? "Hebrew (and Aramaic)" : "Greek"} text, word by word with English · Bible Hub
+        </span>
+        <span className="mt-px block font-serif text-base leading-snug">{interlinear.passage} interlinear</span>
+      </span>
+      <ExternalIcon />
+    </ExternalLink>
+  );
+}
+
+function LanguagesDetails({ term, interlinear, languages }: { term: string; interlinear: BibleInterlinearLink | null; languages: LexiconResult[] }) {
+  const searchable = languages.filter(({ state }) => state.status !== "error");
+  const loaded = languages.flatMap(({ key, state }) => (state.status === "ready" ? [{ key, lookup: state.data }] : []));
+  return (
+    <details className="group mt-4">
+      <summary className={`flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded px-2.5 text-xs font-medium text-[color:var(--foreground-muted)] [&::-webkit-details-marker]:hidden ${linkFocus}`}>
+        Sources &amp; details
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 group-open:rotate-180">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <div className="space-y-2 pt-1">
+        <p className="px-2.5 text-xs leading-5 text-[color:var(--foreground-muted)]">
+          Possible translations for this word in Greek or Hebrew.
+        </p>
+        {searchable.length ? (
+          <div className="flex flex-wrap gap-x-4 px-2.5">
+            {searchable.map(({ key }) => (
+              <LexiconSearchLink key={key} language={key} term={term} />
+            ))}
+          </div>
+        ) : null}
+        {interlinear ? <InterlinearLink interlinear={interlinear} /> : null}
+        {loaded.map(({ key, lookup }) => (
+          <p key={key} className="px-2.5 text-[0.6875rem] leading-5 text-[color:var(--foreground-muted)]">
+            {lookup.attribution.title}, from{" "}
+            <ExternalLink href={lookup.attribution.sourceUrl} className="underline underline-offset-2">OpenScriptures</ExternalLink>
+            {" "}({lookup.attribution.license.replace(/\s*\(.*\)$/, "")})
+          </p>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -320,36 +377,17 @@ export function BiblicalLanguagesSection({ lexicons, disclosure }: { lexicons: B
       count={matchCount ? plural(matchCount, "match", "matches") : null}
       disclosure={disclosure}
     >
-      {offered.length ? (
-        <p className="flex items-start gap-2 px-2.5 pb-4 text-xs leading-5 text-[color:var(--explore-accent)]">
-          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 shrink-0">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 11v5M12 8h.01" />
-          </svg>
-          <span>
-            <span className="font-semibold">Possibilities to explore, not the word in this verse.</span> Strong’s entries whose
-            King James renderings or definitions use “{term}”.
-          </span>
-        </p>
-      ) : null}
       <div className="space-y-6">
         {offered.map((option) => (
           <LexiconPanel key={option.key} language={option.key} term={term} state={option.state} retry={option.retry} />
         ))}
       </div>
-      {interlinear ? (
-        <ExternalLink
-          href={interlinear.url}
-          className="mt-4 grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-[10px] px-2.5 py-2 transition-colors hover:bg-[color:var(--explore-row-hover)] motion-reduce:transition-none"
-        >
-          <span className="min-w-0">
-            <span className="block text-xs leading-snug text-[color:var(--foreground-muted)]">
-              {interlinear.testament === "old" ? "Hebrew (and Aramaic)" : "Greek"} text, word by word with English · Bible Hub
-            </span>
-            <span className="mt-px block font-serif text-base leading-snug">{interlinear.passage} interlinear</span>
-          </span>
-          <ExternalIcon />
-        </ExternalLink>
+      {offered.length ? (
+        <LanguagesDetails term={term} interlinear={interlinear} languages={offered} />
+      ) : interlinear ? (
+        <div className="mt-4">
+          <InterlinearLink interlinear={interlinear} />
+        </div>
       ) : null}
     </ExploreSection>
   );

@@ -1,8 +1,3 @@
-// Explore's biblical languages (the web's BiblicalLanguagesSection and LexiconResults): Strong's Hebrew and Greek
-// entries whose King James renderings or definitions use the selection, the language of the testament being read
-// first, and the chapter's word-by-word interlinear when it is a Bible chapter. These are possibilities to explore,
-// not the original word of the verse, and the section says so.
-
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { SourceStatus } from "@/lib/exploreSources";
@@ -61,19 +56,16 @@ function LexiconEntry({ match }: { match: StrongsMatch }) {
   );
 }
 
-/** A language's Strong's entries as title rows: the best few, the rest on request, and the source. */
 export function LexiconResults({ lookup }: { lookup: StrongsLookup }) {
   const { colors } = useTheme();
   const [showAll, setShowAll] = useState(false);
   const { matches, term, language } = lookup;
   const label = LANGUAGE_LABELS[language];
   const shown = showAll ? matches : matches.slice(0, SHOWN_FIRST);
-  // Words the KJV translates as the term come first; words whose definitions only mention it follow, apart.
   const groups = [
     { id: "kjv", heading: `translated “${term}” in the KJV`, rows: shown.filter((match) => match.matchedIn === "kjv") },
     { id: "definition", heading: `definitions that mention “${term}”`, rows: shown.filter((match) => match.matchedIn === "definition") },
   ].filter((group) => group.rows.length > 0);
-  const license = lookup.attribution.license.replace(/\s*\(.*\)$/, "");
 
   return (
     <View style={{ gap: 4 }} testID={`lexicon-${language}`}>
@@ -118,32 +110,23 @@ export function LexiconResults({ lookup }: { lookup: StrongsLookup }) {
           {`No ${label} entry in Strong’s dictionary uses “${term}” in its King James renderings or definition.`}
         </Text>
       )}
-      <Text style={{ paddingHorizontal: 10, fontFamily: fonts.sans, fontSize: 12, lineHeight: 18, color: colors.foregroundMuted }}>
-        {`${lookup.attribution.title}, from `}
-        <Text accessibilityRole="link" onPress={() => void openExternal(lookup.attribution.sourceUrl)} style={{ textDecorationLine: "underline" }}>
-          OpenScriptures
-        </Text>
-        {` (${license})`}
-      </Text>
     </View>
   );
 }
 
+function LexiconSearchLink({ language, term }: { language: BiblicalLanguage; term: string }) {
+  return <ExternalLink url={bibleHubLexiconSearchUrl(language, term)} label={`Search Bible Hub’s ${LANGUAGE_LABELS[language]} lexicon`} a11y={`Search Bible Hub’s ${LANGUAGE_LABELS[language]} lexicon for “${term}”`} />;
+}
+
 function LexiconPanel({ language, term, state, retry }: { language: BiblicalLanguage; term: string; state: ResourceState<StrongsLookup>; retry: () => void }) {
-  const search = <ExternalLink url={bibleHubLexiconSearchUrl(language, term)} label={`Search Bible Hub’s ${LANGUAGE_LABELS[language]} lexicon`} a11y={`Search Bible Hub’s ${LANGUAGE_LABELS[language]} lexicon for “${term}”`} />;
   if (state.status === "ready") {
-    return (
-      <View>
-        <LexiconResults lookup={state.data} />
-        <View style={{ paddingHorizontal: 10 }}>{search}</View>
-      </View>
-    );
+    return <LexiconResults lookup={state.data} />;
   }
   return (
     <ExploreNotice>
       {state.status === "error" ? (
         <LoadError message={`${LANGUAGE_LABELS[language]} lexicon entries didn’t load. ${state.message}`} onRetry={retry} retryLabel={`Try the ${LANGUAGE_LABELS[language]} lexicon again`}>
-          {search}
+          <LexiconSearchLink language={language} term={term} />
         </LoadError>
       ) : (
         <LoadingLines label={`Looking up “${term}” in Strong’s ${LANGUAGE_LABELS[language]} dictionary…`} />
@@ -174,7 +157,6 @@ function InterlinearRow({ interlinear }: { interlinear: BibleInterlinearLink }) 
   );
 }
 
-/** Strong's entries in both languages, the testament's first, and the chapter's interlinear when there is one. */
 export function BiblicalLanguagesSection({
   term,
   interlinear,
@@ -204,26 +186,61 @@ export function BiblicalLanguagesSection({
       disclosure={disclosure}
       testID="explore-section-languages"
     >
-      {offered.length ? <LanguagesCaution term={term} /> : null}
       <View style={{ gap: 8 }}>
         {offered.map((option) => (
           <LexiconPanel key={option.key} language={option.key} term={term} state={option.state} retry={option.retry} />
         ))}
       </View>
-      {interlinear ? <InterlinearRow interlinear={interlinear} /> : null}
+      {offered.length ? (
+        <LanguagesDetails term={term} interlinear={interlinear} languages={offered} />
+      ) : interlinear ? (
+        <InterlinearRow interlinear={interlinear} />
+      ) : null}
     </ExploreSection>
   );
 }
 
-function LanguagesCaution({ term }: { term: string }) {
-  const color = useTone().accent;
+function LanguagesDetails({ term, interlinear, languages }: { term: string; interlinear: BibleInterlinearLink | null; languages: LexiconResult[] }) {
+  const { colors } = useTheme();
+  const palette = useTone();
+  const [open, setOpen] = useState(false);
+  const searchable = languages.filter(({ state }) => state.status !== "error");
+  const loaded = languages.flatMap(({ key, state }) => (state.status === "ready" ? [{ key, lookup: state.data }] : []));
+  const small = { fontFamily: fonts.sans, fontSize: 12, lineHeight: 19, color: colors.foregroundMuted };
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, paddingHorizontal: 10, paddingBottom: 4 }}>
-      <Icon name="circle-info" size={13} color={color} style={{ marginTop: 3 }} />
-      <Text style={{ flex: 1, fontFamily: fonts.sans, fontSize: 12, lineHeight: 19, color }}>
-        <Text style={{ fontFamily: fonts.sansSemiBold }}>Possibilities to explore, not the word in this verse.</Text>
-        {` Strong’s entries whose King James renderings or definitions use “${term}”.`}
-      </Text>
+    <View style={{ marginTop: 8 }}>
+      <Pressable
+        testID="explore-languages-details-toggle"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((value) => !value)}
+        style={({ pressed }) => ({ minHeight: 44, flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: pressed ? palette.rowPressed : "transparent" })}
+      >
+        <Text style={[small, { fontFamily: fonts.sansMedium }]}>Sources & details</Text>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={11} color={colors.foregroundMuted} />
+      </Pressable>
+      {open ? (
+        <View testID="explore-languages-details" style={{ gap: 4 }}>
+          <Text style={[small, { paddingHorizontal: 10 }]}>Possible translations for this word in Greek or Hebrew.</Text>
+          {searchable.length ? (
+            <View style={{ paddingHorizontal: 10, flexDirection: "row", flexWrap: "wrap", columnGap: 16 }}>
+              {searchable.map(({ key }) => (
+                <LexiconSearchLink key={key} language={key} term={term} />
+              ))}
+            </View>
+          ) : null}
+          {interlinear ? <InterlinearRow interlinear={interlinear} /> : null}
+          {loaded.map(({ key, lookup }) => (
+            <Text key={key} style={[small, { paddingHorizontal: 10, lineHeight: 18 }]}>
+              {`${lookup.attribution.title}, from `}
+              <Text accessibilityRole="link" onPress={() => void openExternal(lookup.attribution.sourceUrl)} style={{ textDecorationLine: "underline" }}>
+                OpenScriptures
+              </Text>
+              {` (${lookup.attribution.license.replace(/\s*\(.*\)$/, "")})`}
+            </Text>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
