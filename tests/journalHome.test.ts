@@ -1,5 +1,12 @@
-import { describe, expect, test } from "vitest";
-import { journalGoalWeek, journalHomeProgress, journalRevisit } from "../src/features/notes/journalHome";
+import { existsSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test, vi } from "vitest";
+import { JournalInvitation } from "../src/features/notes/JournalHomeSections";
+import {
+  JOURNAL_INVITATION_ART, journalGoalWeek, journalHomeProgress, journalInvitationFromStored, journalRevisit, pickJournalInvitation,
+  randomIndexExcept, REFLECTION_PROMPTS, storedJournalInvitation,
+} from "../src/features/notes/journalHome";
 import type { JournalEntry, JournalNoteEntry } from "../src/features/notes/journal";
 
 const note = (id: string, date: string, change: Partial<JournalNoteEntry> = {}): JournalNoteEntry => ({
@@ -35,5 +42,67 @@ describe("journal homepage progress", () => {
     expect(journalRevisit([earlier, reading("read", "2026-10-24"), note("today", "2026-10-25"),
       note("empty", "2026-10-24", { has_reflection: false })], "2026-10-25")).toBe(earlier);
     expect(journalRevisit([], "2026-10-25")).toBeNull();
+  });
+});
+
+describe("the journal invitation's prompt and artwork", () => {
+  test("offers many distinct prompts and only shipped artwork", () => {
+    expect(REFLECTION_PROMPTS.length).toBeGreaterThanOrEqual(15);
+    expect(new Set(REFLECTION_PROMPTS).size).toBe(REFLECTION_PROMPTS.length);
+    expect(JOURNAL_INVITATION_ART.length).toBeGreaterThan(1);
+    for (const art of JOURNAL_INVITATION_ART) expect(existsSync(new URL(`../public${art.src}`, import.meta.url))).toBe(true);
+  });
+
+  test("random picks reach both ends of the range and never return the excluded index", () => {
+    expect(randomIndexExcept(5, null, () => 0)).toBe(0);
+    expect(randomIndexExcept(5, null, () => 0.999999)).toBe(4);
+    expect(randomIndexExcept(5, 0, () => 0)).toBe(1);
+    expect(randomIndexExcept(5, 4, () => 0.999999)).toBe(3);
+    expect(randomIndexExcept(5, 2, () => 0.5)).toBe(3);
+    expect(randomIndexExcept(5, 2, () => 1)).toBe(4);
+    expect(randomIndexExcept(5, 7, () => 0.999999)).toBe(4);
+    expect(randomIndexExcept(5, -1, () => Number.NaN)).toBe(0);
+    expect(randomIndexExcept(1, 0, () => 0.5)).toBe(0);
+    for (let excluded = 0; excluded < 5; excluded += 1) {
+      const seen = new Set(Array.from({ length: 4 }, (_, step) => randomIndexExcept(5, excluded, () => step / 4)));
+      expect(seen).toEqual(new Set([0, 1, 2, 3, 4].filter(index => index !== excluded)));
+    }
+  });
+
+  test("choosing another changes both the prompt and the artwork", () => {
+    for (const value of [0, 0.3, 0.7, 0.999999]) {
+      const previous = { prompt: 3, art: 2 };
+      const next = pickJournalInvitation(previous, () => value);
+      expect(next.prompt).not.toBe(previous.prompt);
+      expect(next.art).not.toBe(previous.art);
+      expect(REFLECTION_PROMPTS[next.prompt]).toBeDefined();
+      expect(JOURNAL_INVITATION_ART[next.art]).toBeDefined();
+    }
+  });
+
+  test("a remembered invitation round-trips, and unknown or malformed storage avoids nothing", () => {
+    const choice = { prompt: 5, art: 1 };
+    expect(journalInvitationFromStored(JSON.parse(JSON.stringify(storedJournalInvitation(choice))))).toEqual(choice);
+    expect(journalInvitationFromStored({ prompt: "A retired prompt", art: JOURNAL_INVITATION_ART[0].src })).toEqual({ art: 0 });
+    for (const value of [null, "text", 4, { prompt: 2, art: 1 }]) {
+      const previous = journalInvitationFromStored(value);
+      const next = pickJournalInvitation(previous, () => 0);
+      expect(next).toEqual({ prompt: 0, art: 0 });
+    }
+  });
+
+  test("the server render is deterministic and chooses nothing, so hydration matches", () => {
+    const random = vi.spyOn(Math, "random");
+    const render = () => renderToStaticMarkup(createElement(JournalInvitation, { date: "2026-10-25", onWrite: () => {} }));
+    const html = render();
+    expect(render()).toBe(html);
+    expect(random).not.toHaveBeenCalled();
+    random.mockRestore();
+    expect(html).not.toContain("Make room for a little light.");
+    expect(html).toMatch(/<h2 aria-live="polite" aria-atomic="true"><\/h2>/);
+    expect(html).toContain("Choose another prompt");
+    expect(html).not.toContain("background-image");
+    for (const prompt of REFLECTION_PROMPTS) expect(html).not.toContain(prompt);
+    expect(html.match(/<button[^>]*disabled=""/g)).toHaveLength(2);
   });
 });
