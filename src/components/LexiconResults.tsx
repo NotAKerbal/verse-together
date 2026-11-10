@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState } from "react";
 import { STRONGS_LANG, scriptRuns, type StrongsLookup, type StrongsMatch } from "@/lib/strongsLexicon";
 import { ExploreRow } from "@/components/ExploreSection";
 import { ExternalIcon, ExternalLink, eyebrow, linkFocus, secondaryLink } from "@/components/WordStudyLinks";
@@ -45,7 +45,7 @@ function LexiconEntry({ match }: { match: StrongsMatch }) {
   );
 }
 
-export function LexiconResults({ lookup, furtherStudy }: { lookup: StrongsLookup; furtherStudy?: ReactNode }) {
+export function LexiconResults({ lookup }: { lookup: StrongsLookup }) {
   const [showAll, setShowAll] = useState(false);
   const listId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -113,14 +113,6 @@ export function LexiconResults({ lookup, furtherStudy }: { lookup: StrongsLookup
           No {label} entry in Strong’s dictionary uses “{term}” in its King James renderings or definition.
         </p>
       )}
-      <footer className="space-y-1 text-xs text-[color:var(--foreground-muted)]">
-        {furtherStudy}
-        <p className="text-[0.6875rem] leading-5">
-          {lookup.attribution.title}, from{" "}
-          <ExternalLink href={lookup.attribution.sourceUrl} className="underline underline-offset-2">OpenScriptures</ExternalLink>
-          {" "}({lookup.attribution.license.replace(/\s*\(.*\)$/, "")})
-        </p>
-      </footer>
     </section>
   );
 }

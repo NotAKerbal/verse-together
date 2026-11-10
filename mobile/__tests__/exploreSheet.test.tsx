@@ -323,7 +323,12 @@ describe("Explore's study helps and biblical languages in a Bible chapter", () =
     expect(within(languages).getByText("Greek · Hebrew · Hebrews 11 interlinear")).toBeTruthy();
     expect(within(languages).getByText("2 matches")).toBeTruthy();
     await press(within(languages).getByTestId("explore-section-languages-toggle"));
-    expect(within(languages).getAllByText(/Possibilities to explore, not the word in this verse\./).length).toBeGreaterThan(0);
+    const detailsToggle = () => within(languages).getByTestId("explore-languages-details-toggle");
+    expect(detailsToggle().props.accessibilityState).toMatchObject({ expanded: false });
+    expect(within(languages).queryByText(/Possible translations for this word in Greek or Hebrew\./)).toBeNull();
+    expect(within(languages).queryByLabelText("Search Bible Hub’s Greek lexicon for “faith”")).toBeNull();
+    expect(within(languages).queryByText(/OpenScriptures/)).toBeNull();
+    expect(within(languages).queryByTestId("explore-interlinear")).toBeNull();
     const order = within(languages).getAllByTestId(/^lexicon-(greek|hebrew)$/).map((element) => element.props.testID);
     expect(order).toEqual(["lexicon-greek", "lexicon-hebrew"]);
     await press(within(languages).getByTestId("lexicon-row-G4102"));
@@ -331,8 +336,22 @@ describe("Explore's study helps and biblical languages in a Bible chapter", () =
     expect(within(languages).getAllByText(/assurance, belief, believe, faith, fidelity\./).length).toBeGreaterThan(0);
     await press(within(languages).getByLabelText("G4102 on Bible Hub"));
     expect(opened).toHaveBeenLastCalledWith("https://biblehub.com/greek/4102.htm");
-    await press(within(languages).getByTestId("explore-interlinear"));
+    await press(detailsToggle());
+    expect(detailsToggle().props.accessibilityState).toMatchObject({ expanded: true });
+    const expanded = within(languages).getByTestId("explore-languages-details");
+    expect(within(expanded).getByText("Possible translations for this word in Greek or Hebrew.")).toBeTruthy();
+    expect(within(expanded).getByText(/^Strong’s Greek Dictionary, from/)).toHaveTextContent("Strong’s Greek Dictionary, from OpenScriptures (CC-BY-SA)");
+    expect(within(expanded).getByText(/^Strong’s Hebrew Dictionary, from/)).toBeTruthy();
+    await press(within(expanded).getByLabelText("Search Bible Hub’s Greek lexicon for “faith”"));
+    expect(opened).toHaveBeenLastCalledWith("https://biblehub.net/searchgreek.php?q=faith");
+    expect(within(expanded).getByLabelText("Search Bible Hub’s Hebrew lexicon for “faith”")).toBeTruthy();
+    await press(within(expanded).getAllByText("OpenScriptures")[0]);
+    expect(opened).toHaveBeenLastCalledWith("https://github.com/openscriptures/strongs");
+    await press(within(expanded).getByTestId("explore-interlinear"));
     expect(opened).toHaveBeenLastCalledWith("https://biblehub.com/interlinear/hebrews/11.htm");
+    await press(detailsToggle());
+    expect(detailsToggle().props.accessibilityState).toMatchObject({ expanded: false });
+    expect(within(languages).queryByTestId("explore-languages-details")).toBeNull();
   });
 
   it("leaves Latter-day Saint study helps out for Other denominations, in matches and in what found nothing", async () => {

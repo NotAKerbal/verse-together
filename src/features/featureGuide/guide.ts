@@ -326,7 +326,7 @@ export const GUIDE_SECTIONS: readonly GuideSection[] = [
                 title: "Look at the Hebrew and Greek",
                 steps: [
                     "Explore a word, then open Biblical languages.",
-                    "Strong's entries whose renderings use the word are listed. They're possibilities to explore, not the word in this verse.",
+                    "Possible translations for the word in Greek or Hebrew are listed.",
                     "Choose one to read its definition.",
                 ],
             },

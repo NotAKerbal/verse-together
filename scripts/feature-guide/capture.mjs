@@ -634,9 +634,12 @@ await scene('explore_languages', 'explore', { fresh: false }, async (p, a) => {
     await sleep(700);
     await a.click(langs, { dwell: 400 });
     await sleep(1500);
-    const note = p.getByText('Possibilities to explore, not the word in this verse', { exact: false }).first();
+    const details = p.getByText('Sources & details', { exact: true }).first();
+    await a.click(details, { dwell: 400 });
+    await sleep(900);
+    const note = p.getByText('Possible translations for this word in Greek or Hebrew', { exact: false }).first();
     await a.hover(note, { pad: 20, ms: 600 });
-    c.mark('list', { note: await a.assertVisible(note, { pad: 6, label: 'possibilities note' }) });
+    c.mark('list', { note: await a.assertVisible(note, { pad: 6, label: 'possible translations note' }) });
     await sleep(2600);
     const logos = p.getByRole('button', { name: /λόγος/ }).first();
     await a.click(logos, { dwell: 450, pad: 30 });

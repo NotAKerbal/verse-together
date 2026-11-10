@@ -44,6 +44,10 @@ export const UNRELEASED: UnreleasedNotes = {
   title: "Upcoming changes",
   items: [
     { kind: "improved", text: "The journal’s invitation to reflect now shows a different question and artwork each time you visit, from a larger set of questions, and Choose another prompt changes both." },
+    {
+      kind: "improved",
+      text: "Greek and Hebrew word results are simpler to read, with source links and details kept in an expandable footer.",
+    },
   ],
 };
 
