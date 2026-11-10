@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBookOpen, faCalendarDays, faMinus, faPen, faPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { readStorageJson, writeStorageJson } from "../../lib/clientStorage";
 import { journalGoalsProblem, MAX_WEEKLY_REFLECTIONS, type JournalGoals } from "../../lib/journalGoals";
 import { dateFromKey, formatMonthHeading, monthKeyOf, type JournalEntry } from "./journal";
-import { journalHomeProgress, journalRevisit, REFLECTION_PROMPTS } from "./journalHome";
+import {
+  JOURNAL_INVITATION_ART, journalHomeProgress, journalInvitationFromStored, journalRevisit, pickJournalInvitation, REFLECTION_PROMPTS,
+  storedJournalInvitation, type JournalInvitationChoice,
+} from "./journalHome";
 import styles from "./JournalHome.module.css";
 
 export type JournalGoalControls = {
@@ -14,6 +18,14 @@ export type JournalGoalControls = {
   onSave: (goals: JournalGoals) => Promise<unknown>;
   saveErrorMessage?: string;
 };
+
+export const JOURNAL_INVITATION_STORAGE_KEY = "vt_journal_invitation_v1";
+
+const subscribeToNothing = () => () => {};
+
+function freshJournalInvitation(previous: Partial<JournalInvitationChoice> | null = null) {
+  return pickJournalInvitation(previous ?? journalInvitationFromStored(readStorageJson("session", JOURNAL_INVITATION_STORAGE_KEY)));
+}
 
 function shortDate(date: string) {
   return dateFromKey(date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -24,18 +36,26 @@ export function JournalInvitation({ date, onWrite, disabled = false }: {
   onWrite: (date: string, prompt?: string) => void;
   disabled?: boolean;
 }) {
-  const [promptIndex, setPromptIndex] = useState(0);
-  const prompt = REFLECTION_PROMPTS[promptIndex];
+  const hydrated = useSyncExternalStore(subscribeToNothing, () => true, () => false);
+  const [choice, setChoice] = useState<JournalInvitationChoice | null>(null);
+  if (hydrated && !choice) setChoice(freshJournalInvitation());
+  useEffect(() => {
+    if (choice) writeStorageJson("session", JOURNAL_INVITATION_STORAGE_KEY, storedJournalInvitation(choice));
+  }, [choice]);
+  const prompt = choice ? REFLECTION_PROMPTS[choice.prompt] : undefined;
+  const art = choice ? JOURNAL_INVITATION_ART[choice.art] : undefined;
   return (
-    <section className={styles.invitation} aria-label="An invitation to reflect">
+    <section className={styles.invitation} aria-label="An invitation to reflect"
+      style={art ? { backgroundImage: `url('${art.src}')`, backgroundPosition: art.position } : undefined}>
       <div className={styles.invitationContent}>
-        <h2>Make room for a little light.</h2>
-        <p aria-live="polite" aria-atomic="true">{prompt}</p>
+        <h2 aria-live="polite" aria-atomic="true">{prompt}</h2>
         <div className={styles.invitationActions}>
-          <button type="button" className={styles.primaryButton} disabled={disabled} onClick={() => onWrite(date, prompt)}>
+          <button type="button" className={styles.primaryButton} disabled={disabled || !prompt}
+            onClick={() => { if (prompt) onWrite(date, prompt); }}>
             <FontAwesomeIcon icon={faPen} aria-hidden="true" /> Write a reflection
           </button>
-          <button type="button" className={styles.promptButton} onClick={() => setPromptIndex(index => (index + 1) % REFLECTION_PROMPTS.length)}>
+          <button type="button" className={styles.promptButton} disabled={!choice}
+            onClick={() => { if (choice) setChoice(freshJournalInvitation(choice)); }}>
             Choose another prompt
           </button>
         </div>

@@ -56,7 +56,9 @@ wasn't found on this machine. The in-repo record is the source for these.
 
 ## Journal banner (`journal-dawn.webp`)
 
-Used as the background of the journal homepage invitation (`src/features/notes/JournalHome.module.css`). Added
+One of the backgrounds the journal homepage invitation chooses from at random, with the Come, Follow Me, New
+Testament, Old Testament, Pearl of Great Price and Doctrine and Covenants Library cards (`JOURNAL_INVITATION_ART` in
+`src/features/notes/journalHome.ts`). Added
 in 6130649 ("Build inspiring journal homepage with editable weekly goals") and merged to dev in f731271.
 
 - **Made with:** the built-in `image_gen` tool in Codex, on 2026-10-25 (Codex session
