@@ -40,7 +40,8 @@ const SOURCE_FILES = {
   "content/cfm/2026-10-26-jeremiah-31-33-36-39-lamentations-1-3.md": ["e6c3e669c181420edafae9da5ba1a5fc9ed38deaff921d7c7008e5806f43b237", 133565],
   "content/cfm/2026-11-02-ezekiel-1-3-33-34-36-37-47.md": ["da21527882a9cfc600caf3364c1b07242be74bcf10bc5ba3bea3581795146f1c", 123572],
   "content/cfm/2026-11-09-daniel-1-7.md": ["b3a718c323f32b53ebe0141dbc0bc694514d1087680986fe2d0bce52e3803c84", 164218],
-  "content/cfm/guides.json": ["19f6c4504854b3720b50d901a6567407724f6faef91bba8e29f57063a33399f0", 3987],
+  "content/cfm/2026-11-16-hosea-1-6-10-14-joel.md": ["5284a088f0fe3b6d404e7ebab849e60d4240f23968812cba516d5593bbaf5f0c", 171522],
+  "content/cfm/guides.json": ["5c267750ac2e4fd9d5b6367f3267c011834c7124fd98da0d72141fb195178725", 4668],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
@@ -54,6 +55,7 @@ const jeremiah = parsed.get("2026-10-19-jeremiah-1-3-7-16-18-20");
 const mixed = parsed.get("2026-10-26-jeremiah-31-33-36-39-lamentations-1-3");
 const ezekiel = parsed.get("2026-11-02-ezekiel-1-3-33-34-36-37-47");
 const daniel = parsed.get("2026-11-09-daniel-1-7");
+const hosea = parsed.get("2026-11-16-hosea-1-6-10-14-joel");
 
 test("scripture-first fragments retain every reader byte, anchor, source, and artwork in source order", () => {
   for (const guide of parsed.values()) {
@@ -188,7 +190,7 @@ test("every guide splits into introduction, reader, and closing sections, losing
   const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
   const opens = (guide, chapter, item) =>
     `<section class="cfm-section" data-kind="chapter" data-chapter="${chapter}" aria-labelledby="${item.id}">`;
-  assert.equal(parsed.size, 7);
+  assert.equal(parsed.size, 8);
   for (const guide of parsed.values()) {
     const name = guide.title;
     const parts = { introduction: guide.introductionHtml, reader: guide.readerHtml, closing: guide.closingHtml };
@@ -356,6 +358,7 @@ test("the guides' Gospel Library scripture citations preview their passages; oth
     ["Mosiah 18:10, 13", "https://www.churchofjesuschrist.org/study/scriptures/bofm/mosiah/18?lang=eng&id=p10#p10"],
     ["2 Kings 22:11, 19", "https://www.churchofjesuschrist.org/study/scriptures/ot/2-kgs/22?lang=eng&id=p11#p11"],
     ["Jeremiah 27–28", "https://www.churchofjesuschrist.org/study/scriptures/ot/jer/28?lang=eng&id=p13-p14#p13"],
+    ["2 Kings 9–10", "https://www.churchofjesuschrist.org/study/scriptures/ot/2-kgs/9?lang=eng"],
   ]);
   const seen = new Map(Array.from(complex.keys(), (label) => [label, 0]));
   let narrowed = 0;
@@ -690,7 +693,14 @@ test("each guide belongs to the schedule week whose start it links from", () => 
     const week = getComeFollowMeWeekByStart(guide.startDate);
     assert.ok(week, guide.slug);
     assert.equal(week.end, guide.endDate);
-    assert.equal(week.block, guide.scripture);
+    // The guide reads exactly the week's chapters, in order. Its metadata may write out a whole book the
+    // schedule names alone ("…; Joel" as "…; Joel 1–3"), since guideRange pairs only numbered parts.
+    const range = guideRange(guide.scripture);
+    assert.ok(range, guide.slug);
+    const weekChapters = week.refs.flatMap((ref) =>
+      Array.from({ length: ref.to - ref.from + 1 }, (_, index) => `${ref.volume} ${ref.book} ${ref.from + index}`)
+    );
+    assert.deepEqual(range.entries.map((entry) => `${entry.volume} ${entry.slug} ${entry.chapter}`), weekChapters, guide.slug);
   }
   assert.equal(getComeFollowMeWeekByStart("2026-10-06"), null);
   assert.equal(new Set(COME_FOLLOW_ME_WEEKS.map((week) => week.start)).size, COME_FOLLOW_ME_WEEKS.length);
@@ -1110,4 +1120,64 @@ test("the November 9 guide pairs Daniel 1–7, covering each of its 224 verses o
   const local = new Set(Array.from(daniel.html.matchAll(/href="#scripture-daniel-(\d+)/g), (match) => Number(match[1])));
   assert.deepEqual([...local].sort((a, b) => a - b), chapters);
   assert.equal(rangeLabel(entries), "Daniel 1–7");
+});
+
+test("the November 16 guide pairs Hosea 1–6, 10–14 and Joel 1–3, covering each of their 223 verses once", () => {
+  const bundle = oldTestament();
+  const { entries } = hosea.range;
+  const joel = [rangeKey(1, 1), rangeKey(1, 2), rangeKey(1, 3)];
+  // The schedule keeps the manual's printed block; the guide's metadata names Joel's chapters.
+  assert.equal(getComeFollowMeWeekByStart("2026-11-16").block, "Hosea 1–6; 10–14; Joel");
+  assert.equal(guides.find((guide) => guide.slug === "2026-11-16-hosea-1-6-10-14-joel").scripture, "Hosea 1–6; 10–14; Joel 1–3");
+  const expected = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14].map((chapter) => ["Hosea", chapter]).concat([1, 2, 3].map((chapter) => ["Joel", chapter]));
+  assert.deepEqual(entries.map((entry) => [entry.book, entry.chapter]), expected);
+  assert.deepEqual(hosea.range.chapters, [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, ...joel]);
+  assert.deepEqual(hosea.readerSections.filter((section) => section.chapter != null).map((section) => section.chapter), hosea.range.chapters);
+  // The note on the unassigned Hosea 7–9 keeps its place in the reader, between chapters 6 and 10, unpaired.
+  const order = hosea.readerSections.map((section) => section.chapter ?? section.id);
+  assert.deepEqual(order.slice(5, 8), [6, "between-the-chapters-hosea-7-9", 10]);
+  for (const chapter of [7, 8, 9]) assert.ok(!hosea.range.chapters.includes(chapter), `Hosea ${chapter}`);
+  for (const section of hosea.readerSections) {
+    for (const block of section.blocks) {
+      if (block.passage) assert.equal(block.passage.chapter, section.chapter, block.id);
+    }
+  }
+  for (const entry of entries) {
+    const item = hosea.toc.find((toc) => toc.kind === "chapter" && toc.book === entry.book && Number(toc.number) === entry.chapter);
+    assert.ok(item, `${entry.book} ${entry.chapter}`);
+    assert.equal(item.part, "reader", `${entry.book} ${entry.chapter}`);
+  }
+  const paired = Array.from(hosea.html.matchAll(/<section class="cfm-section" data-kind="chapter" data-chapter="(\d+)"/g), (match) => Number(match[1]));
+  assert.deepEqual(paired, entries.map((entry) => entry.key));
+  assert.equal(hosea.html, hosea.introductionHtml + hosea.readerHtml + hosea.closingHtml);
+  for (const outside of [hosea.introductionHtml, hosea.closingHtml]) {
+    assert.ok(!/data-chapter="\d+" aria-labelledby/.test(outside));
+    assert.ok(!outside.includes("data-cfm-passage"));
+  }
+  assert.equal(hosea.passages.length, 74);
+  const counts = entries.map((entry) => verseCount(bundle, entry.book, entry.chapter));
+  assert.deepEqual(counts, [11, 23, 5, 19, 15, 11, 15, 12, 14, 16, 9, 20, 32, 21]);
+  assert.equal(counts.reduce((sum, count) => sum + count, 0), 223);
+  const covered = new Map();
+  for (const passage of hosea.passages) {
+    const index = entries.findIndex((entry) => entry.key === passage.chapter);
+    assert.ok(index >= 0, passage.id);
+    assert.ok(passage.first >= 1 && passage.last >= passage.first && passage.last <= counts[index], passage.id);
+    assert.ok(hosea.readerHtml.includes(` id="${passage.id}"`), passage.id);
+    for (let verse = passage.firstHalf === "b" ? passage.first + 1 : passage.first; verse <= passage.last; verse += 1) {
+      const name = `${entries[index].slug} ${entries[index].chapter}:${verse}`;
+      covered.set(name, (covered.get(name) ?? 0) + 1);
+    }
+  }
+  entries.forEach((entry, index) => {
+    for (let verse = 1; verse <= counts[index]; verse += 1) {
+      assert.equal(covered.get(`${entry.slug} ${entry.chapter}:${verse}`), 1, `${entry.book} ${entry.chapter}:${verse}`);
+    }
+  });
+  assert.equal(covered.size, 223);
+  // Local links name their own book: Joel's carry its own keys, never Hosea 1's, 2's or 3's.
+  const locals = Array.from(hosea.html.matchAll(/data-cfm-local href="#([^"]+)" data-chapter="(\d+)"/g), ([, anchor, key]) => [anchor, Number(key)]);
+  for (const [anchor, key] of locals) assert.equal(parseRangeAnchor(anchor, entries)?.chapter, key, anchor);
+  const joelKeys = new Set(locals.filter(([anchor]) => anchor.startsWith("scripture-joel-")).map(([, key]) => key));
+  assert.deepEqual([...joelKeys].sort((a, b) => a - b), joel);
 });

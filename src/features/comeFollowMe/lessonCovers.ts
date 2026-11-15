@@ -49,6 +49,13 @@ export const FALLBACK_COVER: GeneratedCover = {
 };
 
 const LESSON_COVERS: Readonly<Record<string, LessonCover>> = {
+  "2026-11-16": {
+    kind: "generated",
+    src: "/cfm/covers/scripture-landscape.webp",
+    ...GENERATED_SIZE,
+    focus: "15% 45%",
+    alt: "An old olive tree shades a stone path above terraced fields and olive groves on sunlit hills, with a lake and mountains beyond.",
+  },
   "2026-11-09": {
     kind: "painting",
     src: "/cfm/covers/riviere-daniels-answer.webp",

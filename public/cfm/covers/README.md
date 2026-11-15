@@ -36,6 +36,10 @@ Final prompt:
 
 > Use case: historical-scene. Asset type: wide cover art for Old Testament Come Follow Me lessons without a bespoke cover. Primary request: a peaceful ancient Judean landscape, winding footpath between olive trees on sunlit terraced hills, distant pale mountains and warm morning sky. Style: painterly oil landscape with textured brushwork, muted olive, sandstone and soft golden light, contemplative scripture study mood. Wide 3:2 composition suitable for 16:9 cropping. No text. Absolutely NO people, NO human figures, NO Jesus, NO Savior, NO deities, NO angels, NO religious figure depictions. No watermark.
 
+### scripture-landscape.webp (reused for November 16, 2026)
+
+Used for the Hosea 1–6; 10–14; Joel week, for its olive trees and terraced fields (Hosea 14:6; 10:12). The existing generated asset is reused unchanged: no new generation, AI edits, or new file. It is the same image as the fallback cover, given its own entry with a lesson-specific alt text and CSS focus 15% 45%; the 2.4:1, 16:9, 1.35:1, 1:1 and 4:5 crops were checked and keep the olive tree and path in frame. No people and no depiction of the Savior.
+
 ## Historical painting covers
 
 ### rembrandt-jeremiah.webp
