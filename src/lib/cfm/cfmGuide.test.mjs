@@ -693,8 +693,6 @@ test("each guide belongs to the schedule week whose start it links from", () => 
     const week = getComeFollowMeWeekByStart(guide.startDate);
     assert.ok(week, guide.slug);
     assert.equal(week.end, guide.endDate);
-    // The guide reads exactly the week's chapters, in order. Its metadata may write out a whole book the
-    // schedule names alone ("…; Joel" as "…; Joel 1–3"), since guideRange pairs only numbered parts.
     const range = guideRange(guide.scripture);
     assert.ok(range, guide.slug);
     const weekChapters = week.refs.flatMap((ref) =>
@@ -1126,14 +1124,12 @@ test("the November 16 guide pairs Hosea 1–6, 10–14 and Joel 1–3, covering 
   const bundle = oldTestament();
   const { entries } = hosea.range;
   const joel = [rangeKey(1, 1), rangeKey(1, 2), rangeKey(1, 3)];
-  // The schedule keeps the manual's printed block; the guide's metadata names Joel's chapters.
   assert.equal(getComeFollowMeWeekByStart("2026-11-16").block, "Hosea 1–6; 10–14; Joel");
   assert.equal(guides.find((guide) => guide.slug === "2026-11-16-hosea-1-6-10-14-joel").scripture, "Hosea 1–6; 10–14; Joel 1–3");
   const expected = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14].map((chapter) => ["Hosea", chapter]).concat([1, 2, 3].map((chapter) => ["Joel", chapter]));
   assert.deepEqual(entries.map((entry) => [entry.book, entry.chapter]), expected);
   assert.deepEqual(hosea.range.chapters, [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, ...joel]);
   assert.deepEqual(hosea.readerSections.filter((section) => section.chapter != null).map((section) => section.chapter), hosea.range.chapters);
-  // The note on the unassigned Hosea 7–9 keeps its place in the reader, between chapters 6 and 10, unpaired.
   const order = hosea.readerSections.map((section) => section.chapter ?? section.id);
   assert.deepEqual(order.slice(5, 8), [6, "between-the-chapters-hosea-7-9", 10]);
   for (const chapter of [7, 8, 9]) assert.ok(!hosea.range.chapters.includes(chapter), `Hosea ${chapter}`);
@@ -1175,7 +1171,6 @@ test("the November 16 guide pairs Hosea 1–6, 10–14 and Joel 1–3, covering 
     }
   });
   assert.equal(covered.size, 223);
-  // Local links name their own book: Joel's carry its own keys, never Hosea 1's, 2's or 3's.
   const locals = Array.from(hosea.html.matchAll(/data-cfm-local href="#([^"]+)" data-chapter="(\d+)"/g), ([, anchor, key]) => [anchor, Number(key)]);
   for (const [anchor, key] of locals) assert.equal(parseRangeAnchor(anchor, entries)?.chapter, key, anchor);
   const joelKeys = new Set(locals.filter(([anchor]) => anchor.startsWith("scripture-joel-")).map(([, key]) => key));

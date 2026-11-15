@@ -103,7 +103,6 @@ test("the November 16 guide is featured for its own week, with its olive-grove l
     assert.equal(current.title, "I Will Love Them Freely");
     assert.equal(current.dateLabel, "November 16–22, 2026");
     assert.equal(current.href, "/come-follow-me/2026-11-16");
-    // Its own entry reuses the existing generated landscape, with its own alt text and crop.
     assert.notEqual(current.cover, FALLBACK_COVER);
     assert.equal(current.cover.kind, "generated");
     assert.equal(current.cover.src, FALLBACK_COVER.src);
@@ -113,7 +112,6 @@ test("the November 16 guide is featured for its own week, with its olive-grove l
     assert.deepEqual(starts(overview.previous), ["2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
     assert.deepEqual(overview.upcoming, []);
   }
-  // The guide does not change the week's mixed-book reading.
   assert.deepEqual(
     weekReading(getLessonOverview("2026-11-18", guides).current.week).map((range) => `${range.book} ${range.from}-${range.to}`),
     ["hosea 1-6", "hosea 10-14", "joel 1-3"]
