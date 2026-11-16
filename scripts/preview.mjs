@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,22 +99,57 @@ function childEnv(extra = {}) {
   return { ...env, ...extra };
 }
 
-function execute(command, args, { env, input, quiet = false, show = false } = {}) {
-  const result = spawnSync(command, args, {
-    cwd: root,
-    env: childEnv(env),
-    input,
-    encoding: "utf8",
-    stdio: [input === undefined ? "ignore" : "pipe", show ? "inherit" : "pipe", quiet ? "pipe" : "inherit"],
-    maxBuffer: 64 * 1024 * 1024,
+const runningChildren = new Set();
+
+export function execute(command, args, { env, input, quiet = false, show = false, finishOnSignal = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: root,
+      env: childEnv(env),
+      detached: true,
+      stdio: [input === undefined ? "ignore" : "pipe", show ? "inherit" : "pipe", quiet ? "pipe" : "inherit"],
+    });
+    if (!finishOnSignal) runningChildren.add(child);
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+    child.stderr?.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    child.stdin?.end(input);
+    child.on("error", (error) => {
+      runningChildren.delete(child);
+      reject(new Error(`${describe(command, args)} failed: ${redact(error.message)}`));
+    });
+    child.on("close", (status, signal) => {
+      runningChildren.delete(child);
+      if (status === 0) return resolve(stdout.trim());
+      const detail = quiet ? `\n${redact(stderr)}` : "";
+      const outcome = signal ? `was stopped by ${signal}` : `failed with exit code ${status}`;
+      reject(new Error(`${describe(command, args)} ${outcome}${detail}`));
+    });
   });
-  if (result.error) throw new Error(`${describe(command, args)} failed: ${redact(result.error.message)}`);
-  if (result.status !== 0) {
-    const detail = quiet ? `\n${redact(result.stderr)}` : "";
-    const outcome = result.signal ? `was stopped by ${result.signal}` : `failed with exit code ${result.status}`;
-    throw new Error(`${describe(command, args)} ${outcome}${detail}`);
+}
+
+function stopChildren() {
+  for (const child of runningChildren) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      child.kill("SIGTERM");
+    }
   }
-  return (result.stdout ?? "").trim();
+}
+
+export function cleanUpOnSignal(cleanUp, { signals = ["SIGINT", "SIGTERM", "SIGHUP"], exit = (code) => process.exit(code) } = {}) {
+  let stopping = null;
+  for (const signal of signals) {
+    process.on(signal, () => {
+      stopping ??= (async () => {
+        stopChildren();
+        await cleanUp();
+        exit(1);
+      })();
+    });
+  }
 }
 
 const convex = (args, options = {}) => execute(process.execPath, [convexCli, ...args], options);
@@ -123,10 +158,10 @@ function step(message) {
   console.log(`\n\x1b[1m▸ ${message}\x1b[0m`);
 }
 
-function existingDeployment(ref) {
+async function existingDeployment(ref) {
   let output;
   try {
-    output = convex(["function-spec", "--deployment", ref], { quiet: true });
+    output = await convex(["function-spec", "--deployment", ref], { quiet: true });
   } catch (error) {
     if (/Deployment .* not found/.test(error.message)) return null;
     throw error;
@@ -166,28 +201,18 @@ async function main() {
     console.log(usage);
     return;
   }
-  const branch = execute("git", ["rev-parse", "--abbrev-ref", "HEAD"], { quiet: true });
+  const branch = await execute("git", ["rev-parse", "--abbrev-ref", "HEAD"], { quiet: true });
   const name = previewName(options.name, branch);
   const ref = `${convexProject}:preview/${name}`;
 
-  step(`Backend: Convex deployment ${ref}`);
-  const existing = options.fresh ? null : existingDeployment(ref);
-  if (existing) {
-    console.log(`Reusing ${existing} and its data. Pass -- --fresh to start empty.`);
-  } else {
-    convex(["deployment", "create", `${convexProject}:${name}`, "--type", "preview"]);
-  }
-  const deploymentName = assertPreviewBackend(existingDeployment(ref) ?? "");
-  if (!deploymentName) throw new Error(`Could not find ${ref} after creating it.`);
-  if (existing && existing !== deploymentName) throw new Error(`${ref} changed from ${existing} to ${deploymentName}.`);
-
-  const keyName = `preview-script-${Date.now()}`;
-  let keyDeleted = false;
-  function deleteKey() {
-    if (keyDeleted) return;
-    keyDeleted = true;
+  let keyName = null;
+  let deploymentName = null;
+  let keyDeletion = null;
+  const deleteKey = () => (keyDeletion ??= removeKey());
+  async function removeKey() {
+    if (!keyName) return;
     try {
-      convex(["deployment", "token", "delete", keyName, "--deployment", deploymentName], { quiet: true });
+      await convex(["deployment", "token", "delete", keyName, "--deployment", deploymentName], { quiet: true, finishOnSignal: true });
       console.log(`Deleted the temporary deploy key ${keyName}.`);
     } catch {
       console.error(
@@ -196,17 +221,24 @@ async function main() {
       );
     }
   }
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.on(signal, () => {
-      deleteKey();
-      process.exit(1);
-    });
+  cleanUpOnSignal(deleteKey);
+
+  step(`Backend: Convex deployment ${ref}`);
+  const existing = options.fresh ? null : await existingDeployment(ref);
+  if (existing) {
+    console.log(`Reusing ${existing} and its data. Pass -- --fresh to start empty.`);
+  } else {
+    await convex(["deployment", "create", `${convexProject}:${name}`, "--type", "preview"]);
   }
+  deploymentName = assertPreviewBackend((await existingDeployment(ref)) ?? "");
+  if (!deploymentName) throw new Error(`Could not find ${ref} after creating it.`);
+  if (existing && existing !== deploymentName) throw new Error(`${ref} changed from ${existing} to ${deploymentName}.`);
 
   let url;
   try {
+    keyName = `preview-script-${Date.now()}`;
     const key = parseDeployKey(
-      convex(["deployment", "token", "create", keyName, "--deployment", deploymentName], { quiet: true }),
+      await convex(["deployment", "token", "create", keyName, "--deployment", deploymentName], { quiet: true }),
       deploymentName
     );
     secrets.add(key);
@@ -214,19 +246,19 @@ async function main() {
     const convexUrl = `https://${deploymentName}.convex.cloud`;
     const convexSiteUrl = `https://${deploymentName}.convex.site`;
 
-    const settings = withKey(["env", "list"], { quiet: true });
+    const settings = await withKey(["env", "list"], { quiet: true });
     const isSet = (variable) => new RegExp(`^${variable}=`, "m").test(settings);
     for (const variable of ["BETTER_AUTH_SECRET", "AUTH_PROXY_SECRET"]) {
-      if (!isSet(variable)) withKey(["env", "set", variable], { input: randomBytes(32).toString("base64url"), quiet: true });
+      if (!isSet(variable)) await withKey(["env", "set", variable], { input: randomBytes(32).toString("base64url"), quiet: true });
     }
-    if (!isSet("SITE_URL")) withKey(["env", "set", "SITE_URL", "http://localhost:3000"], { quiet: true });
-    withKey(["env", "set", "AUTH_EMAIL_PASSWORD_ENABLED", "true"], { quiet: true });
-    const proxySecret = withKey(["env", "get", "AUTH_PROXY_SECRET"], { quiet: true });
+    if (!isSet("SITE_URL")) await withKey(["env", "set", "SITE_URL", "http://localhost:3000"], { quiet: true });
+    await withKey(["env", "set", "AUTH_EMAIL_PASSWORD_ENABLED", "true"], { quiet: true });
+    const proxySecret = await withKey(["env", "get", "AUTH_PROXY_SECRET"], { quiet: true });
     secrets.add(proxySecret);
-    withKey(["deploy", "--yes", "--codegen", "disable", "--typecheck", "enable", "--message", `npm run preview ${name}`], { show: true });
+    await withKey(["deploy", "--yes", "--codegen", "disable", "--typecheck", "enable", "--message", `npm run preview ${name}`], { show: true });
 
     step("Web app: Vercel preview");
-    const deployOutput = execute(
+    const deployOutput = await execute(
       "npx",
       [
         "--yes", vercelCli, "deploy", "--yes", "--archive=tgz", "--environment", "preview",
@@ -236,17 +268,24 @@ async function main() {
         "--build-env", `VERSE_PREVIEW=${name}`,
         "--env", `NEXT_PUBLIC_CONVEX_URL=${convexUrl}`,
         "--env", `NEXT_PUBLIC_CONVEX_SITE_URL=${convexSiteUrl}`,
-        "--env", `AUTH_PROXY_SECRET=${proxySecret}`,
+        "--env", "AUTH_PROXY_SECRET",
         "--meta", `versePreview=${name}`,
       ],
-      { env: { VERCEL_ORG_ID: vercelOrgId, VERCEL_PROJECT_ID: vercelProjectId, GIT_DIR: path.join(root, ".no-git") } }
+      {
+        env: {
+          VERCEL_ORG_ID: vercelOrgId,
+          VERCEL_PROJECT_ID: vercelProjectId,
+          GIT_DIR: path.join(root, ".no-git"),
+          AUTH_PROXY_SECRET: proxySecret,
+        },
+      }
     );
     url = parsePreviewUrl(deployOutput);
 
     step("Connecting sign-in to the preview URL");
-    withKey(["env", "set", "SITE_URL", url], { quiet: true });
+    await withKey(["env", "set", "SITE_URL", url], { quiet: true });
   } finally {
-    deleteKey();
+    await deleteKey();
   }
 
   step("Test account");

@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { TESTER, assertPreviewBackend, ensureTester, parseArgs, parseDeployKey, parsePreviewUrl, previewName, redact } from "./preview.mjs";
 
@@ -96,4 +100,55 @@ test("fails loudly when the test account cannot be created or used", async () =>
     }),
     /--fresh/
   );
+});
+
+async function waitFor(check, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error("timed out");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+function isRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test("a signal to the script alone stops the running command and still cleans up", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "verse-preview-test-"));
+  try {
+    const childPidFile = path.join(directory, "child.pid");
+    const cleanedFile = path.join(directory, "cleaned");
+    const parentScript = path.join(directory, "parent.mjs");
+    writeFileSync(
+      parentScript,
+      `import { writeFileSync } from "node:fs";
+import { cleanUpOnSignal, execute } from ${JSON.stringify(new URL("./preview.mjs", import.meta.url).href)};
+cleanUpOnSignal(async () => {
+  await execute(process.execPath, ["-e", "setTimeout(() => {}, 200)"], { finishOnSignal: true });
+  writeFileSync(${JSON.stringify(cleanedFile)}, "yes");
+}, { exit: (code) => process.exit(code + 40) });
+try {
+  await execute(process.execPath, ["-e", ${JSON.stringify(`require("node:fs").writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid)); setTimeout(() => {}, 60000)`)}]);
+} catch {
+  process.exitCode = 1;
+}
+`
+    );
+    const parent = spawn(process.execPath, [parentScript], { stdio: "ignore" });
+    const exited = new Promise((resolve) => parent.on("exit", (code) => resolve(code)));
+    await waitFor(() => existsSync(childPidFile));
+    const childPid = Number(readFileSync(childPidFile, "utf8"));
+    parent.kill("SIGTERM");
+    assert.equal(await exited, 41);
+    assert.equal(readFileSync(cleanedFile, "utf8"), "yes");
+    await waitFor(() => !isRunning(childPid));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
