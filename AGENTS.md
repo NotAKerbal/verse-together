@@ -16,6 +16,7 @@ These instructions apply to every coding agent working in this repository, inclu
 - `dev` is the integration branch. Feature branches merge into `dev`, and dev deploys to the Vercel preview and the
   shared development backend.
 - `master` is production. Vercel builds `master` as Production (see `scripts/vercel-build.mjs`).
+- Vercel skips pushes that change only `mobile/`, `native/`, `docs/` or root Markdown; see "Which commits deploy" in `docs/convex-deployment.md`.
 
 ## Releases
 
