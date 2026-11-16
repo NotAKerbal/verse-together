@@ -26,7 +26,7 @@ export function entryProblems(entry) {
   if (!KINDS.includes(entry.kind)) problems.push(`kind must be "new" or "improved".`);
   if (!isText(entry.text)) problems.push("text must say what changed for readers.");
   for (const key of unknownKeys(entry, ENTRY_KEYS)) problems.push(`unknown field "${key}"; use ${ENTRY_KEYS.join(", ")}.`);
-  if (entry.commits !== undefined && !(Array.isArray(entry.commits) && entry.commits.length && entry.commits.every((hash) => HASH.test(hash)))) {
+  if (entry.commits !== undefined && !(Array.isArray(entry.commits) && entry.commits.length && entry.commits.every((hash) => typeof hash === "string" && HASH.test(hash)))) {
     problems.push("commits, when given, must list short commit hashes.");
   }
   const shot = entry.screenshot;

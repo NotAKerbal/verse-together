@@ -292,3 +292,14 @@ test("while watched, adding, changing and removing entries updates the generated
   rmSync(file);
   await settle([]);
 });
+
+test("commits must be hash strings, and collecting refuses an entry that lists numbers and keeps it", async (t) => {
+  const root = scratchRepo({ "numbers.json": { kind: "new", text: "Numbered.", commits: [1234567] } });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  assert.match(readUnreleasedEntries(root).problems.join("\n"), /numbers\.json: commits, when given, must list short commit hashes/);
+  const before = readFileSync(path.join(root, "src/lib/releaseNotes.ts"), "utf8");
+  const { RELEASES } = await loadReleaseNotes(root);
+  await assert.rejects(collectRelease({ root, version: nextVersion(RELEASES[0].version), title: "Title", date: "2026-11-20" }), /Fix the unreleased entries first/);
+  assert.equal(readFileSync(path.join(root, "src/lib/releaseNotes.ts"), "utf8"), before);
+  assert.equal(existsSync(path.join(root, UNRELEASED_DIR, "numbers.json")), true);
+});
