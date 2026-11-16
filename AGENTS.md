@@ -120,6 +120,12 @@ has. Planned work is listed in `FEATURE_IDEAS.md`, which dates from 2026-09-26 a
 
 ## Previews
 
+- `npm run preview [name] [-- --fresh]` deploys the working tree to its own Convex preview backend and a Vercel
+  preview, and prints the URL and test account. Use it to show or test a change with a working backend and sign-in.
+  See `docs/convex-deployment.md`.
+- Never point a preview at `fabulous-dogfish-606` or `lovable-seal-140`, and enable email/password sign-in only
+  on preview backends.
+
 ## Branches
 
 - `dev` is the integration branch. Feature branches merge into `dev`, and dev deploys to the Vercel preview and the

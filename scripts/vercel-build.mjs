@@ -20,8 +20,27 @@ const overrides = [
   "CONVEX_AGENT_MODE",
 ];
 
+const previewNamePattern = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/;
+
 function refuse(message) {
   throw new Error(`vercel-build refused: ${message}`);
+}
+
+function selectPreview(env) {
+  if (env.VERCEL_ENV !== "preview") refuse("VERSE_PREVIEW is allowed only on Vercel Preview builds.");
+  if (!previewNamePattern.test(env.VERSE_PREVIEW)) refuse("VERSE_PREVIEW must be a preview name from npm run preview.");
+  if (env.VERCEL_GIT_COMMIT_REF || env.VERCEL_GIT_COMMIT_SHA) {
+    refuse("previews from npm run preview are deployed without Git metadata.");
+  }
+  if (env.CONVEX_AUTOMATIC_DEPLOYMENT) refuse("previews bring their own backend; CONVEX_AUTOMATIC_DEPLOYMENT must be unset.");
+  const deployment = /^https:\/\/([a-z0-9]+(?:-[a-z0-9]+)+)\.convex\.cloud$/.exec(env.NEXT_PUBLIC_CONVEX_URL ?? "")?.[1];
+  if (!deployment || env.NEXT_PUBLIC_CONVEX_SITE_URL !== `https://${deployment}.convex.site`) {
+    refuse("both public Convex URLs must name the preview's own deployment.");
+  }
+  if (Object.values(targets).some(target => target.name === deployment)) {
+    refuse("previews must not use the shared dev or production backend.");
+  }
+  return { preview: env.VERSE_PREVIEW, deployment };
 }
 
 export function selectTarget(env) {
@@ -35,6 +54,7 @@ export function selectTarget(env) {
   if (env.VERCEL_TARGET_ENV && env.VERCEL_TARGET_ENV !== env.VERCEL_ENV) {
     refuse("custom Vercel environments cannot deploy shared backends.");
   }
+  if (env.VERSE_PREVIEW) return selectPreview(env);
   const branch = env.VERCEL_GIT_COMMIT_REF;
   if (!branch) refuse("missing Git branch metadata.");
   const target = targets[branch];
@@ -113,6 +133,11 @@ export function build({ env = process.env, run = runProcess, log = console.log }
   const buildFrontend = () => run(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "build", "--turbopack"], { env: publicEnv });
   if (!target) {
     log("Feature preview: building frontend without deploying Convex.");
+    buildFrontend();
+    return;
+  }
+  if (target.preview) {
+    log(`Preview ${target.preview}: building frontend for its own backend ${target.deployment} without deploying Convex.`);
     buildFrontend();
     return;
   }

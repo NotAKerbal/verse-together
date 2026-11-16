@@ -9,6 +9,7 @@ in `scripts/vercel-build.mjs` couples the backend and frontend from the same Git
 | `dev` | Preview, **branch `dev` only** | `dev:fabulous-dogfish-606` | `dev:fabulous-dogfish-606` |
 | `master` | Production | `prod:lovable-seal-140` | `prod:lovable-seal-140` |
 | Any feature branch | Preview | No backend push | Must be unset |
+| None (`npm run preview`) | Preview | Its own preview backend, pushed beforehand by the CLI | Must be unset |
 
 This is prepared automation, **not an activated deployment**. No Vercel settings, credentials,
 aliases, Convex configuration, or production backend were changed while implementing it. Once
@@ -55,6 +56,7 @@ before merging this change into that branch. Do not merge to `master` as a way t
    verification before Vercel reports Ready. Smoke-test signed-out and signed-in journal/goal
    reads and writes through `https://scripture-sharing-dev.vercel.app`, including Google sign-in.
    A feature PR preview proves only the frontend path; it does not prove authenticated deployment.
+   To test a branch with a working backend and sign-in, use `npm run preview` (see below).
 6. **Production is a separate activation/release decision.** After a successful dev rehearsal and
    review of production auth/configuration and backend compatibility, create a different key
    scoped to `prod:lovable-seal-140`. Store it only in Vercel **Production**. Set the Production
@@ -68,6 +70,44 @@ before merging this change into that branch. Do not merge to `master` as a way t
 deployment tokens, access-token overrides, custom provision hosts, and anonymous agent mode are
 rejected. The CLI is the version from `package-lock.json`, invoked directly from `node_modules`;
 no `npx` download or interactive login is used. Invalid key values are never included in guard errors.
+
+## Previews from npm run preview
+
+`npm run preview [name] [-- --fresh]` (`scripts/preview.mjs`) deploys the working tree, committed or not,
+to its own Convex preview deployment and a Vercel preview. It never touches `fabulous-dogfish-606`,
+`lovable-seal-140`, Vercel project settings, environment variables, domains or aliases.
+
+1. Resolves `isaac-cochran:verse-together:preview/<name>` (the name defaults to the Git branch). If it
+   is missing, or `--fresh` is passed, `convex deployment create ... --type preview` creates it; creating a
+   name that exists replaces that deployment with an empty one.
+2. Creates a temporary deploy key named `preview-script-<time>` for that deployment and checks it names
+   that deployment, never a shared one. The key is deleted when the script ends, fails or is interrupted
+   (SIGINT, SIGTERM, SIGHUP). If deletion fails it prints the `convex deployment token delete` command.
+3. With the key, sets on the preview backend only: `BETTER_AUTH_SECRET` and `AUTH_PROXY_SECRET` (random,
+   once, passed on stdin), `AUTH_EMAIL_PASSWORD_ENABLED=true`, and a placeholder `SITE_URL`. Then runs
+   `convex deploy --codegen disable --typecheck enable`, which pushes the committed `_generated` code and
+   leaves the working tree unchanged. Google sign-in and email delivery stay unconfigured, so new accounts
+   need no email verification.
+4. Runs `vercel deploy --archive=tgz --environment preview` with `GIT_DIR` pointing at nothing, so Vercel
+   receives no Git metadata and cannot give the deployment a branch's domain. It passes
+   `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL` and `VERSE_PREVIEW=<name>` at build time, the
+   public URLs and `AUTH_PROXY_SECRET` at run time, and `--meta versePreview=<name>`.
+5. Sets `SITE_URL` to the new deployment URL, then creates `tester@versetogether.test` with the real
+   Better Auth sign-up endpoint. If it already exists, it checks that its password still signs in.
+
+`VERSE_PREVIEW` selects a separate path in `scripts/vercel-build.mjs`: allowed only on Vercel Preview, with
+no Git branch or commit metadata and no `CONVEX_AUTOMATIC_DEPLOYMENT`, and only when both public Convex URLs
+name the same deployment, which must not be `fabulous-dogfish-606` or `lovable-seal-140`. It builds the
+frontend with every `CONVEX_*` variable blanked and never runs the Convex CLI.
+
+Each run makes a new Vercel deployment URL and moves `SITE_URL` to it, so sign-in works only on the latest
+URL. The project's Vercel Authentication covers `*.vercel.app`, so viewers need a Vercel sign-in on the team
+or a share link from the dashboard. Convex deletes preview deployments 5 days after creating them.
+
+To delete a preview, delete the deployment in the Convex dashboard (the `Backend` link the script prints,
+Settings → Delete deployment), and remove its Vercel deployments:
+`vercel ls scriptures-sharing --scope notakerbals-projects --meta versePreview=<name>`, then
+`vercel remove <url> --scope notakerbals-projects` for each.
 
 ## Ordering and concurrent builds
 
