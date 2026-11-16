@@ -15,6 +15,12 @@ be run directly with Cargo from `native/`; Node is only needed for regenerating 
 Mobile uses its custom native scripture-text module, so Expo Go cannot run it. See each app's README for SDKs,
 configuration, signed builds and platform limitations.
 
+The web check runs `release:check`, `next typegen`, `tsc --noEmit`, `cfm:check` and `npm test`. `npm test` runs
+every web test: the node:test files under `src/` and `scripts/` (`npm run test:node`, found by glob) and the Vitest
+files under `tests/`, including the Convex backend tests (`npm run test:vitest`). Arguments after
+`npm test --` go to Vitest. The focused `npm run test:*` scripts run one area. Mobile and desktop tests run only
+through their own checks. AGENTS.md lists which checks to run after each kind of change.
+
 ## Shared boundaries
 
 - `public/scripture-data/` and `src/lib/generated/scriptureCatalog.json`: canonical scripture text and catalog.

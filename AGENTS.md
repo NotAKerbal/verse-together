@@ -275,3 +275,22 @@ rubric red for emphasis, hairline rules rather than boxes, and serif display and
 | Dated QA and review records | `docs/browse-refresh-verification.md`, `docs/notes-journal-authenticated-qa.md`, `docs/notes-journal-branch.md`, `docs/ui-improvement-review.md`, `docs/ui-review/`, `design-qa.md`, `native/VERIFICATION.md` |
 
 ## Checks
+
+Run these after a change, by what it touches. A focused `npm run test:*` script or `npx vitest run <file>` is fine
+while iterating; run the full set before handing off.
+
+- **Web** (`src/`, `scripts/`, `content/`, root config): `npm run app -- web check`, which runs `release:check`,
+  `next typegen`, `tsc --noEmit`, `cfm:check` and `npm test`. `npm test` runs every node:test file under `src/` and
+  `scripts/` and every Vitest file under `tests/`. Also run `npx eslint` on the files you changed: the full lint has
+  existing errors, so it is not part of the check yet.
+- **Convex** (`convex/`): the web check, which typechecks `convex/` and runs its tests under `tests/convex/`. Mobile
+  imports shared modules from `src/` and `convex/`, so also run the mobile check when you change one of them.
+- **Release notes** (`src/lib/releaseNotes.ts`, `public/release-notes/`): `npm run release:check` and
+  `npm run test:release`, then the desktop check, which verifies its generated copy of the notes.
+- **Mobile** (`mobile/`): `npm run app -- mobile check` (typecheck, Jest and generated data).
+- **Desktop** (`native/`): `npm run app -- desktop check` (`cargo fmt --check`, release-note data and
+  `cargo test`).
+
+Tests that need the network or secrets stay out of these runs. The full JST appendix audit runs only with
+`JST_CORPUS` naming a saved copy of the upstream entries (see `docs/joseph-smith-translation.md`), and mobile's
+live-service tests only with `LIVE_NETWORK=1`.
