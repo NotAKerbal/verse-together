@@ -636,9 +636,10 @@ fn release_notes_show_the_websites_history_and_open_a_screenshot() {
         ui.find("Version 2.0.0").is_err(),
         "earlier releases start closed"
     );
-    // Upcoming entries are the website's own unreleased history.
-    assert!(!notes.unreleased.items.is_empty());
-    assert!(ui.find("Unreleased").is_ok());
+    assert_eq!(
+        ui.find("Unreleased").is_ok(),
+        !notes.unreleased.items.is_empty()
+    );
     drop(ui);
     // (Below the fold at this window size, so it is opened by its message.)
     let _ = app.update(Message::Release(release_notes::ReleaseMsg::ToggleEarlier));
