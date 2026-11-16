@@ -155,12 +155,17 @@ function claimInProcess(here, worktrees, stateDir) {
   return new Promise((done, fail) => child.on("exit", (code) => (code === 0 ? done(Number(output.trim())) : fail(new Error(`exit ${code}`)))));
 }
 
-function holdLock(stateDir) {
+function holdLock(stateDir, uncommittedOwner = null) {
   mkdirSync(stateDir, { recursive: true });
   const script = `
     import { DatabaseSync } from "node:sqlite";
     const db = new DatabaseSync(${JSON.stringify(path.join(stateDir, "slots.sqlite"))});
     db.exec("BEGIN IMMEDIATE");
+    const owner = ${JSON.stringify(uncommittedOwner)};
+    if (owner) {
+      db.exec("CREATE TABLE IF NOT EXISTS reservations (slot INTEGER PRIMARY KEY, owner TEXT NOT NULL)");
+      db.prepare("INSERT INTO reservations (slot, owner) VALUES (1, ?)").run(owner);
+    }
     console.log("held");
     setInterval(() => {}, 1000);
   `;
@@ -195,15 +200,18 @@ test("a process choosing a slot makes others wait", async () => {
   }
 });
 
-test("a process killed while choosing a slot does not block the next one", async () => {
+test("a process killed while choosing a slot does not block the next one or keep its unsaved claim", async () => {
   const repo = fakeRepository();
   try {
-    const holder = await holdLock(repo.stateDir);
+    const other = repo.worktree("other");
+    const holder = await holdLock(repo.stateDir, other);
     const exited = new Promise((done) => holder.once("exit", done));
     holder.kill("SIGKILL");
     await exited;
     const here = repo.worktree("here");
-    assert.equal(await claimSlot({ here, worktrees: [repo.main, here], stateDir: repo.stateDir, isFree: allFree, lockWaitMs: 300 }), 1);
+    const worktrees = [repo.main, other, here];
+    assert.equal(await claimSlot({ here, worktrees, stateDir: repo.stateDir, isFree: allFree, lockWaitMs: 300 }), 1);
+    assert.equal(await claimSlot({ here: other, worktrees, stateDir: repo.stateDir, isFree: allFree, lockWaitMs: 300 }), 2);
   } finally {
     repo.done();
   }
