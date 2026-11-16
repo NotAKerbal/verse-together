@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { TESTER, assertPreviewBackend, ensureTester, parseArgs, parseDeployKey, parsePreviewUrl, previewName, redact } from "./preview.mjs";
+import { TESTER, assertPreviewBackend, backendSettingsToWrite, ensureTester, parseArgs, parseDeployKey, parsePreviewUrl, previewName, redact, settingNames } from "./preview.mjs";
 
 test("names a preview after the requested name or the current branch", () => {
   assert.equal(previewName("My Experiment!", "dev"), "my-experiment");
@@ -42,6 +42,26 @@ test("never treats a shared backend as a preview", () => {
     assert.throws(() => assertPreviewBackend(shared), /shared backend/);
     assert.throws(() => parseDeployKey(`dev:${shared}|x`, shared), /shared backend/);
   }
+});
+
+test("reads exact setting names from convex env list --names-only", () => {
+  const names = settingNames("AUTH_PROXY_SECRET\nBETTER_AUTH_SECRET\r\nSITE_URL\n\nNo environment variables set (on preview deployment x)\n");
+  assert.deepEqual([...names].sort(), ["AUTH_PROXY_SECRET", "BETTER_AUTH_SECRET", "SITE_URL"]);
+  assert.equal(settingNames("BETTER_AUTH_SECRET_OLD\n").has("BETTER_AUTH_SECRET"), false);
+});
+
+test("a new backend gets secrets, a placeholder site URL and email/password sign-in", () => {
+  assert.deepEqual(backendSettingsToWrite(new Set()), [
+    { name: "BETTER_AUTH_SECRET", secret: true },
+    { name: "AUTH_PROXY_SECRET", secret: true },
+    { name: "SITE_URL", value: "http://localhost:3000" },
+    { name: "AUTH_EMAIL_PASSWORD_ENABLED", value: "true" },
+  ]);
+});
+
+test("an existing backend keeps its secrets and site URL", () => {
+  const existing = settingNames("AUTH_EMAIL_PASSWORD_ENABLED\nAUTH_PROXY_SECRET\nBETTER_AUTH_SECRET\nSITE_URL\n");
+  assert.deepEqual(backendSettingsToWrite(existing), [{ name: "AUTH_EMAIL_PASSWORD_ENABLED", value: "true" }]);
 });
 
 test("finds the deployment URL in the Vercel CLI output", () => {

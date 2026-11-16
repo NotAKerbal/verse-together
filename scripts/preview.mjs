@@ -72,6 +72,24 @@ export function parseDeployKey(output, deploymentName) {
   return key;
 }
 
+export function settingNames(output) {
+  return new Set(
+    output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(line))
+  );
+}
+
+export function backendSettingsToWrite(existing) {
+  const writes = ["BETTER_AUTH_SECRET", "AUTH_PROXY_SECRET"]
+    .filter((name) => !existing.has(name))
+    .map((name) => ({ name, secret: true }));
+  if (!existing.has("SITE_URL")) writes.push({ name: "SITE_URL", value: "http://localhost:3000" });
+  writes.push({ name: "AUTH_EMAIL_PASSWORD_ENABLED", value: "true" });
+  return writes;
+}
+
 export function parsePreviewUrl(output) {
   const url = output.match(/https:\/\/[a-z0-9-]+\.vercel\.app/)?.[0];
   if (!url) throw new Error("Could not find the preview URL in the Vercel CLI output.");
@@ -246,13 +264,14 @@ async function main() {
     const convexUrl = `https://${deploymentName}.convex.cloud`;
     const convexSiteUrl = `https://${deploymentName}.convex.site`;
 
-    const settings = await withKey(["env", "list"], { quiet: true });
-    const isSet = (variable) => new RegExp(`^${variable}=`, "m").test(settings);
-    for (const variable of ["BETTER_AUTH_SECRET", "AUTH_PROXY_SECRET"]) {
-      if (!isSet(variable)) await withKey(["env", "set", variable], { input: randomBytes(32).toString("base64url"), quiet: true });
+    const existing = settingNames(await withKey(["env", "list", "--names-only"], { quiet: true }));
+    for (const setting of backendSettingsToWrite(existing)) {
+      if (setting.secret) {
+        await withKey(["env", "set", setting.name], { input: randomBytes(32).toString("base64url"), quiet: true });
+      } else {
+        await withKey(["env", "set", setting.name, setting.value], { quiet: true });
+      }
     }
-    if (!isSet("SITE_URL")) await withKey(["env", "set", "SITE_URL", "http://localhost:3000"], { quiet: true });
-    await withKey(["env", "set", "AUTH_EMAIL_PASSWORD_ENABLED", "true"], { quiet: true });
     const proxySecret = await withKey(["env", "get", "AUTH_PROXY_SECRET"], { quiet: true });
     secrets.add(proxySecret);
     await withKey(["deploy", "--yes", "--codegen", "disable", "--typecheck", "enable", "--message", `npm run preview ${name}`], { show: true });
