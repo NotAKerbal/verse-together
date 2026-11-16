@@ -18,6 +18,7 @@ import {
   underlineColorOf,
   type VerseAnnotation,
 } from "@/features/annotations/verseAnnotations";
+import { selectionAnchorRect } from "@/lib/selectionPopover";
 import { selectedVerseRanges, restoreVerseRange, type SelectedVerseTextRange } from "@/lib/verseSelection";
 import { api } from "../../../convex/_generated/api";
 import {
@@ -46,10 +47,9 @@ function readSelection(root: HTMLElement, range: Range): ScriptureSelection | nu
   const ranges = selectedVerseRanges(range, root).filter(item => item.chapter !== undefined);
   const verses = ranges.map(item => ({ chapter: item.chapter!, verse: item.verse }));
   const text = ranges.map(item => item.text.slice(item.start, item.end)).join(" ");
-  const rect = Array.from(range.getClientRects()).find(each => each.width > 0 || each.height > 0);
-  if (!verses.length || !text || !rect) return null;
-  const { top, left, right, bottom, width, height } = rect;
-  return { verses, ranges, text, anchor: { top, left, right, bottom, width, height } };
+  const anchor = selectionAnchorRect(range.getClientRects());
+  if (!verses.length || !text || !anchor) return null;
+  return { verses, ranges, text, anchor };
 }
 
 function sameSelection(a: ScriptureSelection, b: ScriptureSelection) {

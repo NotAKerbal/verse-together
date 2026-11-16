@@ -20,6 +20,7 @@ import type { NoteSource } from "@/features/notes/journal";
 import { quotedExcerpt } from "@/features/notes/noteExcerpts";
 import { useAuth } from "@/lib/auth";
 import { getDefaultPreferences, readLocalPreferences } from "@/lib/preferences";
+import { selectionAnchorRect } from "@/lib/selectionPopover";
 import { MARK_COLORS, isMarkColor, type GuideAnnotationPatch } from "../../../convex/annotationRules";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -375,8 +376,8 @@ function GuideSelectionMenu({
       const part = partOf(roots, range.commonAncestorContainer);
       if (!part) return null;
       const text = range.toString().replace(/\s+/g, " ").trim();
-      const rect = Array.from(range.getClientRects()).find((each) => each.width > 0 || each.height > 0);
-      if (!text || !rect) return null;
+      const anchor = selectionAnchorRect(range.getClientRects());
+      if (!text || !anchor) return null;
       const elements = partRoots(roots, part);
       const cached = spanCache.current;
       let described: Described | null =
@@ -396,14 +397,13 @@ function GuideSelectionMenu({
         described = describeSpan(index, start, end);
         spanCache.current = { range: range.cloneRange(), part, described };
       }
-      const { top, left, right, bottom, width, height } = rect;
       return {
         key: described.ok ? `${part}:${described.start}:${described.end}` : `${part}:${described.reason}:${text}`,
         part,
         described,
         text,
         reference: guideReference(elements, range.startContainer),
-        anchor: { top, left, right, bottom, width, height },
+        anchor,
       };
     },
     [roots]

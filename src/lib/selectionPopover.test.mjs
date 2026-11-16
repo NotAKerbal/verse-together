@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { positionSelectionPopover } from "./selectionPopover.ts";
+import { positionSelectionPopover, selectionAnchorRect } from "./selectionPopover.ts";
 
 const card = { width: 440, height: 270 };
 const desktop = { width: 1280, height: 800 };
@@ -45,4 +45,19 @@ test("keeps a large selection's menu onscreen and suppresses a misleading pointe
   assert.ok(position.top >= 80);
   assert.ok(position.top + card.height <= desktop.height - 20);
   assert.equal(position.overlapsSelection, true);
+});
+
+test("anchors to every line of a selection, not just its first", () => {
+  const line = (top, left, right) => ({ top, bottom: top + 26, left, right, width: right - left, height: 26 });
+  const anchor = selectionAnchorRect([line(280, 40, 360), { top: 300, bottom: 300, left: 0, right: 0, width: 0, height: 0 }, line(306, 18, 372), line(332, 18, 120)]);
+  assert.deepEqual(anchor, { top: 280, left: 18, right: 372, bottom: 358, width: 354, height: 78 });
+  const position = positionSelectionPopover(anchor, { width: 366, height: 240 }, { width: 390, height: 844 });
+  assert.equal(position.placement, "bottom");
+  assert.ok(position.top >= anchor.bottom);
+  assert.equal(position.overlapsSelection, false);
+});
+
+test("has no anchor for a selection without visible lines", () => {
+  assert.equal(selectionAnchorRect([]), null);
+  assert.equal(selectionAnchorRect([{ top: 5, bottom: 5, left: 5, right: 5, width: 0, height: 0 }]), null);
 });
