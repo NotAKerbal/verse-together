@@ -5,6 +5,334 @@
   },
   "releases": [
     {
+      "version": "2.26.0",
+      "date": "2026-11-09",
+      "title": "Fresh journal prompts and tidier word sources",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The journal’s invitation to reflect now shows a different question and artwork each time you visit, from a larger set of questions, and Choose another prompt changes both.",
+          "screenshot": {
+            "src": "/release-notes/2.26.0-journal-prompts.webp",
+            "width": 1588,
+            "height": 608,
+            "alt": "The journal’s invitation to reflect: a reflection question set over scripture artwork, with Write a reflection and Choose another prompt buttons beneath it.",
+            "caption": "A reflection question and artwork in the journal; Choose another prompt changes both."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "Greek and Hebrew word results are simpler to read, with source links and details kept in an expandable footer.",
+          "screenshot": {
+            "src": "/release-notes/2.26.0-language-details.webp",
+            "width": 788,
+            "height": 1692,
+            "alt": "The Explore panel for “Word” in John 1:1, showing Greek and Hebrew lexicon matches under Biblical languages, with a collapsed Sources & details footer beneath them.",
+            "caption": "Greek and Hebrew results for “Word”, with sources and details folded into a footer."
+          }
+        }
+      ]
+    },
+    {
+      "version": "2.25.2",
+      "date": "2026-11-09",
+      "title": "A selection menu that waits for you",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The selection menu stays out of the way while you select or adjust text, and comes back when you finish."
+        }
+      ]
+    },
+    {
+      "version": "2.25.1",
+      "date": "2026-11-05",
+      "title": "Unlimited chapter guides for chosen accounts",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "Chosen accounts can be given unlimited personal chapter-guide generation, lifting the per-reader daily and 30-day limits for them. Limits shared by all readers still apply to those accounts."
+        }
+      ]
+    },
+    {
+      "version": "2.25.0",
+      "date": "2026-11-05",
+      "title": "Simple reading with study tools",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "On desktop, the arrow in the header now turns simple mode on and off. The reader’s text stays in place when you switch, and selection tools, annotations, and notes stay available in simple mode.",
+          "screenshot": {
+            "src": "/release-notes/2.25.0-simple-mode.webp",
+            "width": 1600,
+            "height": 1090,
+            "alt": "The reader in simple mode on desktop: the header shows only the Verse Together name and the arrow that turns simple mode off, and 1 Nephi 3:7 is selected with its menu open, showing the highlight and underline buttons, New Note, Annotate, Resources and Focus scripture.",
+            "caption": "Simple mode, turned on with the header arrow, with the selection menu’s marks and Annotate still available."
+          }
+        }
+      ]
+    },
+    {
+      "version": "2.24.1",
+      "date": "2026-11-05",
+      "title": "Easier-to-follow text and labeled navigation",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The reader’s default Comfortable text width is narrower on larger screens, so lines are easier to follow. Comparing translations still gets more room, and the Wide and Full choices work as before."
+        },
+        {
+          "kind": "improved",
+          "text": "The main navigation shows labels with its icons, including on phones, though narrower desktop windows with page controls in the header may label only the current page. In the reader, a small arrow by the chapter name shows it opens the chapter picker, and the one-time tip about selecting text no longer appears.",
+          "screenshot": {
+            "src": "/release-notes/2.24.1-navigation.webp",
+            "width": 1600,
+            "height": 86,
+            "alt": "The app header with the main navigation labeled Browse, Journal and Come Follow Me beside their icons, and the chapter picker showing Mark 9 with a small down arrow.",
+            "caption": "Labeled navigation, and an arrow showing Mark 9 opens the chapter picker."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "While a chapter guide is being written, its page lines up the heading and progress in one column with less explanatory text, and the status in Resources is more compact."
+        }
+      ]
+    },
+    {
+      "version": "2.24.0",
+      "date": "2026-11-05",
+      "title": "Chapter guide progress and human review",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "While a chapter guide is being written, a progress bar shows which step it’s on. If an attempt doesn’t finish, you can see where it stopped and when it can be requested again."
+        },
+        {
+          "kind": "improved",
+          "text": "Chapter guides get up to three rounds of corrections from the reviewer, instead of one. A guide that still needs corrections after that shows that it needs a little additional human review, and its draft is kept, unpublished, for a reviewer or admin to look at and decide whether to continue."
+        },
+        {
+          "kind": "new",
+          "text": "A new chapter guide reviewer role can read the drafts held for human review and continue them, without access to spending or generation controls. Reviewers find it under Chapter guide reviews in the account menu and in Settings."
+        }
+      ]
+    },
+    {
+      "version": "2.23.0",
+      "date": "2026-11-04",
+      "title": "Clearer side-by-side comparisons and reading controls",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "Side by side comparison now lines verses up in clean columns at your reading size, and shows Joseph Smith Translation wording beside the KJV.",
+          "screenshot": {
+            "src": "/release-notes/2.23.0-side-by-side.webp",
+            "width": 1600,
+            "height": 408,
+            "alt": "Mark 9:3 through 6 in three aligned columns headed KJV, JST and BSB, with the JST's added wording in verse 4 underlined and a dash where the JST has no passage.",
+            "caption": "KJV, JST and BSB lined up verse by verse."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "The reading appearance menu is simpler, with a full-width text size slider and grab handle, no text width option on phones, easier Bible controls, and a Joseph Smith Translation switch you no longer have to expand a section to reach.",
+          "screenshot": {
+            "src": "/release-notes/2.23.0-reading-appearance.webp",
+            "width": 768,
+            "height": 976,
+            "alt": "The reading appearance menu, with a full-width text size slider, typeface and text width choices, Your Bibles, and a Joseph Smith Translation switch.",
+            "caption": "The simplified reading appearance menu."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "The Bibles you turn on to compare now stay on as you move between chapters and other pages, until you turn them off. Your choice is saved on this device."
+        }
+      ]
+    },
+    {
+      "version": "2.22.1",
+      "date": "2026-11-04",
+      "title": "Clearer chapter text without study path light bulbs",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The study path light bulbs beside verses are gone, leaving the chapter text clearer."
+        }
+      ]
+    },
+    {
+      "version": "2.22.0",
+      "date": "2026-11-04",
+      "title": "AI-written guides to whole chapters",
+      "items": [
+        {
+          "kind": "new",
+          "text": "Signed-in readers can request an AI-written guide to a whole chapter from Resources, shared with everyone once it's saved."
+        },
+        {
+          "kind": "new",
+          "text": "Selecting verses shows the guide's matching verse groups, and each opens the guide in a reader laid out like Come, Follow Me lessons.",
+          "screenshot": {
+            "src": "/release-notes/2.22.0-chapter-guides.webp",
+            "width": 1568,
+            "height": 1908,
+            "alt": "The chapter guide for 1 Nephi 1, with verses 1 through 3 above their opened context, headed Nephi introduces himself and his record.",
+            "caption": "A chapter guide's verse group with its context open."
+          }
+        }
+      ]
+    },
+    {
+      "version": "2.21.0",
+      "date": "2026-11-01",
+      "title": "Smoother journal writing and scripture study",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "Journal notes save automatically while you write. Add to Note keeps selected passages in the note you are currently composing, including a new reading log note."
+        },
+        {
+          "kind": "improved",
+          "text": "The mobile journal formats headings, bold, links, quotes, lists, and code while you write, just like the website."
+        },
+        {
+          "kind": "improved",
+          "text": "Scripture has more reading room when both desktop side panels are open."
+        },
+        {
+          "kind": "improved",
+          "text": "Highlighting scripture reopens the selection menu while Resources or word study stays open, including when you select the same word again."
+        }
+      ]
+    },
+    {
+      "version": "2.20.5",
+      "date": "2026-10-30",
+      "title": "Clearer Hebrew and Greek word exploration",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "Hebrew and Greek word exploration uses outlined word cards, clearer language groups, and full-width controls to show more words.",
+          "screenshot": {
+            "src": "/release-notes/2.20.5-biblical-languages.webp",
+            "width": 856,
+            "height": 2256,
+            "alt": "Explore for God in Genesis 1, with Hebrew and Greek words grouped in outlined cards and controls to show all matching words.",
+            "caption": "Hebrew and Greek word cards in Explore."
+          }
+        }
+      ]
+    },
+    {
+      "version": "2.20.4",
+      "date": "2026-10-30",
+      "title": "Safer journal sync and compact mobile controls",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The mobile journal editor uses compact reading controls, with the verse range and date available in an expandable summary."
+        },
+        {
+          "kind": "improved",
+          "text": "Desktop sync preserves journal notes when removing older readings and avoids duplicate notes after a retried save. Reader settings keep your latest changes when account preferences finish loading."
+        }
+      ]
+    },
+    {
+      "version": "2.20.3",
+      "date": "2026-10-29",
+      "title": "Smoother mobile account and selection controls",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The testing signup page uses the VerseTogether wordmark in its heading.",
+          "screenshot": {
+            "src": "/release-notes/2.20.3-testing-wordmark.webp",
+            "width": 1392,
+            "height": 1378,
+            "alt": "The testing signup page with the VerseTogether wordmark in its heading above an empty signup form.",
+            "caption": "The testing signup heading uses the VerseTogether wordmark."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "On mobile, tap outside the selected scripture text or action bar to clear the selection, including unselected words in the same verse."
+        },
+        {
+          "kind": "improved",
+          "text": "Google and passkeys share one list in account settings, with compact passkey setup and a sign-in-again action that returns you to finish."
+        }
+      ]
+    },
+    {
+      "version": "2.20.2",
+      "date": "2026-10-29",
+      "title": "Sign-in methods together",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "Account settings groups passkeys with your other sign-in methods in one section."
+        }
+      ]
+    },
+    {
+      "version": "2.20.1",
+      "date": "2026-10-29",
+      "title": "Simpler signup and account spacing",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "The testing signup page has a simpler heading and less introductory text.",
+          "screenshot": {
+            "src": "/release-notes/2.20.1-testing-signup.webp",
+            "width": 1392,
+            "height": 1378,
+            "alt": "The testing signup page with the heading Help test Verse Together above the signup form.",
+            "caption": "A simpler introduction to testing Verse Together."
+          }
+        },
+        {
+          "kind": "improved",
+          "text": "Account settings leaves space between the device list and the button to sign out other devices."
+        }
+      ]
+    },
+    {
+      "version": "2.20.0",
+      "date": "2026-10-29",
+      "title": "Sign in with a passkey",
+      "items": [
+        {
+          "kind": "new",
+          "text": "Add a passkey in Account settings, then sign in with your fingerprint, face, device PIN, or security key. You can name and remove your passkeys, and Google sign-in remains available.",
+          "screenshot": {
+            "src": "/release-notes/2.20.0-passkey-sign-in.webp",
+            "width": 876,
+            "height": 630,
+            "alt": "The sign-in screen with Continue with Google and Sign in with a passkey buttons, followed by supported device options.",
+            "caption": "Use a passkey you've added to sign in with your device or security key."
+          }
+        }
+      ]
+    },
+    {
+      "version": "2.19.0",
+      "date": "2026-10-29",
+      "title": "Android links and study paths",
+      "items": [
+        {
+          "kind": "improved",
+          "text": "Settings groups the feature guide and privacy policy as quiet footer links."
+        },
+        {
+          "kind": "improved",
+          "text": "Scripture links can open in the Android app, and signed-in Android readers can research study paths for uncached chapters."
+        }
+      ]
+    },
+    {
       "version": "2.18.0",
       "date": "2026-10-28",
       "title": "Feature guide and desktop study tools",

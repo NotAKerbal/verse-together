@@ -4,6 +4,9 @@
 // app's own node_modules, so the native bundle never depends on (or duplicates) the web app's install.
 const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
+const { writeUnreleasedNotes } = require("../scripts/unreleased-notes.mjs");
+
+writeUnreleasedNotes();
 
 const projectRoot = __dirname;
 const repoRoot = path.resolve(projectRoot, "..");

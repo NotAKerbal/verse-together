@@ -8,11 +8,11 @@ import {
   CURRENT_VERSION,
   formatReleaseDate,
   RELEASES,
-  UNRELEASED,
   type Release,
   type ReleaseNoteItem,
   type ReleaseScreenshot,
 } from "@/lib/releaseNotes";
+import { UNRELEASED } from "@/lib/unreleasedNotes";
 
 /** How many releases show before "Earlier releases". */
 const RECENT_COUNT = 3;

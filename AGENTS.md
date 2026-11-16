@@ -24,7 +24,10 @@ Verse Together has versions. **2.0.0** is the Marker redesign that replaced the 
 **each merge of `dev` into `master` is one production release**, with either a minor or patch version bump.
 The release history, with the master commit for each release, is `RELEASES` in `src/lib/releaseNotes.ts`, and
 Settings → Release notes shows it. The release script loads that file with Node type stripping: keep it free
-of imports and TypeScript syntax that needs compiling (enums, namespaces).
+of imports and TypeScript syntax that needs compiling (enums, namespaces). Changes waiting for the next release
+are files in `release-notes/unreleased/`, one per change (its `README.md` shows the format), and Settings shows
+them as "Upcoming changes". `next dev`, `next build` and the test runners turn them into
+`src/lib/unreleasedNotes.generated.json`, which isn't committed.
 
 ### When the owner says "merge dev into master"
 
@@ -49,10 +52,13 @@ stays 2: never start 3.0.0 without the owner asking for it.
    - `npm run release:next -- patch` or `npm run release:next -- minor` prints the chosen next version.
      With no argument, the command retains its minor-bump default; it does not assess the changes.
      Run it before editing the release notes, and reuse a prepared version without bumping again.
-   - In `src/lib/releaseNotes.ts`, move the `UNRELEASED` items into a new first entry of `RELEASES` with that
-     `version`, today's `date`, a short `title`, and the short hashes of the commits it describes in `commits`.
-     Leave `masterCommit` off: the merge doesn't exist yet. Fill in the previous release's `masterCommit` if it is
-     still missing. Reset `UNRELEASED.items` to `[]`.
+   - `npm run release:collect -- <version> --title "<short title>" --dry-run` shows the new first entry of
+     `RELEASES` it would make from the files in `release-notes/unreleased/`. Run it again without `--dry-run` to
+     add that entry to `src/lib/releaseNotes.ts` and delete the files. The entry has that `version`, today's
+     `date` (or `--date YYYY-MM-DD`), the items in file name order, and in `commits` the hashes each file lists,
+     or the commit that added a file that lists none. Reorder the items and correct `commits` by hand as needed.
+     It leaves `masterCommit` off: the merge doesn't exist yet. Fill in the previous release's `masterCommit` if
+     it is still missing; the command reminds you.
    - Make the notes truthful: describe only what the merge actually ships, checked against
      `git log --no-merges origin/master..origin/dev`, in plain words for readers. Leave out internal changes
      (deployment, tests, refactors) unless readers notice them. Never describe work that isn't on dev.
@@ -69,8 +75,9 @@ stays 2: never start 3.0.0 without the owner asking for it.
    that the tag can be added later.
 
 Don't bump the version when merging a feature branch into dev, when retrying or re-running a release that was
-already prepared, or for a merge that brings nothing new. Work merged into dev between releases goes in
-`UNRELEASED` (add an item when you merge user-visible work into dev), so the next release's notes are ready.
+already prepared, or for a merge that brings nothing new. Each branch with user-visible work adds its own file to
+`release-notes/unreleased/`, named for what changed, so the next release's notes are ready and branches don't
+conflict over one list. Don't add unreleased work to `RELEASES`. `npm run release:check` checks the files.
 
 ### Release screenshots
 
@@ -81,7 +88,9 @@ already prepared, or for a merge that brings nothing new. Work merged into dev b
 - A screenshot taken after the release it illustrates sets `currentInterface: true`, so the notes say it shows
   today's interface.
 - Save WebP files under `public/release-notes/` named `<version>-<feature>.webp`, at most 1600px wide, with
-  meaningful `alt` text and a `caption`. `npm run release:check` verifies each file exists at its stated size.
+  meaningful `alt` text and a `caption`. Put a screenshot in its change's file in `release-notes/unreleased/`
+  before collecting, or in the new `RELEASES` entry after. `npm run release:check` verifies each file exists at
+  its stated size, for released and unreleased notes alike.
 
 Features in the history without screenshots, on purpose: everything in 2.0.0 (the redesign's interface has since
 changed), Google sign-in (it needs a real account), and changes readers can't see in a still image (reading width,
