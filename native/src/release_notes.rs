@@ -573,12 +573,7 @@ mod tests {
             versions
         );
         assert_eq!(notes.releases[0].version, env!("WEB_VERSION"));
-        for item in notes
-            .releases
-            .iter()
-            .flat_map(|r| &r.items)
-            .chain(&notes.unreleased.items)
-        {
+        for item in notes.releases.iter().flat_map(|r| &r.items) {
             let quoted = serde_json::to_string(&item.text).unwrap();
             assert!(source.contains(&quoted), "not in releaseNotes.ts: {quoted}");
             assert!(item.kind == "new" || item.kind == "improved");

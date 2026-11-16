@@ -1,5 +1,8 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { writeUnreleasedNotes } from "./scripts/unreleased-notes.mjs";
+
+writeUnreleasedNotes();
 
 // One config for every Vitest suite: the Notes journal tests and the Convex auth/ownership tests
 // (convex-test runs functions against an in-memory backend).

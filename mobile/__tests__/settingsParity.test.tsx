@@ -7,7 +7,8 @@
 import { getFunctionName } from "convex/server";
 import { render } from "@testing-library/react-native";
 import { act, fireEvent, renderRouter, screen } from "expo-router/testing-library";
-import { CURRENT_VERSION, RELEASES, UNRELEASED } from "@/lib/releaseNotes";
+import { CURRENT_VERSION, RELEASES } from "@/lib/releaseNotes";
+import { UNRELEASED } from "@/lib/unreleasedNotes";
 import type { SyncClient } from "../src/account/studySync";
 import FeedbackSettings from "../src/features/settings/FeedbackSettings";
 import { FEEDBACK_PATH, feedbackRoute, sendFeedback, type FeedbackRoute } from "../src/features/settings/feedback";

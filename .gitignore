@@ -63,3 +63,5 @@ data/dictionary/
 /native/target/
 /native/dist/
 /native/.local-data/
+
+/src/lib/unreleasedNotes.generated.json
