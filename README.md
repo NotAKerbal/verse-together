@@ -24,27 +24,60 @@ docs in [docs/](docs/).
 
 ## Getting Started
 
-Install [`portless`](https://github.com/vercel-labs/portless) first:
-
-```bash
-npm install -g portless
-```
-
-Then run the development server:
+Log in to Convex once on each machine (`npx convex login`), then run:
 
 ```bash
 npm run dev
 ```
 
-`portless` prints the local hostname it assigns for the app. Open that URL in your browser once the server is ready.
+This gives the checkout it runs in, the main one or any git worktree, its own local Convex backend, data, port
+and test account, so branches and agents run side by side without touching each other or the shared dev
+deployment. When it is ready it prints the URL and the test account:
 
-If you need the plain Next.js localhost flow instead, use:
-
-```bash
-npm run dev:local
+```
+Verse Together is running
+  URL       http://verse-together-1.localhost:3101
+  Email     tester@versetogether.test
+  Password  verse-local-tester
 ```
 
-That fallback uses the default Next.js development server URL, typically `http://localhost:3000`.
+What it does (`scripts/dev.mjs`):
+
+- **Dependencies.** Runs `npm ci` if `node_modules` is missing, as in a new worktree.
+- **Backend.** The first time, it creates a Convex local deployment in the `isaac-cochran/verse-together`
+  project. It runs on this machine and keeps its data in `.convex/local/default`, which git ignores. Later runs
+  reuse it, with the same data and account. The command writes `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`,
+  `NEXT_PUBLIC_CONVEX_SITE_URL` and `AUTH_PROXY_SECRET` to `.env.local`, replacing any earlier lines for them,
+  and leaves other lines alone. In the
+  main checkout this moves `.env.local` off the shared dev deployment, so keep a copy of the old file if you
+  want to switch back.
+- **Ports and hostnames.** The main checkout is served at `http://verse-together.localhost:3100`. Each worktree
+  gets the next free slot the first time and keeps it: `http://verse-together-<n>.localhost:<3100 + n>`, with its
+  backend on ports `3500 + 2n` and `3501 + 2n`. Slots are reserved in a SQLite file in
+  `~/.local/state/verse-together/` (outside the repository), so worktrees started at the same moment still get
+  different slots; a removed worktree's slot is reused. These ranges stay clear of other projects on this machine that use 3000
+  and 3210 upwards. Each checkout has its own hostname because browsers share `localhost` cookies across ports,
+  so two checkouts on plain `localhost` would sign each other out.
+- **Only the local backend.** Every Convex command it runs is pinned to the local deployment named in
+  `.convex/local/default`, whatever `.env.local`, `.env` or the shell say, so it cannot change a cloud deployment.
+- **Backend settings.** Sets `SITE_URL` to the checkout's URL, a generated `BETTER_AUTH_SECRET`, the same
+  `AUTH_PROXY_SECRET` as `.env.local`, and `AUTH_EMAIL_PASSWORD_ENABLED=true`. Email and password sign-in is
+  turned on only on these local backends; the shared dev and production deployments stay Google only. Google,
+  Resend, OpenAI, Anthropic, Merriam-Webster and Spotify keys are not set, so those features are unavailable
+  locally. With no Resend key, new accounts need no email confirmation.
+- **Test account.** Once the backend answers, it signs in as `tester@versetogether.test` and creates the account
+  through the normal email sign-up if that fails. Running it again changes nothing. The account is the same one
+  anyone can create from `/sign-up` on a local backend; the data is throwaway.
+- **Web app.** Starts `next dev --webpack` on the checkout's port. Ctrl-C stops the web app and the backend.
+
+`npm run dev -- --setup` does everything except start the web app, then stops; use it to prepare a new worktree.
+To start over with an empty backend, stop the command and delete `.convex/local`. `scripts/test-account.mjs`
+exports the test account and `ensureTestAccount` for other scripts that set up a backend.
+
+`npm run dev:local` runs plain `next dev --webpack` against whatever `.env.local` names, on Next's default port.
+Sign-in works there only when that backend's `SITE_URL` is the URL you open. The command no longer uses
+`portless`: per-checkout hostnames and ports replace it, and a portless URL would not match the backend's
+`SITE_URL`.
 
 Both dev scripts run the webpack dev server on purpose. With Next 16.1 and Tailwind v4, `next dev --turbopack` spawns a new PostCSS worker process for every CSS compile and never reaps them; on 2026-09-25 that reached 780 workers and roughly 30 GB of RAM. Production builds (`npm run build`) still use Turbopack and are fine.
 
