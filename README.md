@@ -1,6 +1,9 @@
 # Verse Together
 
-One repository for the web app, native Android/iOS app, and native Rust desktop app. They share scripture,
+A scripture study app for the Latter-day Saint standard works: read, mark and annotate, explore words and passages,
+keep a journal, and follow the weekly Come, Follow Me readings.
+
+One repository holds the web app, native Android/iOS app, and native Rust desktop app. They share scripture,
 Come, Follow Me content, artwork and backend APIs. See [the monorepo guide](docs/monorepo.md) for setup and boundaries.
 
 ```bash
@@ -10,8 +13,12 @@ npm run app -- desktop dev           # native Rust app
 npm run apps:check                   # all app checks, sequentially
 ```
 
-The web app remains at the repository root, mobile is in [mobile/](mobile/README.md), and the Rust desktop app is
-in [native/](native/README.md). The web and Convex deployment paths are unchanged.
+The web app remains at the repository root (Next.js in `src/`, Convex backend in `convex/`), mobile is in
+[mobile/](mobile/README.md), and the Rust desktop app is in [native/](native/README.md). The web and Convex deployment
+paths are unchanged.
+
+Coding agents start with [AGENTS.md](AGENTS.md): what is built, the repository map, the rules, and an index of the
+docs in [docs/](docs/).
 
 ## Getting Started
 
@@ -39,54 +46,9 @@ That fallback uses the default Next.js development server URL, typically `http:/
 
 Both dev scripts run the webpack dev server on purpose. With Next 16.1 and Tailwind v4, `next dev --turbopack` spawns a new PostCSS worker process for every CSS compile and never reaps them; on 2026-09-25 that reached 780 workers and roughly 30 GB of RAM. Production builds (`npm run build`) still use Turbopack and are fine.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Scripture dump artifact
-
-The repo keeps a single retained scripture source artifact at `public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db`. That database is the regeneration input for the checked-in app-native dataset under `public/scripture-data/`.
-
-The database is release 2020.12.08 of [beandog/lds-scriptures](https://github.com/beandog/lds-scriptures) ([scriptures.nephi.org](https://scriptures.nephi.org/)), unmodified. Upstream states it is public domain. Its source, terms and what it omits are recorded in [`public/lds-scriptures-2020.12.08/README.md`](public/lds-scriptures-2020.12.08/README.md). Artwork provenance is recorded in [`public/art/README.md`](public/art/README.md).
-
-Generate the app-native scripture manifest and compact per-volume payloads with:
-
-```bash
-npm run generate:scriptures
-```
-
-This writes:
-
-- `public/scripture-data/manifest.json`
-- `public/scripture-data/*.json`
-- `src/lib/generated/scriptureCatalog.json` — the small navigation catalog (volumes, books, chapter and verse counts) that browse, quick navigation, and server lookups read instead of the verse bundles. `npm run generate:scriptures -- --catalog-only` rebuilds just this file from the bundles already in `public/scripture-data`, and `npm run test:browse` checks that it matches them.
-
-The local runtime and browser IndexedDB installer both read from those generated `public/scripture-data` files.
-
-If you need a one-off export from the SQLite source artifact, derive it from the same database:
-
-```bash
-sqlite3 public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db -header -csv "SELECT * FROM scriptures;" > public/lds-scriptures-2020.12.08/csv/lds-scriptures.csv
-```
-
-Use the same SQLite database as the source of truth for any other ad hoc export format.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-Vercel builds now use the guarded Convex/frontend workflow in
+Vercel builds use the guarded Convex/frontend workflow in
 [docs/convex-deployment.md](docs/convex-deployment.md). Configure the branch-scoped dev and separate
 production credentials/activation settings before merging it to their release branches; missing settings
 fail those builds. Feature previews and local `npm run build` do not push Convex.
@@ -96,67 +58,16 @@ fail those builds. Feature previews and local `npm run build` do not push Convex
 Sign-in uses Better Auth inside Convex. The current rollout is **Google only**; email/password support is built
 but stays switched off until `AUTH_EMAIL_PASSWORD_ENABLED=true` is set on the Convex deployment. Configuration,
 the Clerk account migration, cutover and rollback are documented in [docs/auth-migration.md](docs/auth-migration.md).
+Signed-in users can also add a passkey ([docs/passkeys.md](docs/passkeys.md)).
 
-## Dictionary Providers
+## More documentation
 
-The in-app dictionary now uses public APIs via `src/app/api/tools/dictionary/route.ts`:
-
-- `https://dictionaryapi.dev/` (default source, no key required)
-- `https://dictionaryapi.com/` (Merriam-Webster, optional key)
-
-### Optional environment variables
-
-- `MERRIAM_WEBSTER_API_KEY` (or `MW_DICTIONARY_API_KEY`)
-- The apps no longer show chapter study paths. The batch scripts below and the Convex cache remain, `/api/insights/chapter` still reads that cache, and the site never generates them on request. `OPENAI_API_KEY` in the local environment is only for those batch scripts.
-- AI chapter guides are requested from the Resources panel, which shows only the groups matching the selected verses, and read in full at `/chapter-guides/<volume>/<book>/<chapter>`. They're generated in Convex under an application-enforced $100 monthly spending ledger, which isn't a limit the providers enforce. Setup, keys, and limits are in `docs/chapter-guides.md`.
-
-If no Merriam-Webster key is configured, only Free Dictionary API entries will be returned.
-
-Explore also shows scripture study helps and Biblical language entries inline, without leaving the app:
-
-- **Bible Dictionary, Guide to the Scriptures, and Topical Guide.** The selected word is matched against the
-  published topic lists, and the best matching entry in each guide loads as a short preview with "Read more".
-  Other matching or related topics, and See also topics within an entry, load in the same card. Scripture
-  references open in the reader. `GET /api/tools/study-helps?guide=bd|gs|tg&slug=<topic>` fetches only topics in
-  the committed index from churchofjesuschrist.org (10 s timeout, 4 MiB limit, cached for 12 hours, failures not
-  cached) and returns the article's text as structured content; the page's markup is never passed to the browser.
-  Each entry links to its official page.
-- **Hebrew and Greek.** `GET /api/tools/lexicon?language=hebrew|greek&term=<word>` searches the bundled
-  OpenScriptures Strong's dictionaries (server only; see `docs/strongs-data.md`) for entries whose King James
-  renderings, then definitions, use the word. Explore loads the language of the testament being read (Hebrew
-  elsewhere) and the other on request. These are candidates for the English word, not the original word of the
-  verse; a Bible chapter also links to its Bible Hub interlinear.
-
-These sources need no API keys and load independently of the English dictionary lookup.
-
-Refresh the checked-in topic titles and official URL slugs (entry text is fetched when read, never committed) with:
-
-```bash
-node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/generateStudyHelpsIndex.mjs
-```
-
-## Chapter insight batch
-
-Prepare the OpenAI Batch API request for every standard-works chapter except the already cached 1 Nephi 1 result:
-
-```bash
-npm run batch:insights:prepare
-```
-
-This creates ignored artifacts under `.batch-output/chapter-insights-v4/`:
-
-- `canary.jsonl` contains only 1 Nephi 2 and should be submitted first.
-- `requests.jsonl` contains the remaining 1,581 chapters.
-- `manifest.json` records chapter counts, model and prompt versions, file size, and a SHA-256 checksum.
-
-The batch request uses the same `gpt-5.6-luna` prompt, structured output schema, web-search source allowlist, and adaptive output budget as on-demand generation. There is no hard cap on the number of insights; the model is told to return as many well-grounded directions as the chapter warrants.
-
-Cached chapter insights do not expire on a timer. They remain valid while the local scripture text and chapter-insight prompt version match, so a completed corpus is not regenerated simply because time has passed.
-
-Submitting is deliberately a separate, explicit action because it creates billable OpenAI work. Test the canary before sending the full file:
-
-```bash
-npm run batch:insights:submit -- .batch-output/chapter-insights-v4/canary.jsonl --confirm-submit
-```
-
-After validating the canary output, replace `canary.jsonl` with `requests.jsonl` to submit the full set. The submit command writes a local `.submitted.json` receipt beside the request file and never prints the API key.
+- [Scripture data](docs/scripture-data.md): the retained source database, regenerating `public/scripture-data/`, and
+  one-off exports.
+- [Dictionary, study helps and Biblical languages](docs/explore-sources.md): Explore's sources, the optional
+  Merriam-Webster key, and refreshing the study-helps index.
+- [AI chapter guides](docs/chapter-guides.md): requested from the Resources panel, which shows only the groups matching
+  the selected verses, and read in full at `/chapter-guides/<volume>/<book>/<chapter>`. They're generated in Convex
+  under an application-enforced $100 monthly spending ledger, which isn't a limit the providers enforce.
+- [Chapter insight batch](docs/chapter-insights-batch.md): the retired study paths' cache and the OpenAI batch
+  scripts that fill it.
