@@ -53,7 +53,7 @@ What it does (`scripts/dev.mjs`):
   want to switch back.
 - **Ports and hostnames.** The main checkout is served at `http://verse-together.localhost:3100`. Each worktree
   gets the next free slot the first time and keeps it: `http://verse-together-<n>.localhost:<3100 + n>`, with its
-  backend on ports `3500 + 2n` and `3501 + 2n`. Slots are reserved under a lock in
+  backend on ports `3500 + 2n` and `3501 + 2n`. Slots are reserved in a SQLite file in
   `~/.local/state/verse-together/` (outside the repository), so worktrees started at the same moment still get
   different slots; a removed worktree's slot is reused. These ranges stay clear of other projects on this machine that use 3000
   and 3210 upwards. Each checkout has its own hostname because browsers share `localhost` cookies across ports,

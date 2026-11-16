@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { hostname, tmpdir } from "node:os";
+import { spawn } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
@@ -140,75 +140,70 @@ test("a removed worktree's slot can be reused", async () => {
   }
 });
 
-function writeLock(stateDir, owner) {
-  mkdirSync(stateDir, { recursive: true });
-  const file = path.join(stateDir, "slots.lock");
-  writeFileSync(file, JSON.stringify(owner));
-  const old = new Date(Date.now() - 10 * 60_000);
-  utimesSync(file, old, old);
-  return file;
+const moduleUrl = new URL("./local-dev.mjs", import.meta.url).href;
+
+function claimInProcess(here, worktrees, stateDir) {
+  const script = `
+    import { claimSlot } from ${JSON.stringify(moduleUrl)};
+    const isFree = () => new Promise((done) => setTimeout(() => done(true), 50));
+    const slot = await claimSlot({ here: ${JSON.stringify(here)}, worktrees: ${JSON.stringify(worktrees)}, stateDir: ${JSON.stringify(stateDir)}, isFree });
+    console.log(slot);
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "inherit"] });
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += chunk));
+  return new Promise((done, fail) => child.on("exit", (code) => (code === 0 ? done(Number(output.trim())) : fail(new Error(`exit ${code}`)))));
 }
 
-const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid;
+function holdLock(stateDir) {
+  mkdirSync(stateDir, { recursive: true });
+  const script = `
+    import { DatabaseSync } from "node:sqlite";
+    const db = new DatabaseSync(${JSON.stringify(path.join(stateDir, "slots.sqlite"))});
+    db.exec("BEGIN IMMEDIATE");
+    console.log("held");
+    setInterval(() => {}, 1000);
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], { stdio: ["ignore", "pipe", "inherit"] });
+  return new Promise((done) => child.stdout.once("data", () => done(child)));
+}
 
-test("a paused holder keeps the lock however old it is", async () => {
+test("separate processes starting at the same time get different slots", async () => {
   const repo = fakeRepository();
   try {
-    const first = repo.worktree("first");
-    const second = repo.worktree("second");
-    const worktrees = [repo.main, first, second];
-    let resume;
-    const paused = new Promise((done) => (resume = done));
-    let firstStarted;
-    const started = new Promise((done) => (firstStarted = done));
-    const firstClaim = claimSlot({
-      here: first,
-      worktrees,
-      stateDir: repo.stateDir,
-      isFree: async () => {
-        firstStarted();
-        await paused;
-        return true;
-      },
-    });
-    await started;
-    const lock = path.join(repo.stateDir, "slots.lock");
-    const old = new Date(Date.now() - 10 * 60_000);
-    utimesSync(lock, old, old);
-    const secondClaim = claimSlot({ here: second, worktrees, stateDir: repo.stateDir, isFree: allFree });
-    await new Promise((done) => setTimeout(done, 300));
-    resume();
-    assert.deepEqual(await Promise.all([firstClaim, secondClaim]), [1, 2]);
-    assert.equal(existsSync(lock), false);
-  } finally {
-    repo.done();
-  }
-});
-
-test("a lock left by a process that exited is taken over once, even by several claimants", async () => {
-  const repo = fakeRepository();
-  try {
-    writeLock(repo.stateDir, { pid: deadPid(), host: hostname(), token: "gone" });
     const checkouts = ["a", "b", "c", "d"].map((name) => repo.worktree(name));
     const worktrees = [repo.main, ...checkouts];
-    const slowFree = () => new Promise((done) => setTimeout(() => done(true), 5));
-    const slots = await Promise.all(checkouts.map((here) => claimSlot({ here, worktrees, stateDir: repo.stateDir, isFree: slowFree })));
+    const slots = await Promise.all(checkouts.map((here) => claimInProcess(here, worktrees, repo.stateDir)));
     assert.deepEqual([...slots].sort(), [1, 2, 3, 4]);
   } finally {
     repo.done();
   }
 });
 
-test("a lock held on another machine is never taken over", async () => {
+test("a process choosing a slot makes others wait", async () => {
   const repo = fakeRepository();
+  const holder = await holdLock(repo.stateDir);
   try {
-    const lock = writeLock(repo.stateDir, { pid: deadPid(), host: `not-${hostname()}`, token: "elsewhere" });
     const here = repo.worktree("here");
     await assert.rejects(
       claimSlot({ here, worktrees: [repo.main, here], stateDir: repo.stateDir, isFree: allFree, lockWaitMs: 300 }),
-      /Another npm run dev is holding/
+      /still choosing a port slot/
     );
-    assert.equal(existsSync(lock), true);
+  } finally {
+    holder.kill("SIGKILL");
+    repo.done();
+  }
+});
+
+test("a process killed while choosing a slot does not block the next one", async () => {
+  const repo = fakeRepository();
+  try {
+    const holder = await holdLock(repo.stateDir);
+    const exited = new Promise((done) => holder.once("exit", done));
+    holder.kill("SIGKILL");
+    await exited;
+    const here = repo.worktree("here");
+    assert.equal(await claimSlot({ here, worktrees: [repo.main, here], stateDir: repo.stateDir, isFree: allFree, lockWaitMs: 300 }), 1);
   } finally {
     repo.done();
   }

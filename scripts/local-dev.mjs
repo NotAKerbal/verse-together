@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
-import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { homedir, hostname } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -91,88 +92,19 @@ export function slotStateDir(gitCommonDir, env = process.env) {
   return path.join(base, "verse-together", `dev-slots-${repository}`);
 }
 
-function readReservations(stateDir, live) {
-  const reservations = new Map();
-  let entries = [];
-  try {
-    entries = readdirSync(stateDir);
-  } catch {}
-  for (const entry of entries) {
-    if (!/^\d+$/.test(entry)) continue;
-    try {
-      const owner = readFileSync(path.join(stateDir, entry), "utf8").trim();
-      if (live.has(owner)) reservations.set(Number(entry), owner);
-    } catch {}
-  }
-  return reservations;
-}
+const SQLITE_BUSY = 5;
 
-function readLockOwner(file) {
-  try {
-    return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function isRunning(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
-}
-
-function holderIsGone(owner) {
-  return owner !== null && owner.host === hostname() && Number.isInteger(owner.pid) && !isRunning(owner.pid);
-}
-
-function tryAcquire(lockFile, owner) {
-  const pending = `${lockFile}.${owner.token}`;
-  writeFileSync(pending, JSON.stringify(owner));
-  try {
-    linkSync(pending, lockFile);
-    return true;
-  } catch (error) {
-    if (error.code !== "EEXIST") throw error;
-    return false;
-  } finally {
-    rmSync(pending, { force: true });
-  }
-}
-
-function reapAbandoned(lockFile, token) {
-  const owner = readLockOwner(lockFile);
-  if (!holderIsGone(owner)) return;
-  const reaped = `${lockFile}.reaped-${token}`;
-  try {
-    renameSync(lockFile, reaped);
-  } catch {
-    return;
-  }
-  if (readLockOwner(reaped)?.token !== owner.token) {
-    try {
-      linkSync(reaped, lockFile);
-    } catch {}
-  }
-  rmSync(reaped, { force: true });
-}
-
-async function withLock(lockFile, waitMs, task) {
-  const owner = { pid: process.pid, host: hostname(), token: randomBytes(8).toString("hex") };
+async function beginImmediate(db, waitMs) {
   const deadline = Date.now() + waitMs;
-  while (!tryAcquire(lockFile, owner)) {
-    reapAbandoned(lockFile, owner.token);
-    if (Date.now() > deadline) {
-      throw new Error(`Another npm run dev is holding ${lockFile}. If none is running, delete that file and try again.`);
+  for (;;) {
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      return;
+    } catch (error) {
+      if (error.errcode !== SQLITE_BUSY) throw error;
+      if (Date.now() > deadline) throw new Error("Another npm run dev is still choosing a port slot. Try again.");
+      await new Promise((done) => setTimeout(done, 100));
     }
-    await new Promise((done) => setTimeout(done, 100));
-  }
-  try {
-    return await task(() => readLockOwner(lockFile)?.token === owner.token);
-  } finally {
-    if (readLockOwner(lockFile)?.token === owner.token) rmSync(lockFile, { force: true });
   }
 }
 
@@ -180,12 +112,21 @@ export async function claimSlot({ here, worktrees, stateDir, isFree, configOf = 
   const [main, ...others] = worktrees;
   if (main === here) return 0;
   mkdirSync(stateDir, { recursive: true });
-  for (let attempt = 0; ; attempt++) {
-    const slot = await withLock(path.join(stateDir, "slots.lock"), lockWaitMs, async (held) => {
-      const reservations = readReservations(stateDir, new Set(others));
+  const db = new DatabaseSync(path.join(stateDir, "slots.sqlite"));
+  try {
+    db.exec("PRAGMA busy_timeout = 0");
+    await beginImmediate(db, lockWaitMs);
+    try {
+      db.exec("CREATE TABLE IF NOT EXISTS reservations (slot INTEGER PRIMARY KEY, owner TEXT NOT NULL)");
+      const live = new Set(others);
+      const reservations = new Map(
+        db.prepare("SELECT slot, owner FROM reservations").all()
+          .filter((row) => live.has(row.owner))
+          .map((row) => [Number(row.slot), row.owner])
+      );
       const reservedOwners = new Set(reservations.values());
-      const ownReserved = [...reservations].filter(([, owner]) => owner === here).map(([reserved]) => reserved);
-      const chosen = await pickSlot({
+      const ownReserved = [...reservations].filter(([, owner]) => owner === here).map(([slot]) => slot);
+      const slot = await pickSlot({
         here,
         isMain: false,
         ownSlots: [...ownReserved, slotOf(configOf(here))],
@@ -196,13 +137,16 @@ export async function claimSlot({ here, worktrees, stateDir, isFree, configOf = 
           .filter((claimed) => claimed !== null),
         isFree,
       });
-      if (!held()) return null;
-      for (const stale of ownReserved) if (stale !== chosen) rmSync(path.join(stateDir, String(stale)), { force: true });
-      writeFileSync(path.join(stateDir, String(chosen)), `${here}\n`);
-      return held() ? chosen : null;
-    });
-    if (slot !== null) return slot;
-    if (attempt === 2) throw new Error(`Could not reserve a port slot in ${stateDir}. Try again.`);
+      db.prepare("DELETE FROM reservations WHERE owner = ? AND slot <> ?").run(here, slot);
+      db.prepare("INSERT OR REPLACE INTO reservations (slot, owner) VALUES (?, ?)").run(slot, here);
+      db.exec("COMMIT");
+      return slot;
+    } catch (error) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      throw error;
+    }
+  } finally {
+    db.close();
   }
 }
 
