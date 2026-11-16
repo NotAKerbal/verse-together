@@ -21,7 +21,7 @@ This creates ignored artifacts under `.batch-output/chapter-insights-v4/`:
 - `requests.jsonl` contains the remaining 1,581 chapters.
 - `manifest.json` records chapter counts, model and prompt versions, file size, and a SHA-256 checksum.
 
-The batch request uses the same `gpt-5.6-luna` prompt, structured output schema, web-search source allowlist, and adaptive output budget as on-demand generation. There is no hard cap on the number of insights; the model is told to return as many well-grounded directions as the chapter warrants.
+The batch request is built by `src/lib/chapterInsightRequest.ts`, with the same `gpt-5.6-luna` prompt, structured output schema, web-search source allowlist, and adaptive output budget that on-demand generation used before it was retired. There is no hard cap on the number of insights; the model is told to return as many well-grounded directions as the chapter warrants.
 
 Cached chapter insights do not expire on a timer. They remain valid while the local scripture text and chapter-insight prompt version match, so a completed corpus is not regenerated simply because time has passed.
 

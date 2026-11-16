@@ -4,6 +4,14 @@ These instructions apply to every coding agent working in this repository, inclu
 (`CLAUDE.md` imports this file). This is the short version you must follow; the details live in `docs/` and the
 per-app READMEs, listed under [Docs index](#docs-index).
 
+## Code comments
+
+- Do not add code comments. This includes inline, block, JSX, documentation comments, TODOs, and commented-out code.
+- Express intent through clear names, types, and simple code. Put necessary explanations in project documentation.
+- Before handing off changes, remove comments from code you add or change. Do not perform unrelated comment cleanup.
+- Preserve legally required license notices and required machine-consumed directives. These are the only exceptions;
+  do not use directives to bypass checks or carry explanatory prose.
+
 ## What Verse Together is
 
 Verse Together is a scripture study app for the Latter-day Saint standard works: the Old and New Testaments, Book of
@@ -19,8 +27,9 @@ three apps that share one Convex backend, one scripture dataset and one set of l
 
 - **Study works without an account.** Signed-out readers keep notes, reading logs and marks on the device; signing
   in syncs them (`docs/device-study.md`). Don't make a reading or study feature require sign-in without being asked.
-- **Scripture text has one source.** It all comes from the bundled SQLite database. Regenerate the derived files
-  (`docs/scripture-data.md`); never edit `public/scripture-data/` by hand.
+- **Bundled scripture text has one source.** The standard works bundled with the apps all come from one SQLite
+  database. Regenerate the derived files (`docs/scripture-data.md`); never edit `public/scripture-data/` by hand.
+  Additional Bible translations are fetched from the HelloAO API (`src/lib/helloaoApi.ts`), not bundled.
 - **Never generate or AI-edit a depiction of Jesus Christ.** Use credited public-domain or licensed artwork, and record
   every image's provenance next to it (`public/art/README.md`, `public/cfm/covers/README.md`).
 - **AI-written content is labeled and budgeted.** Chapter guides say they were prepared with AI and are generated
@@ -103,11 +112,7 @@ has. Planned work is listed in `FEATURE_IDEAS.md`, which dates from 2026-09-26 a
 
 ## Running locally
 
-_Placeholder: a parallel change writes this section._
-
 ## Previews
-
-_Placeholder: a parallel change writes this section._
 
 ## Branches
 
@@ -187,8 +192,9 @@ selection ranges, retries, account simplifications, guide publishing).
 
 ## Backend rules
 
-- All app data goes through Convex functions in `convex/`, with the schema in `convex/schema.ts`. There is no other
-  database.
+- All server-side data goes through Convex functions in `convex/`, with the schema in `convex/schema.ts`. There is
+  no other server database. Study kept on a device stays local: browser storage on the web, SQLite in the mobile
+  and desktop apps.
 - Better Auth runs inside Convex: `convex/auth.ts` configures it, `convex/http.ts` serves its routes, and the browser
   reaches them through the same-origin proxy at `src/app/api/auth/[...all]/route.ts`. Its tables are the local
   `betterAuth` component in `convex/betterAuth`; never rename or delete it (`docs/passkeys.md`).
@@ -268,5 +274,3 @@ rubric red for emphasis, hairline rules rather than boxes, and serif display and
 | Dated QA and review records | `docs/browse-refresh-verification.md`, `docs/notes-journal-authenticated-qa.md`, `docs/notes-journal-branch.md`, `docs/ui-improvement-review.md`, `docs/ui-review/`, `design-qa.md`, `native/VERIFICATION.md` |
 
 ## Checks
-
-_Placeholder: a parallel change writes this section. Until it lands, `apps.json` lists each app's check commands._

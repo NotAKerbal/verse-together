@@ -25,6 +25,7 @@ The local runtime and browser IndexedDB installer both read from those generated
 If you need a one-off export from the SQLite source artifact, derive it from the same database:
 
 ```bash
+mkdir -p public/lds-scriptures-2020.12.08/csv
 sqlite3 public/lds-scriptures-2020.12.08/sqlite/lds-scriptures-sqlite.db -header -csv "SELECT * FROM scriptures;" > public/lds-scriptures-2020.12.08/csv/lds-scriptures.csv
 ```
 
