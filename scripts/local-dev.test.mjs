@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
@@ -10,6 +11,7 @@ import {
   convexEnv,
   envValue,
   localDeploymentName,
+  parseEnv,
   parseEnvList,
   parseWorktrees,
   pickSlot,
@@ -138,6 +140,80 @@ test("a removed worktree's slot can be reused", async () => {
   }
 });
 
+function writeLock(stateDir, owner) {
+  mkdirSync(stateDir, { recursive: true });
+  const file = path.join(stateDir, "slots.lock");
+  writeFileSync(file, JSON.stringify(owner));
+  const old = new Date(Date.now() - 10 * 60_000);
+  utimesSync(file, old, old);
+  return file;
+}
+
+const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid;
+
+test("a paused holder keeps the lock however old it is", async () => {
+  const repo = fakeRepository();
+  try {
+    const first = repo.worktree("first");
+    const second = repo.worktree("second");
+    const worktrees = [repo.main, first, second];
+    let resume;
+    const paused = new Promise((done) => (resume = done));
+    let firstStarted;
+    const started = new Promise((done) => (firstStarted = done));
+    const firstClaim = claimSlot({
+      here: first,
+      worktrees,
+      stateDir: repo.stateDir,
+      isFree: async () => {
+        firstStarted();
+        await paused;
+        return true;
+      },
+    });
+    await started;
+    const lock = path.join(repo.stateDir, "slots.lock");
+    const old = new Date(Date.now() - 10 * 60_000);
+    utimesSync(lock, old, old);
+    const secondClaim = claimSlot({ here: second, worktrees, stateDir: repo.stateDir, isFree: allFree });
+    await new Promise((done) => setTimeout(done, 300));
+    resume();
+    assert.deepEqual(await Promise.all([firstClaim, secondClaim]), [1, 2]);
+    assert.equal(existsSync(lock), false);
+  } finally {
+    repo.done();
+  }
+});
+
+test("a lock left by a process that exited is taken over once, even by several claimants", async () => {
+  const repo = fakeRepository();
+  try {
+    writeLock(repo.stateDir, { pid: deadPid(), host: hostname(), token: "gone" });
+    const checkouts = ["a", "b", "c", "d"].map((name) => repo.worktree(name));
+    const worktrees = [repo.main, ...checkouts];
+    const slowFree = () => new Promise((done) => setTimeout(() => done(true), 5));
+    const slots = await Promise.all(checkouts.map((here) => claimSlot({ here, worktrees, stateDir: repo.stateDir, isFree: slowFree })));
+    assert.deepEqual([...slots].sort(), [1, 2, 3, 4]);
+  } finally {
+    repo.done();
+  }
+});
+
+test("a lock held on another machine is never taken over", async () => {
+  const repo = fakeRepository();
+  try {
+    const lock = writeLock(repo.stateDir, { pid: deadPid(), host: `not-${hostname()}`, token: "elsewhere" });
+    const here = repo.worktree("here");
+    await assert.rejects(
+      claimSlot({ here, worktrees: [repo.main, here], stateDir: repo.stateDir, isFree: allFree, lockWaitMs: 300 }),
+      /Another npm run dev is holding/
+    );
+    assert.equal(existsSync(lock), true);
+  } finally {
+    repo.done();
+  }
+});
+
 test("slot reservations live outside the repository", () => {
   const dir = slotStateDir("/home/someone/verse-together/.git", { XDG_STATE_HOME: "/state" });
   assert.match(dir, /^\/state\/verse-together\/dev-slots-[0-9a-f]{16}$/);
@@ -168,6 +244,22 @@ test("writing a value replaces every assignment of it", () => {
   const updated = withEnvValues(text, { AUTH_PROXY_SECRET: "new" });
   assert.equal(updated, "AUTH_PROXY_SECRET=new\nOTHER=1\nAUTH_PROXY_SECRET_EXTRA=keep\n");
   assert.equal(envValue(updated, "AUTH_PROXY_SECRET"), "new");
+});
+
+test("multiline quoted values are kept whole", () => {
+  const text = 'OTHER="first\nNEXT_PUBLIC_CONVEX_URL=embedded\nlast"\nNEXT_PUBLIC_CONVEX_URL=https://old.example\n# note\nB=2\n';
+  const updated = withEnvValues(text, { NEXT_PUBLIC_CONVEX_URL: "http://127.0.0.1:3502" });
+  assert.equal(updated, 'OTHER="first\nNEXT_PUBLIC_CONVEX_URL=embedded\nlast"\nNEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3502\n# note\nB=2\n');
+  const values = parseEnv(updated);
+  assert.equal(values.get("OTHER"), "first\nNEXT_PUBLIC_CONVEX_URL=embedded\nlast");
+  assert.equal(values.get("NEXT_PUBLIC_CONVEX_URL"), "http://127.0.0.1:3502");
+  assert.equal(values.get("B"), "2");
+});
+
+test("values that dotenv would read differently are refused", () => {
+  for (const value of ["a b", "a#b", 'a"b', "a\nb"]) {
+    assert.throws(() => withEnvValues("", { NAME: value }), /unsafe value/);
+  }
 });
 
 test("backend env listings are parsed with quotes removed", () => {

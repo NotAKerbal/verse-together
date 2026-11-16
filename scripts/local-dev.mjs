@@ -1,8 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,7 +12,7 @@ export const MAX_SLOTS = 100;
 
 const WEB_PORT_BASE = 3100;
 const BACKEND_PORT_BASE = 3500;
-const LOCK_STALE_MS = 60_000;
+const LOCK_WAIT_MS = 120_000;
 
 const DEPLOYMENT_SELECTORS = [
   "CONVEX_DEPLOYMENT",
@@ -107,51 +107,103 @@ function readReservations(stateDir, live) {
   return reservations;
 }
 
-async function withLock(lockDir, task) {
-  const deadline = Date.now() + 2 * LOCK_STALE_MS;
-  for (;;) {
-    try {
-      mkdirSync(lockDir);
-      break;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      try {
-        if (Date.now() - statSync(lockDir).mtimeMs > LOCK_STALE_MS) rmSync(lockDir, { recursive: true, force: true });
-      } catch {}
-      if (Date.now() > deadline) throw new Error(`Timed out waiting for ${lockDir}.`);
-      await new Promise((done) => setTimeout(done, 100));
-    }
-  }
+function readLockOwner(file) {
   try {
-    return await task();
-  } finally {
-    rmSync(lockDir, { recursive: true, force: true });
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
   }
 }
 
-export async function claimSlot({ here, worktrees, stateDir, isFree, configOf = backendConfig }) {
+function isRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+function holderIsGone(owner) {
+  return owner !== null && owner.host === hostname() && Number.isInteger(owner.pid) && !isRunning(owner.pid);
+}
+
+function tryAcquire(lockFile, owner) {
+  const pending = `${lockFile}.${owner.token}`;
+  writeFileSync(pending, JSON.stringify(owner));
+  try {
+    linkSync(pending, lockFile);
+    return true;
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    return false;
+  } finally {
+    rmSync(pending, { force: true });
+  }
+}
+
+function reapAbandoned(lockFile, token) {
+  const owner = readLockOwner(lockFile);
+  if (!holderIsGone(owner)) return;
+  const reaped = `${lockFile}.reaped-${token}`;
+  try {
+    renameSync(lockFile, reaped);
+  } catch {
+    return;
+  }
+  if (readLockOwner(reaped)?.token !== owner.token) {
+    try {
+      linkSync(reaped, lockFile);
+    } catch {}
+  }
+  rmSync(reaped, { force: true });
+}
+
+async function withLock(lockFile, waitMs, task) {
+  const owner = { pid: process.pid, host: hostname(), token: randomBytes(8).toString("hex") };
+  const deadline = Date.now() + waitMs;
+  while (!tryAcquire(lockFile, owner)) {
+    reapAbandoned(lockFile, owner.token);
+    if (Date.now() > deadline) {
+      throw new Error(`Another npm run dev is holding ${lockFile}. If none is running, delete that file and try again.`);
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  try {
+    return await task(() => readLockOwner(lockFile)?.token === owner.token);
+  } finally {
+    if (readLockOwner(lockFile)?.token === owner.token) rmSync(lockFile, { force: true });
+  }
+}
+
+export async function claimSlot({ here, worktrees, stateDir, isFree, configOf = backendConfig, lockWaitMs = LOCK_WAIT_MS }) {
   const [main, ...others] = worktrees;
   if (main === here) return 0;
   mkdirSync(stateDir, { recursive: true });
-  return withLock(path.join(stateDir, "lock"), async () => {
-    const reservations = readReservations(stateDir, new Set(others));
-    const reservedOwners = new Set(reservations.values());
-    const ownReserved = [...reservations].filter(([, owner]) => owner === here).map(([slot]) => slot);
-    const slot = await pickSlot({
-      here,
-      isMain: false,
-      ownSlots: [...ownReserved, slotOf(configOf(here))],
-      reservations,
-      otherConfigSlots: others
-        .filter((worktree) => worktree !== here && !reservedOwners.has(worktree))
-        .map((worktree) => slotOf(configOf(worktree)))
-        .filter((claimed) => claimed !== null),
-      isFree,
+  for (let attempt = 0; ; attempt++) {
+    const slot = await withLock(path.join(stateDir, "slots.lock"), lockWaitMs, async (held) => {
+      const reservations = readReservations(stateDir, new Set(others));
+      const reservedOwners = new Set(reservations.values());
+      const ownReserved = [...reservations].filter(([, owner]) => owner === here).map(([reserved]) => reserved);
+      const chosen = await pickSlot({
+        here,
+        isMain: false,
+        ownSlots: [...ownReserved, slotOf(configOf(here))],
+        reservations,
+        otherConfigSlots: others
+          .filter((worktree) => worktree !== here && !reservedOwners.has(worktree))
+          .map((worktree) => slotOf(configOf(worktree)))
+          .filter((claimed) => claimed !== null),
+        isFree,
+      });
+      if (!held()) return null;
+      for (const stale of ownReserved) if (stale !== chosen) rmSync(path.join(stateDir, String(stale)), { force: true });
+      writeFileSync(path.join(stateDir, String(chosen)), `${here}\n`);
+      return held() ? chosen : null;
     });
-    for (const stale of ownReserved) if (stale !== slot) rmSync(path.join(stateDir, String(stale)), { force: true });
-    writeFileSync(path.join(stateDir, String(slot)), `${here}\n`);
-    return slot;
-  });
+    if (slot !== null) return slot;
+    if (attempt === 2) throw new Error(`Could not reserve a port slot in ${stateDir}. Try again.`);
+  }
 }
 
 export function isFree(port) {
@@ -171,12 +223,13 @@ export function readEnvFile(file) {
 }
 
 const DOTENV_LINE =
-  /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
+  /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/dgm;
+
+const normalizeNewlines = (text) => text.replace(/\r\n?/g, "\n");
 
 export function parseEnv(text) {
   const values = new Map();
-  const lines = text.replace(/\r\n?/gm, "\n");
-  for (const match of lines.matchAll(DOTENV_LINE)) {
+  for (const match of normalizeNewlines(text).matchAll(DOTENV_LINE)) {
     let value = (match[2] || "").trim();
     const quote = value[0];
     value = value.replace(/^(['"`])([\s\S]*)\1$/gm, "$2");
@@ -190,23 +243,34 @@ export function envValue(text, name) {
   return parseEnv(text).get(name) ?? null;
 }
 
-function assigns(line, name) {
-  return new RegExp(`^\\s*(?:export\\s+)?${name}(?:\\s*=|:\\s)`).test(line);
+function assignmentSpans(text, name) {
+  const spans = [];
+  for (const match of text.matchAll(DOTENV_LINE)) {
+    if (match[1] !== name) continue;
+    const start = text.lastIndexOf("\n", match.indices[1][0] - 1) + 1;
+    const lineEnd = text.indexOf("\n", (match.indices[2] ?? match.indices[1])[1]);
+    spans.push({ start, end: lineEnd === -1 ? text.length : lineEnd });
+  }
+  return spans;
 }
 
 export function withEnvValues(text, values) {
-  let lines = text === "" ? [] : text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+  let result = normalizeNewlines(text);
   for (const [name, value] of Object.entries(values)) {
+    if (!/^\w+$/.test(name) || /[\s"'`#\\]/.test(value)) throw new Error(`Refusing to write an unsafe value for ${name}.`);
     const line = `${name}=${value}`;
-    const first = lines.findIndex((existing) => assigns(existing, name));
-    if (first === -1) {
-      lines.push(line);
+    const [first, ...later] = assignmentSpans(result, name);
+    if (!first) {
+      result = `${result}${result === "" || result.endsWith("\n") ? "" : "\n"}${line}\n`;
       continue;
     }
-    lines = lines.filter((existing, index) => index === first || !assigns(existing, name));
-    lines[first] = line;
+    for (const span of later.reverse()) {
+      const end = result[span.end] === "\n" ? span.end + 1 : span.end;
+      result = result.slice(0, span.start) + result.slice(end);
+    }
+    result = result.slice(0, first.start) + line + result.slice(first.end);
   }
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
+  return result;
 }
 
 export function writeEnvValues(file, values) {
