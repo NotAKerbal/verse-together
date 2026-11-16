@@ -90,6 +90,60 @@ arrive after the final check; the queued newer build runs afterward. Old dashboa
 CLI uploads are not the automation entrypoint. An unavailable Git remote or failed auth preflight fails
 closed. The fixed repository is public, so the remote-head check does not need a GitHub credential.
 
+## Which commits deploy
+
+`vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore.mjs` before every Vercel build. Vercel
+skips the deployment when it exits 0 and builds when it exits 1. The setting lives in the repository,
+so it applies to a branch only once this change has been merged into that branch.
+
+It skips only when git shows that nothing the web app or Convex backend is built from changed since
+the branch's last successful deployment (`VERCEL_GIT_PREVIOUS_SHA`) up to the pushed commit
+(`VERCEL_GIT_COMMIT_SHA`). It checks both the net difference and every commit in between (merges
+against their first parent), so a build-input change that a later commit reverts still builds.
+
+**Not built from**, so changes only here skip: `mobile/`, `native/`, `docs/` and Markdown files at the
+repository root (`README.md`, `AGENTS.md`, ...). **Everything else builds**, including any new file
+or folder, because the build reads far more than `src/`:
+
+| Reader | What it reads |
+| --- | --- |
+| Next.js | `src/`, `public/`, `next.config.ts`, `postcss.config.mjs`, `package.json`, `package-lock.json` (Vercel's install), `content/cfm/` (imported and traced into `/api/resources`), `convex/` (imported by `src/`, including `convex/_generated/`), `src/lib/generated/` |
+| Next.js type check | Every `**/*.ts` and `**/*.tsx` in `tsconfig.json`'s `include`, so also `tests/`, `qa/`, `vitest.config.ts`; `tsconfig.json` excludes `mobile`, `native` and `docs` |
+| Tailwind | Every file git doesn't ignore (`.gitignore`), except what `src/app/globals.css` excludes with `@source not`: the same `mobile`, `native`, `docs` and root `*.md` |
+| Convex deploy | `convex/` (with `convex/tsconfig.json`) and the `src/lib` and `src/features` files it imports |
+| Vercel | `vercel.json`, `scripts/vercel-build.mjs`, `scripts/vercel-ignore.mjs` |
+
+Nothing the web build or Convex imports lives in `mobile/`, `native/` or `docs/`; references there are
+prose. Before the Tailwind exclusions, those folders added three CSS rules the website never used
+(`flex-grow`, `!inline`, `md:w-[min(36rem,…)]`). If the website ever needs something from these
+folders, remove it from `notBuiltFrom` in `scripts/vercel-ignore.mjs` and from the `@source not` and
+`tsconfig.json` exclusions; `npm run test:deploy` checks the three stay in step.
+
+Anything the script can't tell builds:
+
+- no `VERCEL_GIT_COMMIT_SHA` (a CLI deploy, including `npm run preview`) or `VERSE_PREVIEW` set;
+- no previous SHA (a branch's first deployment) or a redeploy of the same commit;
+- a pushed commit whose message contains `[force build]`;
+- either commit missing from Vercel's shallow clone, or a commit in between whose parents are cut off;
+- a pushed commit that doesn't descend from the last deployed one (a rewritten branch);
+- any git failure.
+
+**Dev and master stay in step.** On `dev` and `master`, a successful deployment means
+`vercel-build.mjs` built the frontend, deployed Convex and verified it, all from one commit, before
+Vercel published. A skip publishes nothing and writes nothing, so the live frontend and backend stay
+exactly as that last successful deployment left them: one commit's pair. A skip happens only when no
+commit since then touched a build input, so building would have produced the same frontend and the
+same backend. A build that failed after its Convex deploy (see below) leaves the backend ahead of the
+last successful deployment; its commit is in the next push's range, so that push builds, even if it
+reverts the change. What git can't show still needs a build: Vercel environment variable changes,
+backend writes from outside this pipeline (a manual `convex deploy`, `deploy:notes:development`),
+and a failed build's commit later dropped by a force push. For those, push an empty commit to the
+branch with `[force build]` in its message (`git commit --allow-empty -m "Rebuild dev [force build]"`).
+Alternatively, redeploy the deployment of the branch's current head from the dashboard with **Use
+project's Ignore Build Step** unchecked in the Redeploy dialog
+([Vercel](https://vercel.com/docs/project-configuration/project-settings#ignore-build-step-on-redeploy)).
+Redeploying an older commit doesn't help: `vercel-build.mjs` refuses any commit that isn't the branch head.
+
 ## Failure and rollback
 
 | Failure point | Result / response |

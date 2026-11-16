@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@source not "../../mobile";
+@source not "../../native";
+@source not "../../docs";
+@source not "../../*.md";
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
