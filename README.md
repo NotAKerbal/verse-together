@@ -8,6 +8,8 @@ Come, Follow Me content, artwork and backend APIs. See [the monorepo guide](docs
 
 ```bash
 npm run apps                         # list apps
+npm test                             # every web test: node:test files and Vitest
+npm run app -- web check             # web release data, typecheck, CFM content and tests
 npm run app -- mobile check          # mobile typecheck, tests and generated data
 npm run app -- desktop dev           # native Rust app
 npm run apps:check                   # all app checks, sequentially
