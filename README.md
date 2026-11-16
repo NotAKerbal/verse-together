@@ -88,6 +88,23 @@ Vercel builds use the guarded Convex/frontend workflow in
 production credentials/activation settings before merging it to their release branches; missing settings
 fail those builds. Feature previews and local `npm run build` do not push Convex.
 
+## Previews
+
+`npm run preview` deploys this working tree, committed or not, as a working instance: its own Convex preview
+backend plus a Vercel preview of the web app, with email/password sign-in and a test account.
+
+```sh
+npm run preview                 # named after the current Git branch
+npm run preview my-experiment   # a name of your choice
+npm run preview -- --fresh      # replace the backend with an empty one
+```
+
+Running it again with the same name updates that preview and keeps its data. It prints the URL, the test
+account (`tester@versetogether.test` / `verse-preview-tester`) and the backend's dashboard link. It needs
+`npx convex login` and `vercel login` on this machine. The URL asks for a Vercel sign-in with access to
+the `notakerbals-projects` team. Convex deletes preview backends 5 days after creating them. Details are in
+[docs/convex-deployment.md](docs/convex-deployment.md#previews-from-npm-run-preview).
+
 ## Accounts
 
 Sign-in uses Better Auth inside Convex. The current rollout is **Google only**; email/password support is built
