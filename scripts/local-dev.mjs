@@ -1,6 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,13 +12,18 @@ export const MAX_SLOTS = 100;
 
 const WEB_PORT_BASE = 3100;
 const BACKEND_PORT_BASE = 3500;
+const LOCK_STALE_MS = 60_000;
 
-const DEPLOYMENT_OVERRIDES = [
+const DEPLOYMENT_SELECTORS = [
   "CONVEX_DEPLOYMENT",
   "CONVEX_DEPLOY_KEY",
   "CONVEX_DEPLOYMENT_TOKEN",
   "CONVEX_SELF_HOSTED_URL",
   "CONVEX_SELF_HOSTED_ADMIN_KEY",
+];
+
+const INHERITED_OVERRIDES = [
+  ...DEPLOYMENT_SELECTORS,
   "CONVEX_AGENT_MODE",
   "NEXT_PUBLIC_CONVEX_URL",
   "NEXT_PUBLIC_CONVEX_SITE_URL",
@@ -48,6 +55,11 @@ export function backendConfig(checkout) {
   }
 }
 
+export function localDeploymentName(config) {
+  const name = config?.deploymentName;
+  return typeof name === "string" && /^local-[A-Za-z0-9_-]+$/.test(name) ? name : null;
+}
+
 export function parseWorktrees(porcelain) {
   return porcelain
     .split("\n")
@@ -55,17 +67,91 @@ export function parseWorktrees(porcelain) {
     .map((line) => line.slice("worktree ".length));
 }
 
-export async function chooseSlot({ ownSlot, isMain, claimedSlots, isFree }) {
+export async function pickSlot({ here, isMain, ownSlots, reservations, otherConfigSlots, isFree }) {
   if (isMain) return 0;
-  if (ownSlot !== null && ownSlot > 0) return ownSlot;
-  const claimed = new Set(claimedSlots);
+  const configClaims = new Set(otherConfigSlots);
+  const available = (slot) => {
+    if (!Number.isInteger(slot) || slot < 1 || slot >= MAX_SLOTS) return false;
+    const owner = reservations.get(slot);
+    return owner === here || (owner === undefined && !configClaims.has(slot));
+  };
+  for (const slot of ownSlots) if (available(slot)) return slot;
   for (let slot = 1; slot < MAX_SLOTS; slot++) {
-    if (claimed.has(slot)) continue;
+    if (!available(slot)) continue;
     const free = await Promise.all(Object.values(portsFor(slot)).map(isFree));
     if (free.every(Boolean)) return slot;
   }
   const last = portsFor(MAX_SLOTS - 1);
   throw new Error(`Every port from ${portsFor(1).web} to ${last.web} is taken by another checkout or program.`);
+}
+
+export function slotStateDir(gitCommonDir, env = process.env) {
+  const base = env.XDG_STATE_HOME || path.join(homedir(), ".local", "state");
+  const repository = createHash("sha256").update(gitCommonDir).digest("hex").slice(0, 16);
+  return path.join(base, "verse-together", `dev-slots-${repository}`);
+}
+
+function readReservations(stateDir, live) {
+  const reservations = new Map();
+  let entries = [];
+  try {
+    entries = readdirSync(stateDir);
+  } catch {}
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      const owner = readFileSync(path.join(stateDir, entry), "utf8").trim();
+      if (live.has(owner)) reservations.set(Number(entry), owner);
+    } catch {}
+  }
+  return reservations;
+}
+
+async function withLock(lockDir, task) {
+  const deadline = Date.now() + 2 * LOCK_STALE_MS;
+  for (;;) {
+    try {
+      mkdirSync(lockDir);
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      try {
+        if (Date.now() - statSync(lockDir).mtimeMs > LOCK_STALE_MS) rmSync(lockDir, { recursive: true, force: true });
+      } catch {}
+      if (Date.now() > deadline) throw new Error(`Timed out waiting for ${lockDir}.`);
+      await new Promise((done) => setTimeout(done, 100));
+    }
+  }
+  try {
+    return await task();
+  } finally {
+    rmSync(lockDir, { recursive: true, force: true });
+  }
+}
+
+export async function claimSlot({ here, worktrees, stateDir, isFree, configOf = backendConfig }) {
+  const [main, ...others] = worktrees;
+  if (main === here) return 0;
+  mkdirSync(stateDir, { recursive: true });
+  return withLock(path.join(stateDir, "lock"), async () => {
+    const reservations = readReservations(stateDir, new Set(others));
+    const reservedOwners = new Set(reservations.values());
+    const ownReserved = [...reservations].filter(([, owner]) => owner === here).map(([slot]) => slot);
+    const slot = await pickSlot({
+      here,
+      isMain: false,
+      ownSlots: [...ownReserved, slotOf(configOf(here))],
+      reservations,
+      otherConfigSlots: others
+        .filter((worktree) => worktree !== here && !reservedOwners.has(worktree))
+        .map((worktree) => slotOf(configOf(worktree)))
+        .filter((claimed) => claimed !== null),
+      isFree,
+    });
+    for (const stale of ownReserved) if (stale !== slot) rmSync(path.join(stateDir, String(stale)), { force: true });
+    writeFileSync(path.join(stateDir, String(slot)), `${here}\n`);
+    return slot;
+  });
 }
 
 export function isFree(port) {
@@ -84,23 +170,43 @@ export function readEnvFile(file) {
   }
 }
 
+const DOTENV_LINE =
+  /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
+
+export function parseEnv(text) {
+  const values = new Map();
+  const lines = text.replace(/\r\n?/gm, "\n");
+  for (const match of lines.matchAll(DOTENV_LINE)) {
+    let value = (match[2] || "").trim();
+    const quote = value[0];
+    value = value.replace(/^(['"`])([\s\S]*)\1$/gm, "$2");
+    if (quote === '"') value = value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    values.set(match[1], value);
+  }
+  return values;
+}
+
 export function envValue(text, name) {
-  const match = text.match(new RegExp(`^${name}=(.*)$`, "m"));
-  return match ? match[1].replace(/\s+#.*$/, "").trim().replace(/^(["'])(.*)\1$/, "$2") : null;
+  return parseEnv(text).get(name) ?? null;
+}
+
+function assigns(line, name) {
+  return new RegExp(`^\\s*(?:export\\s+)?${name}(?:\\s*=|:\\s)`).test(line);
 }
 
 export function withEnvValues(text, values) {
-  let result = text;
+  let lines = text === "" ? [] : text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
   for (const [name, value] of Object.entries(values)) {
     const line = `${name}=${value}`;
-    const pattern = new RegExp(`^${name}=.*$`, "m");
-    if (pattern.test(result)) {
-      result = result.replace(pattern, () => line);
-    } else {
-      result = `${result}${result === "" || result.endsWith("\n") ? "" : "\n"}${line}\n`;
+    const first = lines.findIndex((existing) => assigns(existing, name));
+    if (first === -1) {
+      lines.push(line);
+      continue;
     }
+    lines = lines.filter((existing, index) => index === first || !assigns(existing, name));
+    lines[first] = line;
   }
-  return result;
+  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
 export function writeEnvValues(file, values) {
@@ -110,18 +216,19 @@ export function writeEnvValues(file, values) {
 }
 
 export function parseEnvList(output) {
-  const values = new Map();
-  for (const line of output.split("\n")) {
-    const separator = line.indexOf("=");
-    if (separator > 0) values.set(line.slice(0, separator), line.slice(separator + 1).replace(/^(["'])(.*)\1$/, "$2"));
-  }
-  return values;
+  return parseEnv(output);
 }
 
 export function childEnv(extra = {}) {
   const env = { ...process.env };
-  for (const name of DEPLOYMENT_OVERRIDES) delete env[name];
+  for (const name of INHERITED_OVERRIDES) delete env[name];
   return { ...env, ...extra };
+}
+
+export function convexEnv(deploymentName) {
+  const pinned = Object.fromEntries(DEPLOYMENT_SELECTORS.map((name) => [name, ""]));
+  if (deploymentName) pinned.CONVEX_DEPLOYMENT = `local:${deploymentName}`;
+  return pinned;
 }
 
 function describe(cmd, args) {

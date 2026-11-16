@@ -5,15 +5,18 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   BACKEND_STATE,
-  backendConfig,
   childEnv,
-  chooseSlot,
+  claimSlot,
+  convexEnv,
   envValue,
+  localDeploymentName,
   parseEnvList,
   parseWorktrees,
+  pickSlot,
   portsFor,
   siteUrlFor,
   slotOf,
+  slotStateDir,
   withEnvValues,
 } from "./local-dev.mjs";
 import { TEST_ACCOUNT, ensureTestAccount } from "./test-account.mjs";
@@ -40,50 +43,105 @@ test("a backend's slot is read back from its ports", () => {
   assert.equal(slotOf(null), null);
 });
 
+const pick = (options) =>
+  pickSlot({ here: "/w/me", isMain: false, ownSlots: [], reservations: new Map(), otherConfigSlots: [], isFree: allFree, ...options });
+
 test("the main checkout always gets slot 0", async () => {
-  assert.equal(await chooseSlot({ ownSlot: null, isMain: true, claimedSlots: [1, 2], isFree: allFree }), 0);
+  assert.equal(await pick({ isMain: true, otherConfigSlots: [1, 2] }), 0);
 });
 
 test("a worktree keeps the slot it already has", async () => {
-  assert.equal(await chooseSlot({ ownSlot: 4, isMain: false, claimedSlots: [1, 2], isFree: async () => false }), 4);
+  assert.equal(await pick({ ownSlots: [4], otherConfigSlots: [1, 2], isFree: async () => false }), 4);
 });
 
 test("a new worktree takes the first slot no other checkout claims", async () => {
-  assert.equal(await chooseSlot({ ownSlot: null, isMain: false, claimedSlots: [1, null, 2], isFree: allFree }), 3);
+  assert.equal(await pick({ otherConfigSlots: [1, 2] }), 3);
+  assert.equal(await pick({ reservations: new Map([[1, "/w/other"]]) }), 2);
 });
 
 test("a new worktree skips slots whose ports another program holds", async () => {
   const busy = new Set([portsFor(1).site]);
-  const slot = await chooseSlot({ ownSlot: null, isMain: false, claimedSlots: [], isFree: async (port) => !busy.has(port) });
-  assert.equal(slot, 2);
+  assert.equal(await pick({ isFree: async (port) => !busy.has(port) }), 2);
 });
 
 test("a worktree never takes the main checkout's slot", async () => {
-  assert.equal(await chooseSlot({ ownSlot: 0, isMain: false, claimedSlots: [], isFree: allFree }), 1);
+  assert.equal(await pick({ ownSlots: [0, null] }), 1);
+});
+
+test("a reserved slot wins over another worktree's backend on the same ports", async () => {
+  assert.equal(await pick({ ownSlots: [1], reservations: new Map([[1, "/w/me"]]), otherConfigSlots: [1] }), 1);
+  assert.equal(await pick({ ownSlots: [1], reservations: new Map([[1, "/w/other"]]) }), 2);
+  assert.equal(await pick({ ownSlots: [1], otherConfigSlots: [1] }), 2);
 });
 
 test("choosing fails when every slot is taken", async () => {
-  await assert.rejects(chooseSlot({ ownSlot: null, isMain: false, claimedSlots: [], isFree: async () => false }), /Every port/);
+  await assert.rejects(pick({ isFree: async () => false }), /Every port/);
+});
+
+function fakeRepository() {
+  const dir = mkdtempSync(path.join(tmpdir(), "verse-dev-"));
+  const main = path.join(dir, "main");
+  const worktree = (name, slot) => {
+    const checkout = path.join(dir, name);
+    if (slot !== undefined) {
+      mkdirSync(path.join(checkout, BACKEND_STATE), { recursive: true });
+      writeFileSync(path.join(checkout, BACKEND_STATE, "config.json"), JSON.stringify({ ports: portsFor(slot) }));
+    }
+    return checkout;
+  };
+  return { dir, main, worktree, stateDir: path.join(dir, "state"), done: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("worktrees are read from git's porcelain listing", () => {
+  const porcelain = ["worktree /r/main", "HEAD abc", "", "worktree /r/first", "", "worktree /r/second", "prunable gitdir file points to non-existent location", ""];
+  assert.deepEqual(parseWorktrees(porcelain.join("\n")), ["/r/main", "/r/first", "/r/second"]);
 });
 
 test("two worktrees of one repository get different ports", async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "verse-dev-"));
+  const repo = fakeRepository();
   try {
-    const first = path.join(dir, "first");
-    mkdirSync(path.join(first, BACKEND_STATE), { recursive: true });
-    writeFileSync(path.join(first, BACKEND_STATE, "config.json"), JSON.stringify({ ports: portsFor(1) }));
-    const second = path.join(dir, "second");
-    const worktrees = parseWorktrees(
-      [`worktree ${path.join(dir, "main")}`, "HEAD abc", "", `worktree ${first}`, "", `worktree ${second}`, "prunable gitdir file points to non-existent location", ""].join("\n")
-    );
-    assert.deepEqual(worktrees, [path.join(dir, "main"), first, second]);
-    const claimedSlots = worktrees.slice(1).filter((worktree) => worktree !== second).map((worktree) => slotOf(backendConfig(worktree)));
-    const slot = await chooseSlot({ ownSlot: slotOf(backendConfig(second)), isMain: false, claimedSlots, isFree: allFree });
+    const first = repo.worktree("first", 1);
+    const second = repo.worktree("second");
+    const worktrees = [repo.main, first, second];
+    const slot = await claimSlot({ here: second, worktrees, stateDir: repo.stateDir, isFree: allFree });
     assert.equal(slot, 2);
-    assert.notEqual(portsFor(slot).web, portsFor(1).web);
+    assert.equal(await claimSlot({ here: first, worktrees, stateDir: repo.stateDir, isFree: allFree }), 1);
+    assert.equal(await claimSlot({ here: second, worktrees, stateDir: repo.stateDir, isFree: allFree }), 2);
+    assert.equal(await claimSlot({ here: repo.main, worktrees, stateDir: repo.stateDir, isFree: allFree }), 0);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    repo.done();
   }
+});
+
+test("worktrees starting at the same time get different slots", async () => {
+  const repo = fakeRepository();
+  try {
+    const checkouts = ["a", "b", "c", "d"].map((name) => repo.worktree(name));
+    const worktrees = [repo.main, ...checkouts];
+    const slowFree = () => new Promise((done) => setTimeout(() => done(true), 5));
+    const slots = await Promise.all(checkouts.map((here) => claimSlot({ here, worktrees, stateDir: repo.stateDir, isFree: slowFree })));
+    assert.deepEqual([...slots].sort(), [1, 2, 3, 4]);
+  } finally {
+    repo.done();
+  }
+});
+
+test("a removed worktree's slot can be reused", async () => {
+  const repo = fakeRepository();
+  try {
+    const gone = repo.worktree("gone");
+    const next = repo.worktree("next");
+    assert.equal(await claimSlot({ here: gone, worktrees: [repo.main, gone], stateDir: repo.stateDir, isFree: allFree }), 1);
+    assert.equal(await claimSlot({ here: next, worktrees: [repo.main, next], stateDir: repo.stateDir, isFree: allFree }), 1);
+  } finally {
+    repo.done();
+  }
+});
+
+test("slot reservations live outside the repository", () => {
+  const dir = slotStateDir("/home/someone/verse-together/.git", { XDG_STATE_HOME: "/state" });
+  assert.match(dir, /^\/state\/verse-together\/dev-slots-[0-9a-f]{16}$/);
+  assert.notEqual(dir, slotStateDir("/home/someone/other/.git", { XDG_STATE_HOME: "/state" }));
 });
 
 test("env values are replaced in place or appended", () => {
@@ -97,6 +155,19 @@ test("env values are replaced in place or appended", () => {
   assert.equal(envValue(updated, "AUTH_PROXY_SECRET"), "s$1");
   assert.equal(envValue(updated, "MISSING"), null);
   assert.equal(withEnvValues("", { A: "1" }), "A=1\n");
+});
+
+test("env files are read the way dotenv reads them: the last assignment wins", () => {
+  const text = "CONVEX_DEPLOYMENT=local:example\nexport CONVEX_DEPLOYMENT = dev:example-cloud\nQUOTED=\"a # b\"\n";
+  assert.equal(envValue(text, "CONVEX_DEPLOYMENT"), "dev:example-cloud");
+  assert.equal(envValue(text, "QUOTED"), "a # b");
+});
+
+test("writing a value replaces every assignment of it", () => {
+  const text = "AUTH_PROXY_SECRET=old\nOTHER=1\n  export AUTH_PROXY_SECRET = stale\nAUTH_PROXY_SECRET_EXTRA=keep\n";
+  const updated = withEnvValues(text, { AUTH_PROXY_SECRET: "new" });
+  assert.equal(updated, "AUTH_PROXY_SECRET=new\nOTHER=1\nAUTH_PROXY_SECRET_EXTRA=keep\n");
+  assert.equal(envValue(updated, "AUTH_PROXY_SECRET"), "new");
 });
 
 test("backend env listings are parsed with quotes removed", () => {
@@ -118,6 +189,22 @@ test("commands never inherit a shell's deployment selection", () => {
   } finally {
     process.env = saved;
   }
+});
+
+test("Convex commands are pinned to the local backend over anything in env files", () => {
+  const env = convexEnv("local-isaac_cochran-verse_together-1");
+  assert.equal(env.CONVEX_DEPLOYMENT, "local:local-isaac_cochran-verse_together-1");
+  for (const name of ["CONVEX_DEPLOY_KEY", "CONVEX_DEPLOYMENT_TOKEN", "CONVEX_SELF_HOSTED_URL", "CONVEX_SELF_HOSTED_ADMIN_KEY"]) {
+    assert.equal(env[name], "");
+  }
+  assert.equal(convexEnv(null).CONVEX_DEPLOYMENT, "");
+});
+
+test("only local deployment names are accepted", () => {
+  assert.equal(localDeploymentName({ deploymentName: "local-isaac_cochran-verse_together-1" }), "local-isaac_cochran-verse_together-1");
+  assert.equal(localDeploymentName({ deploymentName: "fabulous-dogfish-606" }), null);
+  assert.equal(localDeploymentName({ deploymentName: "local-x\nCONVEX_DEPLOY_KEY=y" }), null);
+  assert.equal(localDeploymentName(null), null);
 });
 
 const sessionCookie = "better-auth.session_token=abc; Path=/; HttpOnly";

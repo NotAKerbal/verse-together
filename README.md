@@ -47,15 +47,19 @@ What it does (`scripts/dev.mjs`):
 - **Backend.** The first time, it creates a Convex local deployment in the `isaac-cochran/verse-together`
   project. It runs on this machine and keeps its data in `.convex/local/default`, which git ignores. Later runs
   reuse it, with the same data and account. The command writes `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`,
-  `NEXT_PUBLIC_CONVEX_SITE_URL` and `AUTH_PROXY_SECRET` to `.env.local` and leaves other lines alone. In the
+  `NEXT_PUBLIC_CONVEX_SITE_URL` and `AUTH_PROXY_SECRET` to `.env.local`, replacing any earlier lines for them,
+  and leaves other lines alone. In the
   main checkout this moves `.env.local` off the shared dev deployment, so keep a copy of the old file if you
   want to switch back.
 - **Ports and hostnames.** The main checkout is served at `http://verse-together.localhost:3100`. Each worktree
   gets the next free slot the first time and keeps it: `http://verse-together-<n>.localhost:<3100 + n>`, with its
-  backend on ports `3500 + 2n` and `3501 + 2n`. Slots are found from `git worktree list` and each worktree's
-  `.convex/local/default/config.json`. These ranges stay clear of other projects on this machine that use 3000
+  backend on ports `3500 + 2n` and `3501 + 2n`. Slots are reserved under a lock in
+  `~/.local/state/verse-together/` (outside the repository), so worktrees started at the same moment still get
+  different slots; a removed worktree's slot is reused. These ranges stay clear of other projects on this machine that use 3000
   and 3210 upwards. Each checkout has its own hostname because browsers share `localhost` cookies across ports,
   so two checkouts on plain `localhost` would sign each other out.
+- **Only the local backend.** Every Convex command it runs is pinned to the local deployment named in
+  `.convex/local/default`, whatever `.env.local`, `.env` or the shell say, so it cannot change a cloud deployment.
 - **Backend settings.** Sets `SITE_URL` to the checkout's URL, a generated `BETTER_AUTH_SECRET`, the same
   `AUTH_PROXY_SECRET` as `.env.local`, and `AUTH_EMAIL_PASSWORD_ENABLED=true`. Email and password sign-in is
   turned on only on these local backends; the shared dev and production deployments stay Google only. Google,

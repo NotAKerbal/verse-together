@@ -6,9 +6,11 @@ import {
   BACKEND_STATE,
   backendConfig,
   capture,
-  chooseSlot,
+  claimSlot,
+  convexEnv,
   envValue,
   isFree,
+  localDeploymentName,
   parseEnvList,
   parseWorktrees,
   portsFor,
@@ -16,7 +18,7 @@ import {
   root,
   run,
   siteUrlFor,
-  slotOf,
+  slotStateDir,
   start,
   stopGroups,
   step,
@@ -44,19 +46,10 @@ function canonical(checkout) {
 }
 
 async function chooseCheckoutSlot() {
-  const here = canonical(root);
-  const [main, ...worktrees] = parseWorktrees(capture("git", ["worktree", "list", "--porcelain"], { quiet: true })).map(canonical);
-  const slot = await chooseSlot({
-    ownSlot: slotOf(backendConfig(root)),
-    isMain: main === here,
-    claimedSlots: worktrees.filter((worktree) => worktree !== here).map((worktree) => slotOf(backendConfig(worktree))),
-    isFree,
-  });
-  return slot;
+  const worktrees = parseWorktrees(capture("git", ["worktree", "list", "--porcelain"], { quiet: true })).map(canonical);
+  const gitCommonDir = canonical(capture("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { quiet: true }));
+  return claimSlot({ here: canonical(root), worktrees, stateDir: slotStateDir(gitCommonDir), isFree });
 }
-
-const deployment = () => envValue(readEnvFile(envFile), "CONVEX_DEPLOYMENT") ?? "";
-const isConfigured = () => backendConfig(root) !== null && deployment().startsWith("local:");
 
 const children = [];
 let stopping = false;
@@ -90,37 +83,41 @@ async function main() {
   const backendSiteUrl = `http://127.0.0.1:${ports.site}`;
   const portArgs = ["--local-cloud-port", String(ports.cloud), "--local-site-port", String(ports.site)];
 
-  if (!isConfigured()) {
+  if (!localDeploymentName(backendConfig(root))) {
     if (!existsSync(path.join(homedir(), ".convex", "config.json"))) {
       throw new Error("Convex is not logged in on this machine. Run `npx convex login` once, then `npm run dev` again.");
     }
     step("Creating a local backend for this checkout");
-    run(convex, [
-      "dev", "--once", "--tail-logs", "disable", ...portArgs,
-      "--configure", "existing", "--team", CONVEX_TEAM, "--project", CONVEX_PROJECT, "--dev-deployment", "local",
-    ]);
+    run(
+      convex,
+      [
+        "dev", "--once", "--tail-logs", "disable", ...portArgs,
+        "--configure", "existing", "--team", CONVEX_TEAM, "--project", CONVEX_PROJECT, "--dev-deployment", "local",
+      ],
+      { env: convexEnv(null) }
+    );
   }
-  if (!deployment().startsWith("local:")) {
-    throw new Error(`.env.local names ${deployment() || "no deployment"}, not a local one. Refusing to change its settings.`);
-  }
+  const deploymentName = localDeploymentName(backendConfig(root));
+  if (!deploymentName) throw new Error(`No local backend was created in ${BACKEND_STATE}.`);
+  const pinned = { env: convexEnv(deploymentName) };
 
   const existingSecret = envValue(readEnvFile(envFile), "AUTH_PROXY_SECRET");
   const proxySecret = existingSecret && existingSecret.length >= MIN_PROXY_SECRET_LENGTH ? existingSecret : newSecret();
   const appEnv = { NEXT_PUBLIC_CONVEX_URL: backendUrl, NEXT_PUBLIC_CONVEX_SITE_URL: backendSiteUrl, AUTH_PROXY_SECRET: proxySecret };
-  writeEnvValues(envFile, appEnv);
+  writeEnvValues(envFile, { CONVEX_DEPLOYMENT: `local:${deploymentName}`, ...appEnv });
 
   step("Checking backend settings");
-  const current = parseEnvList(capture(convex, ["env", "list", "--include-values"], { quiet: true }));
+  const current = parseEnvList(capture(convex, ["env", "list", "--include-values"], { ...pinned, quiet: true }));
   const wanted = { SITE_URL: siteUrl, AUTH_PROXY_SECRET: proxySecret, AUTH_EMAIL_PASSWORD_ENABLED: "true" };
   if (!current.get("BETTER_AUTH_SECRET")) wanted.BETTER_AUTH_SECRET = newSecret();
   for (const [name, value] of Object.entries(wanted)) {
     if (current.get(name) === value) continue;
-    capture(convex, ["env", "set", name], { input: value, quiet: true });
+    capture(convex, ["env", "set", name], { ...pinned, input: value, quiet: true });
     console.log(`Set ${name}.`);
   }
 
   step("Starting the backend");
-  launch(convex, ["dev", ...portArgs]);
+  launch(convex, ["dev", ...portArgs], pinned);
   await waitFor(`${backendSiteUrl}/api/auth/ok`, 180);
 
   step("Checking the test account");
