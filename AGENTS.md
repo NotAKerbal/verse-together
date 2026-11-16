@@ -121,6 +121,14 @@ has. Planned work is listed in `FEATURE_IDEAS.md`, which dates from 2026-09-26 a
 - `master` is production. Vercel builds `master` as Production (see `scripts/vercel-build.mjs`).
 - Vercel skips pushes that change only `mobile/`, `native/`, `docs/` or root Markdown; see "Which commits deploy" in `docs/convex-deployment.md`.
 
+## Running locally
+
+- `npm run dev` gives each checkout (main or worktree) its own local Convex backend, port and hostname, then prints
+  the URL and a test account (`tester@versetogether.test` / `verse-local-tester`) to sign in with. Use it to check
+  signed-in features. `npm run dev -- --setup` prepares a worktree without starting the web app.
+- It never touches the shared dev or production deployments. Stop it with Ctrl-C before you finish. Details are in
+  README.md "Getting Started".
+
 ## Releases
 
 Verse Together has versions. **2.0.0** is the Marker redesign that replaced the whole interface (d65680e,

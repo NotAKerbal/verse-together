@@ -6,11 +6,12 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "portless run next dev --webpack",
+    "dev": "node scripts/dev.mjs",
     "dev:local": "next dev --webpack",
     "build": "next build --turbopack",
     "build:vercel": "node scripts/vercel-build.mjs",
     "test:deploy": "node --test scripts/vercel-build.test.mjs scripts/vercel-ignore.test.mjs",
+    "test:dev": "node --test scripts/local-dev.test.mjs",
     "check:android-app-links": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-android-app-links.mjs",
     "test:release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/release-version.test.mjs",
     "release:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.mjs check",
