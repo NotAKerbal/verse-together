@@ -139,8 +139,10 @@ reverts the change. What git can't show still needs a build: Vercel environment 
 backend writes from outside this pipeline (a manual `convex deploy`, `deploy:notes:development`),
 and a failed build's commit later dropped by a force push. For those, push an empty commit to the
 branch with `[force build]` in its message (`git commit --allow-empty -m "Rebuild dev [force build]"`).
-Vercel's documentation doesn't say whether a dashboard Redeploy runs the ignored-build step, and a
-redeploy of an older commit is refused by `vercel-build.mjs` anyway, so don't rely on Redeploy for this.
+Alternatively, redeploy the deployment of the branch's current head from the dashboard with **Use
+project's Ignore Build Step** unchecked in the Redeploy dialog
+([Vercel](https://vercel.com/docs/project-configuration/project-settings#ignore-build-step-on-redeploy)).
+Redeploying an older commit doesn't help: `vercel-build.mjs` refuses any commit that isn't the branch head.
 
 ## Failure and rollback
 
