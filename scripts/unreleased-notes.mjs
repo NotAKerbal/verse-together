@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -90,6 +90,25 @@ export function writeUnreleasedNotes(root = ROOT) {
   const json = `${JSON.stringify(items, null, 2)}\n`;
   if (!existsSync(out) || readFileSync(out, "utf8") !== json) writeFileSync(out, json);
   return items;
+}
+
+export function watchUnreleasedNotes(root = ROOT, report = console.error) {
+  const dir = path.join(root, UNRELEASED_DIR);
+  if (!existsSync(dir)) return null;
+  let pending;
+  const watcher = watch(dir, () => {
+    clearTimeout(pending);
+    pending = setTimeout(() => {
+      try {
+        writeUnreleasedNotes(root);
+      } catch (error) {
+        report(error.message);
+      }
+    }, 100);
+    pending.unref();
+  });
+  watcher.unref();
+  return watcher;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

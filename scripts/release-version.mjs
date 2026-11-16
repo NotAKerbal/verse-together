@@ -185,12 +185,10 @@ export async function collectRelease({ root = ROOT, version, title, date = today
   const result = { release, block, files, previous: RELEASES[0] };
   if (dryRun) return result;
 
-  writeFileSync(notesFile, source.replace(RELEASES_START, `${RELEASES_START}${block}`));
+  writeFileSync(notesFile, source.replace(RELEASES_START, () => `${RELEASES_START}${block}`));
   try {
     const { RELEASES: updated } = await import(`${pathToFileURL(notesFile).href}?collect=${Date.now()}`);
-    if (updated[0]?.version !== version || updated[0].items.length !== release.items.length) {
-      throw new Error(`its newest release isn't ${version}`);
-    }
+    if (JSON.stringify(updated[0]) !== JSON.stringify(release)) throw new Error(`its newest release isn't the collected ${version}`);
   } catch (error) {
     writeFileSync(notesFile, source);
     throw new Error(`src/lib/releaseNotes.ts was left as it was: it didn't load with ${version} added (${error.message}).`);

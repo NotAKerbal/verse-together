@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
-import { writeUnreleasedNotes } from "./scripts/unreleased-notes.mjs";
-
-writeUnreleasedNotes();
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
+import { watchUnreleasedNotes, writeUnreleasedNotes } from "./scripts/unreleased-notes.mjs";
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
@@ -9,4 +8,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  writeUnreleasedNotes();
+  if (phase === PHASE_DEVELOPMENT_SERVER) watchUnreleasedNotes();
+  return nextConfig;
+}

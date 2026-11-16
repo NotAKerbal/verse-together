@@ -14,7 +14,7 @@ import {
   loadReleaseNotes,
   nextVersion,
 } from "./release-version.mjs";
-import { GENERATED_FILE, readUnreleasedEntries, UNRELEASED_DIR, writeUnreleasedNotes } from "./unreleased-notes.mjs";
+import { GENERATED_FILE, readUnreleasedEntries, UNRELEASED_DIR, watchUnreleasedNotes, writeUnreleasedNotes } from "./unreleased-notes.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -256,4 +256,39 @@ test("collecting refuses a wrong version, a release already prepared, uncommitte
 
 test("the repository's unreleased entries are well formed", () => {
   assert.deepEqual(readUnreleasedEntries(REPO).problems, []);
+});
+
+test("collecting keeps entry text exactly, dollar signs included", async (t) => {
+  const text = "Math in $$ … $$, $& and $1 now render as written.";
+  const root = scratchRepo({ "math.json": { kind: "improved", text, commits: ["b6af8f80"] } });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { RELEASES } = await loadReleaseNotes(root);
+  await collectRelease({ root, version: nextVersion(RELEASES[0].version, "patch"), title: "Costs $$", date: "2026-11-20" });
+  const { RELEASES: after } = await import(`${pathToFileURL(path.join(root, "src/lib/releaseNotes.ts")).href}?dollars`);
+  assert.equal(after[0].items[0].text, text);
+  assert.equal(after[0].title, "Costs $$");
+});
+
+test("while watched, adding, changing and removing entries updates the generated notes", async (t) => {
+  const root = scratchRepo();
+  writeUnreleasedNotes(root);
+  const watcher = watchUnreleasedNotes(root, () => {});
+  t.after(() => {
+    watcher.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  const generated = () => JSON.parse(readFileSync(path.join(root, GENERATED_FILE), "utf8"));
+  const settle = async (expected) => {
+    for (let i = 0; i < 50 && JSON.stringify(generated()) !== JSON.stringify(expected); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.deepEqual(generated(), expected);
+  };
+  const file = path.join(root, UNRELEASED_DIR, "journal-prompts.json");
+  writeFileSync(file, JSON.stringify({ kind: "new", text: "Added." }));
+  await settle([{ kind: "new", text: "Added." }]);
+  writeFileSync(file, JSON.stringify({ kind: "improved", text: "Changed." }));
+  await settle([{ kind: "improved", text: "Changed." }]);
+  rmSync(file);
+  await settle([]);
 });
