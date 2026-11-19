@@ -31,6 +31,7 @@ import { loadChapter } from "@/lib/chapterClient";
 import { runIdleQueue } from "@/lib/chapterRequestCache";
 import { scheduleIdleTask } from "@/lib/idle";
 import { watchSelectionGesture } from "@/lib/selectionGesture";
+import { selectionAnchorRect } from "@/lib/selectionPopover";
 import { scriptureCatalog } from "@/lib/scriptureCatalog";
 import { normalizeScriptureVolume } from "@/lib/scriptureVolumes";
 import { useComparisonChapters } from "./useComparisonChapters";
@@ -138,18 +139,7 @@ function containsNode(container: HTMLElement, node: Node) {
 }
 
 function toAnchorRect(range: Range): VerseActionAnchorRect | null {
-  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
-  const fallbackRect = range.getBoundingClientRect();
-  const rect = rects[0] ?? (fallbackRect.width > 0 || fallbackRect.height > 0 ? fallbackRect : null);
-  if (!rect) return null;
-  return {
-    top: rect.top,
-    left: rect.left,
-    right: rect.right,
-    bottom: rect.bottom,
-    width: rect.width,
-    height: rect.height,
-  };
+  return selectionAnchorRect(range.getClientRects()) ?? selectionAnchorRect([range.getBoundingClientRect()]);
 }
 
 function buildSelectionStateFromRange(

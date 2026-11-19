@@ -2,6 +2,9 @@
 // Babel preset and resolve packages from this app's node_modules, as the Metro bundle does.
 const path = require("path");
 const expoPreset = require("jest-expo/jest-preset");
+const { writeUnreleasedNotes } = require("../scripts/unreleased-notes.mjs");
+
+writeUnreleasedNotes();
 
 // Better Auth and its helpers ship ES modules as .mjs, which the preset's Babel transform (for .js/.ts) skips.
 const babelTransform = expoPreset.transform["\\.[jt]sx?$"];

@@ -39,15 +39,24 @@ export type UnreleasedNotes = {
   items: ReleaseNoteItem[];
 };
 
-/** Changes waiting for the next dev-to-master release. Empty items when there are none. */
-export const UNRELEASED: UnreleasedNotes = {
-  title: "Upcoming changes",
-  items: [],
-};
+export const UNRELEASED_TITLE = "Upcoming changes";
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.26.1",
+    date: "2026-11-18",
+    title: "A selection menu clear of longer selections",
+    items: [
+      {
+        kind: "improved",
+        text: "When you select several lines of scripture, the selection menu now opens above or below the whole selection, instead of over its lower lines, when there is room.",
+      },
+    ],
+    commits: ["79118d55"],
+  },
+  {
     version: "2.26.0",
+    masterCommit: "82323468",
     date: "2026-11-09",
     title: "Fresh journal prompts and tidier word sources",
     items: [

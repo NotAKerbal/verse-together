@@ -1,4 +1,15 @@
 type Rect = { top: number; bottom: number; left: number; width: number };
+type ClientRect = { top: number; right: number; bottom: number; left: number; width: number; height: number };
+
+export function selectionAnchorRect(rects: Iterable<ClientRect>) {
+  const visible = Array.from(rects).filter((rect) => rect.width > 0 || rect.height > 0);
+  if (!visible.length) return null;
+  const top = Math.min(...visible.map((rect) => rect.top));
+  const bottom = Math.max(...visible.map((rect) => rect.bottom));
+  const left = Math.min(...visible.map((rect) => rect.left));
+  const right = Math.max(...visible.map((rect) => rect.right));
+  return { top, left, right, bottom, width: right - left, height: bottom - top };
+}
 
 /** Keep the selection card inside the reader's usable viewport, clear of navigation. */
 export function positionSelectionPopover(

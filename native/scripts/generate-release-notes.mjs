@@ -7,21 +7,21 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { noteItem, unreleasedItems } from "../../scripts/unreleased-notes.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT = path.join(ROOT, "native/assets/release-notes.json");
-const { RELEASES, UNRELEASED } = await import(pathToFileURL(path.join(ROOT, "src/lib/releaseNotes.ts")).href);
+const { RELEASES, UNRELEASED_TITLE } = await import(pathToFileURL(path.join(ROOT, "src/lib/releaseNotes.ts")).href);
 
 // Only what Settings shows: the commits behind each release are bookkeeping, never displayed.
-const item = ({ kind, text, screenshot }) => (screenshot ? { kind, text, screenshot } : { kind, text });
 const notes = {
-  unreleased: { title: UNRELEASED.title, items: UNRELEASED.items.map(item) },
+  unreleased: { title: UNRELEASED_TITLE, items: unreleasedItems(ROOT) },
   releases: RELEASES.map(({ version, date, since, title, items }) => ({
     version,
     date,
     ...(since ? { since } : {}),
     title,
-    items: items.map(item),
+    items: items.map(noteItem),
   })),
 };
 const json = `${JSON.stringify(notes, null, 2)}\n`;
@@ -30,7 +30,7 @@ if (process.argv.includes("--check")) {
     console.error("native/assets/release-notes.json is out of date: run node native/scripts/generate-release-notes.mjs");
     process.exit(1);
   }
-  console.log("native/assets/release-notes.json matches src/lib/releaseNotes.ts");
+  console.log("native/assets/release-notes.json matches src/lib/releaseNotes.ts and release-notes/unreleased");
 } else {
   writeFileSync(OUT, json);
   console.log(`Wrote ${notes.releases.length} releases to native/assets/release-notes.json`);

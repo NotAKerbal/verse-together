@@ -20,10 +20,7 @@
       "test": [
         [
           "npm",
-          "run",
-          "test:convex",
-          "--",
-          "--maxWorkers=2"
+          "test"
         ]
       ],
       "check": [
@@ -51,19 +48,11 @@
         [
           "npm",
           "run",
-          "test:convex",
-          "--",
-          "--maxWorkers=2"
+          "cfm:check"
         ],
         [
           "npm",
-          "run",
-          "test:deploy"
-        ],
-        [
-          "npm",
-          "run",
-          "test:release"
+          "test"
         ]
       ]
     }

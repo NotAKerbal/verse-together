@@ -221,3 +221,69 @@ test("Vercel uses the guarded build while local build stays frontend-only", () =
   assert.equal(pkg.scripts["build:vercel"], "node scripts/vercel-build.mjs");
   assert.equal(pkg.scripts.build, "next build --turbopack");
 });
+
+function previewEnvironment() {
+  return {
+    VERCEL: "1",
+    VERCEL_ENV: "preview",
+    VERCEL_PROJECT_ID: "prj_I55xbo17nxAMQHMBXSEjAxpNt97k",
+    VERCEL_ORG_ID: "team_5zEN6A1TNn3xXcfWMrHKpVAd",
+    VERSE_PREVIEW: "my-experiment",
+    CONVEX_DEPLOY_KEY: "preview:team:project|test-only-not-a-credential",
+    NEXT_PUBLIC_CONVEX_URL: "https://happy-otter-123.convex.cloud",
+    NEXT_PUBLIC_CONVEX_SITE_URL: "https://happy-otter-123.convex.site",
+  };
+}
+
+test("npm run preview builds only the frontend against its own backend", () => {
+  const env = previewEnvironment();
+  const { calls, execute } = harness(env);
+  execute();
+  assert.deepEqual(calls.map(c => c.step), ["frontend"]);
+  assert.equal(calls[0].env.CONVEX_DEPLOY_KEY, "");
+  assert.equal(calls[0].env.NEXT_PUBLIC_CONVEX_URL, env.NEXT_PUBLIC_CONVEX_URL);
+  assert.equal(calls[0].env.NEXT_PUBLIC_CONVEX_SITE_URL, env.NEXT_PUBLIC_CONVEX_SITE_URL);
+});
+
+const previewRefusals = [
+  ["VERCEL_ENV", "production", "only on Vercel Preview"],
+  ["VERCEL_PROJECT_ID", "another-project", "unexpected Vercel project"],
+  ["VERCEL_TARGET_ENV", "staging", "custom Vercel environments"],
+  ["VERSE_PREVIEW", "ab", "must be a preview name"],
+  ["VERSE_PREVIEW", "-leading-dash", "must be a preview name"],
+  ["VERSE_PREVIEW", "Upper-Case", "must be a preview name"],
+  ["VERCEL_GIT_COMMIT_REF", "dev", "without Git metadata"],
+  ["VERCEL_GIT_COMMIT_SHA", sha, "without Git metadata"],
+  ["CONVEX_AUTOMATIC_DEPLOYMENT", "dev:fabulous-dogfish-606", "CONVEX_AUTOMATIC_DEPLOYMENT must be unset"],
+  ["NEXT_PUBLIC_CONVEX_URL", "", "preview's own deployment"],
+  ["NEXT_PUBLIC_CONVEX_URL", "https://happy-otter-123.convex.cloud.evil.example", "preview's own deployment"],
+  ["NEXT_PUBLIC_CONVEX_SITE_URL", "https://other-otter-456.convex.site", "preview's own deployment"],
+];
+
+for (const [key, value, reason] of previewRefusals) {
+  test(`preview refuses ${key}=${value} before starting any process`, () => {
+    const { calls, execute } = harness({ ...previewEnvironment(), [key]: value });
+    assert.throws(execute, { message: new RegExp(reason) });
+    assert.deepEqual(calls, []);
+  });
+}
+
+for (const shared of ["fabulous-dogfish-606", "lovable-seal-140"]) {
+  test(`preview refuses the shared backend ${shared}`, () => {
+    const { calls, execute } = harness({
+      ...previewEnvironment(),
+      NEXT_PUBLIC_CONVEX_URL: `https://${shared}.convex.cloud`,
+      NEXT_PUBLIC_CONVEX_SITE_URL: `https://${shared}.convex.site`,
+    });
+    assert.throws(execute, /shared dev or production backend/);
+    assert.deepEqual(calls, []);
+  });
+}
+
+test("dev and master builds still refuse when the preview marker is inherited", () => {
+  for (const branch of ["dev", "master"]) {
+    const { calls, execute } = harness({ ...environment(branch), VERSE_PREVIEW: "my-experiment" });
+    assert.throws(execute, /only on Vercel Preview|without Git metadata/);
+    assert.deepEqual(calls, []);
+  }
+});

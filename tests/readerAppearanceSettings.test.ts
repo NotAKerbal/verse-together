@@ -32,7 +32,8 @@ import {
   loadPreferences,
   savePreferences,
 } from "../src/lib/preferences";
-import { CURRENT_VERSION, formatReleaseDate, RELEASES, UNRELEASED } from "../src/lib/releaseNotes";
+import { CURRENT_VERSION, formatReleaseDate, RELEASES } from "../src/lib/releaseNotes";
+import { UNRELEASED } from "../src/lib/unreleasedNotes";
 
 function memoryStorage() {
   const data = new Map<string, string>();
