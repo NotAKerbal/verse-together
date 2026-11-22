@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getVerseLessonResources, parseResourceSelection } from "./verseResources.ts";
-import { parseGuide, readGuide, readGuides } from "./cfmGuide.ts";
+import { guideRange, parseGuide, readGuide, readGuides } from "./cfmGuide.ts";
 import { resourcePassageFromLink } from "../../features/comeFollowMe/passagePreview.ts";
 
 const selection = (overrides = {}) => ({ volume: "oldtestament", book: "jeremiah", chapter: 1, verses: [5], ...overrides });
@@ -40,6 +40,30 @@ test("noncontiguous selections do not pull commentary from the gap", () => {
 test("unpublished chapters, skipped chapters, other volumes, and uncovered verses have no lesson matches", () => {
   for (const target of [selection({ chapter: 19 }), selection({ book: "genesis" }), selection({ volume: "newtestament", book: "john", chapter: 3, verses: [16] }), selection({ verses: [199] })]) {
     assert.deepEqual(getVerseLessonResources(target), []);
+  }
+});
+
+test("a lesson spanning two books offers resources for each book's own chapters", () => {
+  const lamentations = getVerseLessonResources(selection({ book: "lamentations", chapter: 3, verses: [22] }));
+  assert.deepEqual(lamentations.map((resource) => resource.reference), ["Lamentations 3:22–24"]);
+  assert.equal(lamentations[0].lessonTitle, "I Will Turn Their Mourning into Joy");
+  assert.match(lamentations[0].href, /^\/come-follow-me\/2026-10-26#lamentations-3-22-24-/);
+  assert.ok(lamentations[0].bodyHtml.length > 0);
+  assert.ok(getVerseLessonResources(selection({ book: "lamentations", chapter: 1, verses: [1] })).every((resource) => resource.reference.startsWith("Lamentations 1:")));
+  for (const chapter of [1, 3]) {
+    const jeremiah = getVerseLessonResources(selection({ chapter, verses: [1, 22] }));
+    assert.ok(jeremiah.length > 0);
+    assert.ok(jeremiah.every((resource) => resource.reference.startsWith(`Jeremiah ${chapter}:`)), `Jeremiah ${chapter}`);
+  }
+});
+
+test("every chapter a published lesson covers has resources", () => {
+  for (const guide of readGuides()) {
+    for (const entry of guideRange(guide.scripture).entries) {
+      const resources = getVerseLessonResources({ volume: entry.volume, book: entry.slug, chapter: entry.chapter, verses: Array.from({ length: 199 }, (_, index) => index + 1) });
+      assert.ok(resources.length > 0, `${guide.slug} ${entry.book} ${entry.chapter}`);
+      assert.ok(resources.every((resource) => resource.reference.startsWith(`${entry.book} ${entry.chapter}:`)), `${guide.slug} ${entry.book} ${entry.chapter}`);
+    }
   }
 });
 
