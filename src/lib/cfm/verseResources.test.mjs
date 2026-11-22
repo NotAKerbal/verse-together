@@ -49,7 +49,7 @@ test("a lesson spanning two books offers resources for each book's own chapters"
   assert.equal(lamentations[0].lessonTitle, "I Will Turn Their Mourning into Joy");
   assert.match(lamentations[0].href, /^\/come-follow-me\/2026-10-26#lamentations-3-22-24-/);
   assert.ok(lamentations[0].bodyHtml.length > 0);
-  assert.ok(getVerseLessonResources(selection({ book: "lamentations", chapter: 1, verses: [1] })).every((resource) => resource.reference.startsWith("Lamentations 1:")));
+  assert.deepEqual(getVerseLessonResources(selection({ book: "lamentations", chapter: 1, verses: [1] })).map((resource) => resource.reference), ["Lamentations 1:1–2"]);
   for (const chapter of [1, 3]) {
     const jeremiah = getVerseLessonResources(selection({ chapter, verses: [1, 22] }));
     assert.ok(jeremiah.length > 0);
