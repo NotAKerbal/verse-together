@@ -18,7 +18,7 @@ test("this week is the guide whose own dates include today, with earlier guides 
     assert.equal(overview.current.guide.slug, "2026-10-19-jeremiah-1-3-7-16-18-20");
     assert.equal(overview.current.href, "/come-follow-me/2026-10-19");
     assert.deepEqual(starts(overview.previous), ["2026-10-12", "2026-10-05", "2026-09-28"]);
-    assert.deepEqual(starts(overview.upcoming), ["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16"]);
+    assert.deepEqual(starts(overview.upcoming), ["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23"]);
   }
 });
 
@@ -36,7 +36,7 @@ test("a guide published for this week is featured with its own title and paintin
     assert.equal(current.cover.kind, "painting");
     assert.equal(current.cover.credit.sourceUrl, "https://commons.wikimedia.org/wiki/File:Rembrandt_-_Jeremiah_lamenting.jpg");
     assert.deepEqual(starts(overview.previous), ["2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
-    assert.deepEqual(starts(overview.upcoming), ["2026-11-02", "2026-11-09", "2026-11-16"]);
+    assert.deepEqual(starts(overview.upcoming), ["2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23"]);
   }
   // The guide does not change the week's mixed-book reading.
   assert.deepEqual(
@@ -61,7 +61,7 @@ test("the November 2 guide is featured for its own week, with the October 26 gui
     assert.equal(current.cover.credit.sourceUrl, "https://commons.wikimedia.org/wiki/File:Brooklyn_Museum_-_The_Good_Shepherd_(Le_bon_pasteur)_-_James_Tissot_-_overall.jpg");
     assert.deepEqual(current.cover, getLessonCover("2026-11-02"));
     assert.deepEqual(starts(overview.previous), ["2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
-    assert.deepEqual(starts(overview.upcoming), ["2026-11-09", "2026-11-16"]);
+    assert.deepEqual(starts(overview.upcoming), ["2026-11-09", "2026-11-16", "2026-11-23"]);
   }
   assert.deepEqual(
     weekReading(getLessonOverview("2026-11-04", guides).current.week).map((range) => `${range.book} ${range.from}-${range.to}`),
@@ -85,7 +85,7 @@ test("the November 9 guide is featured for its own week, with the November 2 gui
     assert.equal(current.cover.credit.sourceUrl, "https://commons.wikimedia.org/wiki/File:Daniel%27s_Answer_to_the_King,_by_Briton_Riviere,_GMIII_MCAG_1937_123-001.jpg");
     assert.deepEqual(current.cover, getLessonCover("2026-11-09"));
     assert.deepEqual(starts(overview.previous), ["2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
-    assert.deepEqual(starts(overview.upcoming), ["2026-11-16"]);
+    assert.deepEqual(starts(overview.upcoming), ["2026-11-16", "2026-11-23"]);
   }
   assert.deepEqual(
     weekReading(getLessonOverview("2026-11-11", guides).current.week).map((range) => `${range.book} ${range.from}-${range.to}`),
@@ -110,7 +110,7 @@ test("the November 16 guide is featured for its own week, with its olive-grove l
     assert.notEqual(current.cover.alt, FALLBACK_COVER.alt);
     assert.deepEqual(current.cover, getLessonCover("2026-11-16"));
     assert.deepEqual(starts(overview.previous), ["2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
-    assert.deepEqual(overview.upcoming, []);
+    assert.deepEqual(starts(overview.upcoming), ["2026-11-23"]);
   }
   assert.deepEqual(
     weekReading(getLessonOverview("2026-11-18", guides).current.week).map((range) => `${range.book} ${range.from}-${range.to}`),
@@ -118,20 +118,44 @@ test("the November 16 guide is featured for its own week, with its olive-grove l
   );
 });
 
+test("the November 23 guide is featured for its own week, with Lucas Gassel's Jonah print credited in full", () => {
+  for (const today of ["2026-11-23", "2026-11-26", "2026-11-29"]) {
+    const overview = getLessonOverview(today, guides);
+    const { current } = overview;
+    assert.equal(overview.schedule, "during");
+    assert.equal(current.start, "2026-11-23", today);
+    assert.equal(current.guide.slug, "2026-11-23-amos-obadiah-jonah");
+    assert.equal(current.title, "Seek the Lord, and Ye Shall Live");
+    assert.equal(current.dateLabel, "November 23–29, 2026");
+    assert.equal(current.href, "/come-follow-me/2026-11-23");
+    assert.notEqual(current.cover, FALLBACK_COVER);
+    assert.equal(current.cover.kind, "painting");
+    assert.equal(current.cover.src, "/cfm/covers/gassel-jonah-plate.webp");
+    assert.equal(current.cover.credit.sourceUrl, "https://commons.wikimedia.org/wiki/File:Landscape_with_a_Ship_and_Jonah_and_the_Whale_MET_DP875195.jpg");
+    assert.deepEqual(current.cover, getLessonCover("2026-11-23"));
+    assert.deepEqual(starts(overview.previous), ["2026-11-16", "2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
+    assert.deepEqual(overview.upcoming, []);
+  }
+  assert.deepEqual(
+    weekReading(getLessonOverview("2026-11-25", guides).current.week).map((range) => `${range.book} ${range.from}-${range.to}`),
+    ["amos 1-9", "obadiah 1-1", "jonah 1-4"]
+  );
+});
+
 test("a scheduled week without a guide is featured as its reading, never as the latest guide", () => {
-  const overview = getLessonOverview("2026-11-25", guides);
+  const overview = getLessonOverview("2026-12-02", guides);
   const { current } = overview;
-  assert.equal(current.start, "2026-11-23");
+  assert.equal(current.start, "2026-11-30");
   assert.equal(current.guide, null);
-  assert.equal(current.title, "Amos; Obadiah; Jonah");
-  assert.equal(current.dateLabel, "November 23–29, 2026");
-  assert.equal(current.href, "/come-follow-me/2026-11-23");
+  assert.equal(current.title, "Micah; Nahum; Habakkuk; Zephaniah");
+  assert.equal(current.dateLabel, "November 30–December 6, 2026");
+  assert.equal(current.href, "/come-follow-me/2026-11-30");
   assert.equal(current.cover, FALLBACK_COVER);
   assert.deepEqual(
     weekReading(current.week).map((range) => `${range.book} ${range.from}-${range.to}`),
-    ["amos 1-9", "obadiah 1-1", "jonah 1-4"]
+    ["micah 1-7", "nahum 1-3", "habakkuk 1-3", "zephaniah 1-3"]
   );
-  assert.deepEqual(starts(overview.previous), ["2026-11-16", "2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
+  assert.deepEqual(starts(overview.previous), ["2026-11-23", "2026-11-16", "2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
   assert.deepEqual(overview.upcoming, []);
 });
 
@@ -145,19 +169,19 @@ test("outside the schedule nothing is called this week", () => {
   const after = getLessonOverview("2027-02-01", guides);
   assert.equal(after.schedule, "after");
   assert.equal(after.current, null);
-  assert.deepEqual(starts(after.previous), ["2026-11-16", "2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
+  assert.deepEqual(starts(after.previous), ["2026-11-23", "2026-11-16", "2026-11-09", "2026-11-02", "2026-10-26", "2026-10-19", "2026-10-12", "2026-10-05", "2026-09-28"]);
 
   const before = getLessonOverview("2025-11-03", guides);
   assert.equal(before.schedule, "before");
   assert.equal(before.current, null);
   assert.deepEqual(before.previous, []);
-  assert.deepEqual(starts(before.upcoming), ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16"]);
+  assert.deepEqual(starts(before.upcoming), ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23"]);
 });
 
 test("a guide published ahead of its week is upcoming, not current", () => {
   const overview = getLessonOverview("2026-10-15", guides);
   assert.equal(overview.current.start, "2026-10-12");
-  assert.deepEqual(starts(overview.upcoming), ["2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16"]);
+  assert.deepEqual(starts(overview.upcoming), ["2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23"]);
   assert.deepEqual(starts(overview.previous), ["2026-10-05", "2026-09-28"]);
 });
 
@@ -220,6 +244,27 @@ test("the October 26 cover is Rembrandt's Jeremiah, a public-domain painting cre
   });
   assert.doesNotMatch(cover.alt, /\b(Jesus|Christ|Savior)\b/);
   const webp = fs.readFileSync(path.join(root, "public", cover.src));
+  assert.equal(webp.subarray(0, 4).toString("latin1"), "RIFF");
+  assert.equal(webp.subarray(8, 12).toString("latin1"), "WEBP");
+});
+
+test("the November 23 cover is Lucas Gassel's Jonah print from the Met, public domain and credited in full", () => {
+  const cover = getLessonCover("2026-11-23");
+  assert.equal(cover.kind, "painting");
+  assert.deepEqual([cover.src, cover.width, cover.height, cover.focus], ["/cfm/covers/gassel-jonah-plate.webp", 1600, 1207, "62% 95%"]);
+  assert.deepEqual(cover.credit, {
+    title: "Landscape with a Ship and Jonah and the Whale",
+    artist: "Lucas Gassel",
+    date: "ca. 1560–70",
+    collection: "The Metropolitan Museum of Art",
+    license: "Public domain (CC0)",
+    sourceLabel: "Wikimedia Commons",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Landscape_with_a_Ship_and_Jonah_and_the_Whale_MET_DP875195.jpg",
+  });
+  assert.equal(shortCoverCredit(cover), "Lucas Gassel, Landscape with a Ship and Jonah and the Whale");
+  assert.doesNotMatch(cover.alt, /\b(Jesus|Christ|Savior)\b/);
+  const webp = fs.readFileSync(path.join(root, "public", cover.src));
+  assert.equal(webp.length, 879726);
   assert.equal(webp.subarray(0, 4).toString("latin1"), "RIFF");
   assert.equal(webp.subarray(8, 12).toString("latin1"), "WEBP");
 });

@@ -41,7 +41,8 @@ const SOURCE_FILES = {
   "content/cfm/2026-11-02-ezekiel-1-3-33-34-36-37-47.md": ["da21527882a9cfc600caf3364c1b07242be74bcf10bc5ba3bea3581795146f1c", 123572],
   "content/cfm/2026-11-09-daniel-1-7.md": ["b3a718c323f32b53ebe0141dbc0bc694514d1087680986fe2d0bce52e3803c84", 164218],
   "content/cfm/2026-11-16-hosea-1-6-10-14-joel.md": ["5284a088f0fe3b6d404e7ebab849e60d4240f23968812cba516d5593bbaf5f0c", 171522],
-  "content/cfm/guides.json": ["5c267750ac2e4fd9d5b6367f3267c011834c7124fd98da0d72141fb195178725", 4668],
+  "content/cfm/2026-11-23-amos-obadiah-jonah.md": ["5bc5cce39bc1f459b23f3b30abba906ed4a09734f031d93cdd7fcc146f00270c", 153738],
+  "content/cfm/guides.json": ["94142749fc360e91f7c53dc747a3bafdfafc765551bd7663d76a37a76b988227", 5371],
   "public/cfm/art/bloch-gethsemane.webp": ["662fae8d460212a7463c5ac3a8eaedd9baef03fa6ef08604eeb4de00f19ce1a2", 71832],
   "public/cfm/art/tissot-good-shepherd.webp": ["c12267233200e7b1a19bc7712a231282d390f1ad1ef26d0e9a506eab802bf463", 49526],
 };
@@ -56,6 +57,7 @@ const mixed = parsed.get("2026-10-26-jeremiah-31-33-36-39-lamentations-1-3");
 const ezekiel = parsed.get("2026-11-02-ezekiel-1-3-33-34-36-37-47");
 const daniel = parsed.get("2026-11-09-daniel-1-7");
 const hosea = parsed.get("2026-11-16-hosea-1-6-10-14-joel");
+const amos = parsed.get("2026-11-23-amos-obadiah-jonah");
 
 test("scripture-first fragments retain every reader byte, anchor, source, and artwork in source order", () => {
   for (const guide of parsed.values()) {
@@ -190,7 +192,7 @@ test("every guide splits into introduction, reader, and closing sections, losing
   const closes = (html) => (html.match(/<\/section>/g) ?? []).length;
   const opens = (guide, chapter, item) =>
     `<section class="cfm-section" data-kind="chapter" data-chapter="${chapter}" aria-labelledby="${item.id}">`;
-  assert.equal(parsed.size, 8);
+  assert.equal(parsed.size, 9);
   for (const guide of parsed.values()) {
     const name = guide.title;
     const parts = { introduction: guide.introductionHtml, reader: guide.readerHtml, closing: guide.closingHtml };
@@ -1175,4 +1177,62 @@ test("the November 16 guide pairs Hosea 1–6, 10–14 and Joel 1–3, covering 
   for (const [anchor, key] of locals) assert.equal(parseRangeAnchor(anchor, entries)?.chapter, key, anchor);
   const joelKeys = new Set(locals.filter(([anchor]) => anchor.startsWith("scripture-joel-")).map(([, key]) => key));
   assert.deepEqual([...joelKeys].sort((a, b) => a - b), joel);
+});
+
+test("the November 23 guide pairs Amos 1–9, Obadiah 1 and Jonah 1–4, covering each of their 215 verses once", () => {
+  const bundle = oldTestament();
+  const { entries } = amos.range;
+  const obadiah = [rangeKey(1, 1)];
+  const jonah = [rangeKey(2, 1), rangeKey(2, 2), rangeKey(2, 3), rangeKey(2, 4)];
+  assert.equal(getComeFollowMeWeekByStart("2026-11-23").block, "Amos; Obadiah; Jonah");
+  assert.equal(guides.find((guide) => guide.slug === "2026-11-23-amos-obadiah-jonah").scripture, "Amos 1–9; Obadiah 1; Jonah 1–4");
+  const expected = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((chapter) => ["Amos", chapter]).concat([["Obadiah", 1]], [1, 2, 3, 4].map((chapter) => ["Jonah", chapter]));
+  assert.deepEqual(entries.map((entry) => [entry.book, entry.chapter]), expected);
+  assert.deepEqual(amos.range.chapters, [1, 2, 3, 4, 5, 6, 7, 8, 9, ...obadiah, ...jonah]);
+  assert.deepEqual(amos.readerSections.filter((section) => section.chapter != null).map((section) => section.chapter), amos.range.chapters);
+  for (const section of amos.readerSections) {
+    for (const block of section.blocks) {
+      if (block.passage) assert.equal(block.passage.chapter, section.chapter, block.id);
+    }
+  }
+  for (const entry of entries) {
+    const item = amos.toc.find((toc) => toc.kind === "chapter" && toc.book === entry.book && Number(toc.number) === entry.chapter);
+    assert.ok(item, `${entry.book} ${entry.chapter}`);
+    assert.equal(item.part, "reader", `${entry.book} ${entry.chapter}`);
+  }
+  const paired = Array.from(amos.html.matchAll(/<section class="cfm-section" data-kind="chapter" data-chapter="(\d+)"/g), (match) => Number(match[1]));
+  assert.deepEqual(paired, entries.map((entry) => entry.key));
+  assert.equal(amos.html, amos.introductionHtml + amos.readerHtml + amos.closingHtml);
+  for (const outside of [amos.introductionHtml, amos.closingHtml]) {
+    assert.ok(!/data-chapter="\d+" aria-labelledby/.test(outside));
+    assert.ok(!outside.includes("data-cfm-passage"));
+  }
+  assert.equal(amos.passages.length, 72);
+  const counts = entries.map((entry) => verseCount(bundle, entry.book, entry.chapter));
+  assert.deepEqual(counts, [15, 16, 15, 13, 27, 14, 17, 14, 15, 21, 17, 10, 10, 11]);
+  assert.equal(counts.reduce((sum, count) => sum + count, 0), 215);
+  const covered = new Map();
+  for (const passage of amos.passages) {
+    const index = entries.findIndex((entry) => entry.key === passage.chapter);
+    assert.ok(index >= 0, passage.id);
+    assert.ok(passage.first >= 1 && passage.last >= passage.first && passage.last <= counts[index], passage.id);
+    assert.ok(amos.readerHtml.includes(` id="${passage.id}"`), passage.id);
+    for (let verse = passage.firstHalf === "b" ? passage.first + 1 : passage.first; verse <= passage.last; verse += 1) {
+      const name = `${entries[index].slug} ${entries[index].chapter}:${verse}`;
+      covered.set(name, (covered.get(name) ?? 0) + 1);
+    }
+  }
+  entries.forEach((entry, index) => {
+    for (let verse = 1; verse <= counts[index]; verse += 1) {
+      assert.equal(covered.get(`${entry.slug} ${entry.chapter}:${verse}`), 1, `${entry.book} ${entry.chapter}:${verse}`);
+    }
+  });
+  assert.equal(covered.size, 215);
+  const locals = Array.from(amos.html.matchAll(/data-cfm-local href="#([^"]+)" data-chapter="(\d+)"/g), ([, anchor, key]) => [anchor, Number(key)]);
+  for (const [anchor, key] of locals) assert.equal(parseRangeAnchor(anchor, entries)?.chapter, key, anchor);
+  const jonahKeys = new Set(locals.filter(([anchor]) => anchor.startsWith("scripture-jonah-")).map(([, key]) => key));
+  for (const key of jonahKeys) assert.ok(jonah.includes(key), String(key));
+  const obadiahKeys = new Set(locals.filter(([anchor]) => anchor.startsWith("scripture-obadiah-")).map(([, key]) => key));
+  for (const key of obadiahKeys) assert.ok(obadiah.includes(key), String(key));
+  assert.ok(jonahKeys.size > 0 && locals.length > 0, `${locals.length} local links`);
 });

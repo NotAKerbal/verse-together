@@ -49,6 +49,23 @@ export const FALLBACK_COVER: GeneratedCover = {
 };
 
 const LESSON_COVERS: Readonly<Record<string, LessonCover>> = {
+  "2026-11-23": {
+    kind: "painting",
+    src: "/cfm/covers/gassel-jonah-plate.webp",
+    width: 1600,
+    height: 1207,
+    focus: "62% 95%",
+    alt: "An engraving of a ship in a stormy sea as sailors throw Jonah toward the open mouth of a great fish, with a second scene of the fish putting Jonah on the shore.",
+    credit: {
+      title: "Landscape with a Ship and Jonah and the Whale",
+      artist: "Lucas Gassel",
+      date: "ca. 1560–70",
+      collection: "The Metropolitan Museum of Art",
+      license: "Public domain (CC0)",
+      sourceLabel: "Wikimedia Commons",
+      sourceUrl: "https://commons.wikimedia.org/wiki/File:Landscape_with_a_Ship_and_Jonah_and_the_Whale_MET_DP875195.jpg",
+    },
+  },
   "2026-11-16": {
     kind: "generated",
     src: "/cfm/covers/scripture-landscape.webp",
