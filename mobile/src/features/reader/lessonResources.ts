@@ -4,7 +4,7 @@
 // published Markdown the site reads), so Resources works offline and nothing is fetched.
 //
 // A passage matches by its real book and chapter (the guide's range entries), so a lesson spanning two books
-// (Jeremiah and Lamentations) offers resources for both, where the web route matches the first book only.
+// (Jeremiah and Lamentations) offers resources for both.
 
 import { nativeGuides } from "../../cfm/guides";
 import type { Block, NativeGuide } from "../../cfm/guideTypes";

@@ -40,23 +40,25 @@ export function parseResourceSelection(params: URLSearchParams): ResourceSelecti
 
 /** Only published commentary that actually overlaps selected verses, with its own cited sources. */
 export function getVerseLessonResources(selection: ResourceSelection, root = process.cwd()): VerseLessonResource[] {
+  const volume = normalizeScriptureVolume(selection.volume);
   const resources: VerseLessonResource[] = [];
   for (const guide of readGuides(root)) {
-    const range = guideRange(guide.scripture);
-    if (
-      !range || range.volume !== normalizeScriptureVolume(selection.volume) || range.slug !== selection.book ||
-      !range.chapters.includes(selection.chapter)
-    ) continue;
+    const entries = (guideRange(guide.scripture)?.entries ?? []).filter(
+      (entry) => entry.volume === volume && entry.slug === selection.book && entry.chapter === selection.chapter
+    );
+    if (entries.length === 0) continue;
+    const chapters = new Map(entries.map((entry) => [entry.key, entry]));
     const parsed = readGuide(guide, root);
     const headings = new Map(parsed.toc.flatMap((item) => item.verses).map((verse) => [verse.id, verse.text]));
     const details = new Map(parsed.passageResources.map((resource) => [resource.passageId, resource]));
     for (const passage of parsed.passages) {
-      if (passage.chapter !== selection.chapter || !selection.verses.some((verse) => verse >= passage.first && verse <= passage.last)) continue;
+      const entry = chapters.get(passage.chapter);
+      if (!entry || !selection.verses.some((verse) => verse >= passage.first && verse <= passage.last)) continue;
       const detail = details.get(passage.id);
       resources.push({
         id: `${guide.slug}:${passage.id}`,
-        title: headings.get(passage.id) || `${range.book} ${passage.label}`,
-        reference: `${range.book} ${passage.label}`,
+        title: headings.get(passage.id) || `${entry.book} ${passage.label}`,
+        reference: `${entry.book} ${passage.label}`,
         lessonTitle: guide.title,
         dateLabel: guide.dateLabel,
         href: `/come-follow-me/${guide.startDate}#${passage.id}`,
