@@ -27,6 +27,28 @@ export type StrongsDataset = {
   entries: StrongsEntry[];
 };
 
+const isText = (value: unknown): value is string => typeof value === "string";
+
+function isStrongsEntry(value: unknown): value is StrongsEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    ["id", "lemma", "transliteration", "definition", "derivation", "kjv"].every((field) => isText(entry[field])) &&
+    (entry.pronunciation === null || isText(entry.pronunciation))
+  );
+}
+
+export function isStrongsDataset(value: unknown): value is StrongsDataset {
+  if (typeof value !== "object" || value === null) return false;
+  const dataset = value as Record<string, unknown>;
+  return (
+    ["source", "revision", "license", "notices"].every((field) => isText(dataset[field])) &&
+    Array.isArray(dataset.entries) &&
+    dataset.entries.length > 0 &&
+    dataset.entries.every(isStrongsEntry)
+  );
+}
+
 export type StrongsMatch = StrongsEntry & {
   /** Where the word was found: one of the King James renderings, or only the definition. */
   matchedIn: "kjv" | "definition";

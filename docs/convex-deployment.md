@@ -122,10 +122,9 @@ The script performs these steps, stopping on the first error:
 2. Check the checkout SHA against Vercel metadata and the current remote branch head.
 3. Authenticate with the scoped key and read `convex function-spec`; require the expected cloud URL.
 4. Build Next.js with the existing `--turbopack` options and public URLs, without Convex credentials.
-   Its type check (`tsconfig.build.json`) covers `src/` and `convex/`, so a type error stops the build here.
+   Its type check uses `tsconfig.build.json` (see [Build time](#build-time)).
 5. Recheck the branch head, rejecting a build superseded while Next.js was building.
-6. Run `convex deploy --yes --typecheck disable` with the scoped key and a branch/SHA audit message.
-   Step 4 already type-checked `convex/`; `npm run app -- web check` also runs `convex/tsconfig.json`.
+6. Run `convex deploy --yes --typecheck enable` with the scoped key and a branch/SHA audit message.
    Convex generates code, validates/bundles, and deploys schema/functions/indexes. No application
    data migration, environment mutation, seed function, snapshot import, or frontend promotion is invoked.
 7. Read the authenticated function spec again and require the same target. Return success to Vercel,
@@ -155,7 +154,7 @@ or folder, because the build reads far more than `src/`:
 | Reader | What it reads |
 | --- | --- |
 | Next.js | `src/`, `public/`, `next.config.ts`, `postcss.config.mjs`, `package.json`, `package-lock.json` (Vercel's install), `content/cfm/` (imported and traced into `/api/resources`), `convex/` (imported by `src/`, including `convex/_generated/`), `src/lib/generated/` |
-| Next.js type check | `tsconfig.build.json` (extends `tsconfig.json`): `src/`, `convex/`, `next.config.ts` and Next's generated types |
+| Next.js type check | `tsconfig.build.json`: every `**/*.ts` and `**/*.tsx` that `tsconfig.json` checks, except test files, so also `qa/`, the helpers in `tests/` and `vitest.config.ts`; both exclude `mobile`, `native` and `docs` |
 | Tailwind | Every file git doesn't ignore (`.gitignore`), except what `src/app/globals.css` excludes with `@source not`: the same `mobile`, `native`, `docs` and root `*.md` |
 | Convex deploy | `convex/` (with `convex/tsconfig.json`) and the `src/lib` and `src/features` files it imports |
 | Vercel | `vercel.json`, `scripts/vercel-build.mjs`, `scripts/vercel-ignore.mjs` |
@@ -193,8 +192,9 @@ Redeploying an older commit doesn't help: `vercel-build.mjs` refuses any commit 
 
 ## Build time
 
-Vercel bills build time as wall time on a 4-core machine. On 2026-11-22 a `master` build
-(`dpl_2EdN9D2MUcBCk7fjVotTYpifdToh`, 61 s from clone to cache upload) spent its time like this:
+On 2026-11-22 a `master` build (`dpl_2EdN9D2MUcBCk7fjVotTYpifdToh`, on Vercel's Standard 4-core build
+machine) took 61 s of elapsed time from clone to cache upload. Vercel reports build usage in build CPU
+minutes, which depend on the machine tier as well as the time. The time went like this:
 
 | Step | Seconds |
 | --- | --- |
@@ -206,19 +206,21 @@ Vercel bills build time as wall time on a 4-core machine. On 2026-11-22 a `maste
 | Vercel output and upload | 5.7 |
 | Build cache: create, then upload 182 MB | 9.6 |
 
-To cut the type checking without dropping any check:
+Two changes make the type checking cheaper without dropping a check:
 
-- `next build` checks `tsconfig.build.json`, which keeps the root options but covers only `src/`, `convex/`
-  and `next.config.ts`. Next.js ignores errors in `*.test.*` files anyway, so checking `tests/` and `qa/`
-  only cost time. `npm run app -- web check` still checks everything with `tsconfig.json`.
-- `convex deploy` runs with `--typecheck disable`: the Next.js check has already covered `convex/`, and the
-  web check runs `tsc --noEmit -p convex/tsconfig.json` for Convex's own settings.
+- `next build` checks `tsconfig.build.json`, which is `tsconfig.json` without test files (`*.test.*`,
+  `*.spec.*`, `__tests__`, `__mocks__`). Next.js discards type errors in those files, so checking them only
+  cost time. It still checks `qa/`, the helpers in `tests/` and `vitest.config.ts`.
+  `npm run app -- web check` checks everything, test files included, with `tsconfig.json`, and also runs
+  `convex/tsconfig.json`. `convex deploy` keeps its own type check: it uses Convex's settings (`ES2021`
+  library) against freshly generated bindings, which the Next.js check doesn't cover.
 - `src/lib/generated/strongsHebrew.d.json.ts` and `strongsGreek.d.json.ts` give the two 4 MB Strong's files
   a declared type (`allowArbitraryExtensions`), so TypeScript no longer infers a type from every entry.
+  `isStrongsDataset` checks the real shape instead: the server refuses malformed data when it loads, and
+  `tests/strongsLexicon.test.ts` checks both files.
 
-On a local machine pinned to 4 cores, these changes took `next build`'s type check from about 41 s to 29 s
-and a type check of `convex/` alone took 13 s. Most of the cache is `node_modules` (`next` alone is 380 MB
-unpacked); keep it, since a clean `npm ci` takes about 30 s.
+Most of the cache is `node_modules` (`next` alone is 380 MB unpacked); keep it, since a clean `npm ci` takes
+about 30 s.
 
 ## Failure and rollback
 

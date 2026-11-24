@@ -15,7 +15,7 @@ Regenerate the checked-in files with Node 24 or later:
 node scripts/generateStrongsLexicons.mjs
 ```
 
-The generator writes only the JSON. `strongsHebrew.d.json.ts` and `strongsGreek.d.json.ts` beside it declare each file as a `StrongsDataset`, so TypeScript doesn't infer a type from all 4 MB; keep them if the files are regenerated.
+The generator writes only the JSON. `strongsHebrew.d.json.ts` and `strongsGreek.d.json.ts` beside it declare each file as a `StrongsDataset`, so TypeScript doesn't infer a type from all 4 MB; keep them if the files are regenerated. `isStrongsDataset` in `src/lib/strongsLexicon.ts` checks the actual shape when the server loads a file, and `tests/strongsLexicon.test.ts` checks both files.
 
 For an offline regeneration, save the two original files in a directory and pass `--from-dir DIR`. Their filenames must be `strongs-hebrew-dictionary.js` and `strongs-greek-dictionary.js`.
 

@@ -2,10 +2,8 @@
   "extends": "./tsconfig.json",
   "include": [
     "next-env.d.ts",
-    "next.config.ts",
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "convex/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
@@ -13,6 +11,12 @@
     "node_modules",
     "mobile",
     "native",
-    "docs"
+    "docs",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/test.*",
+    "**/spec.*",
+    "**/__tests__/**",
+    "**/__mocks__/**"
   ]
 }

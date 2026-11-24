@@ -177,7 +177,7 @@ export function build({ env = process.env, run = runProcess, log = console.log }
   buildFrontend();
   verifyRevision(); // A newer push during the build must not deploy this backend.
   log(`Deploying Convex ${target.ref} from ${sha}.`);
-  run(process.execPath, [cli, "deploy", "--yes", "--typecheck", "disable", "--message", `Vercel ${branch} ${sha}`], { env: convexEnv });
+  run(process.execPath, [cli, "deploy", "--yes", "--typecheck", "enable", "--message", `Vercel ${branch} ${sha}`], { env: convexEnv });
   verifyTarget();
   log(`Verified backend ${target.ref}; Vercel may now publish this frontend.`);
 }

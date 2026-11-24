@@ -52,7 +52,7 @@ for (const branch of ["dev", "master"]) {
     const deploy = calls.find(c => c.step === "deploy");
     assert.equal(deploy.env.CONVEX_DEPLOY_KEY, env.CONVEX_DEPLOY_KEY);
     assert.equal(deploy.env.CONVEX_DEPLOYMENT, env.CONVEX_AUTOMATIC_DEPLOYMENT);
-    assert.equal(deploy.args[deploy.args.indexOf("--typecheck") + 1], "disable");
+    assert.equal(deploy.args[deploy.args.indexOf("--typecheck") + 1], "enable");
     assert.ok(deploy.args.includes(`Vercel ${branch} ${sha}`));
     for (const call of calls) {
       assert.ok(!call.args.some(a => a.includes(env.CONVEX_DEPLOY_KEY)));
@@ -287,14 +287,18 @@ test("dev and master builds still refuse when the preview marker is inherited", 
   }
 });
 
-test("the Next.js build type-checks src/ and convex/, since the Convex deploy skips its own check", () => {
+test("the Next.js build type-checks everything tsconfig.json does except test files", () => {
+  const rootConfig = JSON.parse(readFileSync(new URL("../tsconfig.json", import.meta.url), "utf8"));
   const buildConfig = JSON.parse(readFileSync(new URL("../tsconfig.build.json", import.meta.url), "utf8"));
   const nextConfig = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
   const apps = JSON.parse(readFileSync(new URL("../apps.json", import.meta.url), "utf8"));
   assert.match(nextConfig, /tsconfigPath: "tsconfig\.build\.json"/);
   assert.equal(buildConfig.extends, "./tsconfig.json");
-  for (const pattern of ["src/**/*.ts", "src/**/*.tsx", "convex/**/*.ts", ".next/types/**/*.ts"]) {
-    assert.ok(buildConfig.include.includes(pattern), `the build must type-check ${pattern}`);
+  assert.deepEqual(buildConfig.include, rootConfig.include);
+  assert.deepEqual(buildConfig.exclude.slice(0, rootConfig.exclude.length), rootConfig.exclude);
+  for (const pattern of buildConfig.exclude.slice(rootConfig.exclude.length)) {
+    assert.match(pattern, /^\*\*\/(\*\.)?(test|spec)\.\*$|^\*\*\/__(tests|mocks)__\/\*\*$/);
   }
+  assert.ok(apps.web.commands.check.some(command => command.join(" ").endsWith("tsc --noEmit")));
   assert.ok(apps.web.commands.check.some(command => command.join(" ").endsWith("tsc --noEmit -p convex/tsconfig.json")));
 });
