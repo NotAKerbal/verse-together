@@ -8,8 +8,14 @@ in `scripts/vercel-build.mjs` couples the backend and frontend from the same Git
 | --- | --- | --- | --- |
 | `dev` | Preview, **branch `dev` only** | `dev:fabulous-dogfish-606` | `dev:fabulous-dogfish-606` |
 | `master` | Production | `prod:lovable-seal-140` | `prod:lovable-seal-140` |
-| Any feature branch | Preview | No backend push | Must be unset |
+| Any feature branch | None: `vercel.json` turns its Git deployments off | No backend push | Must be unset |
 | None (`npm run preview`) | Preview | Its own preview backend, pushed beforehand by the CLI | Must be unset |
+
+`git.deploymentEnabled` in `vercel.json` lets only `dev` and `master` deploy from Git. On 2026-11-24 the
+Vercel project also had **preview deployments disabled** (`previewDeploymentsDisabled: true` in
+`GET /v9/projects/scriptures-sharing`, a dashboard setting), so pushes to `dev` currently create no deployment
+and don't update `fabulous-dogfish-606`; only `master` builds from Git. Whether that setting also blocks
+`npm run preview`'s CLI deployments has not been checked.
 
 This is prepared automation, **not an activated deployment**. No Vercel settings, credentials,
 aliases, Convex configuration, or production backend were changed while implementing it. Once
@@ -55,7 +61,6 @@ before merging this change into that branch. Do not merge to `master` as a way t
    `Verified ... -> dev:fabulous-dogfish-606`, frontend success, Convex success, and final target
    verification before Vercel reports Ready. Smoke-test signed-out and signed-in journal/goal
    reads and writes through `https://scripture-sharing-dev.vercel.app`, including Google sign-in.
-   A feature PR preview proves only the frontend path; it does not prove authenticated deployment.
    To test a branch with a working backend and sign-in, use `npm run preview` (see below).
 6. **Production is a separate activation/release decision.** After a successful dev rehearsal and
    review of production auth/configuration and backend compatibility, create a different key
@@ -117,8 +122,10 @@ The script performs these steps, stopping on the first error:
 2. Check the checkout SHA against Vercel metadata and the current remote branch head.
 3. Authenticate with the scoped key and read `convex function-spec`; require the expected cloud URL.
 4. Build Next.js with the existing `--turbopack` options and public URLs, without Convex credentials.
+   Its type check (`tsconfig.build.json`) covers `src/` and `convex/`, so a type error stops the build here.
 5. Recheck the branch head, rejecting a build superseded while Next.js was building.
-6. Run `convex deploy --yes --typecheck enable` with the scoped key and a branch/SHA audit message.
+6. Run `convex deploy --yes --typecheck disable` with the scoped key and a branch/SHA audit message.
+   Step 4 already type-checked `convex/`; `npm run app -- web check` also runs `convex/tsconfig.json`.
    Convex generates code, validates/bundles, and deploys schema/functions/indexes. No application
    data migration, environment mutation, seed function, snapshot import, or frontend promotion is invoked.
 7. Read the authenticated function spec again and require the same target. Return success to Vercel,
@@ -148,7 +155,7 @@ or folder, because the build reads far more than `src/`:
 | Reader | What it reads |
 | --- | --- |
 | Next.js | `src/`, `public/`, `next.config.ts`, `postcss.config.mjs`, `package.json`, `package-lock.json` (Vercel's install), `content/cfm/` (imported and traced into `/api/resources`), `convex/` (imported by `src/`, including `convex/_generated/`), `src/lib/generated/` |
-| Next.js type check | Every `**/*.ts` and `**/*.tsx` in `tsconfig.json`'s `include`, so also `tests/`, `qa/`, `vitest.config.ts`; `tsconfig.json` excludes `mobile`, `native` and `docs` |
+| Next.js type check | `tsconfig.build.json` (extends `tsconfig.json`): `src/`, `convex/`, `next.config.ts` and Next's generated types |
 | Tailwind | Every file git doesn't ignore (`.gitignore`), except what `src/app/globals.css` excludes with `@source not`: the same `mobile`, `native`, `docs` and root `*.md` |
 | Convex deploy | `convex/` (with `convex/tsconfig.json`) and the `src/lib` and `src/features` files it imports |
 | Vercel | `vercel.json`, `scripts/vercel-build.mjs`, `scripts/vercel-ignore.mjs` |
@@ -166,7 +173,7 @@ Anything the script can't tell builds:
 - a pushed commit whose message contains `[force build]`;
 - either commit missing from Vercel's shallow clone, or a commit in between whose parents are cut off;
 - a pushed commit that doesn't descend from the last deployed one (a rewritten branch);
-- any git failure.
+- any git failure, or any other error in the check: the command exits only 0 (skip) or 1 (build).
 
 **Dev and master stay in step.** On `dev` and `master`, a successful deployment means
 `vercel-build.mjs` built the frontend, deployed Convex and verified it, all from one commit, before
@@ -183,6 +190,35 @@ Alternatively, redeploy the deployment of the branch's current head from the das
 project's Ignore Build Step** unchecked in the Redeploy dialog
 ([Vercel](https://vercel.com/docs/project-configuration/project-settings#ignore-build-step-on-redeploy)).
 Redeploying an older commit doesn't help: `vercel-build.mjs` refuses any commit that isn't the branch head.
+
+## Build time
+
+Vercel bills build time as wall time on a 4-core machine. On 2026-11-22 a `master` build
+(`dpl_2EdN9D2MUcBCk7fjVotTYpifdToh`, 61 s from clone to cache upload) spent its time like this:
+
+| Step | Seconds |
+| --- | --- |
+| Clone, restore cache, ignored-build step | 2.8 |
+| `npm install` from the restored cache | 1.0 |
+| Revision and Convex target checks | 3.1 |
+| `next build` (about 8 s compiling, most of the rest type-checking) | 28.7 |
+| `convex deploy`, including its own type check, and the final check | 9.5 |
+| Vercel output and upload | 5.7 |
+| Build cache: create, then upload 182 MB | 9.6 |
+
+To cut the type checking without dropping any check:
+
+- `next build` checks `tsconfig.build.json`, which keeps the root options but covers only `src/`, `convex/`
+  and `next.config.ts`. Next.js ignores errors in `*.test.*` files anyway, so checking `tests/` and `qa/`
+  only cost time. `npm run app -- web check` still checks everything with `tsconfig.json`.
+- `convex deploy` runs with `--typecheck disable`: the Next.js check has already covered `convex/`, and the
+  web check runs `tsc --noEmit -p convex/tsconfig.json` for Convex's own settings.
+- `src/lib/generated/strongsHebrew.d.json.ts` and `strongsGreek.d.json.ts` give the two 4 MB Strong's files
+  a declared type (`allowArbitraryExtensions`), so TypeScript no longer infers a type from every entry.
+
+On a local machine pinned to 4 cores, these changes took `next build`'s type check from about 41 s to 29 s
+and a type check of `convex/` alone took 13 s. Most of the cache is `node_modules` (`next` alone is 380 MB
+unpacked); keep it, since a clean `npm ci` takes about 30 s.
 
 ## Failure and rollback
 

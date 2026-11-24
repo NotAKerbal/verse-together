@@ -86,7 +86,7 @@ Both dev scripts run the webpack dev server on purpose. With Next 16.1 and Tailw
 Vercel builds use the guarded Convex/frontend workflow in
 [docs/convex-deployment.md](docs/convex-deployment.md). Configure the branch-scoped dev and separate
 production credentials/activation settings before merging it to their release branches; missing settings
-fail those builds. Feature previews and local `npm run build` do not push Convex.
+fail those builds. Feature branches don't deploy from Git, and local `npm run build` does not push Convex.
 
 ## Previews
 

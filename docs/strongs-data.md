@@ -15,6 +15,8 @@ Regenerate the checked-in files with Node 24 or later:
 node scripts/generateStrongsLexicons.mjs
 ```
 
+The generator writes only the JSON. `strongsHebrew.d.json.ts` and `strongsGreek.d.json.ts` beside it declare each file as a `StrongsDataset`, so TypeScript doesn't infer a type from all 4 MB; keep them if the files are regenerated.
+
 For an offline regeneration, save the two original files in a directory and pass `--from-dir DIR`. Their filenames must be `strongs-hebrew-dictionary.js` and `strongs-greek-dictionary.js`.
 
 The datasets are for English-term lexical exploration. An English match does not establish which Hebrew or Greek word appears in a particular verse. Verse-level alignment requires an interlinear or another passage-specific source.

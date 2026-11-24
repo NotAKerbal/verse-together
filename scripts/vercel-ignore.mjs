@@ -23,7 +23,8 @@ export function decide({ env = process.env, cwd = root } = {}) {
     if (git("cat-file", "-e", `${sha}^{commit}`).status !== 0) return build(`${short(sha)} is not in Vercel's clone`);
   }
   const message = git("log", "-1", "--format=%B", current);
-  if (message.status !== 0 || message.stdout.includes(forceBuildMarker)) return build(`${short(current)} asks for a build with ${forceBuildMarker}`);
+  if (message.status !== 0) return build(`git could not read the message of ${short(current)}`);
+  if (message.stdout.includes(forceBuildMarker)) return build(`${short(current)} asks for a build with ${forceBuildMarker}`);
   if (git("merge-base", "--is-ancestor", previous, current).status !== 0) {
     return build(`${short(current)} does not descend from the last deployed commit, ${short(previous)}`);
   }
@@ -46,8 +47,18 @@ export function decide({ env = process.env, cwd = root } = {}) {
   return { build: false, reason: `nothing the web app or Convex backend is built from changed since ${short(previous)}` };
 }
 
+export function exitCode({ choose = decide, log = console.log } = {}) {
+  let decision;
+  try {
+    decision = choose();
+  } catch (error) {
+    decision = { build: true, reason: `the check failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const skip = decision?.build === false;
+  log(`${skip ? "Skipping" : "Building"}: ${decision?.reason ?? "the check returned no decision"}`);
+  return skip ? 0 : 1;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { build, reason } = decide();
-  console.log(`${build ? "Building" : "Skipping"}: ${reason}`);
-  process.exitCode = build ? 1 : 0;
+  process.exitCode = exitCode();
 }

@@ -3,6 +3,9 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { watchUnreleasedNotes, writeUnreleasedNotes } from "./scripts/unreleased-notes.mjs";
 
 const nextConfig: NextConfig = {
+  typescript: {
+    tsconfigPath: "tsconfig.build.json",
+  },
   outputFileTracingIncludes: {
     "/api/resources": ["./content/cfm/**/*"],
   },

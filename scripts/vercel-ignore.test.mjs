@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
-import { decide, notBuiltFrom } from "./vercel-ignore.mjs";
+import { decide, exitCode, notBuiltFrom } from "./vercel-ignore.mjs";
 
 const directories = [];
 after(() => {
@@ -221,12 +221,28 @@ test("the command exits 0 to skip and 1 to build, as Vercel expects", () => {
   assert.equal(nonGit.stdout, "Building: not a Git deployment\n");
 });
 
+test("a check that throws or returns nothing builds, so the command exits only 0 or 1", () => {
+  const lines = [];
+  const log = line => lines.push(line);
+  assert.equal(exitCode({ choose: () => { throw new Error("git is missing"); }, log }), 1);
+  assert.equal(exitCode({ choose: () => undefined, log }), 1);
+  assert.equal(exitCode({ choose: () => ({ build: "no", reason: "odd" }), log }), 1);
+  assert.equal(exitCode({ choose: () => ({ build: false, reason: "nothing changed" }), log }), 0);
+  assert.deepEqual(lines, [
+    "Building: the check failed: git is missing",
+    "Building: the check returned no decision",
+    "Building: odd",
+    "Skipping: nothing changed",
+  ]);
+});
+
 test("Vercel runs the ignored-build step, and the web build reads nothing it ignores", () => {
   const config = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const tsconfig = JSON.parse(readFileSync(new URL("../tsconfig.json", import.meta.url), "utf8"));
   const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
   assert.equal(config.ignoreCommand, "node scripts/vercel-ignore.mjs");
+  assert.deepEqual(config.git.deploymentEnabled, { "**": false, dev: true, master: true });
   assert.match(pkg.scripts["test:deploy"], /scripts\/vercel-ignore\.test\.mjs/);
   for (const pattern of notBuiltFrom) {
     assert.ok(css.includes(`@source not "../../${pattern}";`), `Tailwind must not scan ${pattern}`);
