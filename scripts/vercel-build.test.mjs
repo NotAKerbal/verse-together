@@ -290,12 +290,24 @@ test("dev and master builds still refuse when the preview marker is inherited", 
 });
 
 const nextDiscardsDiagnostics = /[\\/]__(?:tests|mocks)__[\\/]|(?<=[\\/.])(?:spec|test)\.[^\\/]+$/;
+const testFileName = /^(?:.*\.)?(?:test|spec)\.tsx?$/;
 
 function typeScriptInputs(directory, config) {
   const require = createRequire(import.meta.url);
   const ts = require("typescript");
   const parsed = ts.parseJsonConfigFileContent({ include: config.include, exclude: config.exclude, compilerOptions: { allowJs: false } }, ts.sys, directory);
   return parsed.fileNames.map(file => path.relative(directory, file)).sort();
+}
+
+function compareInputs(directory, rootConfig, buildConfig) {
+  const root = typeScriptInputs(directory, rootConfig);
+  const build = typeScriptInputs(directory, buildConfig);
+  return {
+    build,
+    added: build.filter(file => !root.includes(file)),
+    removedButReported: root.filter(file => !build.includes(file) && !nextDiscardsDiagnostics.test(`/${file}`)),
+    directoriesNamedLikeTests: [...new Set(root.flatMap(file => path.dirname(file).split(path.sep).filter(part => testFileName.test(part))))],
+  };
 }
 
 test("the Next.js build type-checks every file tsconfig.json does except those whose errors Next.js discards", () => {
@@ -308,22 +320,33 @@ test("the Next.js build type-checks every file tsconfig.json does except those w
   assert.equal(buildConfig.extends, "./tsconfig.json");
   assert.deepEqual(buildConfig.include, rootConfig.include);
 
+  const repository = compareInputs(rootDirectory, rootConfig, buildConfig);
+  assert.deepEqual(repository.added, []);
+  assert.deepEqual(repository.removedButReported, []);
+  assert.deepEqual(repository.directoriesNamedLikeTests, [], "tsconfig.build.json excludes test-file names, which would also hide a directory with such a name; rename it");
+
   const fixture = mkdtempSync(path.join(tmpdir(), "verse-build-tsconfig-"));
   try {
     for (const file of [
       "src/page.tsx", "src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx",
-      "src/__tests__/helper.ts", "src/__mocks__/module.ts", "src/latest.ts", "src/contest.tsx",
+      "src/__tests__/helper.ts", "src/__mocks__/module.ts", "src/latest.ts", "src/contest.tsx", "src/types.test.d.ts",
       "tests/harness.ts", "tests/case.test.ts", "foo.test.data/helper.ts", "test.data/helper.ts",
       "spec.fixtures/helper.tsx", "qa/main.tsx", "vitest.config.ts", "mobile/app.tsx", "docs/example.ts",
+      "src/foo.test.ts/helper.ts", "src/spec.tsx/helper.ts",
     ]) {
       mkdirSync(path.join(fixture, path.dirname(file)), { recursive: true });
       writeFileSync(path.join(fixture, file), "export {};\n");
     }
-    for (const directory of [fixture, rootDirectory]) {
-      const expected = typeScriptInputs(directory, rootConfig).filter(file => !nextDiscardsDiagnostics.test(`/${file}`));
-      assert.deepEqual(typeScriptInputs(directory, buildConfig), expected, directory);
+    const result = compareInputs(fixture, rootConfig, buildConfig);
+    assert.deepEqual(result.added, []);
+    for (const file of ["src/page.tsx", "src/latest.ts", "src/contest.tsx", "tests/harness.ts", "foo.test.data/helper.ts", "test.data/helper.ts", "spec.fixtures/helper.tsx", "qa/main.tsx", "vitest.config.ts", "src/types.test.d.ts"]) {
+      assert.ok(result.build.includes(file), file);
     }
-    assert.ok(typeScriptInputs(fixture, buildConfig).includes("foo.test.data/helper.ts"));
+    for (const file of ["src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx", "src/__tests__/helper.ts", "src/__mocks__/module.ts", "tests/case.test.ts"]) {
+      assert.ok(!result.build.includes(file), file);
+    }
+    assert.deepEqual(result.removedButReported, ["src/foo.test.ts/helper.ts", "src/spec.tsx/helper.ts"]);
+    assert.deepEqual(result.directoriesNamedLikeTests.sort(), ["foo.test.ts", "spec.tsx"]);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
