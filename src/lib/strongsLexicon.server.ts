@@ -2,7 +2,6 @@
 
 import {
   STRONGS_TITLES,
-  isStrongsDataset,
   prepareStrongsEntries,
   searchStrongsEntries,
   type StrongsDataset,
@@ -18,9 +17,8 @@ function loadDataset(language: StrongsLanguage): Promise<Loaded> {
   let request = loaded.get(language);
   if (!request) {
     const load = language === "hebrew" ? import("./generated/strongsHebrew.json") : import("./generated/strongsGreek.json");
-    request = load.then((module): Loaded => {
-      const dataset: unknown = module.default;
-      if (!isStrongsDataset(dataset)) throw new Error(`The bundled Strong's ${language} data is malformed; regenerate it.`);
+    request = load.then((module) => {
+      const dataset = module.default as StrongsDataset;
       return { dataset, prepared: prepareStrongsEntries(dataset.entries) };
     });
     request.catch(() => loaded.delete(language));

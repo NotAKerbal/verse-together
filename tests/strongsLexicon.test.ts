@@ -1,30 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { lookupStrongs } from "../src/lib/strongsLexicon.server";
-import { readFileSync } from "node:fs";
-import { isStrongsDataset, prepareStrongsEntries, scriptRuns, searchStrongsEntries, type StrongsEntry } from "../src/lib/strongsLexicon";
+import { prepareStrongsEntries, scriptRuns, searchStrongsEntries, type StrongsEntry } from "../src/lib/strongsLexicon";
 
 const ids = (matches: { id: string }[]) => matches.map((match) => match.id);
 
 function entry(id: string, kjv: string, definition = ""): StrongsEntry {
   return { id, lemma: "", transliteration: "", pronunciation: null, definition, derivation: "", kjv };
 }
-
-describe("the bundled Strong's files match their declared StrongsDataset type", () => {
-  test.each(["strongsHebrew", "strongsGreek"])("%s.json", (name) => {
-    const dataset: unknown = JSON.parse(readFileSync(new URL(`../src/lib/generated/${name}.json`, import.meta.url), "utf8"));
-    expect(isStrongsDataset(dataset)).toBe(true);
-  });
-
-  test("rejects a malformed dataset or entry", () => {
-    const valid = { source: "s", revision: "r", license: "l", notices: "n", entries: [entry("H1", "father")] };
-    expect(isStrongsDataset(valid)).toBe(true);
-    expect(isStrongsDataset({ ...valid, entries: "corrupt" })).toBe(false);
-    expect(isStrongsDataset({ ...valid, entries: [] })).toBe(false);
-    expect(isStrongsDataset({ ...valid, license: undefined })).toBe(false);
-    expect(isStrongsDataset({ ...valid, entries: [{ ...entry("H1", "father"), kjv: 1 }] })).toBe(false);
-    expect(isStrongsDataset({ ...valid, entries: [{ ...entry("H1", "father"), pronunciation: undefined }] })).toBe(false);
-  });
-});
 
 describe("Strong's entries for an English word, from the bundled OpenScriptures data", () => {
   test("finds πίστις and אֱמוּנָה for faith", async () => {

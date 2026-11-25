@@ -57,9 +57,10 @@ before merging this change into that branch. Do not merge to `master` as a way t
    the exact key type/target and verifies the authenticated URL. Feature previews never invoke
    the Convex CLI and receive no Convex credentials in their Next.js build subprocess. Review the
    old Preview-wide key's other consumers before removing or rotating it.
-5. Merge the reviewed change to `dev`. The Git-triggered deployment must log the exact commit,
-   `Verified ... -> dev:fabulous-dogfish-606`, frontend success, Convex success, and final target
-   verification before Vercel reports Ready. Smoke-test signed-out and signed-in journal/goal
+5. Merge the reviewed change to `dev`. This needs preview deployments enabled in the Vercel project;
+   they are disabled as of 2026-11-24, so `dev` pushes deploy nothing. The Git-triggered deployment
+   must log the exact commit, `Verified ... -> dev:fabulous-dogfish-606`, frontend success, Convex
+   success, and final target verification before Vercel reports Ready. Smoke-test signed-out and signed-in journal/goal
    reads and writes through `https://scripture-sharing-dev.vercel.app`, including Google sign-in.
    To test a branch with a working backend and sign-in, use `npm run preview` (see below).
 6. **Production is a separate activation/release decision.** After a successful dev rehearsal and
@@ -211,11 +212,10 @@ isn't equivalent: a test file can declare global types that change the result fo
 keeps the full check, and `convex deploy` keeps its own (Convex's `ES2021` library against freshly generated
 bindings). `npm run app -- web check` also runs `convex/tsconfig.json`.
 
-`src/lib/generated/strongsHebrew.d.json.ts` and `strongsGreek.d.json.ts` give the two 4 MB Strong's files a
-declared type (`allowArbitraryExtensions`), so TypeScript no longer infers a type from every entry; on a
-local machine pinned to 4 cores that took about 3 s off a 40 s check. `isStrongsDataset` checks the real
-shape instead: the server refuses malformed data when it loads a file, and `tests/strongsLexicon.test.ts`
-checks both files.
+Declaring types for the two generated Strong's files (about 4.5 MB of JSON together) took about 3 s off a
+standalone local `tsc` run, but it moved their shape check from the build to the first lookup, so it was
+left out. With preview deployments disabled, skipping builds (see [Which commits deploy](#which-commits-deploy))
+is the remaining lever.
 
 Most of the cache is `node_modules` (`next` alone is 380 MB unpacked); keep it, since a clean `npm ci` takes
 about 30 s.
