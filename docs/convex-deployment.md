@@ -208,8 +208,8 @@ minutes, which depend on the machine tier as well as the time. The time went lik
 
 Two changes make the type checking cheaper without dropping a check:
 
-- `next build` checks `tsconfig.build.json`, which is `tsconfig.json` without test files (`*.test.*`,
-  `*.spec.*`, `__tests__`, `__mocks__`). Next.js discards type errors in those files, so checking them only
+- `next build` checks `tsconfig.build.json`, which is `tsconfig.json` without test files (`*.test.ts(x)`,
+  `*.spec.ts(x)`, `test.ts(x)`, `spec.ts(x)`, and files under `__tests__` or `__mocks__`). Next.js discards type errors in those files, so checking them only
   cost time. It still checks `qa/`, the helpers in `tests/` and `vitest.config.ts`.
   `npm run app -- web check` checks everything, test files included, with `tsconfig.json`, and also runs
   `convex/tsconfig.json`. `convex deploy` keeps its own type check: it uses Convex's settings (`ES2021`
