@@ -128,9 +128,11 @@ has. Planned work is listed in `FEATURE_IDEAS.md`, which dates from 2026-09-26 a
 
 ## Branches
 
-- `dev` is the integration branch. Feature branches merge into `dev`, and dev deploys to the Vercel preview and the
-  shared development backend.
-- `master` is production. Vercel builds `master` as Production (see `scripts/vercel-build.mjs`).
+- `dev` is the integration branch. Feature branches merge into `dev`. Its pipeline deploys to the Vercel preview and the
+  shared development backend, but the Vercel project has preview deployments turned off (seen 2026-11-24), so pushes
+  to `dev` build nothing for now.
+- `master` is production. Vercel builds `master` as Production (see `scripts/vercel-build.mjs`). Only `master` and
+  `dev` may deploy from Git (`git.deploymentEnabled` in `vercel.json`); feature branches never do.
 - Vercel skips pushes that change only `mobile/`, `native/`, `docs/` or root Markdown; see "Which commits deploy" in `docs/convex-deployment.md`.
 
 ## Releases
@@ -301,9 +303,9 @@ Run these after a change, by what it touches. A focused `npm run test:*` script 
 while iterating; run the full set before handing off.
 
 - **Web** (`src/`, `scripts/`, `content/`, root config): `npm run app -- web check`, which runs `release:check`,
-  `next typegen`, `tsc --noEmit`, `cfm:check` and `npm test`. `npm test` runs every node:test file under `src/` and
-  `scripts/` and every Vitest file under `tests/`. Also run `npx eslint` on the files you changed: the full lint has
-  existing errors, so it is not part of the check yet.
+  `next typegen`, `tsc --noEmit` (with the root and `convex/` configs), `cfm:check` and `npm test`. `npm test` runs
+  every node:test file under `src/` and `scripts/` and every Vitest file under `tests/`. Also run `npx eslint` on the
+  files you changed: the full lint has existing errors, so it is not part of the check yet.
 - **Convex** (`convex/`): the web check, which typechecks `convex/` and runs its tests under `tests/convex/`. Mobile
   imports shared modules from `src/` and `convex/`, so also run the mobile check when you change one of them.
 - **Release notes** (`src/lib/releaseNotes.ts`, `public/release-notes/`): `npm run release:check` and

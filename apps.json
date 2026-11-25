@@ -47,6 +47,16 @@
         ],
         [
           "npm",
+          "exec",
+          "--no",
+          "--",
+          "tsc",
+          "--noEmit",
+          "-p",
+          "convex/tsconfig.json"
+        ],
+        [
+          "npm",
           "run",
           "cfm:check"
         ],

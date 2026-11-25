@@ -8,8 +8,14 @@ in `scripts/vercel-build.mjs` couples the backend and frontend from the same Git
 | --- | --- | --- | --- |
 | `dev` | Preview, **branch `dev` only** | `dev:fabulous-dogfish-606` | `dev:fabulous-dogfish-606` |
 | `master` | Production | `prod:lovable-seal-140` | `prod:lovable-seal-140` |
-| Any feature branch | Preview | No backend push | Must be unset |
+| Any feature branch | None: `vercel.json` turns its Git deployments off | No backend push | Must be unset |
 | None (`npm run preview`) | Preview | Its own preview backend, pushed beforehand by the CLI | Must be unset |
+
+`git.deploymentEnabled` in `vercel.json` lets only `dev` and `master` deploy from Git. On 2026-11-24 the
+Vercel project also had **preview deployments disabled** (`previewDeploymentsDisabled: true` in
+`GET /v9/projects/scriptures-sharing`, a dashboard setting), so pushes to `dev` currently create no deployment
+and don't update `fabulous-dogfish-606`; only `master` builds from Git. Whether that setting also blocks
+`npm run preview`'s CLI deployments has not been checked.
 
 This is prepared automation, **not an activated deployment**. No Vercel settings, credentials,
 aliases, Convex configuration, or production backend were changed while implementing it. Once
@@ -51,11 +57,11 @@ before merging this change into that branch. Do not merge to `master` as a way t
    the exact key type/target and verifies the authenticated URL. Feature previews never invoke
    the Convex CLI and receive no Convex credentials in their Next.js build subprocess. Review the
    old Preview-wide key's other consumers before removing or rotating it.
-5. Merge the reviewed change to `dev`. The Git-triggered deployment must log the exact commit,
-   `Verified ... -> dev:fabulous-dogfish-606`, frontend success, Convex success, and final target
-   verification before Vercel reports Ready. Smoke-test signed-out and signed-in journal/goal
+5. Merge the reviewed change to `dev`. This needs preview deployments enabled in the Vercel project;
+   they are disabled as of 2026-11-24, so `dev` pushes deploy nothing. The Git-triggered deployment
+   must log the exact commit, `Verified ... -> dev:fabulous-dogfish-606`, frontend success, Convex
+   success, and final target verification before Vercel reports Ready. Smoke-test signed-out and signed-in journal/goal
    reads and writes through `https://scripture-sharing-dev.vercel.app`, including Google sign-in.
-   A feature PR preview proves only the frontend path; it does not prove authenticated deployment.
    To test a branch with a working backend and sign-in, use `npm run preview` (see below).
 6. **Production is a separate activation/release decision.** After a successful dev rehearsal and
    review of production auth/configuration and backend compatibility, create a different key
@@ -133,8 +139,9 @@ closed. The fixed repository is public, so the remote-head check does not need a
 ## Which commits deploy
 
 `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore.mjs` before every Vercel build. Vercel
-skips the deployment when it exits 0 and builds when it exits 1. The setting lives in the repository,
-so it applies to a branch only once this change has been merged into that branch.
+skips the deployment when it exits 0 and builds when it exits 1; the script exits with nothing else,
+and any error in it builds. The setting lives in the repository; it reached `dev` on 2026-11-15
+(`e9bb256b`) and `master` on 2026-11-18 (`e9f2257a`).
 
 It skips only when git shows that nothing the web app or Convex backend is built from changed since
 the branch's last successful deployment (`VERCEL_GIT_PREVIOUS_SHA`) up to the pushed commit
@@ -166,7 +173,7 @@ Anything the script can't tell builds:
 - a pushed commit whose message contains `[force build]`;
 - either commit missing from Vercel's shallow clone, or a commit in between whose parents are cut off;
 - a pushed commit that doesn't descend from the last deployed one (a rewritten branch);
-- any git failure.
+- any git failure, or any other error in the check: the command exits only 0 (skip) or 1 (build).
 
 **Dev and master stay in step.** On `dev` and `master`, a successful deployment means
 `vercel-build.mjs` built the frontend, deployed Convex and verified it, all from one commit, before
@@ -178,11 +185,42 @@ last successful deployment; its commit is in the next push's range, so that push
 reverts the change. What git can't show still needs a build: Vercel environment variable changes,
 backend writes from outside this pipeline (a manual `convex deploy`, `deploy:notes:development`),
 and a failed build's commit later dropped by a force push. For those, push an empty commit to the
-branch with `[force build]` in its message (`git commit --allow-empty -m "Rebuild dev [force build]"`).
+branch with `[force build]` in its message (`git commit --allow-empty -m "Rebuild [force build]"`). The
+branch must be one Vercel deploys from Git: `master`, or `dev` only while preview deployments are enabled.
 Alternatively, redeploy the deployment of the branch's current head from the dashboard with **Use
 project's Ignore Build Step** unchecked in the Redeploy dialog
 ([Vercel](https://vercel.com/docs/project-configuration/project-settings#ignore-build-step-on-redeploy)).
 Redeploying an older commit doesn't help: `vercel-build.mjs` refuses any commit that isn't the branch head.
+
+## Build time
+
+On 2026-11-22 a `master` build (`dpl_2EdN9D2MUcBCk7fjVotTYpifdToh`, on Vercel's Standard 4-core build
+machine) took 61 s of elapsed time from clone to cache upload. Vercel reports build usage in build CPU
+minutes, which depend on the machine tier as well as the time. The time went like this:
+
+| Step | Seconds |
+| --- | --- |
+| Clone, restore cache, ignored-build step | 2.8 |
+| `npm install` from the restored cache | 1.0 |
+| Revision and Convex target checks | 3.1 |
+| `next build` (about 8 s compiling, most of the rest type-checking) | 28.7 |
+| `convex deploy`, including its own type check, and the final check | 9.5 |
+| Vercel output and upload | 5.7 |
+| Build cache: create, then upload 182 MB | 9.6 |
+
+Type checking is most of `next build`, and it covers every `**/*.ts` and `**/*.tsx` in `tsconfig.json`,
+test files included. Next.js discards errors reported in test files, but leaving them out of the build check
+isn't equivalent: a test file can declare global types that change the result for app files. So the build
+keeps the full check, and `convex deploy` keeps its own (Convex's `ES2021` library against freshly generated
+bindings). `npm run app -- web check` also runs `convex/tsconfig.json`.
+
+Declaring types for the two generated Strong's files (about 4.5 MB of JSON together) took about 3 s off a
+standalone local `tsc` run, but it moved their shape check from the build to the first lookup, so it was
+left out. With preview deployments disabled, skipping builds (see [Which commits deploy](#which-commits-deploy))
+is the remaining lever.
+
+Most of the cache is `node_modules` (`next` alone is 380 MB unpacked); keep it, since a clean `npm ci` takes
+about 30 s.
 
 ## Failure and rollback
 
