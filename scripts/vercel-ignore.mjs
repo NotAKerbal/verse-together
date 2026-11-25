@@ -54,8 +54,9 @@ export function exitCode({ choose = decide, log = console.log } = {}) {
   } catch (error) {
     decision = { build: true, reason: `the check failed: ${error instanceof Error ? error.message : String(error)}` };
   }
-  const skip = decision?.build === false;
-  log(`${skip ? "Skipping" : "Building"}: ${decision?.reason ?? "the check returned no decision"}`);
+  const reason = typeof decision?.reason === "string" && decision.reason.trim() !== "" ? decision.reason : "";
+  const skip = decision?.build === false && reason !== "";
+  log(`${skip ? "Skipping" : "Building"}: ${reason || "the check returned no decision"}`);
   return skip ? 0 : 1;
 }
 

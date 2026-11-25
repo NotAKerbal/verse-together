@@ -227,11 +227,15 @@ test("a check that throws or returns nothing builds, so the command exits only 0
   assert.equal(exitCode({ choose: () => { throw new Error("git is missing"); }, log }), 1);
   assert.equal(exitCode({ choose: () => undefined, log }), 1);
   assert.equal(exitCode({ choose: () => ({ build: "no", reason: "odd" }), log }), 1);
+  assert.equal(exitCode({ choose: () => ({ build: false }), log }), 1);
+  assert.equal(exitCode({ choose: () => ({ build: false, reason: " " }), log }), 1);
   assert.equal(exitCode({ choose: () => ({ build: false, reason: "nothing changed" }), log }), 0);
   assert.deepEqual(lines, [
     "Building: the check failed: git is missing",
     "Building: the check returned no decision",
     "Building: odd",
+    "Building: the check returned no decision",
+    "Building: the check returned no decision",
     "Skipping: nothing changed",
   ]);
 });

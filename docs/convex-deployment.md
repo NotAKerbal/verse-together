@@ -139,8 +139,9 @@ closed. The fixed repository is public, so the remote-head check does not need a
 ## Which commits deploy
 
 `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore.mjs` before every Vercel build. Vercel
-skips the deployment when it exits 0 and builds when it exits 1. The setting lives in the repository,
-so it applies to a branch only once this change has been merged into that branch.
+skips the deployment when it exits 0 and builds when it exits 1; the script exits with nothing else,
+and any error in it builds. The setting lives in the repository and has been on `dev` and `master`
+since 2026-11-15.
 
 It skips only when git shows that nothing the web app or Convex backend is built from changed since
 the branch's last successful deployment (`VERCEL_GIT_PREVIOUS_SHA`) up to the pushed commit
@@ -184,7 +185,8 @@ last successful deployment; its commit is in the next push's range, so that push
 reverts the change. What git can't show still needs a build: Vercel environment variable changes,
 backend writes from outside this pipeline (a manual `convex deploy`, `deploy:notes:development`),
 and a failed build's commit later dropped by a force push. For those, push an empty commit to the
-branch with `[force build]` in its message (`git commit --allow-empty -m "Rebuild dev [force build]"`).
+branch with `[force build]` in its message (`git commit --allow-empty -m "Rebuild [force build]"`). The
+branch must be one Vercel deploys from Git: `master`, or `dev` only while preview deployments are enabled.
 Alternatively, redeploy the deployment of the branch's current head from the dashboard with **Use
 project's Ignore Build Step** unchecked in the Redeploy dialog
 ([Vercel](https://vercel.com/docs/project-configuration/project-settings#ignore-build-step-on-redeploy)).
