@@ -140,8 +140,8 @@ closed. The fixed repository is public, so the remote-head check does not need a
 
 `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore.mjs` before every Vercel build. Vercel
 skips the deployment when it exits 0 and builds when it exits 1; the script exits with nothing else,
-and any error in it builds. The setting lives in the repository and has been on `dev` and `master`
-since 2026-11-15.
+and any error in it builds. The setting lives in the repository; it reached `dev` on 2026-11-15
+(`e9bb256b`) and `master` on 2026-11-18 (`e9f2257a`).
 
 It skips only when git shows that nothing the web app or Convex backend is built from changed since
 the branch's last successful deployment (`VERCEL_GIT_PREVIOUS_SHA`) up to the pushed commit
