@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkBuildTypeCheckInputs } from "./build-type-check.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repository = "https://github.com/NotAKerbal/verse-together.git";
@@ -127,10 +128,13 @@ function runProcess(command, args, { env, capture = false }) {
   return result.stdout ?? "";
 }
 
-export function build({ env = process.env, run = runProcess, log = console.log } = {}) {
+export function build({ env = process.env, run = runProcess, log = console.log, checkTypeCheckInputs = () => checkBuildTypeCheckInputs(root) } = {}) {
   const target = selectTarget(env);
   const publicEnv = frontendEnv(env);
-  const buildFrontend = () => run(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "build", "--turbopack"], { env: publicEnv });
+  const buildFrontend = () => {
+    checkTypeCheckInputs();
+    run(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "build", "--turbopack"], { env: publicEnv });
+  };
   if (!target) {
     log("Feature preview: building frontend without deploying Convex.");
     buildFrontend();

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { checkBuildTypeCheckInputs, filesOnlyTheFullCheckReports, typeScriptInputs } from "./build-type-check.mjs";
 import { build } from "./vercel-build.mjs";
 
 const sha = "a".repeat(40);
@@ -42,7 +42,9 @@ function harness(env, { failAt, wrongUrl, badJson, checkoutSha = sha, heads = [s
     if (step === "function-spec") return badJson ? "invalid" : JSON.stringify({ url: wrongUrl ?? env.NEXT_PUBLIC_CONVEX_URL });
     return "";
   };
-  return { calls, execute: () => build({ env, run, log() {} }) };
+  const typeCheckInputsChecked = [];
+  const checkTypeCheckInputs = () => typeCheckInputsChecked.push(calls.length);
+  return { calls, typeCheckInputsChecked, execute: () => build({ env, run, log() {}, checkTypeCheckInputs }) };
 }
 
 for (const branch of ["dev", "master"]) {
@@ -176,7 +178,12 @@ for (const failure of ["", "frontend", "deploy"]) {
       for (const subdir of ["scripts", "bin", "node_modules/convex/bin", "node_modules/next/dist/bin"]) {
         mkdirSync(path.join(directory, subdir), { recursive: true });
       }
-      writeFileSync(path.join(directory, "scripts/vercel-build.mjs"), readFileSync(new URL("./vercel-build.mjs", import.meta.url)));
+      for (const file of ["scripts/vercel-build.mjs", "scripts/build-type-check.mjs", "tsconfig.json", "tsconfig.build.json"]) {
+        writeFileSync(path.join(directory, file), readFileSync(new URL(`../${file}`, import.meta.url)));
+      }
+      mkdirSync(path.join(directory, "src"));
+      writeFileSync(path.join(directory, "src/page.ts"), "export {};\n");
+      symlinkSync(fileURLToPath(new URL("../node_modules/typescript", import.meta.url)), path.join(directory, "node_modules/typescript"), "dir");
       const logFile = path.join(directory, "commands.jsonl");
       // Only these fixture executables run: no installed CLI, Git remote or backend.
       const recorder = `
@@ -289,68 +296,88 @@ test("dev and master builds still refuse when the preview marker is inherited", 
   }
 });
 
-const nextDiscardsDiagnostics = /[\\/]__(?:tests|mocks)__[\\/]|(?<=[\\/.])(?:spec|test)\.[^\\/]+$/;
-const testFileName = /^(?:.*\.)?(?:test|spec)\.tsx?$/;
-
-function typeScriptInputs(directory, config) {
-  const require = createRequire(import.meta.url);
-  const ts = require("typescript");
-  const parsed = ts.parseJsonConfigFileContent({ include: config.include, exclude: config.exclude, compilerOptions: { allowJs: false } }, ts.sys, directory);
-  return parsed.fileNames.map(file => path.relative(directory, file)).sort();
-}
-
-function compareInputs(directory, rootConfig, buildConfig) {
-  const root = typeScriptInputs(directory, rootConfig);
-  const build = typeScriptInputs(directory, buildConfig);
-  return {
-    build,
-    added: build.filter(file => !root.includes(file)),
-    removedButReported: root.filter(file => !build.includes(file) && !nextDiscardsDiagnostics.test(`/${file}`)),
-    directoriesNamedLikeTests: [...new Set(root.flatMap(file => path.dirname(file).split(path.sep).filter(part => testFileName.test(part))))],
-  };
+function typeCheckFixture(files, buildConfig = readFileSync(new URL("../tsconfig.build.json", import.meta.url), "utf8")) {
+  const fixture = mkdtempSync(path.join(tmpdir(), "verse-build-tsconfig-"));
+  writeFileSync(path.join(fixture, "tsconfig.json"), readFileSync(new URL("../tsconfig.json", import.meta.url)));
+  writeFileSync(path.join(fixture, "tsconfig.build.json"), buildConfig);
+  for (const file of files) {
+    mkdirSync(path.join(fixture, path.dirname(file)), { recursive: true });
+    writeFileSync(path.join(fixture, file), "export {};\n");
+  }
+  return fixture;
 }
 
 test("the Next.js build type-checks every file tsconfig.json does except those whose errors Next.js discards", () => {
   const rootDirectory = fileURLToPath(new URL("..", import.meta.url));
-  const rootConfig = JSON.parse(readFileSync(new URL("../tsconfig.json", import.meta.url), "utf8"));
-  const buildConfig = JSON.parse(readFileSync(new URL("../tsconfig.build.json", import.meta.url), "utf8"));
   const nextConfig = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
   const apps = JSON.parse(readFileSync(new URL("../apps.json", import.meta.url), "utf8"));
   assert.match(nextConfig, /tsconfigPath: "tsconfig\.build\.json"/);
-  assert.equal(buildConfig.extends, "./tsconfig.json");
-  assert.deepEqual(buildConfig.include, rootConfig.include);
+  assert.deepEqual(filesOnlyTheFullCheckReports(rootDirectory), []);
+  assert.doesNotThrow(() => checkBuildTypeCheckInputs(rootDirectory));
 
-  const repository = compareInputs(rootDirectory, rootConfig, buildConfig);
-  assert.deepEqual(repository.added, []);
-  assert.deepEqual(repository.removedButReported, []);
-  assert.deepEqual(repository.directoriesNamedLikeTests, [], "tsconfig.build.json excludes test-file names, which would also hide a directory with such a name; rename it");
-
-  const fixture = mkdtempSync(path.join(tmpdir(), "verse-build-tsconfig-"));
+  const fixture = typeCheckFixture([
+    "src/page.tsx", "src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx",
+    "src/__tests__/helper.ts", "src/__mocks__/module.ts", "src/latest.ts", "src/contest.tsx", "src/types.test.d.ts",
+    "tests/harness.ts", "tests/case.test.ts", "foo.test.data/helper.ts", "test.data/helper.ts",
+    "spec.fixtures/helper.tsx", "qa/main.tsx", "vitest.config.ts", "mobile/app.tsx", "docs/example.ts",
+    "src/foo.test.ts/helper.ts", "src/spec.tsx/helper.ts", "src/line\nbreak.test.ts/helper.ts",
+  ]);
   try {
-    for (const file of [
-      "src/page.tsx", "src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx",
-      "src/__tests__/helper.ts", "src/__mocks__/module.ts", "src/latest.ts", "src/contest.tsx", "src/types.test.d.ts",
-      "tests/harness.ts", "tests/case.test.ts", "foo.test.data/helper.ts", "test.data/helper.ts",
-      "spec.fixtures/helper.tsx", "qa/main.tsx", "vitest.config.ts", "mobile/app.tsx", "docs/example.ts",
-      "src/foo.test.ts/helper.ts", "src/spec.tsx/helper.ts",
-    ]) {
-      mkdirSync(path.join(fixture, path.dirname(file)), { recursive: true });
-      writeFileSync(path.join(fixture, file), "export {};\n");
-    }
-    const result = compareInputs(fixture, rootConfig, buildConfig);
-    assert.deepEqual(result.added, []);
+    const build = typeScriptInputs(path.join(fixture, "tsconfig.build.json")).map(file => path.relative(fixture, file));
     for (const file of ["src/page.tsx", "src/latest.ts", "src/contest.tsx", "tests/harness.ts", "foo.test.data/helper.ts", "test.data/helper.ts", "spec.fixtures/helper.tsx", "qa/main.tsx", "vitest.config.ts", "src/types.test.d.ts"]) {
-      assert.ok(result.build.includes(file), file);
+      assert.ok(build.includes(file), file);
     }
-    for (const file of ["src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx", "src/__tests__/helper.ts", "src/__mocks__/module.ts", "tests/case.test.ts"]) {
-      assert.ok(!result.build.includes(file), file);
+    for (const file of ["src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx", "src/__tests__/helper.ts", "src/__mocks__/module.ts", "tests/case.test.ts", "mobile/app.tsx", "docs/example.ts"]) {
+      assert.ok(!build.includes(file), file);
     }
-    assert.deepEqual(result.removedButReported, ["src/foo.test.ts/helper.ts", "src/spec.tsx/helper.ts"]);
-    assert.deepEqual(result.directoriesNamedLikeTests.sort(), ["foo.test.ts", "spec.tsx"]);
+    const missed = ["src/foo.test.ts/helper.ts", "src/line\nbreak.test.ts/helper.ts", "src/spec.tsx/helper.ts"];
+    assert.deepEqual(filesOnlyTheFullCheckReports(fixture).sort(), missed.sort());
+    assert.throws(() => checkBuildTypeCheckInputs(fixture), /skips files whose type errors Next\.js would report[\s\S]*src\/foo\.test\.ts\/helper\.ts/);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
 
   assert.ok(apps.web.commands.check.some(command => command.join(" ").endsWith("tsc --noEmit")));
   assert.ok(apps.web.commands.check.some(command => command.join(" ").endsWith("tsc --noEmit -p convex/tsconfig.json")));
+});
+
+test("an unreadable build tsconfig stops the check", () => {
+  const fixture = typeCheckFixture(["src/page.tsx"], "{ \"extends\": \"./missing.json\" }\n");
+  try {
+    assert.throws(() => checkBuildTypeCheckInputs(fixture), /could not read tsconfig\.build\.json/);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("every frontend build checks the type-check inputs first, and stops if they skip a reported file", () => {
+  for (const env of [environment("dev"), environment("master")]) {
+    const { calls, typeCheckInputsChecked, execute } = harness(env);
+    execute();
+    assert.deepEqual(typeCheckInputsChecked, [calls.findIndex(call => call.step === "frontend")]);
+  }
+  const featureCalls = [];
+  build({
+    env: { ...environment("feature"), CONVEX_AUTOMATIC_DEPLOYMENT: "", VERCEL_ENV: "preview" },
+    run: (command, args) => featureCalls.push(args[0].includes("/next/") ? "frontend" : command),
+    log() {},
+    checkTypeCheckInputs: () => featureCalls.push("type-check inputs"),
+  });
+  assert.deepEqual(featureCalls, ["type-check inputs", "frontend"]);
+
+  const refusedCalls = [];
+  assert.throws(() => build({
+    env: environment("master"),
+    run: (command, args) => {
+      refusedCalls.push(args[0].includes("/next/") ? "frontend" : args[1] ?? args[0]);
+      if (args[0] === "rev-parse") return `${sha}\n`;
+      if (args[0] === "ls-remote") return `${sha}\trefs/heads/master\n`;
+      if (args[1] === "function-spec") return JSON.stringify({ url: environment("master").NEXT_PUBLIC_CONVEX_URL });
+      return "";
+    },
+    log() {},
+    checkTypeCheckInputs: () => { throw new Error("vercel-build refused: tsconfig.build.json skips files"); },
+  }), /skips files/);
+  assert.ok(!refusedCalls.includes("frontend"));
+  assert.ok(!refusedCalls.includes("deploy"));
 });
