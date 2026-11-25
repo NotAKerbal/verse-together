@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { build } from "./vercel-build.mjs";
 
 const sha = "a".repeat(40);
@@ -287,7 +289,17 @@ test("dev and master builds still refuse when the preview marker is inherited", 
   }
 });
 
-test("the Next.js build type-checks everything tsconfig.json does except test files", () => {
+const nextDiscardsDiagnostics = /[\\/]__(?:tests|mocks)__[\\/]|(?<=[\\/.])(?:spec|test)\.[^\\/]+$/;
+
+function typeScriptInputs(directory, config) {
+  const require = createRequire(import.meta.url);
+  const ts = require("typescript");
+  const parsed = ts.parseJsonConfigFileContent({ include: config.include, exclude: config.exclude, compilerOptions: { allowJs: false } }, ts.sys, directory);
+  return parsed.fileNames.map(file => path.relative(directory, file)).sort();
+}
+
+test("the Next.js build type-checks every file tsconfig.json does except those whose errors Next.js discards", () => {
+  const rootDirectory = fileURLToPath(new URL("..", import.meta.url));
   const rootConfig = JSON.parse(readFileSync(new URL("../tsconfig.json", import.meta.url), "utf8"));
   const buildConfig = JSON.parse(readFileSync(new URL("../tsconfig.build.json", import.meta.url), "utf8"));
   const nextConfig = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
@@ -295,10 +307,27 @@ test("the Next.js build type-checks everything tsconfig.json does except test fi
   assert.match(nextConfig, /tsconfigPath: "tsconfig\.build\.json"/);
   assert.equal(buildConfig.extends, "./tsconfig.json");
   assert.deepEqual(buildConfig.include, rootConfig.include);
-  assert.deepEqual(buildConfig.exclude.slice(0, rootConfig.exclude.length), rootConfig.exclude);
-  for (const pattern of buildConfig.exclude.slice(rootConfig.exclude.length)) {
-    assert.match(pattern, /^\*\*\/(\*\.)?(test|spec)\.\*$|^\*\*\/__(tests|mocks)__\/\*\*$/);
+
+  const fixture = mkdtempSync(path.join(tmpdir(), "verse-build-tsconfig-"));
+  try {
+    for (const file of [
+      "src/page.tsx", "src/page.test.tsx", "src/lib/util.spec.ts", "src/lib/test.ts", "src/lib/spec.tsx",
+      "src/__tests__/helper.ts", "src/__mocks__/module.ts", "src/latest.ts", "src/contest.tsx",
+      "tests/harness.ts", "tests/case.test.ts", "foo.test.data/helper.ts", "test.data/helper.ts",
+      "spec.fixtures/helper.tsx", "qa/main.tsx", "vitest.config.ts", "mobile/app.tsx", "docs/example.ts",
+    ]) {
+      mkdirSync(path.join(fixture, path.dirname(file)), { recursive: true });
+      writeFileSync(path.join(fixture, file), "export {};\n");
+    }
+    for (const directory of [fixture, rootDirectory]) {
+      const expected = typeScriptInputs(directory, rootConfig).filter(file => !nextDiscardsDiagnostics.test(`/${file}`));
+      assert.deepEqual(typeScriptInputs(directory, buildConfig), expected, directory);
+    }
+    assert.ok(typeScriptInputs(fixture, buildConfig).includes("foo.test.data/helper.ts"));
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
   }
+
   assert.ok(apps.web.commands.check.some(command => command.join(" ").endsWith("tsc --noEmit")));
   assert.ok(apps.web.commands.check.some(command => command.join(" ").endsWith("tsc --noEmit -p convex/tsconfig.json")));
 });

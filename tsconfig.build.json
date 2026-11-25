@@ -12,10 +12,14 @@
     "mobile",
     "native",
     "docs",
-    "**/*.test.*",
-    "**/*.spec.*",
-    "**/test.*",
-    "**/spec.*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/test.ts",
+    "**/test.tsx",
+    "**/spec.ts",
+    "**/spec.tsx",
     "**/__tests__/**",
     "**/__mocks__/**"
   ]
